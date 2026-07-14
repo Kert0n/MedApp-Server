@@ -10,6 +10,19 @@
 
 RSA files не должны находиться в `src/main/resources`: `.dockerignore` исключает PEM и настоящий `application-prod.properties` из build context.
 
+Standalone Docker Compose монтирует file-based secrets как bind mounts и не
+меняет их host owner. Поскольку application запускается non-root, каталог с
+ключами должен иметь mode `0700`, а сами PEM — `0644`:
+
+```bash
+chmod 700 /secure/path
+chmod 644 /secure/path/jwt-private.pem /secure/path/jwt-public.pem
+```
+
+`0644` не открывает ключ другим host users: без execute permission на каталоге
+`0700` они не могут обратиться к находящимся внутри файлам. Не размещайте PEM в
+общедоступном каталоге.
+
 ## Preflight
 
 ```bash

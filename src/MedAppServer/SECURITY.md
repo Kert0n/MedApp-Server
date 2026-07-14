@@ -53,6 +53,9 @@ fingerprints в корневом `.gitleaksignore`. Широкие исключ�
 Dev keys создаются в ignored-каталоге `.local/secrets`. Main resource set
 исключает `certs/*.pem`, поэтому даже оставшийся локальный PEM внутри source
 tree не включается в JAR. Docker context исключает эти файлы независимо.
+Для standalone Compose host-каталог ключей закрывается mode `0700`, а PEM имеет
+`0644`, чтобы bind mount был доступен non-root application user; детали и
+обоснование приведены в `DEPLOYMENT.md`.
 
 ## Reporting
 
