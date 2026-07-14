@@ -9,3 +9,4 @@ FROM postgres:18.4-alpine3.23
 RUN apk upgrade --no-cache
 COPY --from=gosu-build /go/bin/gosu /usr/local/bin/gosu
 RUN gosu --version
+USER postgres:postgres

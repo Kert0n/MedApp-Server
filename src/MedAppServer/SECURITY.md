@@ -39,6 +39,8 @@ CI запускает tests, CodeQL, dependency review, Gitleaks и Trivy. High/
 Trivy отдельно анализирует executable JAR со всеми nested dependencies и все
 три production images: application, Caddy и PostgreSQL. Caddy и `gosu`
 пересобираются Go 1.26.5; OS packages обновляются во время image build.
+Все три runtime containers запускаются без root; Compose дополнительно удаляет
+capabilities и включает `no-new-privileges`.
 
 Test profile использует ephemeral RSA key pair, которую Gradle генерирует в
 `build/generated-test-resources` перед тестами; private key не хранится в Git.

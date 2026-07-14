@@ -23,17 +23,11 @@ services:
     read_only: true
     tmpfs:
       - /tmp
-      - /var/run/postgresql
+      - /var/run/postgresql:uid=70,gid=70,mode=3775
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    cap_add:
-      - CHOWN
-      - DAC_OVERRIDE
-      - FOWNER
-      - SETGID
-      - SETUID
     logging:
       driver: none
 
