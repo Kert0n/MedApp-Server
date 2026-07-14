@@ -89,7 +89,7 @@ class ComplexWorkflowStoriesTest {
 
         val allergyMeds = drugRepository.save(
             Drug(
-                id = UUID.randomUUID(), name = "Allergy Meds", quantity = 60.0,
+                id = UUID.randomUUID(), name = "Allergy Meds", quantity = 60.0.toBigDecimal(),
                 quantityUnit = "pills", medKit = homeKit, formType = null,
                 category = null,
                 manufacturer = null,
@@ -99,7 +99,7 @@ class ComplexWorkflowStoriesTest {
         )
         val painkillers = drugRepository.save(
             Drug(
-                id = UUID.randomUUID(), name = "Painkillers", quantity = 100.0,
+                id = UUID.randomUUID(), name = "Painkillers", quantity = 100.0.toBigDecimal(),
                 quantityUnit = "pills", medKit = homeKit, formType = null,
                 category = null,
                 manufacturer = null,
@@ -116,13 +116,13 @@ class ComplexWorkflowStoriesTest {
         // PHASE 2: Everyone makes Treatment Plans
         // ==========================================
         // Allergy Meds: 60 total. Alice (20), Bob (20), Charlie (20) = 60 planned.
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(allergyMeds.id, 20.0))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(allergyMeds.id, 20.0))
-        usingService.createTreatmentPlan(charlie.id, UsingCreateDTO(allergyMeds.id, 20.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(allergyMeds.id, 20.0.toBigDecimal()))
+        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(allergyMeds.id, 20.0.toBigDecimal()))
+        usingService.createTreatmentPlan(charlie.id, UsingCreateDTO(allergyMeds.id, 20.0.toBigDecimal()))
 
         // Painkillers: 100 total. Bob plans 30, Charlie plans 30.
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(painkillers.id, 30.0))
-        usingService.createTreatmentPlan(charlie.id, UsingCreateDTO(painkillers.id, 30.0))
+        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(painkillers.id, 30.0.toBigDecimal()))
+        usingService.createTreatmentPlan(charlie.id, UsingCreateDTO(painkillers.id, 30.0.toBigDecimal()))
 
         entityManager.flush()
         entityManager.clear()
@@ -133,16 +133,16 @@ class ComplexWorkflowStoriesTest {
         // Bob consumes 30 Allergy Meds. Stock drops from 60 to 30.
         // Total planned was 60. Stock is now 30. Scale factor = 30/60 = 0.5.
         // All plans (20) should auto-scale down to 10.
-        drugService.consumeDrug(allergyMeds.id, 30.0, bob.id)
+        drugService.consumeDrug(allergyMeds.id, 30.0.toBigDecimal(), bob.id)
 
         entityManager.flush()
         entityManager.clear()
 
         val updatedAllergyMeds = drugRepository.findById(allergyMeds.id).get()
-        assertEquals(30.0, updatedAllergyMeds.quantity, "Stock should be 30")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(30.0.toBigDecimal(), updatedAllergyMeds.quantity, "Stock should be 30")
 
         val aliceAllergyPlan = usingRepository.findByUserIdAndDrugId(alice.id, allergyMeds.id)!!
-        assertEquals(10.0, aliceAllergyPlan.plannedAmount, "Alice's plan should auto-scale to 10")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(10.0.toBigDecimal(), aliceAllergyPlan.plannedAmount, "Alice's plan should auto-scale to 10")
 
         // ==========================================
         // PHASE 4: Single Drug Move (Security Audit)
@@ -195,9 +195,9 @@ class ComplexWorkflowStoriesTest {
             "Charlie's last plan must be deleted"
         )
 
-        // Verify Alice and Bob kept their 10.0 scaled plans
+        // Verify Alice and Bob kept their 10.0.toBigDecimal() scaled plans
         val finalAlicePlan = usingRepository.findByUserIdAndDrugId(alice.id, allergyMeds.id)!!
-        assertEquals(10.0, finalAlicePlan.plannedAmount, "Alice kept her plan through migration")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(10.0.toBigDecimal(), finalAlicePlan.plannedAmount, "Alice kept her plan through migration")
 
         // ==========================================
         // PHASE 6: Last User Standing Auto-Cleanup
@@ -240,7 +240,7 @@ class ComplexWorkflowStoriesTest {
 
         // Alice adds 100 tablets to sourceKit
         val createDrugDto = DrugCreateDTO(
-            name = "LifePill", quantity = 100.0, quantityUnit = "tablets",
+            name = "LifePill", quantity = 100.0.toBigDecimal(), quantityUnit = "tablets",
             medKitId = sourceKit.id, formType = null, category = null,
             manufacturer = null, country = null, description = null
         )
@@ -248,29 +248,29 @@ class ComplexWorkflowStoriesTest {
         dbHelper.flushAndClear()
 
         // Alice and Bob create treatment plans (40 each, total 80)
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 40.0))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, 40.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 40.0.toBigDecimal()))
+        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, 40.0.toBigDecimal()))
         dbHelper.flushAndClear()
 
         // ── Phase 1: Alter Using ──
         // Bob increases his plan from 40 to 60.
         // Allowed because 100 stock - 40 Alice = 60 available.
-        usingService.updateTreatmentPlan(bob.id, drug.id, UsingUpdateDTO(plannedAmount = 60.0))
+        usingService.updateTreatmentPlan(bob.id, drug.id, UsingUpdateDTO(plannedAmount = 60.0.toBigDecimal()))
         dbHelper.flushAndClear()
 
-        assertEquals(60.0, dbHelper.userPlan(bob.id, drug.id)!!, 0.001, "Bob's plan updated to 60")
-        assertEquals(40.0, dbHelper.userPlan(alice.id, drug.id)!!, 0.001, "Alice's plan unchanged at 40")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(60.0.toBigDecimal(), dbHelper.userPlan(bob.id, drug.id)!!, 0.001.toBigDecimal(), "Bob's plan updated to 60")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(40.0.toBigDecimal(), dbHelper.userPlan(alice.id, drug.id)!!, 0.001.toBigDecimal(), "Alice's plan unchanged at 40")
 
         // ── Phase 2: Alter Drug (The Spill) ──
         // Alice updates the drug quantity from 100 to 50.
         // This MUST trigger `handleQuantityReduction`. Factor = 50 / 100 = 0.5.
-        val updateDrugDto = DrugUpdateDTO(quantity = 50.0)
+        val updateDrugDto = DrugUpdateDTO(quantity = 50.0.toBigDecimal())
         drugService.update(drug.id, updateDrugDto, alice.id)
         dbHelper.flushAndClear()
 
-        assertEquals(50.0, dbHelper.drugQuantity(drug.id)!!, 0.001, "Drug quantity updated to 50")
-        assertEquals(20.0, dbHelper.userPlan(alice.id, drug.id)!!, 0.001, "Alice scaled down (40 -> 20)")
-        assertEquals(30.0, dbHelper.userPlan(bob.id, drug.id)!!, 0.001, "Bob scaled down (60 -> 30)")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(50.0.toBigDecimal(), dbHelper.drugQuantity(drug.id)!!, 0.001.toBigDecimal(), "Drug quantity updated to 50")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(20.0.toBigDecimal(), dbHelper.userPlan(alice.id, drug.id)!!, 0.001.toBigDecimal(), "Alice scaled down (40 -> 20)")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(30.0.toBigDecimal(), dbHelper.userPlan(bob.id, drug.id)!!, 0.001.toBigDecimal(), "Bob scaled down (60 -> 30)")
 
         // ── Phase 3: Move Drug ──
         // Alice moves the drug to targetKit (where Bob has no access).
@@ -282,7 +282,7 @@ class ComplexWorkflowStoriesTest {
 
         // The ultimate security check: Bob's plan must be gone
         assertNull(dbHelper.userPlan(bob.id, drug.id), "Bob's plan MUST be stripped due to lost access")
-        assertEquals(20.0, dbHelper.userPlan(alice.id, drug.id)!!, 0.001, "Alice's plan remains intact")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(20.0.toBigDecimal(), dbHelper.userPlan(alice.id, drug.id)!!, 0.001.toBigDecimal(), "Alice's plan remains intact")
 
         // ── Phase 4: Privacy-by-Default Deletion ──
         // Alice deletes the drug completely.
@@ -312,7 +312,7 @@ class ComplexWorkflowStoriesTest {
         medKitService.joinMedKitByKey(shareKey, bob.id)
 
         // Alice creates a drug
-        val drug = drugService.create(DrugCreateDTO("Shared Meds", 10.0, "pcs", kitA.id), kitA, alice.id)
+        val drug = drugService.create(DrugCreateDTO("Shared Meds", 10.0.toBigDecimal(), "pcs", kitA.id), kitA, alice.id)
 
         // Bob creates a private kit
         val kitB = medKitService.createNew(bob.id)
@@ -336,11 +336,11 @@ class ComplexWorkflowStoriesTest {
         val kitA = medKitService.createNew(alice.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kitA.id, alice.id), bob.id)
 
-        val drug = drugService.create(DrugCreateDTO("Audit Meds", 10.0, "pcs", kitA.id), kitA, alice.id)
+        val drug = drugService.create(DrugCreateDTO("Audit Meds", 10.0.toBigDecimal(), "pcs", kitA.id), kitA, alice.id)
 
         // Both have plans
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 5.0))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, 2.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 5.0.toBigDecimal()))
+        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, 2.0.toBigDecimal()))
 
         // Alice has a private kit (Bob is NOT in this one)
         val kitB = medKitService.createNew(alice.id)
@@ -366,7 +366,7 @@ class ComplexWorkflowStoriesTest {
         entityManager.flush()
         entityManager.clear()
         val drug =
-            medKitDrugServices.createDrugInMedkit(DrugCreateDTO("Migrating Meds", 10.0, "pcs", kitA.id), alice.id)
+            medKitDrugServices.createDrugInMedkit(DrugCreateDTO("Migrating Meds", 10.0.toBigDecimal(), "pcs", kitA.id), alice.id)
 
         // ACT: Delete Kit A and migrate drugs to Kit B
         entityManager.flush()

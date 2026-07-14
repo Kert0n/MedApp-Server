@@ -3,6 +3,7 @@ package org.kert0n.medappserver.db.model
 import jakarta.persistence.*
 import jakarta.validation.constraints.NotNull
 import java.io.Serializable
+import java.math.BigDecimal
 import java.time.Instant
 import java.util.*
 
@@ -31,8 +32,8 @@ class Using(
     var drug: Drug,
 
     @NotNull
-    @Column(name = "planned_amount", nullable = false)
-    var plannedAmount: Double,
+    @Column(name = "planned_amount", nullable = false, precision = 19, scale = 6)
+    var plannedAmount: BigDecimal,
 
     @NotNull
     @Column(name = "last_modified", nullable = false)
@@ -78,4 +79,3 @@ class UsingKey(
         return Objects.hash(userId, drugId)
     }
 }
-

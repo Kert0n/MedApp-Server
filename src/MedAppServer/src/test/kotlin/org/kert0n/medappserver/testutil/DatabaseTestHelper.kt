@@ -11,6 +11,7 @@ import org.kert0n.medappserver.db.repository.UsingRepository
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
+import java.math.BigDecimal
 import java.util.*
 
 @Component
@@ -27,7 +28,7 @@ class DatabaseTestHelper(
     }
 
     @Transactional
-    fun freshDrug(medKit: MedKit, quantity: Double): Drug {
+    fun freshDrug(medKit: MedKit, quantity: BigDecimal): Drug {
         val drug = drugBuilder(medKit)
             .withName("Drug_${UUID.randomUUID()}")
             .withQuantity(quantity)
@@ -41,8 +42,8 @@ class DatabaseTestHelper(
     }
 
     // Null-safe getters essential for testing Privacy-by-Default (deletion)
-    fun drugQuantity(id: UUID): Double? = drugRepository.findByIdOrNull(id)?.quantity
-    fun totalPlanned(id: UUID): Double? = drugRepository.findByIdOrNull(id)?.totalPlannedAmount
-    fun userPlan(userId: UUID, drugId: UUID): Double? =
+    fun drugQuantity(id: UUID): BigDecimal? = drugRepository.findByIdOrNull(id)?.quantity
+    fun totalPlanned(id: UUID): BigDecimal? = drugRepository.findByIdOrNull(id)?.totalPlannedAmount
+    fun userPlan(userId: UUID, drugId: UUID): BigDecimal? =
         usingRepository.findByUserIdAndDrugId(userId, drugId)?.plannedAmount
 }

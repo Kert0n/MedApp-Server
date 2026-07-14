@@ -18,6 +18,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
 import java.time.Instant
+import java.math.BigDecimal
 import java.util.*
 import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBody
 
@@ -169,7 +170,7 @@ data class IntakeRequest(
     @NotNull
     @DecimalMin(value = "0.0", inclusive = false)
     @Schema(description = "Amount consumed", example = "1.0", minimum = "0")
-    val quantityConsumed: Double
+    val quantityConsumed: BigDecimal
 )
 
 @Schema(description = "Treatment plan information")
@@ -179,7 +180,7 @@ data class UsingDTO(
     @Schema(description = "Drug identifier")
     val drugId: UUID,
     @Schema(description = "Planned total amount for the course")
-    val plannedAmount: Double,
+    val plannedAmount: BigDecimal,
     @Schema(description = "Date when the plan was created")
     val createdAt: Instant,
     @Schema(description = "Date of last modification")
@@ -195,7 +196,7 @@ data class UsingCreateDTO(
     @NotNull
     @DecimalMin("0.0")
     @Schema(description = "Planned amount", example = "20.0", minimum = "0")
-    val plannedAmount: Double
+    val plannedAmount: BigDecimal
 )
 
 @Schema(description = "Update treatment plan request")
@@ -203,5 +204,5 @@ data class UsingUpdateDTO(
     @NotNull
     @DecimalMin("0.0")
     @Schema(description = "Planned amount", example = "20.0", minimum = "0")
-    val plannedAmount: Double
+    val plannedAmount: BigDecimal
 )

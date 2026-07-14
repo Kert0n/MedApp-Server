@@ -69,7 +69,7 @@ class BasicWorkflowStoriesTest {
         val aspirin = Drug(
             id = UUID.randomUUID(),
             name = "Aspirin",
-            quantity = 100.0,
+            quantity = 100.0.toBigDecimal(),
             quantityUnit = "tablets",
             formType = "tablet",
             category = "painkiller",
@@ -83,7 +83,7 @@ class BasicWorkflowStoriesTest {
         val ibuprofen = Drug(
             id = UUID.randomUUID(),
             name = "Ibuprofen",
-            quantity = 50.0,
+            quantity = 50.0.toBigDecimal(),
             quantityUnit = "tablets",
             formType = "tablet",
             category = "painkiller",
@@ -96,14 +96,14 @@ class BasicWorkflowStoriesTest {
         entityManager.flush()
 
         // Anna takes 2 tablets of Aspirin
-        drugService.consumeDrug(aspirin.id, 2.0, anna.id)
+        drugService.consumeDrug(aspirin.id, 2.0.toBigDecimal(), anna.id)
         entityManager.flush()
         entityManager.clear()
 
         // Check inventory
         val updatedAspirin = drugRepository.findById(aspirin.id).orElse(null)
         assertNotNull(updatedAspirin)
-        assertEquals(98.0, updatedAspirin.quantity, "Should have 98 tablets left")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(98.0.toBigDecimal(), updatedAspirin.quantity, "Should have 98 tablets left")
 
         val drugs = drugRepository.findAllByMedKitId(homeMedkit.id)
         assertEquals(2, drugs.size, "Should have 2 drugs in medkit")
@@ -126,7 +126,7 @@ class BasicWorkflowStoriesTest {
         val vitamins = Drug(
             id = UUID.randomUUID(),
             name = "Vitamin C",
-            quantity = 30.0,
+            quantity = 30.0.toBigDecimal(),
             quantityUnit = "tablets",
             formType = null,
             category = null,
@@ -185,7 +185,7 @@ class BasicWorkflowStoriesTest {
         val drug = Drug(
             id = UUID.randomUUID(),
             name = "Test Drug",
-            quantity = 100.0,
+            quantity = 100.0.toBigDecimal(),
             quantityUnit = "ml",
             formType = null,
             category = null,
@@ -236,7 +236,7 @@ class BasicWorkflowStoriesTest {
         val drug1 = Drug(
             id = UUID.randomUUID(),
             name = "Drug A",
-            quantity = 50.0,
+            quantity = 50.0.toBigDecimal(),
             quantityUnit = "tablets",
             formType = null,
             category = null,
@@ -248,7 +248,7 @@ class BasicWorkflowStoriesTest {
         val drug2 = Drug(
             id = UUID.randomUUID(),
             name = "Drug B",
-            quantity = 100.0,
+            quantity = 100.0.toBigDecimal(),
             quantityUnit = "ml",
             formType = null,
             category = null,
@@ -304,7 +304,7 @@ class BasicWorkflowStoriesTest {
         val drug = Drug(
             id = UUID.randomUUID(),
             name = "Limited Drug",
-            quantity = 30.0,
+            quantity = 30.0.toBigDecimal(),
             quantityUnit = "tablets",
             formType = null,
             category = null,
@@ -317,9 +317,9 @@ class BasicWorkflowStoriesTest {
         entityManager.flush()
 
         // Consume all in steps
-        drugService.consumeDrug(drug.id, 10.0, user.id)
-        drugService.consumeDrug(drug.id, 10.0, user.id)
-        drugService.consumeDrug(drug.id, 10.0, user.id)
+        drugService.consumeDrug(drug.id, 10.0.toBigDecimal(), user.id)
+        drugService.consumeDrug(drug.id, 10.0.toBigDecimal(), user.id)
+        drugService.consumeDrug(drug.id, 10.0.toBigDecimal(), user.id)
         entityManager.flush()
         entityManager.clear()
 

@@ -3,6 +3,7 @@ package org.kert0n.medappserver.services.models
 import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.services.security.SecurityService
+import org.kert0n.medappserver.services.security.AuthenticatedUser
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.data.repository.findByIdOrNull
@@ -19,21 +20,22 @@ import java.util.*
 class UserService(
     private val userRepository: UserRepository,
     private val securityService: SecurityService,
-    private val logger: Logger = LoggerFactory.getLogger(MedKitService::class.java)
+    private val logger: Logger = LoggerFactory.getLogger(UserService::class.java)
 ) : UserDetailsService {
 
-    fun registerNewUser(login: UUID, password: String, ip: String): User {
-        logger.debug("Register new user $login")
+    fun registerNewUser(login: UUID, password: String): User {
         val user = userRepository.save(
             User(login, securityService.hashPassword(password))
         )
-        securityService.registerIncrease(ip)
         return user
     }
 
     override fun loadUserByUsername(username: String): UserDetails {
-        logger.debug("Load user $username")
-        return userRepository.findByIdOrNull(UUID.fromString(username)) ?: throw UsernameNotFoundException(username)
+        val userId = runCatching { UUID.fromString(username) }.getOrElse {
+            throw UsernameNotFoundException("Invalid credentials")
+        }
+        val user = userRepository.findByIdOrNull(userId) ?: throw UsernameNotFoundException("Invalid credentials")
+        return AuthenticatedUser(user.id, user.hashedKey)
     }
 
     fun findById(id: UUID): User {

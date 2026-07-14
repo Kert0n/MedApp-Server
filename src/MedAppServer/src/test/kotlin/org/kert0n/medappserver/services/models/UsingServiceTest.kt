@@ -38,10 +38,10 @@ class UsingServiceTest {
     fun `findAllByUser returns usings for user`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit, 100.0.toBigDecimal())
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 10.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 10.0.toBigDecimal()))
         dbHelper.flushAndClear()
 
         assertEquals(1, usingService.findAllByUser(alice.id).size)
@@ -51,10 +51,10 @@ class UsingServiceTest {
     fun `findAllByDrug returns usings for drug`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit, 100.0.toBigDecimal())
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 10.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 10.0.toBigDecimal()))
         dbHelper.flushAndClear()
 
         assertEquals(1, usingService.findAllByDrug(drug.id).size)
@@ -66,7 +66,7 @@ class UsingServiceTest {
     fun `findByUserAndDrug throws NOT_FOUND when no plan exists`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit, 100.0.toBigDecimal())
         dbHelper.flushAndClear()
 
         assertFailsWith<ResponseStatusException> {
@@ -80,10 +80,10 @@ class UsingServiceTest {
     fun `deleteAllByUserIdInMedkit removes plans for user in specific medkit`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit, 100.0.toBigDecimal())
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 10.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 10.0.toBigDecimal()))
         dbHelper.flushAndClear()
 
         assertEquals(1, usingService.findAllByUser(alice.id).size)
@@ -100,12 +100,12 @@ class UsingServiceTest {
     fun `createTreatmentPlan creates plan`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit, 100.0.toBigDecimal())
         dbHelper.flushAndClear()
 
-        val using = usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 30.0))
+        val using = usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 30.0.toBigDecimal()))
 
-        assertEquals(30.0, using.plannedAmount)
+        org.kert0n.medappserver.testutil.assertDecimalEquals(30.0.toBigDecimal(), using.plannedAmount)
         assertEquals(alice.id, using.user.id)
         assertEquals(drug.id, using.drug.id)
     }
@@ -114,14 +114,14 @@ class UsingServiceTest {
     fun `createTreatmentPlan throws CONFLICT for duplicate`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit, 100.0.toBigDecimal())
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 30.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 30.0.toBigDecimal()))
         dbHelper.flushAndClear()
 
         assertFailsWith<ResponseStatusException> {
-            usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 20.0))
+            usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 20.0.toBigDecimal()))
         }
     }
 
@@ -129,11 +129,11 @@ class UsingServiceTest {
     fun `createTreatmentPlan throws when exceeding available quantity`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 50.0)
+        val drug = dbHelper.freshDrug(kit, 50.0.toBigDecimal())
         dbHelper.flushAndClear()
 
         assertFailsWith<ResponseStatusException> {
-            usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 100.0))
+            usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 100.0.toBigDecimal()))
         }
     }
 
@@ -143,14 +143,14 @@ class UsingServiceTest {
     fun `updateTreatmentPlan updates planned amount`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit, 100.0.toBigDecimal())
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 30.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 30.0.toBigDecimal()))
         dbHelper.flushAndClear()
 
-        val updated = usingService.updateTreatmentPlan(alice.id, drug.id, UsingUpdateDTO(50.0))
-        assertEquals(50.0, updated.plannedAmount)
+        val updated = usingService.updateTreatmentPlan(alice.id, drug.id, UsingUpdateDTO(50.0.toBigDecimal()))
+        org.kert0n.medappserver.testutil.assertDecimalEquals(50.0.toBigDecimal(), updated.plannedAmount)
     }
 
     @Test
@@ -159,16 +159,16 @@ class UsingServiceTest {
         val bob = dbHelper.freshUser("bob")
         val kit = medKitService.createNew(alice.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit, 100.0.toBigDecimal())
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 50.0))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, 30.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 50.0.toBigDecimal()))
+        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, 30.0.toBigDecimal()))
         dbHelper.flushAndClear()
 
         // Bob tries to increase to 60 but only 100 - 50 = 50 available for him
         assertFailsWith<ResponseStatusException> {
-            usingService.updateTreatmentPlan(bob.id, drug.id, UsingUpdateDTO(60.0))
+            usingService.updateTreatmentPlan(bob.id, drug.id, UsingUpdateDTO(60.0.toBigDecimal()))
         }
     }
 
@@ -178,30 +178,30 @@ class UsingServiceTest {
     fun `recordIntake reduces both drug quantity and planned amount`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit, 100.0.toBigDecimal())
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 30.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 30.0.toBigDecimal()))
         dbHelper.flushAndClear()
 
-        val updated = usingService.recordIntake(alice.id, drug.id, 10.0)
+        val updated = usingService.recordIntake(alice.id, drug.id, 10.0.toBigDecimal())
         assertNotNull(updated)
-        assertEquals(20.0, updated.plannedAmount)
-        assertEquals(90.0, drugService.findById(drug.id).quantity)
+        org.kert0n.medappserver.testutil.assertDecimalEquals(20.0.toBigDecimal(), updated.plannedAmount)
+        org.kert0n.medappserver.testutil.assertDecimalEquals(90.0.toBigDecimal(), drugService.findById(drug.id).quantity)
     }
 
     @Test
     fun `recordIntake throws when exceeding planned amount`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit, 100.0.toBigDecimal())
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 10.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 10.0.toBigDecimal()))
         dbHelper.flushAndClear()
 
         val ex = assertFailsWith<ResponseStatusException> {
-            usingService.recordIntake(alice.id, drug.id, 15.0)
+            usingService.recordIntake(alice.id, drug.id, 15.0.toBigDecimal())
         }
         assertTrue(ex.reason!!.contains("exceeds planned amount"))
     }
@@ -210,19 +210,19 @@ class UsingServiceTest {
     fun `recordIntake throws when exceeding drug quantity`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 20.0)
+        val drug = dbHelper.freshDrug(kit, 20.0.toBigDecimal())
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 10.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 10.0.toBigDecimal()))
         dbHelper.flushAndClear()
 
         // Artificially corrupt DB state to simulate race condition
         val directDrug = drugService.findByIdForUserForUpdate(drug.id, alice.id)
-        directDrug.quantity = 2.0
+        directDrug.quantity = 2.0.toBigDecimal()
         drugRepository.saveAndFlush(directDrug)
 
         val ex = assertFailsWith<ResponseStatusException> {
-            usingService.recordIntake(alice.id, drug.id, 5.0)
+            usingService.recordIntake(alice.id, drug.id, 5.0.toBigDecimal())
         }
         assertTrue(ex.reason!!.contains("Insufficient drug quantity"))
     }
@@ -231,18 +231,18 @@ class UsingServiceTest {
     fun `recordIntake exactly consuming planned amount deletes plan`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 20.0)
+        val drug = dbHelper.freshDrug(kit, 20.0.toBigDecimal())
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 10.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 10.0.toBigDecimal()))
         dbHelper.flushAndClear()
 
-        val result = usingService.recordIntake(alice.id, drug.id, 10.0)
+        val result = usingService.recordIntake(alice.id, drug.id, 10.0.toBigDecimal())
         dbHelper.flushAndClear()
 
         assertNull(result)
         assertNull(dbHelper.userPlan(alice.id, drug.id))
-        assertEquals(10.0, dbHelper.drugQuantity(drug.id)!!, 0.001)
+        org.kert0n.medappserver.testutil.assertDecimalEquals(10.0.toBigDecimal(), dbHelper.drugQuantity(drug.id)!!, 0.001.toBigDecimal())
     }
 
     // ── deleteTreatmentPlan ──
@@ -251,10 +251,10 @@ class UsingServiceTest {
     fun `deleteTreatmentPlan removes plan`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit, 100.0.toBigDecimal())
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 30.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 30.0.toBigDecimal()))
         dbHelper.flushAndClear()
 
         usingService.deleteTreatmentPlan(alice.id, drug.id)
@@ -271,15 +271,15 @@ class UsingServiceTest {
     fun `toUsingDTO returns correct DTO`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit, 100.0.toBigDecimal())
         dbHelper.flushAndClear()
 
-        val using = usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 30.0))
+        val using = usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 30.0.toBigDecimal()))
         dbHelper.flushAndClear()
 
         val dto = usingService.toUsingDTO(using)
         assertEquals(alice.id, dto.userId)
         assertEquals(drug.id, dto.drugId)
-        assertEquals(30.0, dto.plannedAmount)
+        org.kert0n.medappserver.testutil.assertDecimalEquals(30.0.toBigDecimal(), dto.plannedAmount)
     }
 }

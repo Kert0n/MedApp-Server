@@ -3,6 +3,7 @@ package org.kert0n.medappserver.testutil
 import org.kert0n.medappserver.controller.DrugCreateDTO
 import org.kert0n.medappserver.controller.DrugUpdateDTO
 import org.kert0n.medappserver.db.model.*
+import java.math.BigDecimal
 import java.util.*
 
 /**
@@ -47,7 +48,7 @@ class MedKitBuilder {
 class DrugBuilder(private val medKit: MedKit) {
     private var id: UUID = UUID.randomUUID()
     private var name: String = "Test Drug"
-    private var quantity: Double = 100.0
+    private var quantity: BigDecimal = 100.0.toBigDecimal()
     private var quantityUnit: String = "mg"
     private var formType: String? = "tablet"
     private var category: String? = "painkiller"
@@ -57,7 +58,7 @@ class DrugBuilder(private val medKit: MedKit) {
 
     fun withId(id: UUID) = apply { this.id = id }
     fun withName(name: String) = apply { this.name = name }
-    fun withQuantity(quantity: Double) = apply { this.quantity = quantity }
+    fun withQuantity(quantity: BigDecimal) = apply { this.quantity = quantity }
     fun withQuantityUnit(unit: String) = apply { this.quantityUnit = unit }
     fun withFormType(formType: String?) = apply { this.formType = formType }
     fun withCategory(category: String?) = apply { this.category = category }
@@ -82,9 +83,9 @@ class DrugBuilder(private val medKit: MedKit) {
 }
 
 class UsingBuilder(private val user: User, private val drug: Drug) {
-    private var plannedAmount: Double = 30.0
+    private var plannedAmount: BigDecimal = 30.0.toBigDecimal()
 
-    fun withPlannedAmount(amount: Double) = apply { this.plannedAmount = amount }
+    fun withPlannedAmount(amount: BigDecimal) = apply { this.plannedAmount = amount }
 
     fun build(): Using {
         return Using(
@@ -98,7 +99,7 @@ class UsingBuilder(private val user: User, private val drug: Drug) {
 
 class DrugCreateDTOBuilder {
     private var name: String = "Test Drug"
-    private var quantity: Double = 100.0
+    private var quantity: BigDecimal = 100.0.toBigDecimal()
     private var quantityUnit: String = "mg"
     private var medKitId: UUID = UUID.randomUUID()
     private var formType: String? = "tablet"
@@ -108,7 +109,7 @@ class DrugCreateDTOBuilder {
     private var description: String? = "Test description"
 
     fun withName(name: String) = apply { this.name = name }
-    fun withQuantity(quantity: Double) = apply { this.quantity = quantity }
+    fun withQuantity(quantity: BigDecimal) = apply { this.quantity = quantity }
     fun withQuantityUnit(unit: String) = apply { this.quantityUnit = unit }
     fun withMedKitId(id: UUID) = apply { this.medKitId = id }
     fun withFormType(formType: String?) = apply { this.formType = formType }
@@ -134,7 +135,7 @@ class DrugCreateDTOBuilder {
 
 class DrugUpdateDTOBuilder {
     private var name: String? = null
-    private var quantity: Double? = null
+    private var quantity: BigDecimal? = null
     private var quantityUnit: String? = null
     private var formType: String? = null
     private var category: String? = null
@@ -143,7 +144,7 @@ class DrugUpdateDTOBuilder {
     private var description: String? = null
 
     fun withName(name: String) = apply { this.name = name }
-    fun withQuantity(quantity: Double) = apply { this.quantity = quantity }
+    fun withQuantity(quantity: BigDecimal) = apply { this.quantity = quantity }
     fun withQuantityUnit(unit: String) = apply { this.quantityUnit = unit }
     fun withFormType(formType: String) = apply { this.formType = formType }
     fun withCategory(category: String) = apply { this.category = category }

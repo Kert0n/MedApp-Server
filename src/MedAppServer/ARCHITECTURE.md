@@ -1,41 +1,61 @@
 # Архитектура MedApp Server
 
-## Обзор
+## Контекст
 
-Серверная часть MedApp отвечает за синхронизацию общих аптечек, учет препаратов и выдачу каталога лекарств. Решение
-реализовано на **Spring Boot** и Kotlin с использованием JPA/Hibernate и PostgreSQL.
+MedApp Server — модульный монолит. Он синхронно обрабатывает REST-запросы, хранит текущее состояние в PostgreSQL и использует локальный временный cache для приглашений и регистрационного throttle.
 
-## Компоненты
+```text
+Client
+  │ HTTPS
+  ▼
+Caddy
+  │ trusted X-Forwarded-*
+  ▼
+Spring MVC / Security
+  ▼
+Application services
+  ▼
+JPA repositories
+  ▼
+PostgreSQL
+```
 
-- **Контроллеры** (`controller/`) — REST API:
-    - `AuthController`: регистрация и выдача JWT.
-    - `UserController`: полный снимок данных пользователя для синхронизации.
-    - `MedKitController`: управление аптечками и доступом.
-    - `DrugController`: CRUD для препаратов и поиск по каталогу.
-    - `MedKitDrugController`: Сервис для менеджмента связи препаратов и аптечек (перемещения, создания, удаления и
-      т.п.).
-    - `UsingsController`: планы лечения и фиксация приема.
-- **Сервисы** (`services/`) — бизнес-логика:
-    - `MedKitService`, `DrugService`, `UsingService` — core-операции.
-    - `VidalDrugService` — поиск по справочнику.
-    - `SecurityService` — генерация ключей, JWT, rate-limit регистрации.
-    - `CacheService` — кэш share-ключей и регистраций.
-- **Хранилище** (`db/`) — сущности JPA и репозитории.
+## Слои
 
-## Модель данных
+- `controller` — HTTP contract, validation и mapping;
+- `services.models` — операции над отдельными агрегатами;
+- `services.orchestrators` — транзакционные сценарии над несколькими агрегатами;
+- `services.security` — JWT, credentials, client address и throttling;
+- `db.model` и `db.repository` — persistence model и access-scoped queries;
+- `config` — типизированные настройки.
 
-| Сущность      | Назначение                           | Ключевые поля                                                                                                  |
-|---------------|--------------------------------------|----------------------------------------------------------------------------------------------------------------|
-| **User**      | Пользователь без персональных данных | `id`, `hashedKey`                                                                                              |
-| **MedKit**    | Общая аптечка                        | `id`, связи с пользователями и препаратами                                                                     |
-| **Drug**      | Препарат пользователя                | `name`, `quantity`, `quantityUnit`, `formType`, `category`, `manufacturer`, `country`, `description`, `medKit` |
-| **Using**     | План лечения по препарату            | `plannedAmount`, `createdAt`, `lastModified`, связи с `User` и `Drug`                                          |
-| **VidalDrug** | Каталог препаратов                   | `name`, `formType`,`quantity`, `quantityUnit`, `manufacturer`, `category`, `description`                       |
+Web DTO не возвращают JPA entities. Authentication principal отделён от `User` entity, поэтому persistence model не реализует Spring Security interfaces.
 
-## Безопасность и приватность
+## Авторизация
 
-- Сервер не хранит персональные данные, только технические идентификаторы. IP адреса хранятся только в кеше
-  в хешированном виде
-- JWT с ограниченным сроком действия.
-- Share-ключи кэшируются в хешированном виде и имеют TTL.
-- Логи пишутся только в stdout.
+Авторизация основана только на membership. Запросы ищут drug/medkit одновременно по resource ID и authenticated user ID. Отсутствующий и недоступный ресурс возвращают одинаковый `404`.
+
+Owner и роли отсутствуют. Любой участник может менять общую аптечку и удалить её для всех. `/leave` удаляет только текущего участника.
+
+## Конкурентность
+
+Операции изменения stock и treatment plans сериализуются pessimistic lock на строке drug. Это предотвращает отрицательный остаток без `@Version` и без дополнительной metadata.
+
+Количества представлены как `BigDecimal` и `NUMERIC(19,6)`. При пропорциональном уменьшении округление выполняется с `HALF_UP`, а residual добавляется к детерминированно выбранному плану, чтобы сумма оставалась точно равна stock.
+
+## Временные cache
+
+- share cache: `SHA-256(token) → medKitId`, TTL, token многоразовый до TTL;
+- registration cache: `HMAC(processKey, IP) → AtomicInteger`, фиксированное окно;
+- оба cache локальны процессу и очищаются при рестарте;
+- Aedile остаётся Kotlin API над Caffeine.
+
+## Database evolution
+
+Flyway является единственным production-механизмом изменения схемы. Hibernate работает с `ddl-auto=validate`. Existing schema получает baseline version 1, затем применяется decimal migration.
+
+## Operational boundary
+
+Caddy — единственный доверенный proxy. Tomcat принимает forwarded headers только из выделенной edge Docker-сети. Application и PostgreSQL не имеют host port в production Compose.
+
+Подробнее: [DEPLOYMENT.md](DEPLOYMENT.md) и [SECURITY.md](SECURITY.md).
