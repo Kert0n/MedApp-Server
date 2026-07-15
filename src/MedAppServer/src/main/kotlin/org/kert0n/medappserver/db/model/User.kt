@@ -45,17 +45,10 @@ class User(
         return id.hashCode()
     }
 
-    override fun getAuthorities(): Collection<GrantedAuthority> {
-        return emptyList()
-    }
+    override fun getAuthorities(): Collection<GrantedAuthority> = emptyList()
 
-    override fun getPassword(): String {
-        return hashedKey
-    }
+    override fun getPassword(): String = hashedKey
 
-    override fun getUsername(): String {
-        return id.toString()
-    }
+    override fun getUsername(): String = id.toString()
 
 }
-

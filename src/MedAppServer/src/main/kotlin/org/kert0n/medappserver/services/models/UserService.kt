@@ -19,19 +19,22 @@ import java.util.*
 class UserService(
     private val userRepository: UserRepository,
     private val securityService: SecurityService,
-    private val logger: Logger = LoggerFactory.getLogger(MedKitService::class.java)
+    private val logger: Logger = LoggerFactory.getLogger(UserService::class.java)
 ) : UserDetailsService {
 
     fun registerNewUser(login: UUID, password: String): User {
-        logger.debug("Register new user $login")
-        return userRepository.save(
+        val user = userRepository.save(
             User(login, securityService.hashPassword(password))
         )
+        return user
     }
 
     override fun loadUserByUsername(username: String): UserDetails {
-        logger.debug("Load user $username")
-        return userRepository.findByIdOrNull(UUID.fromString(username)) ?: throw UsernameNotFoundException(username)
+        val userId = runCatching { UUID.fromString(username) }.getOrElse {
+            throw UsernameNotFoundException("Invalid credentials")
+        }
+        val user = userRepository.findByIdOrNull(userId) ?: throw UsernameNotFoundException("Invalid credentials")
+        return user
     }
 
     fun findById(id: UUID): User {

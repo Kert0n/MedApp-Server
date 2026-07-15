@@ -18,7 +18,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.ResultActions
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch
-import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.*
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
@@ -95,32 +94,40 @@ class AuthControllerTest {
     }
 
     @Test
-    fun `GET login - returns token for authenticated user`() {
+    fun `POST token - returns no-store bearer token for authenticated user`() {
         val userId = UUID.randomUUID()
         val hashedPassword = "{noop}password"
         val user = User(id = userId, hashedKey = hashedPassword)
         whenever(userService.loadUserByUsername(userId.toString())).thenReturn(user)
-        whenever(securityService.generateToken(any<User>(), any())).thenReturn("jwt-token-123")
+        whenever(securityService.generateToken(user)).thenReturn("jwt-token-123")
 
         mockMvc.perform(
-            get("/auth/login")
+            post("/auth/token")
                 .with(httpBasic(userId.toString(), "password"))
         )
             .andExpect(status().isOk)
-            .andExpect(content().string("jwt-token-123"))
+            .andExpect(header().string("Cache-Control", "no-store"))
+            .andExpect(jsonPath("$.accessToken").value("jwt-token-123"))
+            .andExpect(jsonPath("$.tokenType").value("Bearer"))
     }
 
     @Test
-    fun `GET login - returns 401 with wrong password`() {
+    fun `POST token - returns 401 with wrong password`() {
         val userId = UUID.randomUUID()
         val hashedPassword = "{noop}correct-password"
         val user = User(id = userId, hashedKey = hashedPassword)
         whenever(userService.loadUserByUsername(userId.toString())).thenReturn(user)
 
         mockMvc.perform(
-            get("/auth/login")
+            post("/auth/token")
                 .with(httpBasic(userId.toString(), "wrong-password"))
         )
+            .andExpect(status().isUnauthorized)
+    }
+
+    @Test
+    fun `POST token - returns 401 without credentials`() {
+        mockMvc.perform(post("/auth/token"))
             .andExpect(status().isUnauthorized)
     }
 }

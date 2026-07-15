@@ -2,12 +2,13 @@ package org.kert0n.medappserver
 
 
 import org.springframework.boot.autoconfigure.SpringBootApplication
-import org.springframework.boot.context.properties.ConfigurationPropertiesScan
+import org.kert0n.medappserver.services.security.RsaKeyProperties
+import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.runApplication
 
 
 @SpringBootApplication
-@ConfigurationPropertiesScan
+@EnableConfigurationProperties(RsaKeyProperties::class)
 
 class MedAppServerApplication
 
