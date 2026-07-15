@@ -186,3 +186,4 @@ src/MedAppServer/src/main/resources/certs
 /src/main/resources/certs/public.pem
 /init-scripts/dump.sql
 /src/main/resources/application-prod.properties
+/.local/
