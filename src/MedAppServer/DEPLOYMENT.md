@@ -1,67 +1,46 @@
 # Production deployment
 
-## Required inputs
+## Перед запуском
 
-- `POSTGRES_PASSWORD`;
-- `REGISTRATION_SECRET`;
-- `JWT_PRIVATE_KEY_FILE`;
-- `JWT_PUBLIC_KEY_FILE`;
-- DNS record для домена из `Caddyfile`.
-
-RSA files не должны находиться в `src/main/resources`: `.dockerignore` исключает PEM и настоящий `application-prod.properties` из build context.
-
-Standalone Docker Compose монтирует file-based secrets как bind mounts и не
-меняет их host owner. Поскольку application запускается non-root, каталог с
-ключами должен иметь mode `0700`, а сами PEM — `0644`:
+1. Сделайте backup PostgreSQL.
+2. Проверьте данные по [DATABASE_MIGRATION.md](DATABASE_MIGRATION.md).
+3. Подготовьте отдельные production JWT keys вне repository.
+4. Задайте required environment variables:
 
 ```bash
-chmod 700 /secure/path
-chmod 644 /secure/path/jwt-private.pem /secure/path/jwt-public.pem
-```
-
-`0644` не открывает ключ другим host users: без execute permission на каталоге
-`0700` они не могут обратиться к находящимся внутри файлам. Не размещайте PEM в
-общедоступном каталоге.
-
-## Preflight
-
-```bash
-export POSTGRES_PASSWORD='...'
-export REGISTRATION_SECRET='...'
+export POSTGRES_PASSWORD='replace-me'
+export REGISTRATION_SECRET='replace-me'
 export JWT_PRIVATE_KEY_FILE='/secure/path/jwt-private.pem'
 export JWT_PUBLIC_KEY_FILE='/secure/path/jwt-public.pem'
-
-docker compose config
-docker compose build
 ```
 
-Перед первым запуском на существующей БД выполните процедуру из [DATABASE_MIGRATION.md](DATABASE_MIGRATION.md).
+Каталог с ключами должен быть доступен только оператору. Для standalone Compose файлы должны читаться non-root application container.
 
-## Start
+## Запуск
 
 ```bash
-docker compose up -d
-curl --fail https://medapp.el-communication.ru/actuator/health
+docker compose config
+docker compose up -d --build
+docker compose ps
 ```
 
-В production наружу публикуются только Caddy `80/443`. App `8080` и PostgreSQL `5432` доступны только внутри Docker networks.
+Application health:
 
-Production Compose собирает hardened Caddy и PostgreSQL images локально.
-Alpine packages обновляются при сборке, а Caddy и используемый PostgreSQL
-entrypoint-ом `gosu` пересобираются на зафиксированном Go toolchain с
-актуальными stdlib security fixes. Поэтому production images необходимо
-регулярно пересобирать, даже если application code не менялся.
+```bash
+docker compose exec -T med-app-server \
+  wget --quiet --output-document=- http://localhost:8080/actuator/health
+```
 
-## Logs
+## Diagnostics
 
-Production Compose использует `logging.driver: none`. `docker compose logs` не является способом диагностики production. Проверка состояния выполняется health endpoint и состоянием контейнеров.
+```bash
+docker compose logs --tail=200 med-app-server
+docker compose logs --tail=200 postgres
+docker compose logs --tail=200 caddy
+```
+
+Compose использует Docker `local` logging driver с ротацией `10 MB × 3` на service. Caddy HTTP access log не включён.
 
 ## Rollback
 
-1. Остановить запись трафика.
-2. Остановить stack.
-3. Восстановить pre-migration database backup, если была применена необратимая migration.
-4. Запустить предыдущий image и совместимую конфигурацию.
-5. Проверить health до возврата трафика.
-
-Не откатывайте только application image после применения несовместимой schema migration.
+Application rollback выполняется возвратом предыдущего image. Если Flyway уже изменил schema, восстановите согласованный database backup; не пытайтесь автоматически откатывать destructive migration.

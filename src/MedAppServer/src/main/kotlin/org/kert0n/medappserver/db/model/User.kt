@@ -2,6 +2,8 @@ package org.kert0n.medappserver.db.model
 
 import jakarta.persistence.*
 import jakarta.validation.constraints.NotNull
+import org.springframework.security.core.GrantedAuthority
+import org.springframework.security.core.userdetails.UserDetails
 import java.util.*
 
 @Entity
@@ -27,7 +29,7 @@ class User(
     var medKits: MutableSet<MedKit> = mutableSetOf(),
     @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
     var usings: MutableSet<Using> = mutableSetOf()
-) {
+) : UserDetails {
 
 
     override fun equals(other: Any?): Boolean {
@@ -42,5 +44,11 @@ class User(
     override fun hashCode(): Int {
         return id.hashCode()
     }
+
+    override fun getAuthorities(): Collection<GrantedAuthority> = emptyList()
+
+    override fun getPassword(): String = hashedKey
+
+    override fun getUsername(): String = id.toString()
 
 }

@@ -2,6 +2,7 @@
 .github
 .gradle
 .idea
+.local
 build
 htmlReport
 **/.DS_Store

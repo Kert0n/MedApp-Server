@@ -6,7 +6,6 @@ import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.services.models.UserService
 import org.kert0n.medappserver.services.security.SecurityService
-import org.kert0n.medappserver.services.security.AuthenticatedUser
 import org.mockito.kotlin.any
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.whenever
@@ -98,9 +97,9 @@ class AuthControllerTest {
     fun `POST token - returns no-store bearer token for authenticated user`() {
         val userId = UUID.randomUUID()
         val hashedPassword = "{noop}password"
-        val user = AuthenticatedUser(id = userId, hashedKey = hashedPassword)
+        val user = User(id = userId, hashedKey = hashedPassword)
         whenever(userService.loadUserByUsername(userId.toString())).thenReturn(user)
-        whenever(securityService.generateToken(userId)).thenReturn("jwt-token-123")
+        whenever(securityService.generateToken(user)).thenReturn("jwt-token-123")
 
         mockMvc.perform(
             post("/auth/token")
@@ -116,7 +115,7 @@ class AuthControllerTest {
     fun `POST token - returns 401 with wrong password`() {
         val userId = UUID.randomUUID()
         val hashedPassword = "{noop}correct-password"
-        val user = AuthenticatedUser(id = userId, hashedKey = hashedPassword)
+        val user = User(id = userId, hashedKey = hashedPassword)
         whenever(userService.loadUserByUsername(userId.toString())).thenReturn(user)
 
         mockMvc.perform(

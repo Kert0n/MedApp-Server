@@ -24,7 +24,7 @@ import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator
 import org.springframework.security.oauth2.core.OAuth2Error
 import org.springframework.security.oauth2.core.OAuth2TokenValidator
 import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult
-import org.kert0n.medappserver.config.AuthenticationProperties
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.authentication.HttpStatusEntryPoint
 
@@ -33,14 +33,19 @@ import org.springframework.security.web.authentication.HttpStatusEntryPoint
 @EnableWebSecurity
 class SecurityConfiguration(
     private val rsaKeys: RsaKeyProperties,
-    private val authenticationProperties: AuthenticationProperties,
+    @Value($$"${authentication.issuer:medapp-server}") private val authenticationIssuer: String,
+    @Value($$"${authentication.audience:medapp-api}") private val authenticationAudience: String,
 ) {
+    init {
+        require(authenticationIssuer.isNotBlank()) { "authentication.issuer must not be blank" }
+        require(authenticationAudience.isNotBlank()) { "authentication.audience must not be blank" }
+    }
 
     @Bean
     fun jwtDecoder(): JwtDecoder = NimbusJwtDecoder.withPublicKey(rsaKeys.publicKey).build().apply {
-        val issuerValidator = JwtValidators.createDefaultWithIssuer(authenticationProperties.issuer)
+        val issuerValidator = JwtValidators.createDefaultWithIssuer(authenticationIssuer)
         val audienceValidator = OAuth2TokenValidator<Jwt> { jwt ->
-            if (authenticationProperties.audience in jwt.audience) {
+            if (authenticationAudience in jwt.audience) {
                 OAuth2TokenValidatorResult.success()
             } else {
                 OAuth2TokenValidatorResult.failure(OAuth2Error("invalid_token", "Invalid audience", null))

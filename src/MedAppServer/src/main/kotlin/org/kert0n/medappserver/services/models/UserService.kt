@@ -3,7 +3,6 @@ package org.kert0n.medappserver.services.models
 import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.services.security.SecurityService
-import org.kert0n.medappserver.services.security.AuthenticatedUser
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.data.repository.findByIdOrNull
@@ -35,7 +34,7 @@ class UserService(
             throw UsernameNotFoundException("Invalid credentials")
         }
         val user = userRepository.findByIdOrNull(userId) ?: throw UsernameNotFoundException("Invalid credentials")
-        return AuthenticatedUser(user.id, user.hashedKey)
+        return user
     }
 
     fun findById(id: UUID): User {

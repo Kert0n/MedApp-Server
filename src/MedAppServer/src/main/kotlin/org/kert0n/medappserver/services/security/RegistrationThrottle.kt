@@ -1,7 +1,7 @@
 package org.kert0n.medappserver.services.security
 
 import com.sksamuel.aedile.core.Cache
-import org.kert0n.medappserver.config.RegistrationProperties
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
@@ -14,14 +14,23 @@ import kotlin.io.encoding.Base64
 
 @Service
 class RegistrationThrottle(
-    private val properties: RegistrationProperties,
+    @Value($$"${registration.secret}") private val registrationSecret: String,
+    @Value($$"${registration.throttle.max-successful-registrations:3}")
+    private val maxSuccessfulRegistrations: Int,
     private val counters: Cache<String, AtomicInteger>
 ) {
     private val processKey = ByteArray(32).also(SecureRandom()::nextBytes)
 
+    init {
+        require(registrationSecret.isNotBlank()) { "registration.secret must not be blank" }
+        require(maxSuccessfulRegistrations >= 1) {
+            "registration.throttle.max-successful-registrations must be at least 1"
+        }
+    }
+
     fun isValidRegistrationToken(candidate: String): Boolean = MessageDigest.isEqual(
         candidate.toByteArray(StandardCharsets.UTF_8),
-        properties.secret.toByteArray(StandardCharsets.UTF_8)
+        registrationSecret.toByteArray(StandardCharsets.UTF_8)
     )
 
     /**
@@ -30,7 +39,7 @@ class RegistrationThrottle(
      */
     suspend fun tryAcquire(clientAddress: String): RegistrationPermit? {
         val counter = counters.get(toTransientKey(clientAddress)) { AtomicInteger(0) }
-        if (counter.incrementAndGet() > properties.throttle.maxSuccessfulRegistrations) {
+        if (counter.incrementAndGet() > maxSuccessfulRegistrations) {
             counter.decrementAndGet()
             return null
         }

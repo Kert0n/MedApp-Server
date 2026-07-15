@@ -1,8 +1,0 @@
-# Deleted non-production RSA test fixture. Tests now generate an ephemeral key.
-# These fingerprints remain because rewriting shared Git history is unsafe.
-b69d3046163272f0531f7759ceae49413120c1f3:src/MedAppServer/src/test/resources/certs/private.pem:private-key:1
-0801bc60c6091ebeca9c1a41181d4026e36ffde0:src/MedAppServer/src/test/resources/certs/private.pem:private-key:1
-
-# Historical hard-coded JWT-shaped test value; not a token issued by MedApp.
-ea538dc2427f0c730b8860a6876b7f5fbc97f644:src/MedAppServer/src/test/kotlin/org/kert0n/medappserver/controller/AuthControllerTest.kt:jwt:207
-336209253e59148d7ad73a9e838f927a3931cee2:src/MedAppServer/src/test/kotlin/org/kert0n/medappserver/controller/AuthControllerTest.kt:jwt:207

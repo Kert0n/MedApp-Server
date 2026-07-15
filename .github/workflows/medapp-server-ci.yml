@@ -26,6 +26,11 @@ jobs:
   test-and-build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      RSA_PRIVATE_KEY: file:${{ runner.temp }}/medapp-secrets/ci-jwt-private.pem
+      RSA_PUBLIC_KEY: file:${{ runner.temp }}/medapp-secrets/ci-jwt-public.pem
+      JWT_PRIVATE_KEY_FILE: ${{ runner.temp }}/medapp-secrets/ci-jwt-private.pem
+      JWT_PUBLIC_KEY_FILE: ${{ runner.temp }}/medapp-secrets/ci-jwt-public.pem
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
@@ -35,6 +40,8 @@ jobs:
           distribution: temurin
           java-version: "21"
       - uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6
+      - name: Generate ephemeral CI signing keys
+        run: ./src/main/resources/certs/gen.sh "${RUNNER_TEMP}/medapp-secrets"
       - name: Test
         run: ./gradlew clean test --no-daemon
       - name: Build executable JAR
@@ -43,8 +50,6 @@ jobs:
         env:
           POSTGRES_PASSWORD: ci-placeholder
           REGISTRATION_SECRET: ci-placeholder
-          JWT_PRIVATE_KEY_FILE: /tmp/ci-jwt-private.pem
-          JWT_PUBLIC_KEY_FILE: /tmp/ci-jwt-public.pem
         run: docker compose config --quiet
       - name: Validate Caddy configuration
         run: >-
@@ -54,21 +59,10 @@ jobs:
           caddy validate --config /etc/caddy/Caddyfile
       - name: Build production container
         run: docker build --tag medapp-server:${{ github.sha }} .
-      - name: Generate ephemeral smoke-test signing keys
-        run: |
-          install -d -m 700 "${RUNNER_TEMP}/medapp-secrets"
-          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 \
-            -out "${RUNNER_TEMP}/medapp-secrets/ci-jwt-private.pem"
-          openssl rsa -pubout -in "${RUNNER_TEMP}/medapp-secrets/ci-jwt-private.pem" \
-            -out "${RUNNER_TEMP}/medapp-secrets/ci-jwt-public.pem"
-          chmod 644 "${RUNNER_TEMP}/medapp-secrets/ci-jwt-private.pem" \
-            "${RUNNER_TEMP}/medapp-secrets/ci-jwt-public.pem"
       - name: Smoke-test production database and application
         env:
           POSTGRES_PASSWORD: ci-placeholder
           REGISTRATION_SECRET: ci-placeholder
-          JWT_PRIVATE_KEY_FILE: ${{ runner.temp }}/medapp-secrets/ci-jwt-private.pem
-          JWT_PUBLIC_KEY_FILE: ${{ runner.temp }}/medapp-secrets/ci-jwt-public.pem
         run: |
           docker compose --project-name medapp-ci up --detach --build --wait postgres med-app-server
           docker compose --project-name medapp-ci exec -T med-app-server \
@@ -78,6 +72,4 @@ jobs:
         env:
           POSTGRES_PASSWORD: ci-placeholder
           REGISTRATION_SECRET: ci-placeholder
-          JWT_PRIVATE_KEY_FILE: ${{ runner.temp }}/medapp-secrets/ci-jwt-private.pem
-          JWT_PUBLIC_KEY_FILE: ${{ runner.temp }}/medapp-secrets/ci-jwt-public.pem
         run: docker compose --project-name medapp-ci down --volumes --remove-orphans

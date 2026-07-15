@@ -11,19 +11,20 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.servlet.http.HttpServletRequest
 import org.kert0n.medappserver.controller.dto.RegisterResponse
 import org.kert0n.medappserver.controller.dto.TokenResponse
-import org.kert0n.medappserver.config.AuthenticationProperties
+import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.services.models.UserService
-import org.kert0n.medappserver.services.models.userId
 import org.kert0n.medappserver.services.security.SecurityService
 import org.kert0n.medappserver.services.security.ClientAddressProvider
 import org.kert0n.medappserver.services.security.RegistrationThrottle
 import org.springframework.http.HttpStatus
 import org.springframework.http.CacheControl
 import org.springframework.http.ResponseEntity
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.server.ResponseStatusException
 import java.util.*
+import java.time.Duration
 
 @RestController
 @RequestMapping("/auth")
@@ -33,8 +34,13 @@ class AuthController(
     private val securityService: SecurityService,
     private val registrationThrottle: RegistrationThrottle,
     private val clientAddressProvider: ClientAddressProvider,
-    private val authenticationProperties: AuthenticationProperties
+    @Value($$"${authentication.term:10m}") private val authenticationTerm: Duration
 ) {
+    init {
+        require(!authenticationTerm.isZero && !authenticationTerm.isNegative) {
+            "authentication.term must be positive"
+        }
+    }
 
     @PostMapping("/register")
     @Operation(
@@ -96,8 +102,8 @@ class AuthController(
             .header("Pragma", "no-cache")
             .body(
                 TokenResponse(
-                    accessToken = securityService.generateToken(authentication.userId),
-                    expiresIn = authenticationProperties.term.seconds
+                    accessToken = securityService.generateToken(authentication.principal as User),
+                    expiresIn = authenticationTerm.seconds
                 )
             )
 }

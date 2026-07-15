@@ -1,98 +1,52 @@
 # MedApp Server
 
-REST API для синхронизации общих аптечек, препаратов и планов лечения.
+Backend общей домашней аптечки на Kotlin и Spring Boot.
 
-## Privacy by design
+Участники аптечки равноправны. Сервер не хранит владельца, роли, автора изменения или историю действий. Authentication key возвращается при регистрации один раз; в базе остаётся только его hash.
 
-Сервер хранит текущее состояние, технических пользователей и связи пользователей с аптечками, но сознательно не хранит владельца, роли, автора изменения и историю действий. Участники общей аптечки равноправны.
+## Требования
 
-Share token хранится только в виде временного SHA-256 hash в локальном Aedile/Caffeine cache. Registration throttle хранит только временный HMAC от IP с process-local случайным ключом. После перезапуска эти данные исчезают.
+- JDK 21;
+- Docker и Docker Compose;
+- OpenSSL для локальной генерации JWT keys.
 
-Подробные гарантии и ограничения: [PRIVACY_MODEL.md](PRIVACY_MODEL.md).
+## Локальный запуск
 
-## Технологии
+Один раз создайте локальную RSA-пару:
 
-- Kotlin 2 и Java 21
-- Spring Boot 4, Spring MVC и Spring Security
-- Spring Data JPA, PostgreSQL 18 и Flyway
-- Aedile как Kotlin API над Caffeine
-- Caddy, Docker и Docker Compose
+```bash
+./src/main/resources/certs/gen.sh
+```
 
-## API
+Повторный вызов проверяет и повторно использует существующие файлы в `.local/secrets`. Поэтому JWT остаются валидными между Gradle, IDE и debug-запусками.
 
-Основные публичные endpoints:
+Явная ротация:
 
-- `POST /auth/register` — создать технического пользователя, передав `X-Registration-Token`;
-- `POST /auth/token` — получить JWT через HTTP Basic;
-- `/med-kit` — управление общими аптечками;
-- `/drug` — управление препаратами;
-- `/using` — планы лечения и приём препаратов;
-- `GET /user` — полный snapshot доступных пользователю данных.
+```bash
+./src/main/resources/certs/gen.sh --force
+```
 
-`open-api.yaml` является проверяемым контрактом и автоматически сравнивается со Springdoc во время тестов.
+После ротации ранее выданные JWT перестают проверяться.
 
-## Локальная разработка
-
-Требования: JDK 21 и Docker.
+Запустите development database и приложение:
 
 ```bash
 docker compose -f compose.dev.yaml up -d
-./src/main/resources/certs/gen.sh
-./gradlew bootRun --args='--spring.profiles.active=dev'
+SPRING_PROFILES_ACTIVE=dev ./gradlew bootRun
 ```
 
-Dev profile использует локальные тестовые значения и не предназначен для публичного развёртывания. RSA keys создаются в ignored-каталоге `.local/secrets`; Gradle явно исключает любые `certs/*.pem` из main resources, поэтому локальный ключ не может случайно попасть в JAR.
+OpenAPI в dev доступен через `/swagger-ui/index.html` и `/v3/api-docs`.
 
-Swagger UI: `http://localhost:8080/swagger-ui/index.html`.
-
-## Тесты
+## Проверка
 
 ```bash
-./gradlew test
+./gradlew clean test bootJar --no-daemon
 ```
-
-Обновление OpenAPI после намеренного изменения API:
-
-```bash
-./gradlew test --tests '*OpenApiContractTest' -DupdateOpenApi=true
-./gradlew test
-```
-
-## Production
-
-Production использует Caddy как единственную публичную точку входа. Порты application и PostgreSQL наружу не публикуются. Перед запуском требуются:
-
-- `POSTGRES_PASSWORD`;
-- `REGISTRATION_SECRET`;
-- `JWT_PRIVATE_KEY_FILE`;
-- `JWT_PUBLIC_KEY_FILE`.
-
-```bash
-docker compose config
-docker compose up -d --build
-```
-
-Настройки и rollback описаны в [DEPLOYMENT.md](DEPLOYMENT.md), миграции — в [DATABASE_MIGRATION.md](DATABASE_MIGRATION.md).
-
-## Registration throttle
-
-Throttle предназначен для отсечения случайных автоматических регистраций, а не для противодействия целевой распределённой атаке.
-
-- учитываются только успешные регистрации;
-- check и reservation атомарны;
-- IP не сохраняется в исходном виде;
-- окно и лимит задаются через `registration.throttle.window` и `registration.throttle.max-successful-registrations`;
-- состояние локально одному экземпляру приложения;
-- исчерпание лимита возвращает `429`.
-
-При горизонтальном масштабировании потребуется отдельное архитектурное решение. Оно намеренно не добавлено в текущую одноинстансную privacy-модель.
 
 ## Документация
 
-- [ARCHITECTURE.md](ARCHITECTURE.md)
-- [PRIVACY_MODEL.md](PRIVACY_MODEL.md)
-- [SECURITY.md](SECURITY.md)
-- [DEPLOYMENT.md](DEPLOYMENT.md)
-- [DATABASE_MIGRATION.md](DATABASE_MIGRATION.md)
-- [API_MIGRATION_V1.md](API_MIGRATION_V1.md)
-- [CHANGELOG.md](CHANGELOG.md)
+- [ARCHITECTURE.md](ARCHITECTURE.md) — компоненты и data flow;
+- [PRIVACY_MODEL.md](PRIVACY_MODEL.md) — какие данные сохраняются;
+- [API_MIGRATION_V1.md](API_MIGRATION_V1.md) — изменения HTTP API;
+- [DATABASE_MIGRATION.md](DATABASE_MIGRATION.md) — миграция базы;
+- [DEPLOYMENT.md](DEPLOYMENT.md) — production запуск и диагностика.

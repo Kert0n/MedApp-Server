@@ -1,49 +1,27 @@
 # Privacy model
 
-## Что сервер знает
+## Что сохраняется
 
-Сервер неизбежно знает:
+- случайный user identifier и hash authentication key;
+- membership пользователя в общих аптечках;
+- текущее содержимое аптечек и treatment plans.
 
-- существование технического user ID;
-- hash authentication key;
-- membership пользователя в аптечках;
-- текущее содержимое аптечки;
-- текущие treatment plans пользователя;
-- данные текущего HTTP-запроса во время его обработки.
+## Что не сохраняется
 
-## Что сервер намеренно не хранит
+- owner и роли участников;
+- автор или причина изменения;
+- audit/history действий;
+- исходные authentication и share keys;
+- история IP-адресов.
 
-- персональные данные и контакты;
-- owner аптечки и роли;
-- автора изменения;
-- причины изменения;
-- историю действий и audit trail;
-- login history;
-- исходные share tokens;
-- исходные IP в application cache;
-- persistent registration throttle;
-- entity version columns.
-
-Отсутствие author metadata означает, что после изменения можно увидеть новое состояние, но нельзя определить, какой участник его создал.
+Все участники общей аптечки равноправны. Удаление owner/roles/audit является частью product model, а не отсутствующей функцией.
 
 ## Logs
 
-Production Caddy access log отключён. Docker logging driver для application, Caddy и PostgreSQL установлен в `none`, поэтому stdout/stderr контейнеров не сохраняются Docker daemon.
+Caddy HTTP access log отключён. Operational console logs контейнеров доступны для диагностики и ограничены Docker-ротацией. Application не пишет credentials, JWT, signing keys или datasource password.
 
-Application не пишет пользовательские identifiers и medication values на INFO/WARN. Dev logs не являются частью production privacy guarantee.
+Infrastructure вне application — hosting provider, DNS, kernel и внешняя сеть — может иметь собственную telemetry и требует отдельной настройки оператора.
 
-Host, cloud provider, kernel, DNS и внешняя сеть остаются вне контроля application. Оператор должен отдельно проверить, что reverse proxy перед Caddy, hosting provider и network equipment не создают собственные access logs.
+## Ограничения
 
-## Tokens
-
-Authentication key возвращается один раз при регистрации. Сервер хранит только password hash и не может восстановить исходный key. Account recovery намеренно отсутствует.
-
-Share token хранится в cache только как SHA-256 hash и исчезает после TTL или restart. Token многоразовый в пределах TTL.
-
-## Registration IP
-
-IP используется только как вход HMAC-SHA-256. HMAC key генерируется на startup и не сохраняется. Поэтому cache key нельзя стабильно сопоставить между рестартами и нельзя проверить перебором без process-local key.
-
-## Принятый trade-off
-
-Модель уменьшает объём данных, полезных при компрометации, но не делает сервер «невзламываемым». Компрометация работающего процесса всё ещё даёт доступ к текущим запросам, расшифрованному состоянию в памяти, базе данных и signing key.
+Privacy-by-design уменьшает объём сохранённых данных, но не делает работающий процесс или базу недоступными при их компрометации. Account recovery без authentication key намеренно отсутствует.

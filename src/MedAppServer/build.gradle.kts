@@ -1,6 +1,3 @@
-import java.security.KeyPairGenerator
-import java.util.Base64
-
 plugins {
     kotlin("jvm") version "2.2.21"
     kotlin("plugin.spring") version "2.2.21"
@@ -23,42 +20,27 @@ repositories {
     mavenCentral()
 }
 
-val generatedTestResources = layout.buildDirectory.dir("generated-test-resources")
+val localJwtPrivateKey = layout.projectDirectory.file(".local/secrets/jwt-private.pem")
+val localJwtPublicKey = layout.projectDirectory.file(".local/secrets/jwt-public.pem")
+val externalJwtPrivateKey = providers.environmentVariable("RSA_PRIVATE_KEY")
+val externalJwtPublicKey = providers.environmentVariable("RSA_PUBLIC_KEY")
 
-val generateTestRsaKeys by tasks.registering {
-    description = "Generates an ephemeral RSA key pair for the test profile"
-    outputs.dir(generatedTestResources)
-    outputs.upToDateWhen { false }
-
-    doLast {
-        val certificateDirectory = generatedTestResources.get().dir("certs").asFile
-        certificateDirectory.mkdirs()
-
-        val keyPairGenerator = KeyPairGenerator.getInstance("RSA")
-        keyPairGenerator.initialize(2048)
-        val keyPair = keyPairGenerator.generateKeyPair()
-        val mimeEncoder = Base64.getMimeEncoder(64, "\n".toByteArray())
-
-        fun pem(type: String, encoded: ByteArray): String = buildString {
-            appendLine("-----BEGIN $type-----")
-            appendLine(mimeEncoder.encodeToString(encoded))
-            appendLine("-----END $type-----")
+val ensureLocalJwtKeys by tasks.registering(Exec::class) {
+    description = "Creates the stable local JWT key pair when it does not already exist"
+    outputs.files(localJwtPrivateKey, localJwtPublicKey)
+    onlyIf { !(externalJwtPrivateKey.isPresent && externalJwtPublicKey.isPresent) }
+    doFirst {
+        require(externalJwtPrivateKey.isPresent == externalJwtPublicKey.isPresent) {
+            "RSA_PRIVATE_KEY and RSA_PUBLIC_KEY must be configured together"
         }
-
-        certificateDirectory.resolve("private.pem")
-            .writeText(pem("PRIVATE KEY", keyPair.private.encoded))
-        certificateDirectory.resolve("public.pem")
-            .writeText(pem("PUBLIC KEY", keyPair.public.encoded))
     }
+    commandLine("sh", "src/main/resources/certs/gen.sh")
 }
 
 sourceSets {
     main {
         // Signing keys are runtime inputs and must never be packaged into an artifact.
         resources.exclude("certs/*.pem")
-    }
-    test {
-        resources.srcDir(generatedTestResources)
     }
 }
 
@@ -111,5 +93,5 @@ tasks.withType<Test> {
 }
 
 tasks.named<ProcessResources>("processTestResources") {
-    dependsOn(generateTestRsaKeys)
+    dependsOn(ensureLocalJwtKeys)
 }
