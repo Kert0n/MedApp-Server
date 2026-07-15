@@ -1,9 +1,13 @@
 .gradle
-build
 .idea
+.local
+build
 *.iml
 *.ipr
 *.iws
 .DS_Store
+src/main/resources/application-prod.properties
+src/main/resources/certs/*.pem
+src/test
 *.log
 .env

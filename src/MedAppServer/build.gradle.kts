@@ -20,6 +20,30 @@ repositories {
     mavenCentral()
 }
 
+val localJwtPrivateKey = layout.projectDirectory.file(".local/secrets/jwt-private.pem")
+val localJwtPublicKey = layout.projectDirectory.file(".local/secrets/jwt-public.pem")
+val externalJwtPrivateKey = providers.environmentVariable("RSA_PRIVATE_KEY")
+val externalJwtPublicKey = providers.environmentVariable("RSA_PUBLIC_KEY")
+
+val ensureLocalJwtKeys by tasks.registering(Exec::class) {
+    description = "Creates the stable local JWT key pair when it does not already exist"
+    outputs.files(localJwtPrivateKey, localJwtPublicKey)
+    onlyIf { !(externalJwtPrivateKey.isPresent && externalJwtPublicKey.isPresent) }
+    doFirst {
+        require(externalJwtPrivateKey.isPresent == externalJwtPublicKey.isPresent) {
+            "RSA_PRIVATE_KEY and RSA_PUBLIC_KEY must be configured together"
+        }
+    }
+    commandLine("sh", "src/main/resources/certs/gen.sh")
+}
+
+sourceSets {
+    main {
+        // Signing keys are runtime inputs and must never be packaged into an artifact.
+        resources.exclude("certs/*.pem")
+    }
+}
+
 dependencies {
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.1")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
@@ -65,4 +89,8 @@ allOpen {
 tasks.withType<Test> {
     useJUnitPlatform()
     jvmArgs("-XX:+EnableDynamicAgentLoading")
+}
+
+tasks.named<ProcessResources>("processTestResources") {
+    dependsOn(ensureLocalJwtKeys)
 }
