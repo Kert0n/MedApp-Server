@@ -1,59 +1,118 @@
+name: medapp
+
+x-logging: &bounded-logging
+  driver: local
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   postgres:
-    image: 'postgres:18.3-trixie'
+    image: medapp-postgres:18.4-hardened
+    build:
+      context: .
+      dockerfile: Postgres.Dockerfile
     environment:
-      - 'POSTGRES_DB=medapp-server-db'
-      - 'POSTGRES_PASSWORD=secret'
-      - 'POSTGRES_USER=myuser'
+      POSTGRES_DB: medapp-server-db
+      POSTGRES_USER: medapp
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
     volumes:
       - postgres_data:/var/lib/postgresql
-      - ./init-scripts/dump.sql:/docker-entrypoint-initdb.d/dump.sql
-    ports:
-      - "5432:5432"
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U myuser -d medapp-server-db" ]
+      test: ["CMD-SHELL", "pg_isready -U medapp -d medapp-server-db"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
-      - med-app-network
+      - data
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run/postgresql:uid=70,gid=70,mode=3775
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging: *bounded-logging
 
-#  med-app-server:
-#    build:
-#      context: .
-#      dockerfile: Dockerfile
-#    environment:
-#      - 'SPRING_PROFILES_ACTIVE=prod'
-#      - 'SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/medapp-server-db'
-#      - 'SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT=60000'
-#    expose:
-#      - "8080"
-#    depends_on:
-#      postgres:
-#        condition: service_healthy
-#    networks:
-#      - med-app-network
-#    healthcheck:
-#      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
-#      interval: 30s
-#      timeout: 10s
-#      retries: 3
-#      start_period: 40s
-#    restart: unless-stopped
-#
-#  caddy:
-#    image: caddy:2-alpine
-#    ports:
-#      - "80:80"
-#      - "443:443"
-#    volumes:
-#      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-#      - caddy_data:/data       # тут Caddy хранит сертификаты
-#      - caddy_config:/config
-#    networks:
-#      - med-app-network
-#    restart: unless-stopped
+  med-app-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/medapp-server-db
+      SPRING_DATASOURCE_USERNAME: medapp
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      REGISTRATION_SECRET: ${REGISTRATION_SECRET:?REGISTRATION_SECRET must be set}
+      RSA_PRIVATE_KEY: file:/run/secrets/jwt-private.pem
+      RSA_PUBLIC_KEY: file:/run/secrets/jwt-public.pem
+      SERVER_FORWARD_HEADERS_STRATEGY: NATIVE
+      SERVER_TOMCAT_REMOTEIP_INTERNAL_PROXIES: 172.30.0.0/24
+    secrets:
+      - source: jwt_private
+        target: jwt-private.pem
+      - source: jwt_public
+        target: jwt-public.pem
+    expose:
+      - "8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - edge
+      - data
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging: *bounded-logging
 
+  caddy:
+    image: medapp-caddy:2.11.4-hardened
+    build:
+      context: .
+      dockerfile: Caddy.Dockerfile
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      med-app-server:
+        condition: service_healthy
+    networks:
+      - edge
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    logging: *bounded-logging
+
+secrets:
+  jwt_private:
+    file: ${JWT_PRIVATE_KEY_FILE:?JWT_PRIVATE_KEY_FILE must be set}
+  jwt_public:
+    file: ${JWT_PUBLIC_KEY_FILE:?JWT_PUBLIC_KEY_FILE must be set}
 
 volumes:
   postgres_data:
@@ -61,5 +120,12 @@ volumes:
   caddy_config:
 
 networks:
-  med-app-network:
-    driver: bridge
+  edge:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+  data:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.31.0.0/24

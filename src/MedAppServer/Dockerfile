@@ -3,25 +3,24 @@ FROM gradle:9.3-jdk21 AS build
 WORKDIR /app
 
 # Copy gradle files for dependency caching
-COPY build.gradle.kts settings.gradle.kts ./
+COPY build.gradle.kts settings.gradle.kts gradlew ./
 COPY gradle ./gradle
 
-# Download dependencies
-RUN gradle dependencies --no-daemon || true
+# Resolve and verify dependencies before copying sources, preserving the cache layer.
+RUN ./gradlew dependencies --no-daemon
 
 # Copy source code
 COPY src ./src
 
 # Build application
-RUN gradle bootJar --no-daemon
+RUN ./gradlew bootJar --no-daemon
 
 # Runtime stage
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
-# Install wget for healthcheck
-RUN apk add --no-cache wget
-RUN apk add --no-cache curl
+# Install only the healthcheck client, then run without root privileges.
+RUN apk upgrade --no-cache && apk add --no-cache wget
 
 # Create non-root user for security
 RUN addgroup -S spring && adduser -S spring -G spring

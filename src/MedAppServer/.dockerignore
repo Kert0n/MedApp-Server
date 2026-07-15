@@ -1,13 +1,12 @@
+.git
+.github
 .gradle
 .idea
 .local
 build
-*.iml
-*.ipr
-*.iws
-.DS_Store
+htmlReport
+**/.DS_Store
 src/main/resources/application-prod.properties
 src/main/resources/certs/*.pem
 src/test
 *.log
-.env
