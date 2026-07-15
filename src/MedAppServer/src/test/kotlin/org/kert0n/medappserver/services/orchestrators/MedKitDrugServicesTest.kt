@@ -51,7 +51,7 @@ class MedKitDrugServicesTest {
         dbHelper.flushAndClear()
 
         val drug = medKitDrugServices.createDrugInMedkit(
-            DrugCreateDTO(name = "Aspirin", quantity = 100.0, quantityUnit = "mg", medKitId = kit.id),
+            DrugCreateDTO(name = "Aspirin", quantity = 100.0.toBigDecimal(), quantityUnit = "mg", medKitId = kit.id),
             alice.id
         )
 
@@ -68,7 +68,7 @@ class MedKitDrugServicesTest {
 
         assertFailsWith<ResponseStatusException> {
             medKitDrugServices.createDrugInMedkit(
-                DrugCreateDTO(name = "Drug", quantity = 10.0, quantityUnit = "mg", medKitId = kit.id),
+                DrugCreateDTO(name = "Drug", quantity = 10.0.toBigDecimal(), quantityUnit = "mg", medKitId = kit.id),
                 eve.id
             )
         }
@@ -81,7 +81,7 @@ class MedKitDrugServicesTest {
         val alice = dbHelper.freshUser("alice")
         val kit1 = medKitService.createNew(alice.id)
         val kit2 = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit1, 50.0)
+        val drug = dbHelper.freshDrug(kit1, 50.0.toBigDecimal())
         dbHelper.flushAndClear()
 
         val moved = medKitDrugServices.moveDrug(drug.id, kit2.id, alice.id)
@@ -96,11 +96,11 @@ class MedKitDrugServicesTest {
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(sourceKit.id, alice.id), bob.id)
 
         val targetKit = medKitService.createNew(alice.id) // Only Alice
-        val drug = dbHelper.freshDrug(sourceKit, 50.0)
+        val drug = dbHelper.freshDrug(sourceKit, 50.0.toBigDecimal())
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 10.0))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, 10.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 10.0.toBigDecimal()))
+        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, 10.0.toBigDecimal()))
         dbHelper.flushAndClear()
 
         medKitDrugServices.moveDrug(drug.id, targetKit.id, alice.id)
@@ -118,7 +118,7 @@ class MedKitDrugServicesTest {
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kitA.id, alice.id), bob.id)
 
         val drug = drugService.create(
-            DrugCreateDTO("Shared Meds", 10.0, "pcs", kitA.id), kitA, alice.id
+            DrugCreateDTO("Shared Meds", 10.0.toBigDecimal(), "pcs", kitA.id), kitA, alice.id
         )
         val kitB = medKitService.createNew(bob.id)
         dbHelper.flushAndClear()
@@ -134,7 +134,7 @@ class MedKitDrugServicesTest {
     fun `moveDrug throws when target medkit not found`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 10.0)
+        val drug = dbHelper.freshDrug(kit, 10.0.toBigDecimal())
         dbHelper.flushAndClear()
 
         assertThrows<ResponseStatusException> {
@@ -150,10 +150,10 @@ class MedKitDrugServicesTest {
         val bob = dbHelper.freshUser("bob")
         val kit = medKitService.createNew(alice.id)
         medKitService.addUserToMedKit(kit.id, bob.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit, 100.0.toBigDecimal())
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, 10.0))
+        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, 10.0.toBigDecimal()))
         dbHelper.flushAndClear()
 
         medKitDrugServices.removeUserFromMedKit(kit.id, bob.id)
@@ -171,7 +171,7 @@ class MedKitDrugServicesTest {
     fun `delete without transfer removes medkit`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        dbHelper.freshDrug(kit, 10.0)
+        dbHelper.freshDrug(kit, 10.0.toBigDecimal())
         dbHelper.flushAndClear()
 
         medKitDrugServices.delete(kit.id, alice.id, null)
@@ -188,7 +188,7 @@ class MedKitDrugServicesTest {
         val kitA = medKitService.createNew(alice.id)
         val kitB = medKitService.createNew(alice.id)
         val drug = medKitDrugServices.createDrugInMedkit(
-            DrugCreateDTO("Migrating Drug", 10.0, "pcs", kitA.id), alice.id
+            DrugCreateDTO("Migrating Drug", 10.0.toBigDecimal(), "pcs", kitA.id), alice.id
         )
         dbHelper.flushAndClear()
 
@@ -210,11 +210,11 @@ class MedKitDrugServicesTest {
 
         val newKit = medKitService.createNew(alice.id) // Only Alice
 
-        val drug = dbHelper.freshDrug(oldKit, 90.0)
+        val drug = dbHelper.freshDrug(oldKit, 90.0.toBigDecimal())
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 30.0))
-        usingService.createTreatmentPlan(charlie.id, UsingCreateDTO(drug.id, 30.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 30.0.toBigDecimal()))
+        usingService.createTreatmentPlan(charlie.id, UsingCreateDTO(drug.id, 30.0.toBigDecimal()))
         dbHelper.flushAndClear()
 
         medKitDrugServices.delete(oldKit.id, alice.id, newKit.id)
@@ -241,11 +241,11 @@ class MedKitDrugServicesTest {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
         drugService.create(
-            DrugCreateDTO(name = "Drug A", quantity = 50.0, quantityUnit = "mg", medKitId = kit.id),
+            DrugCreateDTO(name = "Drug A", quantity = 50.0.toBigDecimal(), quantityUnit = "mg", medKitId = kit.id),
             kit, alice.id
         )
         drugService.create(
-            DrugCreateDTO(name = "Drug B", quantity = 30.0, quantityUnit = "tablets", medKitId = kit.id),
+            DrugCreateDTO(name = "Drug B", quantity = 30.0.toBigDecimal(), quantityUnit = "tablets", medKitId = kit.id),
             kit, alice.id
         )
         dbHelper.flushAndClear()

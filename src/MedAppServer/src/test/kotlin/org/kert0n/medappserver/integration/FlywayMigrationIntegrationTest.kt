@@ -31,7 +31,20 @@ class FlywayMigrationIntegrationTest {
             "SELECT version FROM flyway_schema_history WHERE success = TRUE ORDER BY installed_rank",
             String::class.java
         )
-        assertEquals(listOf("1"), versions)
+        val quantityColumn = jdbcTemplate.queryForMap(
+            """
+            SELECT data_type, numeric_precision, numeric_scale
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'user_drugs'
+              AND column_name = 'quantity'
+            """.trimIndent()
+        )
+
+        assertEquals(listOf("1", "2"), versions)
+        assertEquals("numeric", quantityColumn["data_type"])
+        assertEquals(19, (quantityColumn["numeric_precision"] as Number).toInt())
+        assertEquals(6, (quantityColumn["numeric_scale"] as Number).toInt())
     }
 
     companion object {

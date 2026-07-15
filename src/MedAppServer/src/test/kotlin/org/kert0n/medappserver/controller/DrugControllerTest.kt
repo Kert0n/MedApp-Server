@@ -72,7 +72,7 @@ class DrugControllerTest {
     private fun createTestDrug(): Drug = Drug(
         id = drugId,
         name = "Aspirin",
-        quantity = 100.0,
+        quantity = 100.0.toBigDecimal(),
         quantityUnit = "mg",
         formType = "tablet",
         category = "painkiller",
@@ -85,8 +85,8 @@ class DrugControllerTest {
     private fun createTestDrugDTO(): DrugDTO = DrugDTO(
         id = drugId,
         name = "Aspirin",
-        quantity = 100.0,
-        plannedQuantity = 30.0,
+        quantity = 100.0.toBigDecimal(),
+        plannedQuantity = 30.0.toBigDecimal(),
         quantityUnit = "mg",
         formType = "tablet",
         category = "painkiller",
@@ -110,8 +110,8 @@ class DrugControllerTest {
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.id").value(drugId.toString()))
             .andExpect(jsonPath("$.name").value("Aspirin"))
-            .andExpect(jsonPath("$.quantity").value(100.0))
-            .andExpect(jsonPath("$.plannedQuantity").value(30.0))
+            .andExpect(jsonPath("$.quantity").value(100.0.toBigDecimal()))
+            .andExpect(jsonPath("$.plannedQuantity").value(30.0.toBigDecimal()))
     }
 
     @Test
@@ -141,7 +141,7 @@ class DrugControllerTest {
 
         val createDTO = DrugCreateDTO(
             name = "Aspirin",
-            quantity = 100.0,
+            quantity = 100.0.toBigDecimal(),
             quantityUnit = "mg",
             medKitId = medKitId
         )
@@ -190,26 +190,26 @@ class DrugControllerTest {
     fun `GET quantity info - returns quantity info`() {
         val drug = createTestDrug()
         whenever(drugService.findByIdForUser(drugId, userId)).thenReturn(drug)
-        drug.totalPlannedAmount = 30.0
+        drug.totalPlannedAmount = 30.0.toBigDecimal()
 
         mockMvc.perform(
             get("/drug/quantity/$drugId")
                 .with(jwt().jwt { it.subject(userId.toString()) })
         )
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.actualQuantity").value(100.0))
-            .andExpect(jsonPath("$.plannedQuantity").value(30.0))
-            .andExpect(jsonPath("$.availableQuantity").value(70.0))
+            .andExpect(jsonPath("$.actualQuantity").value(100.0.toBigDecimal()))
+            .andExpect(jsonPath("$.plannedQuantity").value(30.0.toBigDecimal()))
+            .andExpect(jsonPath("$.availableQuantity").value(70.0.toBigDecimal()))
     }
 
     @Test
     fun `PUT consume drug - reduces quantity and returns drug`() {
-        val drug = createTestDrug().apply { quantity = 90.0 }
-        val dto = createTestDrugDTO().copy(quantity = 90.0)
-        whenever(drugService.consumeDrug(eq(drugId), eq(10.0), eq(userId))).thenReturn(drug)
+        val drug = createTestDrug().apply { quantity = 90.0.toBigDecimal() }
+        val dto = createTestDrugDTO().copy(quantity = 90.0.toBigDecimal())
+        whenever(drugService.consumeDrug(eq(drugId), eq(10.0.toBigDecimal()), eq(userId))).thenReturn(drug)
         whenever(drugService.toDrugDTO(drug)).thenReturn(dto)
 
-        val consumeRequest = ConsumeRequest(quantity = 10.0)
+        val consumeRequest = ConsumeRequest(quantity = 10.0.toBigDecimal())
 
         mockMvc.perform(
             put("/drug/consume/$drugId")
@@ -218,7 +218,7 @@ class DrugControllerTest {
                 .content(objectMapper.writeValueAsString(consumeRequest))
         )
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.quantity").value(90.0))
+            .andExpect(jsonPath("$.quantity").value(90.0.toBigDecimal()))
     }
 
     @Test
