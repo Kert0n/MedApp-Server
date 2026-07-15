@@ -1,154 +1,98 @@
 # MedApp Server
 
-REST API сервер для мобильного приложения-органайзера лекарств и синхронизации общих аптечек.
+REST API для синхронизации общих аптечек, препаратов и планов лечения.
+
+## Privacy by design
+
+Сервер хранит текущее состояние, технических пользователей и связи пользователей с аптечками, но сознательно не хранит владельца, роли, автора изменения и историю действий. Участники общей аптечки равноправны.
+
+Share token хранится только в виде временного SHA-256 hash в локальном Aedile/Caffeine cache. Registration throttle хранит только временный HMAC от IP с process-local случайным ключом. После перезапуска эти данные исчезают.
+
+Подробные гарантии и ограничения: [PRIVACY_MODEL.md](PRIVACY_MODEL.md).
 
 ## Технологии
 
-- Kotlin 2
-- Spring Boot 4
-- Spring Data JPA
-- Spring Security (JWT)
-- Caffeine (via Kotlin adapter Adeine) cache
-- PostgreSQL 18
-- Docker & Docker Compose
+- Kotlin 2 и Java 21
+- Spring Boot 4, Spring MVC и Spring Security
+- Spring Data JPA, PostgreSQL 18 и Flyway
+- Aedile как Kotlin API над Caffeine
+- Caddy, Docker и Docker Compose
 
-## Архитектура
+## API
 
-Сервер реализован по слоистой архитектуре: контроллеры → сервисы → репозитории. Подробное описание —
-в [ARCHITECTURE.md](ARCHITECTURE.md).
+Основные публичные endpoints:
 
-Проект следует принципу **Privacy by Design**:
+- `POST /auth/register` — создать технического пользователя, передав `X-Registration-Token`;
+- `POST /auth/token` — получить JWT через HTTP Basic;
+- `/med-kit` — управление общими аптечками;
+- `/drug` — управление препаратами;
+- `/using` — планы лечения и приём препаратов;
+- `GET /user` — полный snapshot доступных пользователю данных.
 
-- Сервер НЕ хранит персональные данные пользователей
-- Идентификация через автоматически генерируемые ключи безопасности
-- Логи выводятся только в консоль (не хранятся)
+`open-api.yaml` является проверяемым контрактом и автоматически сравнивается со Springdoc во время тестов.
 
-## Модель данных (кратко)
+## Локальная разработка
 
-- **User**: идентификатор, храним только логин-пароль
-- **MedKit**: аптечка, связь между препаратами и идентификаторами
-- **Drug**: название, количество, единицы измерения, форма, категория, производитель, страна, описание.
-- **Using**: план прием по препарату у юзера (с резервированием количества).
-- **VidalDrug**: справочник препаратов для поиска по названию.
-
-## Аутентификация и регистрация
-
-1. `POST /auth/register` — регистрация с передачей `secret` (см. `registration.secret`).
-2. `GET /auth/login` — выдача JWT по HTTP Basic.
-
-Регистрация ограничивается по IP (кэшируем хеши ip с успешными регистрациями)
-JWT по умолчанию живет 10 минут.
-
-## Запуск с Docker Compose
-
-В [compose](compose.yaml) нужно убрать комментарий в medapp-server, затем стандартный запуск
+Требования: JDK 21 и Docker.
 
 ```bash
-# Запуск всех сервисов
-docker-compose up -d
-
-# Просмотр логов
-docker-compose logs -f medapp-server
+docker compose -f compose.dev.yaml up -d
+./src/main/resources/certs/gen.sh
+./gradlew bootRun --args='--spring.profiles.active=dev'
 ```
 
-## API Документация
+Dev profile использует локальные тестовые значения и не предназначен для публичного развёртывания. RSA keys создаются в ignored-каталоге `.local/secrets`; Gradle явно исключает любые `certs/*.pem` из main resources, поэтому локальный ключ не может случайно попасть в JAR.
 
-После запуска доступна Swagger UI по адресу:
+Swagger UI: `http://localhost:8080/swagger-ui/index.html`.
 
-```
-http://localhost:8080/swagger
-```
-
-OpenAPI JSON:
-
-```
-http://localhost:8080/v3/api-docs
-```
-
-## Основные эндпоинты
-
-### Аутентификация
-
-- `POST /auth/register` - Регистрация нового пользователя (нужно передать секрет из конфига)
-- `GET /auth/login` - Получение JWT токена
-
-### Пользователь
-
-- `GET /user` - Получить все данные пользователя
-
-### Аптечки
-
-- `POST /med-kit` - Создать аптечку
-- `GET /med-kit/{id}` - Получить аптечку
-- `GET /med-kit` - Получить все аптечки
-- `POST /med-kit/{id}/share` - Сгенерировать ключ доступа
-- `POST /med-kit/join` - Присоединиться к аптечке по ключу
-- `DELETE /med-kit/{id}/leave` - Выйти из аптечки
-- `DELETE /med-kit/{id}` - Удалить аптечку
-
-### Препараты
-
-- `POST /drug` - Создать препарат
-- `GET /drug/{id}` - Получить препарат
-- `PUT /drug/{id}` - Обновить препарат
-- `DELETE /drug/{id}` - Удалить препарат
-- `GET /drug/template/search` - Поиск в базе препаратов
-
-### Планы лечения
-
-- `POST /using` - Создать план лечения
-- `GET /using` - Получить все планы
-- `PUT /using/drug/{drugId}` - Обновить план
-- `POST /using/drug/{drugId}/intake` - Отметить прием
-- `DELETE /using/drug/{drugId}` - Удалить план
-
-## Конфигурация
-
-Основные параметры в `application.properties`:
-
-```properties
-# Срок действия JWT токена (в минутах)
-authentication.termInMinutes=10
-# Срок действия ключа на присоединение к аптечке (в минутах)
-medkit.share.termInMinutes=15
-# Секрет для регистрации (отбиваем залетных ботов)
-registration.secret=your-secret-here
-# База данных
-spring.datasource.url=jdbc:postgresql://localhost:5432/medapp-server-db
-#Период в течении которого пользователь не может заново зарегестрироваться с определенного ip
-registration.timeout.InSeconds=30
-#Количество регистраций после которых новые регистрации с определенного ip будут ограничены
-registration.timeout.BanNumber=1
-
-```
-
-## Тестирование
+## Тесты
 
 ```bash
-# Запуск всех тестов
 ./gradlew test
 ```
 
-## Безопасность
+Обновление OpenAPI после намеренного изменения API:
 
-- JWT-based аутентификация
-- RSA ключи для подписи токенов
-- Stateless сессии
-- Валидация всех входных данных
-- Защита от SQL injection через JPA
+```bash
+./gradlew test --tests '*OpenApiContractTest' -DupdateOpenApi=true
+./gradlew test
+```
 
-## Логирование
+## Production
 
-Логи выводятся только в консоль в соответствии с Privacy by Design:
+Production использует Caddy как единственную публичную точку входа. Порты application и PostgreSQL наружу не публикуются. Перед запуском требуются:
 
-- `DEBUG` уровень для пакета приложения
-- `INFO` для Spring компонентов
-- Логи НЕ сохраняются на диск
-- Логи НЕ содержат чувствительных данных
+- `POSTGRES_PASSWORD`;
+- `REGISTRATION_SECRET`;
+- `JWT_PRIVATE_KEY_FILE`;
+- `JWT_PUBLIC_KEY_FILE`.
 
-## Мониторинг
+```bash
+docker compose config
+docker compose up -d --build
+```
 
-Spring Boot Actuator эндпоинты:
+Настройки и rollback описаны в [DEPLOYMENT.md](DEPLOYMENT.md), миграции — в [DATABASE_MIGRATION.md](DATABASE_MIGRATION.md).
 
-- `/actuator/health` - Статус здоровья
-- `/actuator/info` - Информация о приложении
+## Registration throttle
+
+Throttle предназначен для отсечения случайных автоматических регистраций, а не для противодействия целевой распределённой атаке.
+
+- учитываются только успешные регистрации;
+- check и reservation атомарны;
+- IP не сохраняется в исходном виде;
+- окно и лимит задаются через `registration.throttle.window` и `registration.throttle.max-successful-registrations`;
+- состояние локально одному экземпляру приложения;
+- исчерпание лимита возвращает `429`.
+
+При горизонтальном масштабировании потребуется отдельное архитектурное решение. Оно намеренно не добавлено в текущую одноинстансную privacy-модель.
+
+## Документация
+
+- [ARCHITECTURE.md](ARCHITECTURE.md)
+- [PRIVACY_MODEL.md](PRIVACY_MODEL.md)
+- [SECURITY.md](SECURITY.md)
+- [DEPLOYMENT.md](DEPLOYMENT.md)
+- [DATABASE_MIGRATION.md](DATABASE_MIGRATION.md)
+- [API_MIGRATION_V1.md](API_MIGRATION_V1.md)
+- [CHANGELOG.md](CHANGELOG.md)
