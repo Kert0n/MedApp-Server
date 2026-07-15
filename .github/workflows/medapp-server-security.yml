@@ -1,0 +1,129 @@
+name: MedApp Server Security
+
+on:
+  pull_request:
+    paths:
+      - "src/MedAppServer/**"
+      - ".gitleaksignore"
+      - ".github/workflows/medapp-server-security.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/MedAppServer/**"
+      - ".gitleaksignore"
+      - ".github/workflows/medapp-server-security.yml"
+  schedule:
+    - cron: "41 3 * * 2"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: medapp-server-security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4.9.0
+        with:
+          fail-on-severity: high
+
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install verified Gitleaks 8.30.1
+        working-directory: ${{ runner.temp }}
+        run: |
+          curl --fail --silent --show-error --location --remote-name \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          curl --fail --silent --show-error --location --remote-name \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_checksums.txt
+          grep 'gitleaks_8.30.1_linux_x64.tar.gz$' gitleaks_8.30.1_checksums.txt | sha256sum --check --strict
+          tar --extract --gzip --file gitleaks_8.30.1_linux_x64.tar.gz gitleaks
+      - name: Scan repository history for secrets
+        run: ${{ runner.temp }}/gitleaks git --redact --verbose .
+
+  filesystem-and-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6
+      - name: Install verified Trivy 0.72.0
+        working-directory: ${{ runner.temp }}
+        run: |
+          curl --fail --silent --show-error --location --remote-name \
+            https://github.com/aquasecurity/trivy/releases/download/v0.72.0/trivy_0.72.0_Linux-64bit.tar.gz
+          curl --fail --silent --show-error --location --remote-name \
+            https://github.com/aquasecurity/trivy/releases/download/v0.72.0/trivy_0.72.0_checksums.txt
+          grep 'trivy_0.72.0_Linux-64bit.tar.gz$' trivy_0.72.0_checksums.txt | sha256sum --check --strict
+          tar --extract --gzip --file trivy_0.72.0_Linux-64bit.tar.gz trivy
+      - name: Scan source, secrets, and configuration
+        run: >-
+          ${{ runner.temp }}/trivy fs
+          --scanners vuln,secret,misconfig
+          --severity HIGH,CRITICAL
+          --exit-code 1
+          src/MedAppServer
+      - name: Build application JAR for post-build dependency analysis
+        working-directory: src/MedAppServer
+        run: ./gradlew clean bootJar --no-daemon
+      - name: Scan application JAR and nested dependencies
+        run: >-
+          ${{ runner.temp }}/trivy rootfs
+          --scanners vuln
+          --severity HIGH,CRITICAL
+          --exit-code 1
+          src/MedAppServer/build/libs
+      - name: Build production image
+        run: docker build --tag medapp-server:security-scan src/MedAppServer
+      - name: Build hardened Caddy image
+        run: >-
+          docker build
+          --file src/MedAppServer/Caddy.Dockerfile
+          --tag medapp-caddy:security-scan
+          src/MedAppServer
+      - name: Build hardened PostgreSQL image
+        run: >-
+          docker build
+          --file src/MedAppServer/Postgres.Dockerfile
+          --tag medapp-postgres:security-scan
+          src/MedAppServer
+      - name: Scan application production image
+        run: >-
+          ${{ runner.temp }}/trivy image
+          --scanners vuln
+          --severity HIGH,CRITICAL
+          --exit-code 1
+          medapp-server:security-scan
+      - name: Scan Caddy production image
+        run: >-
+          ${{ runner.temp }}/trivy image
+          --scanners vuln
+          --severity HIGH,CRITICAL
+          --exit-code 1
+          medapp-caddy:security-scan
+      - name: Scan PostgreSQL production image
+        run: >-
+          ${{ runner.temp }}/trivy image
+          --scanners vuln
+          --severity HIGH,CRITICAL
+          --exit-code 1
+          medapp-postgres:security-scan
