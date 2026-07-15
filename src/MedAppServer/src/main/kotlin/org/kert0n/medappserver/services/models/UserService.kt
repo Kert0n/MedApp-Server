@@ -22,13 +22,11 @@ class UserService(
     private val logger: Logger = LoggerFactory.getLogger(MedKitService::class.java)
 ) : UserDetailsService {
 
-    fun registerNewUser(login: UUID, password: String, ip: String): User {
+    fun registerNewUser(login: UUID, password: String): User {
         logger.debug("Register new user $login")
-        val user = userRepository.save(
+        return userRepository.save(
             User(login, securityService.hashPassword(password))
         )
-        securityService.registerIncrease(ip)
-        return user
     }
 
     override fun loadUserByUsername(username: String): UserDetails {

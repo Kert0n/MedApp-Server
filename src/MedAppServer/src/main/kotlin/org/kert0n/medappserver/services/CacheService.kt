@@ -8,14 +8,23 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.stereotype.Service
 import java.util.*
+import java.time.Duration
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.minutes
-import kotlin.time.Duration.Companion.seconds
 
 @Service
 class CacheService(
     @Value($$"${medkit.share.termInMinutes}") private val medKitShareTerm: Long,
-    @Value($$"${registration.timeout.InSeconds}") private val registrationTimeOut: Long,
+    @Value($$"${registration.throttle.window:5m}") private val registrationWindow: Duration,
 ) {
+    init {
+        require(medKitShareTerm > 0) { "medkit.share.termInMinutes must be positive" }
+        require(!registrationWindow.isZero && !registrationWindow.isNegative) {
+            "registration.throttle.window must be positive"
+        }
+    }
+
     // Storage for medkit share tokens
     @Bean
     fun medKitTokenCache(): Cache<String, UUID> = Caffeine.newBuilder()
@@ -25,8 +34,8 @@ class CacheService(
 
     @Bean
     // Storage for successful registration attempt
-    fun successfulRegistrationsCache(): Cache<String, Int> = Caffeine.newBuilder()
-        .expireAfterWrite(registrationTimeOut.seconds)
+    fun successfulRegistrationsCache(): Cache<String, AtomicInteger> = Caffeine.newBuilder()
+        .expireAfterWrite(registrationWindow.toMillis(), TimeUnit.MILLISECONDS)
         .maximumSize(10_000)
         .asCache()
 }

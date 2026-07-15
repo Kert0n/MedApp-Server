@@ -10,8 +10,9 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.servlet.http.HttpServletRequest
 import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.services.models.UserService
+import org.kert0n.medappserver.services.security.ClientAddressProvider
+import org.kert0n.medappserver.services.security.RegistrationThrottle
 import org.kert0n.medappserver.services.security.SecurityService
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
@@ -22,9 +23,10 @@ import java.util.*
 @RequestMapping("/auth")
 @Tag(name = "Authentication", description = "Public endpoints for registration and token issuance")
 class AuthController(
-    @Value($$"${registration.secret}") private val registrationSecret: String,
     private val userService: UserService,
-    private val securityService: SecurityService
+    private val securityService: SecurityService,
+    private val registrationThrottle: RegistrationThrottle,
+    private val clientAddressProvider: ClientAddressProvider,
 ) {
 
 
@@ -45,31 +47,33 @@ class AuthController(
     @ApiResponses(
         value = [
             ApiResponse(
-                responseCode = "200",
+                responseCode = "201",
                 description = "User registered",
                 content = [Content(schema = Schema(implementation = RegisterResponse::class))]
             ),
             ApiResponse(responseCode = "403", description = "Invalid registration secret", content = [Content()]),
-            ApiResponse(responseCode = "504", description = "Too many registration attempts", content = [Content()])
+            ApiResponse(responseCode = "429", description = "Too many registration attempts", content = [Content()])
         ]
     )
-    fun register(
+    @ResponseStatus(HttpStatus.CREATED)
+    suspend fun register(
         request: HttpServletRequest,
         @Parameter(description = "Shared registration secret", required = true, example = "dev-secret")
         @RequestHeader("X-Registration-Token") token: String
     ): RegisterResponse {
         // Validate the shared secret first to avoid exposing rate-limit status to unauthorized callers.
-        if (token != registrationSecret) {
+        if (!registrationThrottle.isValidRegistrationToken(token)) {
             throw ResponseStatusException(HttpStatus.FORBIDDEN, "Invalid secret")
         }
-        // Rate limit registration by IP address to reduce abuse without storing user PII.
-        if (!securityService.validateRequest(request.remoteAddr)) {
-            throw ResponseStatusException(HttpStatus.GATEWAY_TIMEOUT, "Too many registration request")
+        val permit = registrationThrottle.tryAcquire(clientAddressProvider.getClientAddress(request))
+            ?: throw ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "Too many registration requests")
+        permit.use {
+            val login = UUID.randomUUID()
+            val pwd: String = securityService.generateKey(32)
+            userService.registerNewUser(login, pwd)
+            permit.commit()
+            return RegisterResponse(login, pwd)
         }
-        val login = UUID.randomUUID()
-        val pwd: String = securityService.generateKey(32)
-        userService.registerNewUser(login, pwd, request.remoteAddr)
-        return RegisterResponse(login, pwd)
     }
 
     @GetMapping("/login")
