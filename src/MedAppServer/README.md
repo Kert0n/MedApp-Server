@@ -1,154 +1,52 @@
 # MedApp Server
 
-REST API сервер для мобильного приложения-органайзера лекарств и синхронизации общих аптечек.
+Backend общей домашней аптечки на Kotlin и Spring Boot.
 
-## Технологии
+Участники аптечки равноправны. Сервер не хранит владельца, роли, автора изменения или историю действий. Authentication key возвращается при регистрации один раз; в базе остаётся только его hash.
 
-- Kotlin 2
-- Spring Boot 4
-- Spring Data JPA
-- Spring Security (JWT)
-- Caffeine (via Kotlin adapter Adeine) cache
-- PostgreSQL 18
-- Docker & Docker Compose
+## Требования
 
-## Архитектура
+- JDK 21;
+- Docker и Docker Compose;
+- OpenSSL для локальной генерации JWT keys.
 
-Сервер реализован по слоистой архитектуре: контроллеры → сервисы → репозитории. Подробное описание —
-в [ARCHITECTURE.md](ARCHITECTURE.md).
+## Локальный запуск
 
-Проект следует принципу **Privacy by Design**:
-
-- Сервер НЕ хранит персональные данные пользователей
-- Идентификация через автоматически генерируемые ключи безопасности
-- Логи выводятся только в консоль (не хранятся)
-
-## Модель данных (кратко)
-
-- **User**: идентификатор, храним только логин-пароль
-- **MedKit**: аптечка, связь между препаратами и идентификаторами
-- **Drug**: название, количество, единицы измерения, форма, категория, производитель, страна, описание.
-- **Using**: план прием по препарату у юзера (с резервированием количества).
-- **VidalDrug**: справочник препаратов для поиска по названию.
-
-## Аутентификация и регистрация
-
-1. `POST /auth/register` — регистрация с передачей `secret` (см. `registration.secret`).
-2. `GET /auth/login` — выдача JWT по HTTP Basic.
-
-Регистрация ограничивается по IP (кэшируем хеши ip с успешными регистрациями)
-JWT по умолчанию живет 10 минут.
-
-## Запуск с Docker Compose
-
-В [compose](compose.yaml) нужно убрать комментарий в medapp-server, затем стандартный запуск
+Один раз создайте локальную RSA-пару:
 
 ```bash
-# Запуск всех сервисов
-docker-compose up -d
-
-# Просмотр логов
-docker-compose logs -f medapp-server
+./src/main/resources/certs/gen.sh
 ```
 
-## API Документация
+Повторный вызов проверяет и повторно использует существующие файлы в `.local/secrets`. Поэтому JWT остаются валидными между Gradle, IDE и debug-запусками.
 
-После запуска доступна Swagger UI по адресу:
-
-```
-http://localhost:8080/swagger
-```
-
-OpenAPI JSON:
-
-```
-http://localhost:8080/v3/api-docs
-```
-
-## Основные эндпоинты
-
-### Аутентификация
-
-- `POST /auth/register` - Регистрация нового пользователя (нужно передать секрет из конфига)
-- `GET /auth/login` - Получение JWT токена
-
-### Пользователь
-
-- `GET /user` - Получить все данные пользователя
-
-### Аптечки
-
-- `POST /med-kit` - Создать аптечку
-- `GET /med-kit/{id}` - Получить аптечку
-- `GET /med-kit` - Получить все аптечки
-- `POST /med-kit/{id}/share` - Сгенерировать ключ доступа
-- `POST /med-kit/join` - Присоединиться к аптечке по ключу
-- `DELETE /med-kit/{id}/leave` - Выйти из аптечки
-- `DELETE /med-kit/{id}` - Удалить аптечку
-
-### Препараты
-
-- `POST /drug` - Создать препарат
-- `GET /drug/{id}` - Получить препарат
-- `PUT /drug/{id}` - Обновить препарат
-- `DELETE /drug/{id}` - Удалить препарат
-- `GET /drug/template/search` - Поиск в базе препаратов
-
-### Планы лечения
-
-- `POST /using` - Создать план лечения
-- `GET /using` - Получить все планы
-- `PUT /using/drug/{drugId}` - Обновить план
-- `POST /using/drug/{drugId}/intake` - Отметить прием
-- `DELETE /using/drug/{drugId}` - Удалить план
-
-## Конфигурация
-
-Основные параметры в `application.properties`:
-
-```properties
-# Срок действия JWT токена (в минутах)
-authentication.termInMinutes=10
-# Срок действия ключа на присоединение к аптечке (в минутах)
-medkit.share.termInMinutes=15
-# Секрет для регистрации (отбиваем залетных ботов)
-registration.secret=your-secret-here
-# База данных
-spring.datasource.url=jdbc:postgresql://localhost:5432/medapp-server-db
-#Период в течении которого пользователь не может заново зарегестрироваться с определенного ip
-registration.timeout.InSeconds=30
-#Количество регистраций после которых новые регистрации с определенного ip будут ограничены
-registration.timeout.BanNumber=1
-
-```
-
-## Тестирование
+Явная ротация:
 
 ```bash
-# Запуск всех тестов
-./gradlew test
+./src/main/resources/certs/gen.sh --force
 ```
 
-## Безопасность
+После ротации ранее выданные JWT перестают проверяться.
 
-- JWT-based аутентификация
-- RSA ключи для подписи токенов
-- Stateless сессии
-- Валидация всех входных данных
-- Защита от SQL injection через JPA
+Запустите development database и приложение:
 
-## Логирование
+```bash
+docker compose -f compose.dev.yaml up -d
+SPRING_PROFILES_ACTIVE=dev ./gradlew bootRun
+```
 
-Логи выводятся только в консоль в соответствии с Privacy by Design:
+OpenAPI в dev доступен через `/swagger-ui/index.html` и `/v3/api-docs`.
 
-- `DEBUG` уровень для пакета приложения
-- `INFO` для Spring компонентов
-- Логи НЕ сохраняются на диск
-- Логи НЕ содержат чувствительных данных
+## Проверка
 
-## Мониторинг
+```bash
+./gradlew clean test bootJar --no-daemon
+```
 
-Spring Boot Actuator эндпоинты:
+## Документация
 
-- `/actuator/health` - Статус здоровья
-- `/actuator/info` - Информация о приложении
+- [ARCHITECTURE.md](ARCHITECTURE.md) — компоненты и data flow;
+- [PRIVACY_MODEL.md](PRIVACY_MODEL.md) — какие данные сохраняются;
+- [API_MIGRATION_V1.md](API_MIGRATION_V1.md) — изменения HTTP API;
+- [DATABASE_MIGRATION.md](DATABASE_MIGRATION.md) — миграция базы;
+- [DEPLOYMENT.md](DEPLOYMENT.md) — production запуск и диагностика.

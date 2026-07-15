@@ -1,41 +1,26 @@
-# Архитектура MedApp Server
+# Architecture
 
-## Обзор
+## Runtime
 
-Серверная часть MedApp отвечает за синхронизацию общих аптечек, учет препаратов и выдачу каталога лекарств. Решение
-реализовано на **Spring Boot** и Kotlin с использованием JPA/Hibernate и PostgreSQL.
+```text
+Client -> Caddy -> MedApp Server -> PostgreSQL
+```
 
-## Компоненты
+Caddy завершает TLS и передаёт HTTP-запросы приложению. MedApp Server выполняет authentication, validation и business logic. PostgreSQL хранит текущее состояние.
 
-- **Контроллеры** (`controller/`) — REST API:
-    - `AuthController`: регистрация и выдача JWT.
-    - `UserController`: полный снимок данных пользователя для синхронизации.
-    - `MedKitController`: управление аптечками и доступом.
-    - `DrugController`: CRUD для препаратов и поиск по каталогу.
-    - `MedKitDrugController`: Сервис для менеджмента связи препаратов и аптечек (перемещения, создания, удаления и
-      т.п.).
-    - `UsingsController`: планы лечения и фиксация приема.
-- **Сервисы** (`services/`) — бизнес-логика:
-    - `MedKitService`, `DrugService`, `UsingService` — core-операции.
-    - `VidalDrugService` — поиск по справочнику.
-    - `SecurityService` — генерация ключей, JWT, rate-limit регистрации.
-    - `CacheService` — кэш share-ключей и регистраций.
-- **Хранилище** (`db/`) — сущности JPA и репозитории.
+## Application layers
 
-## Модель данных
+- `controller` — HTTP API и DTO;
+- `services.models` — операции над отдельными моделями;
+- `services.orchestrators` — операции, затрагивающие несколько моделей;
+- `services.security` — authentication и registration throttling;
+- `db.model` / `db.repository` — persistence;
+- `db/migration` — Flyway migrations.
 
-| Сущность      | Назначение                           | Ключевые поля                                                                                                  |
-|---------------|--------------------------------------|----------------------------------------------------------------------------------------------------------------|
-| **User**      | Пользователь без персональных данных | `id`, `hashedKey`                                                                                              |
-| **MedKit**    | Общая аптечка                        | `id`, связи с пользователями и препаратами                                                                     |
-| **Drug**      | Препарат пользователя                | `name`, `quantity`, `quantityUnit`, `formType`, `category`, `manufacturer`, `country`, `description`, `medKit` |
-| **Using**     | План лечения по препарату            | `plannedAmount`, `createdAt`, `lastModified`, связи с `User` и `Drug`                                          |
-| **VidalDrug** | Каталог препаратов                   | `name`, `formType`,`quantity`, `quantityUnit`, `manufacturer`, `category`, `description`                       |
+Controllers получают authenticated user и передают его identifier в services. Services проверяют доступ через membership общей аптечки и выполняют изменения внутри transactions.
 
-## Безопасность и приватность
+Количества представлены как `BigDecimal` и PostgreSQL `NUMERIC(19,6)`. Concurrent stock changes не добавляют version metadata в пользовательские данные.
 
-- Сервер не хранит персональные данные, только технические идентификаторы. IP адреса хранятся только в кеше
-  в хешированном виде
-- JWT с ограниченным сроком действия.
-- Share-ключи кэшируются в хешированном виде и имеют TTL.
-- Логи пишутся только в stdout.
+Временные registration/share данные не сохраняются и исчезают при restart.
+
+Production schema изменяется только Flyway; Hibernate использует `ddl-auto=validate`.
