@@ -22,13 +22,20 @@ class OpenApiConfiguration {
             )
             .addSecurityItem(SecurityRequirement().addList("Bearer Authentication"))
             .components(
-                Components().addSecuritySchemes(
-                    "Bearer Authentication",
-                    SecurityScheme()
-                        .type(SecurityScheme.Type.HTTP)
-                        .scheme("bearer")
-                        .bearerFormat("JWT")
-                )
+                Components()
+                    .addSecuritySchemes(
+                        "Bearer Authentication",
+                        SecurityScheme()
+                            .type(SecurityScheme.Type.HTTP)
+                            .scheme("bearer")
+                            .bearerFormat("JWT")
+                    )
+                    .addSecuritySchemes(
+                        "Basic Authentication",
+                        SecurityScheme()
+                            .type(SecurityScheme.Type.HTTP)
+                            .scheme("basic")
+                    )
             )
     }
 }
