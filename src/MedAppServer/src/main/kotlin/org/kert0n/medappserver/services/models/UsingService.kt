@@ -68,11 +68,7 @@ class UsingService(
         val availableQuantity = drug.quantity - currentPlanned
 
         if (createDTO.plannedAmount > availableQuantity) {
-            logger.warn(
-                "Requested planned amount {} exceeds available quantity {}",
-                createDTO.plannedAmount,
-                availableQuantity
-            )
+            logger.warn("Rejected treatment plan because requested quantity exceeds availability")
             throw ResponseStatusException(
                 HttpStatus.BAD_REQUEST,
                 "Insufficient quantity available. Available: $availableQuantity, Requested: ${createDTO.plannedAmount}"
@@ -103,11 +99,7 @@ class UsingService(
         val availableQuantity = using.drug.quantity - otherPlanned
 
         if (updateDTO.plannedAmount > availableQuantity) {
-            logger.warn(
-                "Updated planned amount {} exceeds available quantity {}",
-                updateDTO.plannedAmount,
-                availableQuantity
-            )
+            logger.warn("Rejected treatment plan update because requested quantity exceeds availability")
             throw ResponseStatusException(
                 HttpStatus.BAD_REQUEST,
                 "Insufficient quantity available. Available: $availableQuantity, Requested: ${updateDTO.plannedAmount}"
