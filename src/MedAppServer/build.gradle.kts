@@ -107,6 +107,7 @@ allOpen {
 tasks.withType<Test> {
     useJUnitPlatform()
     jvmArgs("-XX:+EnableDynamicAgentLoading")
+    systemProperty("updateOpenApi", System.getProperty("updateOpenApi", "false"))
 }
 
 tasks.named<ProcessResources>("processTestResources") {
