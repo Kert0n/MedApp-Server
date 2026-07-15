@@ -1,0 +1,79 @@
+name: MedApp Server CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/MedAppServer/**"
+      - ".github/workflows/medapp-server-ci.yml"
+  pull_request:
+    paths:
+      - "src/MedAppServer/**"
+      - ".github/workflows/medapp-server-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: medapp-server-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: src/MedAppServer
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6
+      - name: Generate ephemeral CI signing keys
+        run: ./src/main/resources/certs/gen.sh "${RUNNER_TEMP}/medapp-secrets"
+      - name: Test
+        env:
+          RSA_PRIVATE_KEY: file:${{ runner.temp }}/medapp-secrets/jwt-private.pem
+          RSA_PUBLIC_KEY: file:${{ runner.temp }}/medapp-secrets/jwt-public.pem
+        run: ./gradlew clean test --no-daemon
+      - name: Build executable JAR
+        run: ./gradlew bootJar --no-daemon
+      - name: Validate production Compose model
+        env:
+          POSTGRES_PASSWORD: ci-placeholder
+          REGISTRATION_SECRET: ci-placeholder
+          JWT_PRIVATE_KEY_FILE: ${{ runner.temp }}/medapp-secrets/jwt-private.pem
+          JWT_PUBLIC_KEY_FILE: ${{ runner.temp }}/medapp-secrets/jwt-public.pem
+        run: docker compose config --quiet
+      - name: Validate Caddy configuration
+        run: >-
+          docker run --rm
+          --volume "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro"
+          caddy:2.11.4-alpine
+          caddy validate --config /etc/caddy/Caddyfile
+      - name: Build production container
+        run: docker build --tag medapp-server:${{ github.sha }} .
+      - name: Smoke-test production database and application
+        env:
+          POSTGRES_PASSWORD: ci-placeholder
+          REGISTRATION_SECRET: ci-placeholder
+          JWT_PRIVATE_KEY_FILE: ${{ runner.temp }}/medapp-secrets/jwt-private.pem
+          JWT_PUBLIC_KEY_FILE: ${{ runner.temp }}/medapp-secrets/jwt-public.pem
+        run: |
+          docker compose --project-name medapp-ci up --detach --build --wait postgres med-app-server
+          docker compose --project-name medapp-ci exec -T med-app-server \
+            wget --quiet --output-document=- http://localhost:8080/actuator/health
+      - name: Remove smoke-test containers and data
+        if: always()
+        env:
+          POSTGRES_PASSWORD: ci-placeholder
+          REGISTRATION_SECRET: ci-placeholder
+          JWT_PRIVATE_KEY_FILE: ${{ runner.temp }}/medapp-secrets/jwt-private.pem
+          JWT_PUBLIC_KEY_FILE: ${{ runner.temp }}/medapp-secrets/jwt-public.pem
+        run: docker compose --project-name medapp-ci down --volumes --remove-orphans
