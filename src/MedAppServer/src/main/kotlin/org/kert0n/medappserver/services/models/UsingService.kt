@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 import java.time.Instant
+import java.math.BigDecimal
 import java.util.*
 
 @Service
@@ -113,8 +114,10 @@ class UsingService(
     }
 
     @Transactional
-    fun recordIntake(userId: UUID, drugId: UUID, quantityConsumed: Double): Using? {
+    fun recordIntake(userId: UUID, drugId: UUID, quantityConsumed: BigDecimal): Using? {
         logger.debug("Recording intake for user {} and drug {}, quantity: {}", userId, drugId, quantityConsumed)
+        // Serialize intake, consume and plan updates on the same stock row without adding a version column.
+        drugService.findByIdForUserForUpdate(drugId, userId)
         val using = findByUserAndDrug(userId, drugId)
         // Check if consumed quantity exceeds planned amount
         if (quantityConsumed > using.plannedAmount) {
@@ -130,13 +133,13 @@ class UsingService(
 
         // Update planned amount
         // IMPORTANT! THIS MUST ALWAYS BE BEFORE QUANTITY REDUCTION, SO IT CAN PROPERLY ASSESS TOTAL PLANNED QUANTITY
-        using.plannedAmount = maxOf(0.0, using.plannedAmount - quantityConsumed)
+        using.plannedAmount = maxOf(BigDecimal.ZERO, using.plannedAmount - quantityConsumed)
         // Reduce drug quantity
         using.drug.quantity -= quantityConsumed
         // This could be replaced with reloading drug from db, but this much quicker
         using.drug.totalPlannedAmount -= quantityConsumed
         quantityReductionService.handleQuantityReduction(using.drug)
-        if (using.plannedAmount == 0.0) {
+        if (using.plannedAmount.signum() == 0) {
             usingRepository.delete(using)
             return null
         }

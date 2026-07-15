@@ -40,13 +40,13 @@ class QuantityReductionServiceTest {
     fun `drug deleted when quantity reaches zero`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 50.0)
+        val drug = dbHelper.freshDrug(kit, 50.0.toBigDecimal())
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 50.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 50.0.toBigDecimal()))
         dbHelper.flushAndClear()
 
-        drugService.consumeDrug(drug.id, 50.0, alice.id)
+        drugService.consumeDrug(drug.id, 50.0.toBigDecimal(), alice.id)
         dbHelper.flushAndClear()
 
         assertNull(drugRepository.findByIdOrNull(drug.id))
@@ -61,19 +61,19 @@ class QuantityReductionServiceTest {
         val bob = dbHelper.freshUser("bob")
         val kit = medKitService.createNew(alice.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit, 100.0.toBigDecimal())
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 20.0))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, 20.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 20.0.toBigDecimal()))
+        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, 20.0.toBigDecimal()))
         dbHelper.flushAndClear()
 
-        drugService.consumeDrug(drug.id, 50.0, alice.id)
+        drugService.consumeDrug(drug.id, 50.0.toBigDecimal(), alice.id)
         dbHelper.flushAndClear()
 
-        assertEquals(50.0, dbHelper.drugQuantity(drug.id))
-        assertEquals(20.0, dbHelper.userPlan(alice.id, drug.id))
-        assertEquals(20.0, dbHelper.userPlan(bob.id, drug.id))
+        org.kert0n.medappserver.testutil.assertDecimalEquals(50.0.toBigDecimal(), dbHelper.drugQuantity(drug.id))
+        org.kert0n.medappserver.testutil.assertDecimalEquals(20.0.toBigDecimal(), dbHelper.userPlan(alice.id, drug.id))
+        org.kert0n.medappserver.testutil.assertDecimalEquals(20.0.toBigDecimal(), dbHelper.userPlan(bob.id, drug.id))
     }
 
     // ── handleQuantityReduction: totalPlanned > quantity → proportional scaling ──
@@ -84,21 +84,21 @@ class QuantityReductionServiceTest {
         val bob = dbHelper.freshUser("bob")
         val kit = medKitService.createNew(alice.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit, 100.0.toBigDecimal())
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 60.0))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, 40.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 60.0.toBigDecimal()))
+        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, 40.0.toBigDecimal()))
         dbHelper.flushAndClear()
 
-        // Consume 50 → quantity=50, factor=50/100=0.5
-        drugService.consumeDrug(drug.id, 50.0, alice.id)
+        // Consume 50 → quantity=50, factor=50/100=0.5.toBigDecimal()
+        drugService.consumeDrug(drug.id, 50.0.toBigDecimal(), alice.id)
         dbHelper.flushAndClear()
 
-        assertEquals(50.0, dbHelper.drugQuantity(drug.id))
-        assertEquals(30.0, dbHelper.userPlan(alice.id, drug.id)!!, 0.001)
-        assertEquals(20.0, dbHelper.userPlan(bob.id, drug.id)!!, 0.001)
-        assertEquals(50.0, dbHelper.totalPlanned(drug.id)!!, 0.001)
+        org.kert0n.medappserver.testutil.assertDecimalEquals(50.0.toBigDecimal(), dbHelper.drugQuantity(drug.id))
+        org.kert0n.medappserver.testutil.assertDecimalEquals(30.0.toBigDecimal(), dbHelper.userPlan(alice.id, drug.id)!!, 0.001.toBigDecimal())
+        org.kert0n.medappserver.testutil.assertDecimalEquals(20.0.toBigDecimal(), dbHelper.userPlan(bob.id, drug.id)!!, 0.001.toBigDecimal())
+        org.kert0n.medappserver.testutil.assertDecimalEquals(50.0.toBigDecimal(), dbHelper.totalPlanned(drug.id)!!, 0.001.toBigDecimal())
     }
 
     // ── handleUsingReduction: ratio preserved ──
@@ -109,18 +109,18 @@ class QuantityReductionServiceTest {
         val bob = dbHelper.freshUser("bob")
         val kit = medKitService.createNew(alice.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit, 100.0.toBigDecimal())
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 60.0))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, 40.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 60.0.toBigDecimal()))
+        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, 40.0.toBigDecimal()))
         dbHelper.flushAndClear()
 
-        drugService.consumeDrug(drug.id, 50.0, alice.id)
+        drugService.consumeDrug(drug.id, 50.0.toBigDecimal(), alice.id)
         dbHelper.flushAndClear()
 
         val alicePlan = dbHelper.userPlan(alice.id, drug.id)!!
         val bobPlan = dbHelper.userPlan(bob.id, drug.id)!!
-        assertEquals(3.0 / 2.0, alicePlan / bobPlan, 0.001)
+        org.kert0n.medappserver.testutil.assertDecimalEquals(3.0.toBigDecimal() / 2.0.toBigDecimal(), alicePlan / bobPlan, 0.001.toBigDecimal())
     }
 }

@@ -49,8 +49,8 @@ class UserControllerTest {
     @Test
     fun `GET user data - returns user with medkits`() {
         val drugDTO = DrugDTO(
-            id = UUID.randomUUID(), name = "Aspirin", quantity = 100.0,
-            plannedQuantity = 0.0, quantityUnit = "mg", formType = null,
+            id = UUID.randomUUID(), name = "Aspirin", quantity = 100.0.toBigDecimal(),
+            plannedQuantity = 0.0.toBigDecimal(), quantityUnit = "mg", formType = null,
             category = null, manufacturer = null, country = null,
             description = null, medKitId = medKitId
         )

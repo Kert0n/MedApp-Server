@@ -12,6 +12,7 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.transaction.annotation.Transactional
+import java.math.BigDecimal
 import java.util.*
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -50,7 +51,7 @@ class RepositoryIntegrationTests {
         return medKit
     }
 
-    private fun createDrug(medKit: MedKit, name: String = "Drug", quantity: Double = 100.0): Drug {
+    private fun createDrug(medKit: MedKit, name: String = "Drug", quantity: BigDecimal = 100.0.toBigDecimal()): Drug {
         return drugRepository.save(
             Drug(
                 name = name,
@@ -132,7 +133,7 @@ class RepositoryIntegrationTests {
             usingKey = UsingKey(user.id, drug1.id),
             user = user,
             drug = drug1,
-            plannedAmount = 10.0
+            plannedAmount = 10.0.toBigDecimal()
         )
         usingRepository.save(using)
         entityManager.flush()
@@ -157,19 +158,19 @@ class RepositoryIntegrationTests {
             usingKey = UsingKey(user1.id, drug.id),
             user = user1,
             drug = drug,
-            plannedAmount = 20.0
+            plannedAmount = 20.0.toBigDecimal()
         )
         val using2 = Using(
             usingKey = UsingKey(user2.id, drug.id),
             user = user2,
             drug = drug,
-            plannedAmount = 30.0
+            plannedAmount = 30.0.toBigDecimal()
         )
         usingRepository.save(using1)
         usingRepository.save(using2)
         entityManager.flush()
         entityManager.clear()
-        assertEquals(50.0, drugRepository.findByIdOrNull(drug.id)?.totalPlannedAmount)
+        org.kert0n.medappserver.testutil.assertDecimalEquals(50.0.toBigDecimal(), drugRepository.findByIdOrNull(drug.id)?.totalPlannedAmount)
     }
 
     @Test
@@ -180,7 +181,7 @@ class RepositoryIntegrationTests {
         entityManager.flush()
         entityManager.clear()
 
-        assertEquals(0.0, drug.totalPlannedAmount)
+        org.kert0n.medappserver.testutil.assertDecimalEquals(0.0.toBigDecimal(), drug.totalPlannedAmount)
     }
 
     // === MedKitRepository Tests ===
@@ -289,7 +290,7 @@ class RepositoryIntegrationTests {
             usingKey = UsingKey(user1.id, drug.id),
             user = user1,
             drug = drug,
-            plannedAmount = 10.0
+            plannedAmount = 10.0.toBigDecimal()
         )
         usingRepository.save(using)
         entityManager.flush()
@@ -323,8 +324,8 @@ class RepositoryIntegrationTests {
         val drug2 = createDrug(medKit, "Drug B")
         entityManager.flush()
 
-        usingRepository.save(Using(UsingKey(user.id, drug1.id), user, drug1, 10.0))
-        usingRepository.save(Using(UsingKey(user.id, drug2.id), user, drug2, 20.0))
+        usingRepository.save(Using(UsingKey(user.id, drug1.id), user, drug1, 10.0.toBigDecimal()))
+        usingRepository.save(Using(UsingKey(user.id, drug2.id), user, drug2, 20.0.toBigDecimal()))
         entityManager.flush()
         entityManager.clear()
 
@@ -342,8 +343,8 @@ class RepositoryIntegrationTests {
         val drug = createDrug(medKit)
         entityManager.flush()
 
-        usingRepository.save(Using(UsingKey(user1.id, drug.id), user1, drug, 10.0))
-        usingRepository.save(Using(UsingKey(user2.id, drug.id), user2, drug, 20.0))
+        usingRepository.save(Using(UsingKey(user1.id, drug.id), user1, drug, 10.0.toBigDecimal()))
+        usingRepository.save(Using(UsingKey(user2.id, drug.id), user2, drug, 20.0.toBigDecimal()))
         entityManager.flush()
         entityManager.clear()
 
@@ -358,13 +359,13 @@ class RepositoryIntegrationTests {
         val drug = createDrug(medKit)
         entityManager.flush()
 
-        usingRepository.save(Using(UsingKey(user.id, drug.id), user, drug, 15.0))
+        usingRepository.save(Using(UsingKey(user.id, drug.id), user, drug, 15.0.toBigDecimal()))
         entityManager.flush()
         entityManager.clear()
 
         val using = usingRepository.findByUserIdAndDrugId(user.id, drug.id)
         assertNotNull(using)
-        assertEquals(15.0, using.plannedAmount)
+        org.kert0n.medappserver.testutil.assertDecimalEquals(15.0.toBigDecimal(), using.plannedAmount)
     }
 
     @Test
@@ -385,7 +386,7 @@ class RepositoryIntegrationTests {
         val drug = createDrug(medKit, "TestDrug")
         entityManager.flush()
 
-        usingRepository.save(Using(UsingKey(user.id, drug.id), user, drug, 10.0))
+        usingRepository.save(Using(UsingKey(user.id, drug.id), user, drug, 10.0.toBigDecimal()))
         entityManager.flush()
         entityManager.clear()
 

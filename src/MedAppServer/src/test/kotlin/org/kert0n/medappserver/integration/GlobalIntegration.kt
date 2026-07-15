@@ -85,36 +85,36 @@ class PlannedQuantityTrackingTests {
         val kit = medKitService.createNew(alice.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
 
-        val drug = dbHelper.freshDrug(kit, 120.0)
+        val drug = dbHelper.freshDrug(kit, 120.0.toBigDecimal())
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 40.0))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, 30.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 40.0.toBigDecimal()))
+        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, 30.0.toBigDecimal()))
         dbHelper.flushAndClear()
 
         // Sanity: initial state
-        assertEquals(120.0, dbHelper.drugQuantity(drug.id))
-        assertEquals(70.0, dbHelper.totalPlanned(drug.id))
-        assertEquals(40.0, dbHelper.userPlan(alice.id, drug.id))
-        assertEquals(30.0, dbHelper.userPlan(bob.id, drug.id))
+        org.kert0n.medappserver.testutil.assertDecimalEquals(120.0.toBigDecimal(), dbHelper.drugQuantity(drug.id))
+        org.kert0n.medappserver.testutil.assertDecimalEquals(70.0.toBigDecimal(), dbHelper.totalPlanned(drug.id))
+        org.kert0n.medappserver.testutil.assertDecimalEquals(40.0.toBigDecimal(), dbHelper.userPlan(alice.id, drug.id))
+        org.kert0n.medappserver.testutil.assertDecimalEquals(30.0.toBigDecimal(), dbHelper.userPlan(bob.id, drug.id))
 
         // ── Alice takes 10 (within her plan of 40) ──
-        usingService.recordIntake(alice.id, drug.id, 10.0)
+        usingService.recordIntake(alice.id, drug.id, 10.0.toBigDecimal())
         dbHelper.flushAndClear()
 
-        assertEquals(110.0, dbHelper.drugQuantity(drug.id), "drug: 120-10=110")
-        assertEquals(30.0, dbHelper.userPlan(alice.id, drug.id), "alice: 40-10=30")
-        assertEquals(30.0, dbHelper.userPlan(bob.id, drug.id), "bob: unchanged at 30")
-        assertEquals(60.0, dbHelper.totalPlanned(drug.id), "total: 30+30=60")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(110.0.toBigDecimal(), dbHelper.drugQuantity(drug.id), "drug: 120-10=110")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(30.0.toBigDecimal(), dbHelper.userPlan(alice.id, drug.id), "alice: 40-10=30")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(30.0.toBigDecimal(), dbHelper.userPlan(bob.id, drug.id), "bob: unchanged at 30")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(60.0.toBigDecimal(), dbHelper.totalPlanned(drug.id), "total: 30+30=60")
 
         // ── Bob takes 5 (within his plan of 30) ──
-        usingService.recordIntake(bob.id, drug.id, 5.0)
+        usingService.recordIntake(bob.id, drug.id, 5.0.toBigDecimal())
         dbHelper.flushAndClear()
 
-        assertEquals(105.0, dbHelper.drugQuantity(drug.id), "drug: 110-5=105")
-        assertEquals(30.0, dbHelper.userPlan(alice.id, drug.id), "alice: unchanged at 30")
-        assertEquals(25.0, dbHelper.userPlan(bob.id, drug.id), "bob: 30-5=25")
-        assertEquals(55.0, dbHelper.totalPlanned(drug.id), "total: 30+25=55")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(105.0.toBigDecimal(), dbHelper.drugQuantity(drug.id), "drug: 110-5=105")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(30.0.toBigDecimal(), dbHelper.userPlan(alice.id, drug.id), "alice: unchanged at 30")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(25.0.toBigDecimal(), dbHelper.userPlan(bob.id, drug.id), "bob: 30-5=25")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(55.0.toBigDecimal(), dbHelper.totalPlanned(drug.id), "total: 30+25=55")
 
         // Invariant: planned never exceeds quantity
         assertTrue(dbHelper.totalPlanned(drug.id)!! <= dbHelper.drugQuantity(drug.id)!!)
@@ -148,50 +148,50 @@ class PlannedQuantityTrackingTests {
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), charlie.id)
 
-        val drug = dbHelper.freshDrug(kit, 90.0)
+        val drug = dbHelper.freshDrug(kit, 90.0.toBigDecimal())
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 30.0))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, 30.0))
-        usingService.createTreatmentPlan(charlie.id, UsingCreateDTO(drug.id, 30.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 30.0.toBigDecimal()))
+        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, 30.0.toBigDecimal()))
+        usingService.createTreatmentPlan(charlie.id, UsingCreateDTO(drug.id, 30.0.toBigDecimal()))
         dbHelper.flushAndClear()
 
         // Initial state: zero slack
-        assertEquals(90.0, dbHelper.drugQuantity(drug.id))
-        assertEquals(90.0, dbHelper.totalPlanned(drug.id))
-        assertEquals(30.0, dbHelper.userPlan(alice.id, drug.id))
-        assertEquals(30.0, dbHelper.userPlan(bob.id, drug.id))
-        assertEquals(30.0, dbHelper.userPlan(charlie.id, drug.id))
+        org.kert0n.medappserver.testutil.assertDecimalEquals(90.0.toBigDecimal(), dbHelper.drugQuantity(drug.id))
+        org.kert0n.medappserver.testutil.assertDecimalEquals(90.0.toBigDecimal(), dbHelper.totalPlanned(drug.id))
+        org.kert0n.medappserver.testutil.assertDecimalEquals(30.0.toBigDecimal(), dbHelper.userPlan(alice.id, drug.id))
+        org.kert0n.medappserver.testutil.assertDecimalEquals(30.0.toBigDecimal(), dbHelper.userPlan(bob.id, drug.id))
+        org.kert0n.medappserver.testutil.assertDecimalEquals(30.0.toBigDecimal(), dbHelper.userPlan(charlie.id, drug.id))
 
         // ── Alice takes 1 ──
-        usingService.recordIntake(alice.id, drug.id, 1.0)
+        usingService.recordIntake(alice.id, drug.id, 1.0.toBigDecimal())
         dbHelper.flushAndClear()
 
-        assertEquals(89.0, dbHelper.drugQuantity(drug.id), "drug: 90-1=89")
-        assertEquals(29.0, dbHelper.userPlan(alice.id, drug.id), "alice: 30-1=29")
-        assertEquals(30.0, dbHelper.userPlan(bob.id, drug.id), "bob: untouched")
-        assertEquals(30.0, dbHelper.userPlan(charlie.id, drug.id), "charlie: untouched")
-        assertEquals(89.0, dbHelper.totalPlanned(drug.id), "total: 29+30+30=89")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(89.0.toBigDecimal(), dbHelper.drugQuantity(drug.id), "drug: 90-1=89")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(29.0.toBigDecimal(), dbHelper.userPlan(alice.id, drug.id), "alice: 30-1=29")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(30.0.toBigDecimal(), dbHelper.userPlan(bob.id, drug.id), "bob: untouched")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(30.0.toBigDecimal(), dbHelper.userPlan(charlie.id, drug.id), "charlie: untouched")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(89.0.toBigDecimal(), dbHelper.totalPlanned(drug.id), "total: 29+30+30=89")
 
         // ── Bob takes 1 ──
-        usingService.recordIntake(bob.id, drug.id, 1.0)
+        usingService.recordIntake(bob.id, drug.id, 1.0.toBigDecimal())
         dbHelper.flushAndClear()
 
-        assertEquals(88.0, dbHelper.drugQuantity(drug.id), "drug: 89-1=88")
-        assertEquals(29.0, dbHelper.userPlan(alice.id, drug.id), "alice: still 29")
-        assertEquals(29.0, dbHelper.userPlan(bob.id, drug.id), "bob: 30-1=29")
-        assertEquals(30.0, dbHelper.userPlan(charlie.id, drug.id), "charlie: untouched")
-        assertEquals(88.0, dbHelper.totalPlanned(drug.id), "total: 29+29+30=88")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(88.0.toBigDecimal(), dbHelper.drugQuantity(drug.id), "drug: 89-1=88")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(29.0.toBigDecimal(), dbHelper.userPlan(alice.id, drug.id), "alice: still 29")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(29.0.toBigDecimal(), dbHelper.userPlan(bob.id, drug.id), "bob: 30-1=29")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(30.0.toBigDecimal(), dbHelper.userPlan(charlie.id, drug.id), "charlie: untouched")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(88.0.toBigDecimal(), dbHelper.totalPlanned(drug.id), "total: 29+29+30=88")
 
         // ── Charlie takes 1 ──
-        usingService.recordIntake(charlie.id, drug.id, 1.0)
+        usingService.recordIntake(charlie.id, drug.id, 1.0.toBigDecimal())
         dbHelper.flushAndClear()
 
-        assertEquals(87.0, dbHelper.drugQuantity(drug.id), "drug: 88-1=87")
-        assertEquals(29.0, dbHelper.userPlan(alice.id, drug.id), "alice: still 29")
-        assertEquals(29.0, dbHelper.userPlan(bob.id, drug.id), "bob: still 29")
-        assertEquals(29.0, dbHelper.userPlan(charlie.id, drug.id), "charlie: 30-1=29")
-        assertEquals(87.0, dbHelper.totalPlanned(drug.id), "total: 29+29+29=87")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(87.0.toBigDecimal(), dbHelper.drugQuantity(drug.id), "drug: 88-1=87")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(29.0.toBigDecimal(), dbHelper.userPlan(alice.id, drug.id), "alice: still 29")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(29.0.toBigDecimal(), dbHelper.userPlan(bob.id, drug.id), "bob: still 29")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(29.0.toBigDecimal(), dbHelper.userPlan(charlie.id, drug.id), "charlie: 30-1=29")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(87.0.toBigDecimal(), dbHelper.totalPlanned(drug.id), "total: 29+29+29=87")
 
         // Invariant preserved
         assertEquals(
@@ -229,19 +229,19 @@ class PlannedQuantityTrackingTests {
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), charlie.id)
 
-        val drug = dbHelper.freshDrug(kit, 90.0)
+        val drug = dbHelper.freshDrug(kit, 90.0.toBigDecimal())
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 30.0))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, 30.0))
-        usingService.createTreatmentPlan(charlie.id, UsingCreateDTO(drug.id, 30.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 30.0.toBigDecimal()))
+        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, 30.0.toBigDecimal()))
+        usingService.createTreatmentPlan(charlie.id, UsingCreateDTO(drug.id, 30.0.toBigDecimal()))
         dbHelper.flushAndClear()
 
         // Bob emergency-consumes 30 (ignores the plan system)
-        drugService.consumeDrug(drug.id, 30.0, bob.id)
+        drugService.consumeDrug(drug.id, 30.0.toBigDecimal(), bob.id)
         dbHelper.flushAndClear()
 
-        assertEquals(60.0, dbHelper.drugQuantity(drug.id), "drug: 90-30=60")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(60.0.toBigDecimal(), dbHelper.drugQuantity(drug.id), "drug: 90-30=60")
 
         val alicePlan = dbHelper.userPlan(alice.id, drug.id)!!
         val bobPlan = dbHelper.userPlan(bob.id, drug.id)!!
@@ -249,10 +249,10 @@ class PlannedQuantityTrackingTests {
         val total = dbHelper.totalPlanned(drug.id)
 
         // factor = 60/90 = 2/3; each plan was 30 → 20
-        assertEquals(20.0, alicePlan, 0.001, "alice: 30 * 2/3 = 20")
-        assertEquals(20.0, bobPlan, 0.001, "bob: 30 * 2/3 = 20")
-        assertEquals(20.0, charliePlan, 0.001, "charlie: 30 * 2/3 = 20")
-        assertEquals(60.0, total!!, 0.001, "dbHelper.totalPlanned must equal drug.quantity after scaling")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(20.0.toBigDecimal(), alicePlan, 0.001.toBigDecimal(), "alice: 30 * 2/3 = 20")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(20.0.toBigDecimal(), bobPlan, 0.001.toBigDecimal(), "bob: 30 * 2/3 = 20")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(20.0.toBigDecimal(), charliePlan, 0.001.toBigDecimal(), "charlie: 30 * 2/3 = 20")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(60.0.toBigDecimal(), total!!, 0.001.toBigDecimal(), "dbHelper.totalPlanned must equal drug.quantity after scaling")
 
         println("✅ Emergency consumption scaling test passed")
     }
@@ -290,58 +290,58 @@ class PlannedQuantityTrackingTests {
         val kit = medKitService.createNew(alice.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
 
-        val drug = dbHelper.freshDrug(kit, 120.0)
+        val drug = dbHelper.freshDrug(kit, 120.0.toBigDecimal())
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 40.0))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, 40.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 40.0.toBigDecimal()))
+        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, 40.0.toBigDecimal()))
         dbHelper.flushAndClear()
 
-        assertEquals(120.0, dbHelper.drugQuantity(drug.id))
-        assertEquals(80.0, dbHelper.totalPlanned(drug.id))
-        assertEquals(40.0, dbHelper.userPlan(alice.id, drug.id))
-        assertEquals(40.0, dbHelper.userPlan(bob.id, drug.id))
+        org.kert0n.medappserver.testutil.assertDecimalEquals(120.0.toBigDecimal(), dbHelper.drugQuantity(drug.id))
+        org.kert0n.medappserver.testutil.assertDecimalEquals(80.0.toBigDecimal(), dbHelper.totalPlanned(drug.id))
+        org.kert0n.medappserver.testutil.assertDecimalEquals(40.0.toBigDecimal(), dbHelper.userPlan(alice.id, drug.id))
+        org.kert0n.medappserver.testutil.assertDecimalEquals(40.0.toBigDecimal(), dbHelper.userPlan(bob.id, drug.id))
 
         // ── Step 1: Alice takes 10 ──
-        usingService.recordIntake(alice.id, drug.id, 10.0)
+        usingService.recordIntake(alice.id, drug.id, 10.0.toBigDecimal())
         dbHelper.flushAndClear()
 
-        assertEquals(110.0, dbHelper.drugQuantity(drug.id), "step1 drug")
-        assertEquals(30.0, dbHelper.userPlan(alice.id, drug.id), "step1 alice: 40-10=30")
-        assertEquals(40.0, dbHelper.userPlan(bob.id, drug.id), "step1 bob: unchanged")
-        assertEquals(70.0, dbHelper.totalPlanned(drug.id), "step1 total: 30+40=70")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(110.0.toBigDecimal(), dbHelper.drugQuantity(drug.id), "step1 drug")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(30.0.toBigDecimal(), dbHelper.userPlan(alice.id, drug.id), "step1 alice: 40-10=30")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(40.0.toBigDecimal(), dbHelper.userPlan(bob.id, drug.id), "step1 bob: unchanged")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(70.0.toBigDecimal(), dbHelper.totalPlanned(drug.id), "step1 total: 30+40=70")
 
         // ── Step 2: Bob takes 10 ──
-        usingService.recordIntake(bob.id, drug.id, 10.0)
+        usingService.recordIntake(bob.id, drug.id, 10.0.toBigDecimal())
         dbHelper.flushAndClear()
 
-        assertEquals(100.0, dbHelper.drugQuantity(drug.id), "step2 drug")
-        assertEquals(30.0, dbHelper.userPlan(alice.id, drug.id), "step2 alice: unchanged")
-        assertEquals(30.0, dbHelper.userPlan(bob.id, drug.id), "step2 bob: 40-10=30")
-        assertEquals(60.0, dbHelper.totalPlanned(drug.id), "step2 total: 30+30=60")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(100.0.toBigDecimal(), dbHelper.drugQuantity(drug.id), "step2 drug")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(30.0.toBigDecimal(), dbHelper.userPlan(alice.id, drug.id), "step2 alice: unchanged")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(30.0.toBigDecimal(), dbHelper.userPlan(bob.id, drug.id), "step2 bob: 40-10=30")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(60.0.toBigDecimal(), dbHelper.totalPlanned(drug.id), "step2 total: 30+30=60")
 
         // ── Step 3: Emergency consume 60 ──
-        drugService.consumeDrug(drug.id, 60.0, alice.id)
+        drugService.consumeDrug(drug.id, 60.0.toBigDecimal(), alice.id)
         dbHelper.flushAndClear()
 
-        assertEquals(40.0, dbHelper.drugQuantity(drug.id), "step3 drug: 100-60=40")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(40.0.toBigDecimal(), dbHelper.drugQuantity(drug.id), "step3 drug: 100-60=40")
         // scale = 40/60 = 2/3
-        assertEquals(20.0, dbHelper.userPlan(alice.id, drug.id)!!, 0.001, "step3 alice: 30*2/3=20")
-        assertEquals(20.0, dbHelper.userPlan(bob.id, drug.id)!!, 0.001, "step3 bob: 30*2/3=20")
-        assertEquals(40.0, dbHelper.totalPlanned(drug.id)!!, 0.001, "step3 total=40=drug.quantity")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(20.0.toBigDecimal(), dbHelper.userPlan(alice.id, drug.id)!!, 0.001.toBigDecimal(), "step3 alice: 30*2/3=20")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(20.0.toBigDecimal(), dbHelper.userPlan(bob.id, drug.id)!!, 0.001.toBigDecimal(), "step3 bob: 30*2/3=20")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(40.0.toBigDecimal(), dbHelper.totalPlanned(drug.id)!!, 0.001.toBigDecimal(), "step3 total=40=drug.quantity")
 
         // ── Step 4: Alice takes 5 of her new plan of 20 ──
-        usingService.recordIntake(alice.id, drug.id, 5.0)
+        usingService.recordIntake(alice.id, drug.id, 5.0.toBigDecimal())
         dbHelper.flushAndClear()
 
-        assertEquals(35.0, dbHelper.drugQuantity(drug.id), "step4 drug: 40-5=35")
-        assertEquals(15.0, dbHelper.userPlan(alice.id, drug.id)!!, 0.001, "step4 alice: 20-5=15")
-        assertEquals(20.0, dbHelper.userPlan(bob.id, drug.id)!!, 0.001, "step4 bob: unchanged at 20")
-        assertEquals(35.0, dbHelper.totalPlanned(drug.id)!!, 0.001, "step4 total: 15+20=35")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(35.0.toBigDecimal(), dbHelper.drugQuantity(drug.id), "step4 drug: 40-5=35")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(15.0.toBigDecimal(), dbHelper.userPlan(alice.id, drug.id)!!, 0.001.toBigDecimal(), "step4 alice: 20-5=15")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(20.0.toBigDecimal(), dbHelper.userPlan(bob.id, drug.id)!!, 0.001.toBigDecimal(), "step4 bob: unchanged at 20")
+        org.kert0n.medappserver.testutil.assertDecimalEquals(35.0.toBigDecimal(), dbHelper.totalPlanned(drug.id)!!, 0.001.toBigDecimal(), "step4 total: 15+20=35")
 
         // Final invariant
-        assertEquals(
-            dbHelper.drugQuantity(drug.id)!!, dbHelper.totalPlanned(drug.id)!!, 0.001,
+        org.kert0n.medappserver.testutil.assertDecimalEquals(
+            dbHelper.drugQuantity(drug.id)!!, dbHelper.totalPlanned(drug.id)!!, 0.001.toBigDecimal(),
             "quantity and dbHelper.totalPlanned must be equal: all stock is reserved"
         )
 
