@@ -18,6 +18,13 @@ import org.springframework.security.oauth2.jwt.JwtDecoder
 import org.springframework.security.oauth2.jwt.JwtEncoder
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder
+import org.springframework.security.oauth2.jwt.Jwt
+import org.springframework.security.oauth2.jwt.JwtValidators
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator
+import org.springframework.security.oauth2.core.OAuth2Error
+import org.springframework.security.oauth2.core.OAuth2TokenValidator
+import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult
+import org.kert0n.medappserver.config.AuthenticationProperties
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.authentication.HttpStatusEntryPoint
 
@@ -26,10 +33,21 @@ import org.springframework.security.web.authentication.HttpStatusEntryPoint
 @EnableWebSecurity
 class SecurityConfiguration(
     private val rsaKeys: RsaKeyProperties,
+    private val authenticationProperties: AuthenticationProperties,
 ) {
 
     @Bean
-    fun jwtDecoder(): JwtDecoder = NimbusJwtDecoder.withPublicKey(rsaKeys.publicKey).build()
+    fun jwtDecoder(): JwtDecoder = NimbusJwtDecoder.withPublicKey(rsaKeys.publicKey).build().apply {
+        val issuerValidator = JwtValidators.createDefaultWithIssuer(authenticationProperties.issuer)
+        val audienceValidator = OAuth2TokenValidator<Jwt> { jwt ->
+            if (authenticationProperties.audience in jwt.audience) {
+                OAuth2TokenValidatorResult.success()
+            } else {
+                OAuth2TokenValidatorResult.failure(OAuth2Error("invalid_token", "Invalid audience", null))
+            }
+        }
+        setJwtValidator(DelegatingOAuth2TokenValidator(issuerValidator, audienceValidator))
+    }
 
 
     @Bean
@@ -53,11 +71,12 @@ class SecurityConfiguration(
             .authorizeHttpRequests { auth ->
                 auth
                     .requestMatchers(
-                        "/auth/**",
+                        "/auth/register",
                         "/swagger",
                         "/swagger-ui/**",
                         "/v3/api-docs/**",
-                        "/actuator/**",
+                        "/actuator/health",
+                        "/actuator/health/**",
                     )
                     .permitAll()
                     .dispatcherTypeMatchers(
@@ -68,7 +87,6 @@ class SecurityConfiguration(
                     .anyRequest()
                     .authenticated()
             }
-            // BEWARE OF THIS! XCSS possible if code changes
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .exceptionHandling { configurer ->
                 configurer

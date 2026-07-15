@@ -6,14 +6,20 @@ import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
+import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.servlet.http.HttpServletRequest
-import org.kert0n.medappserver.db.model.User
+import org.kert0n.medappserver.controller.dto.RegisterResponse
+import org.kert0n.medappserver.controller.dto.TokenResponse
+import org.kert0n.medappserver.config.AuthenticationProperties
 import org.kert0n.medappserver.services.models.UserService
+import org.kert0n.medappserver.services.models.userId
+import org.kert0n.medappserver.services.security.SecurityService
 import org.kert0n.medappserver.services.security.ClientAddressProvider
 import org.kert0n.medappserver.services.security.RegistrationThrottle
-import org.kert0n.medappserver.services.security.SecurityService
 import org.springframework.http.HttpStatus
+import org.springframework.http.CacheControl
+import org.springframework.http.ResponseEntity
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.server.ResponseStatusException
@@ -27,16 +33,8 @@ class AuthController(
     private val securityService: SecurityService,
     private val registrationThrottle: RegistrationThrottle,
     private val clientAddressProvider: ClientAddressProvider,
+    private val authenticationProperties: AuthenticationProperties
 ) {
-
-
-    @Schema(description = "Registration response with generated credentials")
-    data class RegisterResponse(
-        @Schema(description = "Generated login identifier")
-        val login: UUID,
-        @Schema(description = "Generated secret key for authentication")
-        val key: String
-    )
 
     @PostMapping("/register")
     @Operation(
@@ -76,22 +74,30 @@ class AuthController(
         }
     }
 
-    @GetMapping("/login")
+    @PostMapping("/token")
     @Operation(
         summary = "Issue JWT token",
         description = "Uses HTTP Basic authentication and returns a JWT access token.",
-        security = []
+        security = [SecurityRequirement(name = "Basic Authentication")]
     )
     @ApiResponses(
         value = [
             ApiResponse(
                 responseCode = "200",
                 description = "JWT token issued",
-                content = [Content(schema = Schema(implementation = String::class))]
+                content = [Content(schema = Schema(implementation = TokenResponse::class))]
             ),
             ApiResponse(responseCode = "401", description = "Invalid credentials", content = [Content()])
         ]
     )
-    fun login(authentication: Authentication): String =
-        securityService.generateToken(authentication.principal as User)
+    fun token(authentication: Authentication): ResponseEntity<TokenResponse> =
+        ResponseEntity.ok()
+            .cacheControl(CacheControl.noStore())
+            .header("Pragma", "no-cache")
+            .body(
+                TokenResponse(
+                    accessToken = securityService.generateToken(authentication.userId),
+                    expiresIn = authenticationProperties.term.seconds
+                )
+            )
 }
