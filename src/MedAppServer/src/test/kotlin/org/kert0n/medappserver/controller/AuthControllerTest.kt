@@ -1,5 +1,6 @@
 package org.kert0n.medappserver.controller
 
+import com.sksamuel.aedile.core.Cache
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.db.model.User
@@ -15,6 +16,8 @@ import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfig
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.ResultActions
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.*
@@ -22,6 +25,7 @@ import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
 import java.util.*
+import java.util.concurrent.atomic.AtomicInteger
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -38,19 +42,30 @@ class AuthControllerTest {
     @MockitoBean
     private lateinit var securityService: SecurityService
 
+    @Autowired
+    private lateinit var successfulRegistrationsCache: Cache<String, AtomicInteger>
+
     @BeforeEach
     fun setup() {
+        successfulRegistrationsCache.invalidateAll()
         mockMvc = MockMvcBuilders.webAppContextSetup(context)
             .apply<DefaultMockMvcBuilder>(SecurityMockMvcConfigurers.springSecurity())
             .build()
     }
 
+    private fun register(token: String): ResultActions {
+        val asyncResult = mockMvc.perform(
+            post("/auth/register")
+                .header("X-Registration-Token", token)
+        )
+            .andExpect(request().asyncStarted())
+            .andReturn()
+        return mockMvc.perform(asyncDispatch(asyncResult))
+    }
+
     @Test
     fun `POST register - returns 403 with wrong secret`() {
-        mockMvc.perform(
-            post("/auth/register")
-                .header("X-Registration-Token", "wrong-secret")
-        )
+        register("wrong-secret")
             .andExpect(status().isForbidden)
     }
 
@@ -58,27 +73,25 @@ class AuthControllerTest {
     fun `POST register - returns login and key with correct secret`() {
         val userId = UUID.randomUUID()
         val user = User(id = userId, hashedKey = "hashed")
-        whenever(securityService.validateRequest(any())).thenReturn(true)
         whenever(securityService.generateKey(32)).thenReturn("generated-key")
-        whenever(userService.registerNewUser(any(), eq("generated-key"), any())).thenReturn(user)
+        whenever(userService.registerNewUser(any(), eq("generated-key"))).thenReturn(user)
 
-        mockMvc.perform(
-            post("/auth/register")
-                .header("X-Registration-Token", "test-secret")
-        )
-            .andExpect(status().isOk)
+        register("test-secret")
+            .andExpect(status().isCreated)
             .andExpect(jsonPath("$.key").value("generated-key"))
     }
 
     @Test
-    fun `POST register - returns 504 when rate limited`() {
-        whenever(securityService.validateRequest(any())).thenReturn(false)
+    fun `POST register - returns 429 when rate limited`() {
+        val user = User(id = UUID.randomUUID(), hashedKey = "hashed")
+        whenever(securityService.generateKey(32)).thenReturn("generated-key")
+        whenever(userService.registerNewUser(any(), eq("generated-key"))).thenReturn(user)
 
-        mockMvc.perform(
-            post("/auth/register")
-                .header("X-Registration-Token", "test-secret")
-        )
-            .andExpect(status().isGatewayTimeout)
+        register("test-secret")
+            .andExpect(status().isCreated)
+
+        register("test-secret")
+            .andExpect(status().isTooManyRequests)
     }
 
     @Test

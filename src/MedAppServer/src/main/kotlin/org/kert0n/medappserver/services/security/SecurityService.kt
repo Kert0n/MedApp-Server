@@ -1,6 +1,5 @@
 package org.kert0n.medappserver.services.security
 
-import com.sksamuel.aedile.core.Cache
 import org.kert0n.medappserver.db.model.User
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.security.crypto.password.PasswordEncoder
@@ -21,8 +20,6 @@ class SecurityService(
     private val encoder: JwtEncoder,
     private val decoder: JwtDecoder,
     @Value($$"${authentication.termInMinutes}") private val authenticationTerm: Long,
-    @Value($$"${registration.timeout.BanNumber}") private val registrationNumber: Long,
-    private val successfulRegistrationsCache: Cache<String, Int>
 ) {
 
     fun generateKey(size: Int) = Base64.encode(ByteArray(size).also { SecureRandom().nextBytes(it) })
@@ -46,17 +43,4 @@ class SecurityService(
         ).tokenValue
     }
 
-    // Track successful registrations per IP to throttle automated registrations.
-    fun validateRequest(ip: String): Boolean =
-        (successfulRegistrationsCache.getOrNull(ip) ?: 0) <= registrationNumber
-
-    // Creates or increases successful registration attempt from IP
-    fun registerIncrease(ip: String) {
-        val current = successfulRegistrationsCache.getOrNull(ip)
-        if (current == null) {
-            successfulRegistrationsCache.put(ip, 1)
-        } else {
-            successfulRegistrationsCache[ip] = current + 1
-        }
-    }
 }
