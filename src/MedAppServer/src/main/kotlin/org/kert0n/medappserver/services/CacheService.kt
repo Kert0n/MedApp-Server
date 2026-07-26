@@ -1,7 +1,7 @@
 package org.kert0n.medappserver.services
 
 import com.github.benmanes.caffeine.cache.Caffeine
-import org.kert0n.medappserver.controller.IntakeOutcome
+import org.kert0n.medappserver.services.orchestrators.IntakeOutcome
 import com.sksamuel.aedile.core.Cache
 import com.sksamuel.aedile.core.asCache
 import com.sksamuel.aedile.core.expireAfterWrite

@@ -4,7 +4,7 @@ import com.sksamuel.aedile.core.Cache
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
-import org.kert0n.medappserver.controller.IntakeOutcome
+import org.kert0n.medappserver.services.orchestrators.IntakeOutcome
 import org.kert0n.medappserver.controller.UsingCreateDTO
 import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.MedKit
@@ -139,6 +139,21 @@ class IntakeIdempotencyTest {
         assertEquals(first, second, "повтор обязан вернуть тот же результат, а не 404")
         assertQty(7.0, drugRepository.findById(drug.id).orElseThrow().quantity,
             "списание должно быть однократным")
+    }
+
+    @Test
+    fun `отказ не кешируется и не блокирует последующий приём`() {
+        // Кешируется только состоявшийся приём. Закешированный отказ переживёт исправление
+        // своей причины: клиент починил количество, а сервер продолжает отдавать прежнюю
+        // ошибку до истечения TTL. Ровно поэтому запись в кеш стоит после успешного вызова.
+        val (user, drug, _) = prepare(stock = 10.0, plan = 2.0)
+        val intakeId = UUID.randomUUID()
+
+        intake(user, drug, 5.0, intakeId).andExpect(status().isBadRequest)
+        intake(user, drug, 2.0, intakeId).andExpect(status().isOk)
+
+        assertQty(8.0, drugRepository.findById(drug.id).orElseThrow().quantity,
+            "приём после отказа с тем же intakeId должен примениться: первого списания не было")
     }
 
     @Test
