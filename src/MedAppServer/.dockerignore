@@ -1,9 +1,24 @@
 .gradle
 build
+htmlReport
 .idea
 *.iml
 *.ipr
 *.iws
 .DS_Store
 *.log
+
+# Runtime secrets. These are supplied to the container at startup and must never
+# end up in an image layer.
 .env
+.local
+src/main/resources/application-prod.properties
+src/main/resources/certs/*.pem
+
+# Closed reference data (~60 MB), deliberately excluded from git as well.
+# The build never copies it, but without this line it is still uploaded to the
+# Docker daemon as part of the build context on every build.
+init-scripts
+
+# Not needed to produce the runtime image; bootJar does not compile tests.
+src/test
