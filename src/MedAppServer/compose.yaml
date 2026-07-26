@@ -34,8 +34,10 @@ services:
       - 'SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/medapp-server-db'
       - 'SPRING_DATASOURCE_USERNAME=${POSTGRES_USER:?POSTGRES_USER must be set}'
       - 'SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}'
-      # registration.secret сюда не передаётся: он уже в application-prod.properties внутри
-      # образа. Образ самодостаточен, лишнюю обязательную переменную вводить не за чем.
+      # Пробрасывается только если задан в окружении или .env. Не обязателен: в образе с
+      # application-prod.properties секрет уже есть, а на чистом клоне его надо задать —
+      # иначе приложение осознанно падает при старте.
+      - REGISTRATION_SECRET
       - 'SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT=60000'
     expose:
       - "8080"

@@ -27,6 +27,17 @@ class AuthController(
     private val securityService: SecurityService
 ) {
 
+    init {
+        // Пустой секрет — не конфигурация, а обходимый барьер. Падаем при старте, а не
+        // принимаем любую регистрацию: базовый application.properties оставляет значение
+        // пустым специально, чтобы его обязательно задали через REGISTRATION_SECRET или
+        // application-prod.properties.
+        require(registrationSecret.isNotBlank()) {
+            "registration.secret must not be blank: set the REGISTRATION_SECRET environment " +
+                "variable or provide application-prod.properties"
+        }
+    }
+
 
     @Schema(description = "Registration response with generated credentials")
     data class RegisterResponse(
