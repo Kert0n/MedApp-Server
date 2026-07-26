@@ -47,6 +47,10 @@ class AuthControllerTest {
         // default `false` and reject every /auth/login with 429 before authentication.
         // Throttling itself is covered by LoginThrottleTest.
         whenever(securityService.isLoginAllowed(any())).thenReturn(true)
+        // Same reason: the registration secret comparison now goes through the service, and
+        // an unstubbed mock would answer `false` for a correct secret too.
+        whenever(securityService.secretsMatch(any(), any())).thenReturn(false)
+        whenever(securityService.secretsMatch(eq("test-secret"), any())).thenReturn(true)
     }
 
     @Test

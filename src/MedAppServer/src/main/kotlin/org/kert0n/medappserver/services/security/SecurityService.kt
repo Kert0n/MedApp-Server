@@ -10,6 +10,7 @@ import org.springframework.security.oauth2.jwt.JwtDecoder
 import org.springframework.security.oauth2.jwt.JwtEncoder
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters
 import org.springframework.stereotype.Service
+import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.time.Instant
@@ -37,6 +38,20 @@ class SecurityService(
     fun hashPassword(rawPassword: String): String = passwordEncoder.encode(rawPassword)!!
     fun hashToken(token: String): String =
         Base64.encode(MessageDigest.getInstance("SHA-256").digest(token.toByteArray()))
+
+    /**
+     * Compares two shared secrets without leaking how much of a candidate was correct.
+     *
+     * `==` on strings stops at the first differing character, so response time depends on
+     * the length of the matching prefix. Both sides are hashed first because
+     * [MessageDigest.isEqual] itself returns early when lengths differ — hashing makes both
+     * inputs the same length, so neither the content nor the length of the expected secret
+     * shows through.
+     */
+    fun secretsMatch(candidate: String, expected: String): Boolean = MessageDigest.isEqual(
+        hashToken(candidate).toByteArray(StandardCharsets.UTF_8),
+        hashToken(expected).toByteArray(StandardCharsets.UTF_8)
+    )
 
 
     fun generateToken(user: User, termInMinutes: Long = authenticationTerm): String {
