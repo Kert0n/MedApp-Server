@@ -188,7 +188,7 @@ class UsingsControllerTest {
         whenever(usingService.recordIntake(eq(userId), eq(drugId), eq(qty(10.0)))).thenReturn(using)
         whenever(usingService.toUsingDTO(using)).thenReturn(dto)
 
-        val intakeRequest = IntakeRequest(quantityConsumed = qty(10.0))
+        val intakeRequest = IntakeRequest(quantityConsumed = qty(10.0), intakeId = UUID.randomUUID())
 
         mockMvc.perform(
             post("/using/drug/$drugId/intake")
@@ -205,7 +205,7 @@ class UsingsControllerTest {
         whenever(usingService.recordIntake(eq(userId), eq(drugId), any()))
             .thenThrow(ResponseStatusException(HttpStatus.BAD_REQUEST, "Exceeds planned amount"))
 
-        val intakeRequest = IntakeRequest(quantityConsumed = qty(100.0))
+        val intakeRequest = IntakeRequest(quantityConsumed = qty(100.0), intakeId = UUID.randomUUID())
 
         mockMvc.perform(
             post("/using/drug/$drugId/intake")

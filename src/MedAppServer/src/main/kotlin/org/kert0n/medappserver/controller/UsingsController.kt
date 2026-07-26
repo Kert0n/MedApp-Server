@@ -1,5 +1,6 @@
 package org.kert0n.medappserver.controller
 
+import com.sksamuel.aedile.core.Cache
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.media.Content
@@ -14,6 +15,7 @@ import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.services.models.userId
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
@@ -26,7 +28,8 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBod
 @Tag(name = "Treatment Plans", description = "Endpoints for treatment plans and intake tracking")
 class UsingsController(
     private val usingService: UsingService,
-    private val logger: Logger = LoggerFactory.getLogger(UsingsController::class.java)
+    private val logger: Logger = LoggerFactory.getLogger(UsingsController::class.java),
+    @Qualifier("intakeResultsCache") private val intakeResultsCache: Cache<String, IntakeOutcome>
 ) {
 
 
@@ -141,9 +144,26 @@ class UsingsController(
             drugId, authentication.userId, intakeRequest.quantityConsumed
         )
 
-        return usingService.recordIntake(authentication.userId, drugId, intakeRequest.quantityConsumed)?.let { using ->
-            usingService.toUsingDTO(using)
+        // Ключ включает пользователя: intakeId генерирует клиент, и без этого один клиент мог
+        // бы получить результат чужой операции, подобрав совпадающий идентификатор.
+        val key = "${authentication.userId}:${intakeRequest.intakeId}"
+
+        intakeResultsCache.getOrNull(key)?.let { seen ->
+            logger.debug("Повторный intakeId, отдаю прежний результат без повторного списания")
+            return seen.plan
         }
+
+        val plan = usingService
+            .recordIntake(authentication.userId, drugId, intakeRequest.quantityConsumed)
+            ?.let { usingService.toUsingDTO(it) }
+
+        // Кеш заполняется здесь, а не внутри recordIntake, сознательно: тот метод
+        // транзакционный, и запись изнутри осталась бы в кеше даже при откате транзакции,
+        // то есть повтор получил бы результат операции, которой не было.
+        //
+        // Ошибки не кешируются: отказ выводится из состояния и при повторе повторится сам.
+        intakeResultsCache.put(key, IntakeOutcome(plan))
+        return plan
     }
 
     @DeleteMapping("/drug/{drugId}")
@@ -169,8 +189,26 @@ data class IntakeRequest(
     @NotNull
     @DecimalMin(value = "0.0", inclusive = false)
     @Schema(description = "Amount consumed", example = "1.0", minimum = "0")
-    val quantityConsumed: BigDecimal
+    val quantityConsumed: BigDecimal,
+
+    @NotNull
+    @Schema(
+        description = "Client-generated identifier of this intake event. Retrying with the same " +
+            "value returns the first result instead of applying the intake twice.",
+        required = true
+    )
+    val intakeId: UUID
 )
+
+/**
+ * Обёртка вокруг результата приёма для кеша идемпотентности.
+ *
+ * Нужна потому, что приём может завершиться удалением плана, и тогда результат — отсутствие
+ * плана, то есть null. Caffeine null-значения не принимает, а различать «не видели такой
+ * intakeId» и «видели, и план исчез» обязательно: без этого повтор вернул бы 404 вместо
+ * первого ответа.
+ */
+data class IntakeOutcome(val plan: UsingDTO?)
 
 @Schema(description = "Treatment plan information")
 data class UsingDTO(

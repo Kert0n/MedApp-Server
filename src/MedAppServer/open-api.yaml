@@ -802,7 +802,14 @@ components:
           description: Amount consumed
           example: 1.0
           minimum: 0.0
+        intakeId:
+          type: string
+          format: uuid
+          description: Client-generated identifier of this intake event. Retrying
+            with the same value returns the first result instead of applying the intake
+            twice.
       required:
+      - intakeId
       - quantityConsumed
     MedKitCreatedResponse:
       type: object
