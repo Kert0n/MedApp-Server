@@ -68,15 +68,39 @@ Flyway сознательно не используется. Но `ddl-auto=upda
 
 ## Запуск с Docker Compose
 
-В [compose](compose.yaml) нужно убрать комментарий в medapp-server, затем стандартный запуск
+Один раз — создать `.env` рядом с `compose.yaml` по образцу
+[.env.example](.env.example). Это единственный обязательный шаг: он нужен, чтобы пароль
+базы не лежал в репозитории. Без него `compose` падает сразу, а не поднимает базу со
+слабым паролем.
 
 ```bash
-# Запуск всех сервисов
-docker-compose up -d
+cp .env.example .env && $EDITOR .env
 
-# Просмотр логов
-docker-compose logs -f medapp-server
+docker compose up -d --build
+
+docker compose logs -f med-app-server
 ```
+
+Схема создаётся автоматически из [db/schema.sql](db/schema.sql) при инициализации
+Postgres, поэтому на чистой машине больше ничего не требуется. Наружу смотрит только
+Caddy: приложение и Postgres портов не публикуют — на этом же держится доверие к
+`X-Forwarded-For`.
+
+### Справочник препаратов
+
+`init-scripts/cleaned-init.sql` — закрытые данные, в репозиторий не попадают, и compose
+их **не** монтирует: на чистом клоне файла нет, а безусловный монтаж отсутствующего пути
+Docker превращает в каталог — именно так и был сломан init раньше.
+
+Если файл у вас есть, залить его после подъёма БД:
+
+```bash
+docker compose exec -T postgres \
+  psql -U "$POSTGRES_USER" -d medapp-server-db < init-scripts/cleaned-init.sql
+```
+
+Без него приложение работает полностью, но `GET /drug/template/search` возвращает пустой
+список: каталог пуст, а не сломан.
 
 ## API Документация
 

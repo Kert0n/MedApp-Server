@@ -3,57 +3,72 @@ services:
     image: 'postgres:18.3-trixie'
     environment:
       - 'POSTGRES_DB=medapp-server-db'
-      - 'POSTGRES_PASSWORD=secret'
-      - 'POSTGRES_USER=myuser'
+      - 'POSTGRES_USER=${POSTGRES_USER:?POSTGRES_USER must be set}'
+      - 'POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}'
     volumes:
       - postgres_data:/var/lib/postgresql
-      - ./init-scripts/dump.sql:/docker-entrypoint-initdb.d/dump.sql
-    ports:
-      - "5432:5432"
+      # Схема приложения. Раньше здесь монтировался ./init-scripts/dump.sql, которого не
+      # существует: Docker создавал каталог с таким именем, init не выполнялся, pg_trgm не
+      # ставился, и поиск по справочнику падал с 500.
+      #
+      # Справочник Vidal сюда НЕ монтируется: это закрытые данные вне git, на чистом клоне
+      # файла нет, и безусловный монтаж воспроизвёл бы ровно тот же баг. Он заливается
+      # отдельным шагом, см. README.
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    # Порт наружу не публикуется: доступ только из сети data.
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U myuser -d medapp-server-db" ]
+      test: [ "CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d medapp-server-db" ]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
-      - med-app-network
+      - data
+    restart: unless-stopped
 
-#  med-app-server:
-#    build:
-#      context: .
-#      dockerfile: Dockerfile
-#    environment:
-#      - 'SPRING_PROFILES_ACTIVE=prod'
-#      - 'SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/medapp-server-db'
-#      - 'SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT=60000'
-#    expose:
-#      - "8080"
-#    depends_on:
-#      postgres:
-#        condition: service_healthy
-#    networks:
-#      - med-app-network
-#    healthcheck:
-#      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
-#      interval: 30s
-#      timeout: 10s
-#      retries: 3
-#      start_period: 40s
-#    restart: unless-stopped
-#
-#  caddy:
-#    image: caddy:2-alpine
-#    ports:
-#      - "80:80"
-#      - "443:443"
-#    volumes:
-#      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-#      - caddy_data:/data       # тут Caddy хранит сертификаты
-#      - caddy_config:/config
-#    networks:
-#      - med-app-network
-#    restart: unless-stopped
+  med-app-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - 'SPRING_PROFILES_ACTIVE=prod'
+      - 'SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/medapp-server-db'
+      - 'SPRING_DATASOURCE_USERNAME=${POSTGRES_USER:?POSTGRES_USER must be set}'
+      - 'SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}'
+      # registration.secret сюда не передаётся: он уже в application-prod.properties внутри
+      # образа. Образ самодостаточен, лишнюю обязательную переменную вводить не за чем.
+      - 'SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT=60000'
+    expose:
+      - "8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # В edge — чтобы был виден Caddy, в data — чтобы видеть Postgres. Наружу не публикуется:
+    # на этом держится доверие к X-Forwarded-For (forward-headers-strategy=native).
+    networks:
+      - edge
+      - data
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
 
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data       # тут Caddy хранит сертификаты
+      - caddy_config:/config
+    depends_on:
+      - med-app-server
+    networks:
+      - edge
+    restart: unless-stopped
 
 volumes:
   postgres_data:
@@ -61,5 +76,9 @@ volumes:
   caddy_config:
 
 networks:
-  med-app-network:
+  # Единственная сеть, куда смотрит внешний мир.
+  edge:
+    driver: bridge
+  # Postgres виден только приложению.
+  data:
     driver: bridge
