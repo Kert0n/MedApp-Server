@@ -42,7 +42,16 @@ class DrugService(
     }
 
 
-    @Transactional(readOnly = true)
+    /**
+     * Берёт препарат под блокировку на запись.
+     *
+     * Без readOnly сознательно: метод выполняет `SELECT ... FOR UPDATE`, а readOnly переводит
+     * соединение в режим только для чтения и ставит flush-режим MANUAL. Не падало это лишь
+     * потому, что метод всегда вызывается из внешней read-write транзакции, и при
+     * распространении REQUIRED внутренний readOnly игнорируется. То есть аннотация вводила в
+     * заблуждение и сломалась бы при первом вызове напрямую.
+     */
+    @Transactional
     fun findByIdForUserForUpdate(drugId: UUID, userId: UUID): Drug {
         logger.debug("Finding locked drug {} for user {}", drugId, userId)
         return drugRepository.findByIdAndMedKitUsersIdForUpdate(drugId, userId)
