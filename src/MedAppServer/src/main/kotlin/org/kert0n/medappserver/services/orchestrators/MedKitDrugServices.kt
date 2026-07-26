@@ -40,7 +40,7 @@ class MedKitDrugServices(
             medKitRepository.findByIdAndUsersIdWithUsers(targetMedKitId, userId) ?: throw ResponseStatusException(
                 HttpStatus.NOT_FOUND
             )
-        val drug = drugRepository.findByIdAndUsingsUserIdWithUsing(drugId, userId) ?: throw ResponseStatusException(
+        val drug = drugRepository.findByIdAndMedKitUsersIdWithUsings(drugId, userId) ?: throw ResponseStatusException(
             HttpStatus.NOT_FOUND
         )
 

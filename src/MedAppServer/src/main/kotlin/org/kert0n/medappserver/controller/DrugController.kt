@@ -9,6 +9,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
 import jakarta.validation.constraints.DecimalMin
+import jakarta.validation.constraints.Max
+import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
 import org.kert0n.medappserver.services.models.DrugService
@@ -199,8 +201,20 @@ class DrugController(
     )
     fun searchDrugTemplates(
         authentication: Authentication,
-        @Parameter(description = "Search term") @RequestParam searchTerm: String,
-        @Parameter(description = "Maximum results") @RequestParam(defaultValue = "10") limit: Int
+        @Parameter(description = "Search term")
+        @RequestParam @Size(min = 1, max = 200) searchTerm: String,
+        // Unbounded before: limit=-1 reached Postgres as LIMIT -1 and failed with a 500,
+        // limit=10000000 was an out-of-memory lever on an authenticated endpoint.
+        //
+        // The bounds are stated twice on purpose. @Min/@Max are what actually enforce them,
+        // but springdoc does not render them into the schema for a query parameter (it does
+        // render @Size, see searchTerm above), so without the explicit schema the published
+        // contract would not mention the limit at all. Keep the two in step.
+        @Parameter(
+            description = "Maximum results",
+            schema = Schema(type = "integer", format = "int32", minimum = "1", maximum = "50")
+        )
+        @RequestParam(defaultValue = "10") @Min(1) @Max(50) limit: Int
     ): List<DrugTemplateDTO> {
         logger.debug(
             "GET /drug/template/search?searchTerm={}&limit={} by user {}",
@@ -364,6 +378,7 @@ data class DrugCreateDTO(
     @Schema(description = "Country", example = "Germany")
     val country: String? = null,
 
+    @Size(max = 4000)
     @Schema(description = "Description")
     val description: String? = null
 )
@@ -398,6 +413,7 @@ data class DrugUpdateDTO(
     @Schema(description = "Country", example = "Germany")
     val country: String? = null,
 
+    @Size(max = 4000)
     @Schema(description = "Description")
     val description: String? = null
 )

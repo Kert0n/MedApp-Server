@@ -99,7 +99,12 @@ class MedKitController(
     }
 
     @PostMapping("/{medKitId}/share")
-    @Operation(summary = "Generate share key", description = "Generates a one-time share key for a medkit")
+    @Operation(
+        summary = "Generate share key",
+        description = "Generates a share key for a medkit. The key stays valid until it expires " +
+            "(medkit.share.termInMinutes) and can be used more than once during that window, so " +
+            "treat it as a short-lived invitation rather than a single-use token."
+    )
     @ApiResponses(
         value = [
             ApiResponse(responseCode = "200", description = "Share key generated"),
@@ -151,10 +156,18 @@ class MedKitController(
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @Operation(summary = "Delete medkit", description = "Deletes a medkit or removes the user if others remain")
+    @Operation(
+        summary = "Delete medkit",
+        description = "Deletes the medkit for everyone who shares it, including its drugs and " +
+            "the treatment plans of other participants. Use when the physical medicine kit has " +
+            "ceased to exist as a shared thing — it was taken away or was damaged beyond use. " +
+            "Pass transferToMedKitId to move the drugs into another of your medkits instead of " +
+            "discarding them. To leave a shared medkit without destroying it, use " +
+            "DELETE /med-kit/{id}/leave."
+    )
     @ApiResponses(
         value = [
-            ApiResponse(responseCode = "204", description = "Medkit deleted"),
+            ApiResponse(responseCode = "204", description = "Medkit deleted for all participants"),
             ApiResponse(responseCode = "404", description = "Medkit not found", content = [Content()])
         ]
     )

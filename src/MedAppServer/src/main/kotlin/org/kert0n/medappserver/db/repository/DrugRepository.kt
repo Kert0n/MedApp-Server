@@ -33,7 +33,7 @@ interface DrugRepository : JpaRepository<Drug, UUID> {
     WHERE d.id = :drugId AND u.id = :userId
 """
     )
-    fun findByIdAndUsingsUserIdWithUsing(drugId: UUID, userId: UUID): Drug?
+    fun findByIdAndMedKitUsersIdWithUsings(drugId: UUID, userId: UUID): Drug?
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query(

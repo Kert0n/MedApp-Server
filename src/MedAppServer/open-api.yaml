@@ -1,1445 +1,1010 @@
-{
-  "openapi": "3.1.0",
-  "info": {
-    "title": "MedApp Server API",
-    "description": "REST API for MedApp medicine kit synchronization and catalog search.",
-    "version": "0.0.1"
-  },
-  "servers": [
-    {
-      "url": "http://localhost:8080",
-      "description": "Generated server url"
-    }
-  ],
-  "security": [
-    {
-      "Bearer Authentication": [ ]
-    }
-  ],
-  "tags": [
-    {
-      "name": "Drug Management",
-      "description": "APIs for managing drugs in medicine kits"
-    },
-    {
-      "name": "MedKit Management",
-      "description": "APIs for managing medicine kits"
-    },
-    {
-      "name": "User Data",
-      "description": "Endpoints for user profile and synchronization data"
-    },
-    {
-      "name": "Authentication",
-      "description": "Public endpoints for registration and token issuance"
-    },
-    {
-      "name": "Treatment Plans",
-      "description": "Endpoints for treatment plans and intake tracking"
-    }
-  ],
-  "paths": {
-    "/using/drug/{drugId}": {
-      "get": {
-        "tags": [
-          "Treatment Plans"
-        ],
-        "summary": "Get treatment plan by drug",
-        "description": "Returns a treatment plan for a specific drug.",
-        "operationId": "getSpecificUsing",
-        "parameters": [
-          {
-            "name": "drugId",
-            "in": "path",
-            "description": "Drug ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Treatment plan retrieved",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/UsingDTO"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Treatment plan not found"
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "Treatment Plans"
-        ],
-        "summary": "Update treatment plan",
-        "description": "Updates the planned amount for a drug.",
-        "operationId": "updateUsing",
-        "parameters": [
-          {
-            "name": "drugId",
-            "in": "path",
-            "description": "Drug ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "description": "Updated treatment plan",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UsingUpdateDTO"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Treatment plan updated",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/UsingDTO"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid input"
-          },
-          "404": {
-            "description": "Treatment plan not found"
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "Treatment Plans"
-        ],
-        "summary": "Delete treatment plan",
-        "description": "Deletes a planned usage for a drug.",
-        "operationId": "deleteTreatmentPlan",
-        "parameters": [
-          {
-            "name": "drugId",
-            "in": "path",
-            "description": "Drug ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Treatment plan deleted"
-          },
-          "404": {
-            "description": "Treatment plan not found"
-          }
-        }
-      }
-    },
-    "/drug/{id}": {
-      "get": {
-        "tags": [
-          "Drug Management"
-        ],
-        "summary": "Get drug by ID",
-        "description": "Retrieves a drug by its ID if the user has access",
-        "operationId": "getDrug",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Drug ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Drug found",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/DrugDTO"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Drug not found or access denied"
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "Drug Management"
-        ],
-        "summary": "Update a drug",
-        "description": "Updates an existing drug",
-        "operationId": "updateDrug",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Drug ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "description": "Drug update details",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DrugUpdateDTO"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Drug updated successfully",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/DrugDTO"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid input"
-          },
-          "404": {
-            "description": "Drug not found"
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "Drug Management"
-        ],
-        "summary": "Delete a drug",
-        "description": "Deletes a drug from the medicine kit",
-        "operationId": "deleteDrug",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Drug ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Drug deleted successfully"
-          },
-          "404": {
-            "description": "Drug not found"
-          }
-        }
-      }
-    },
-    "/drug/move/{id}": {
-      "put": {
-        "tags": [
-          "Drug Management"
-        ],
-        "summary": "Move drug to another medicine kit",
-        "description": "Transfers a drug between medicine kits",
-        "operationId": "moveDrug",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Drug ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "description": "Target medicine kit",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/MoveDrugRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Drug moved",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/DrugDTO"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid target medkit"
-          },
-          "404": {
-            "description": "Drug or medkit not found"
-          }
-        }
-      }
-    },
-    "/drug/consume/{id}": {
-      "put": {
-        "tags": [
-          "Drug Management"
-        ],
-        "summary": "Consume drug",
-        "description": "Reduces drug quantity by the consumed amount",
-        "operationId": "consumeDrug",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Drug ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "description": "Consumption details",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ConsumeRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Drug consumed",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/DrugDTO"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid quantity"
-          },
-          "404": {
-            "description": "Drug not found"
-          }
-        }
-      }
-    },
-    "/using": {
-      "get": {
-        "tags": [
-          "Treatment Plans"
-        ],
-        "summary": "Get all treatment plans",
-        "description": "Returns all planned drug usages for the user.",
-        "operationId": "getUsings",
-        "responses": {
-          "200": {
-            "description": "Treatment plans retrieved",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/UsingDTO"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "Treatment Plans"
-        ],
-        "summary": "Create treatment plan",
-        "description": "Creates a planned usage for a drug.",
-        "operationId": "createUsing",
-        "requestBody": {
-          "description": "Treatment plan details",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UsingCreateDTO"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Treatment plan created",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/UsingDTO"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid input"
-          },
-          "409": {
-            "description": "Treatment plan already exists"
-          }
-        }
-      }
-    },
-    "/using/drug/{drugId}/intake": {
-      "post": {
-        "tags": [
-          "Treatment Plans"
-        ],
-        "summary": "Record intake",
-        "description": "Registers a drug intake and updates the planned amount.",
-        "operationId": "recordRegularUsing",
-        "parameters": [
-          {
-            "name": "drugId",
-            "in": "path",
-            "description": "Drug ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "description": "Intake details",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/IntakeRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Intake recorded",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/UsingDTO"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid intake amount"
-          },
-          "404": {
-            "description": "Treatment plan not found"
-          }
-        }
-      }
-    },
-    "/med-kit": {
-      "get": {
-        "tags": [
-          "MedKit Management"
-        ],
-        "summary": "Get all medkits",
-        "description": "Returns summary info for all medkits accessible to the user",
-        "operationId": "getAllMedKits",
-        "responses": {
-          "200": {
-            "description": "Medkits retrieved",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/MedKitSummaryDTO"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "MedKit Management"
-        ],
-        "summary": "Create a new medkit",
-        "description": "Creates a new medkit for the authenticated user",
-        "operationId": "createNew",
-        "responses": {
-          "201": {
-            "description": "Medkit created successfully",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/MedKitCreatedResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          }
-        }
-      }
-    },
-    "/med-kit/{medKitId}/share": {
-      "post": {
-        "tags": [
-          "MedKit Management"
-        ],
-        "summary": "Generate share key",
-        "description": "Generates a one-time share key for a medkit",
-        "operationId": "generateKeyToMedKit",
-        "parameters": [
-          {
-            "name": "medKitId",
-            "in": "path",
-            "description": "Medkit ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Share key generated",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Medkit not found or access denied"
-          }
-        }
-      }
-    },
-    "/med-kit/join": {
-      "post": {
-        "tags": [
-          "MedKit Management"
-        ],
-        "summary": "Join medkit by share key",
-        "description": "Joins an existing medkit using a share key",
-        "operationId": "joinMedKitByKey",
-        "requestBody": {
-          "description": "Join request",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/JoinMedKitRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successfully joined medkit",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/MedKitDTO"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Share key expired or invalid"
-          }
-        }
-      }
-    },
-    "/drug": {
-      "post": {
-        "tags": [
-          "Drug Management"
-        ],
-        "summary": "Create a new drug",
-        "description": "Creates a new drug in a medicine kit",
-        "operationId": "createDrug",
-        "requestBody": {
-          "description": "Drug details to create",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DrugCreateDTO"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Drug created successfully",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/DrugDTO"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid input"
-          },
-          "403": {
-            "description": "User does not have access to the medicine kit"
-          }
-        }
-      }
-    },
-    "/auth/register": {
-      "post": {
-        "tags": [
-          "Authentication"
-        ],
-        "summary": "Register a new user",
-        "description": "Creates a new user and returns generated credentials.",
-        "operationId": "register",
-        "parameters": [
-          {
-            "name": "X-Registration-Token",
-            "in": "header",
-            "description": "Shared registration secret",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "example": "dev-secret"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "User registered",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/RegisterResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Invalid registration secret"
-          },
-          "504": {
-            "description": "Too many registration attempts"
-          }
-        }
-      }
-    },
-    "/user": {
-      "get": {
-        "tags": [
-          "User Data"
-        ],
-        "summary": "Get user snapshot",
-        "description": "Returns user identifier with all accessible medkits and drugs for sync.",
-        "operationId": "getAllDataForUser",
-        "responses": {
-          "200": {
-            "description": "User snapshot retrieved",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/UserDto"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          }
-        }
-      }
-    },
-    "/med-kit/{id}": {
-      "get": {
-        "tags": [
-          "MedKit Management"
-        ],
-        "summary": "Get medkit by ID",
-        "description": "Retrieves a medkit if the user has access",
-        "operationId": "getMedKit",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Medkit ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Medkit found",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/MedKitDTO"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Medkit not found or access denied"
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "MedKit Management"
-        ],
-        "summary": "Delete medkit",
-        "description": "Deletes a medkit or removes the user if others remain",
-        "operationId": "deleteMedKit",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Medkit ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "transferToMedKitId",
-            "in": "query",
-            "description": "Target medkit ID to transfer drugs",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Medkit deleted"
-          },
-          "404": {
-            "description": "Medkit not found"
-          }
-        }
-      }
-    },
-    "/drug/template/{id}": {
-      "get": {
-        "tags": [
-          "Drug Management"
-        ],
-        "summary": "Get drug template by ID",
-        "description": "Retrieves a drug template from the database",
-        "operationId": "getDrugTemplate",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Template ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Template retrieved",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/DrugTemplateDTO"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Template not found"
-          }
-        }
-      }
-    },
-    "/drug/template/search": {
-      "get": {
-        "tags": [
-          "Drug Management"
-        ],
-        "summary": "Search drug templates",
-        "description": "Fuzzy search for drug templates in the database",
-        "operationId": "searchDrugTemplates",
-        "parameters": [
-          {
-            "name": "searchTerm",
-            "in": "query",
-            "description": "Search term",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Maximum results",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "default": 10
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Templates found",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/DrugTemplateDTO"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid search term"
-          }
-        }
-      }
-    },
-    "/drug/quantity/{id}": {
-      "get": {
-        "tags": [
-          "Drug Management"
-        ],
-        "summary": "Get drug quantity info",
-        "description": "Returns actual, planned, and available quantities",
-        "operationId": "getDrugQuantityInfo",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Drug ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Quantity info retrieved",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/QuantityInfo"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Drug not found"
-          }
-        }
-      }
-    },
-    "/auth/login": {
-      "get": {
-        "tags": [
-          "Authentication"
-        ],
-        "summary": "Issue JWT token",
-        "description": "Uses HTTP Basic authentication and returns a JWT access token.",
-        "operationId": "login",
-        "responses": {
-          "200": {
-            "description": "JWT token issued",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid credentials"
-          }
-        }
-      }
-    },
-    "/med-kit/{id}/leave": {
-      "delete": {
-        "tags": [
-          "MedKit Management"
-        ],
-        "summary": "Leave medkit",
-        "description": "Removes the authenticated user from the medkit",
-        "operationId": "leaveMedKit",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Medkit ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "User removed from medkit"
-          },
-          "404": {
-            "description": "Medkit not found"
-          }
-        }
-      }
-    }
-  },
-  "components": {
-    "schemas": {
-      "UsingUpdateDTO": {
-        "type": "object",
-        "description": "Update treatment plan request",
-        "properties": {
-          "plannedAmount": {
-            "type": "number",
-            "format": "double",
-            "description": "Planned amount",
-            "example": 20,
-            "minimum": 0
-          }
-        },
-        "required": [
-          "plannedAmount"
-        ]
-      },
-      "UsingDTO": {
-        "type": "object",
-        "description": "Treatment plan information",
-        "properties": {
-          "userId": {
-            "type": "string",
-            "format": "uuid",
-            "description": "User identifier"
-          },
-          "drugId": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Drug identifier"
-          },
-          "plannedAmount": {
-            "type": "number",
-            "format": "double",
-            "description": "Planned total amount for the course"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time",
-            "description": "Date when the plan was created"
-          },
-          "lastModified": {
-            "type": "string",
-            "format": "date-time",
-            "description": "Date of last modification"
-          }
-        }
-      },
-      "DrugUpdateDTO": {
-        "type": "object",
-        "description": "Request to update a drug",
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "Drug name",
-            "example": "Aspirin",
-            "maxLength": 300,
-            "minLength": 1
-          },
-          "quantity": {
-            "type": "number",
-            "format": "double",
-            "description": "Quantity",
-            "example": 100,
-            "minimum": 0
-          },
-          "quantityUnit": {
-            "type": "string",
-            "description": "Quantity unit",
-            "example": "mg",
-            "maxLength": 50,
-            "minLength": 1
-          },
-          "formType": {
-            "type": "string",
-            "description": "Form type",
-            "example": "tablet",
-            "maxLength": 100,
-            "minLength": 0
-          },
-          "category": {
-            "type": "string",
-            "description": "Category",
-            "example": "painkiller",
-            "maxLength": 200,
-            "minLength": 0
-          },
-          "manufacturer": {
-            "type": "string",
-            "description": "Manufacturer",
-            "example": "Bayer",
-            "maxLength": 300,
-            "minLength": 0
-          },
-          "country": {
-            "type": "string",
-            "description": "Country",
-            "example": "Germany",
-            "maxLength": 100,
-            "minLength": 0
-          },
-          "description": {
-            "type": "string",
-            "description": "Description"
-          }
-        }
-      },
-      "DrugDTO": {
-        "type": "object",
-        "description": "Drug information with planned quantity",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Drug ID"
-          },
-          "name": {
-            "type": "string",
-            "description": "Drug name",
-            "example": "Aspirin"
-          },
-          "quantity": {
-            "type": "number",
-            "format": "double",
-            "description": "Current quantity",
-            "example": 100
-          },
-          "plannedQuantity": {
-            "type": "number",
-            "format": "double",
-            "description": "Total planned quantity across treatment plans",
-            "example": 30
-          },
-          "quantityUnit": {
-            "type": "string",
-            "description": "Quantity unit",
-            "example": "mg"
-          },
-          "formType": {
-            "type": "string",
-            "description": "Form type",
-            "example": "tablet"
-          },
-          "category": {
-            "type": "string",
-            "description": "Category",
-            "example": "painkiller"
-          },
-          "manufacturer": {
-            "type": "string",
-            "description": "Manufacturer",
-            "example": "Bayer"
-          },
-          "country": {
-            "type": "string",
-            "description": "Country",
-            "example": "Germany"
-          },
-          "description": {
-            "type": "string",
-            "description": "Description"
-          },
-          "medKitId": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Medicine kit ID"
-          }
-        }
-      },
-      "MoveDrugRequest": {
-        "type": "object",
-        "description": "Request to move a drug to another medicine kit",
-        "properties": {
-          "targetMedKitId": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Target medicine kit ID"
-          }
-        },
-        "required": [
-          "targetMedKitId"
-        ]
-      },
-      "ConsumeRequest": {
-        "type": "object",
-        "description": "Request to consume a drug",
-        "properties": {
-          "quantity": {
-            "type": "number",
-            "format": "double",
-            "description": "Quantity to consume",
-            "example": 2,
-            "minimum": 0
-          }
-        },
-        "required": [
-          "quantity"
-        ]
-      },
-      "UsingCreateDTO": {
-        "type": "object",
-        "description": "Create treatment plan request",
-        "properties": {
-          "drugId": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Drug identifier"
-          },
-          "plannedAmount": {
-            "type": "number",
-            "format": "double",
-            "description": "Planned amount",
-            "example": 20,
-            "minimum": 0
-          }
-        },
-        "required": [
-          "drugId",
-          "plannedAmount"
-        ]
-      },
-      "IntakeRequest": {
-        "type": "object",
-        "description": "Intake request",
-        "properties": {
-          "quantityConsumed": {
-            "type": "number",
-            "format": "double",
-            "description": "Amount consumed",
-            "example": 1,
-            "minimum": 0
-          }
-        },
-        "required": [
-          "quantityConsumed"
-        ]
-      },
-      "MedKitCreatedResponse": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Created medkit ID"
-          }
-        },
-        "required": [
-          "id"
-        ]
-      },
-      "JoinMedKitRequest": {
-        "type": "object",
-        "description": "Join medkit request",
-        "properties": {
-          "key": {
-            "type": "string",
-            "description": "Share key to join medkit",
-            "example": "share-key-123",
-            "minLength": 1
-          }
-        },
-        "required": [
-          "key"
-        ]
-      },
-      "MedKitDTO": {
-        "type": "object",
-        "description": "Medkit with drugs",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Medkit ID"
-          },
-          "drugs": {
-            "type": "array",
-            "description": "Drugs in medkit",
-            "items": {
-              "$ref": "#/components/schemas/DrugDTO"
-            },
-            "uniqueItems": true
-          }
-        }
-      },
-      "DrugCreateDTO": {
-        "type": "object",
-        "description": "Request to create a new drug",
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "Drug name",
-            "example": "Aspirin",
-            "maxLength": 300,
-            "minLength": 1
-          },
-          "quantity": {
-            "type": "number",
-            "format": "double",
-            "description": "Quantity",
-            "example": 100,
-            "minimum": 0
-          },
-          "quantityUnit": {
-            "type": "string",
-            "description": "Quantity unit",
-            "example": "mg",
-            "maxLength": 50,
-            "minLength": 1
-          },
-          "medKitId": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Medicine kit ID"
-          },
-          "formType": {
-            "type": "string",
-            "description": "Form type",
-            "example": "tablet",
-            "maxLength": 100,
-            "minLength": 0
-          },
-          "category": {
-            "type": "string",
-            "description": "Category",
-            "example": "painkiller",
-            "maxLength": 200,
-            "minLength": 0
-          },
-          "manufacturer": {
-            "type": "string",
-            "description": "Manufacturer",
-            "example": "Bayer",
-            "maxLength": 300,
-            "minLength": 0
-          },
-          "country": {
-            "type": "string",
-            "description": "Country",
-            "example": "Germany",
-            "maxLength": 100,
-            "minLength": 0
-          },
-          "description": {
-            "type": "string",
-            "description": "Description"
-          }
-        },
-        "required": [
-          "medKitId",
-          "name",
-          "quantity",
-          "quantityUnit"
-        ]
-      },
-      "RegisterResponse": {
-        "type": "object",
-        "description": "Registration response with generated credentials",
-        "properties": {
-          "login": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Generated login identifier"
-          },
-          "key": {
-            "type": "string",
-            "description": "Generated secret key for authentication"
-          }
-        }
-      },
-      "UserDto": {
-        "type": "object",
-        "description": "Full user snapshot",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "User identifier"
-          },
-          "medKits": {
-            "type": "array",
-            "description": "All medkits available to the user",
-            "items": {
-              "$ref": "#/components/schemas/MedKitDTO"
-            },
-            "uniqueItems": true
-          }
-        }
-      },
-      "MedKitSummaryDTO": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Medkit ID"
-          },
-          "userCount": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Number of users in medkit"
-          },
-          "drugCount": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Number of drugs in medkit"
-          }
-        },
-        "required": [
-          "drugCount",
-          "id",
-          "userCount"
-        ]
-      },
-      "DrugTemplateDTO": {
-        "type": "object",
-        "description": "Drug template from the database",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Template ID"
-          },
-          "name": {
-            "type": "string",
-            "description": "Drug name"
-          },
-          "formType": {
-            "type": "string",
-            "description": "Form type (e.g., tablet, syrup)"
-          },
-          "category": {
-            "type": "string",
-            "description": "Category"
-          },
-          "quantityUnit": {
-            "type": "string",
-            "description": "Quantity unit"
-          },
-          "manufacturer": {
-            "type": "string",
-            "description": "Manufacturer"
-          },
-          "country": {
-            "type": "string",
-            "description": "Country"
-          },
-          "description": {
-            "type": "string",
-            "description": "Description"
-          }
-        }
-      },
-      "QuantityInfo": {
-        "type": "object",
-        "description": "Drug quantity information",
-        "properties": {
-          "actualQuantity": {
-            "type": "number",
-            "format": "double",
-            "description": "Actual quantity in stock"
-          },
-          "plannedQuantity": {
-            "type": "number",
-            "format": "double",
-            "description": "Total planned quantity across all treatment plans"
-          },
-          "availableQuantity": {
-            "type": "number",
-            "format": "double",
-            "description": "Available quantity (actual - planned)"
-          }
-        }
-      }
-    },
-    "securitySchemes": {
-      "Bearer Authentication": {
-        "type": "http",
-        "scheme": "bearer",
-        "bearerFormat": "JWT"
-      }
-    }
-  }
-}
+openapi: 3.1.0
+info:
+  title: MedApp Server API
+  description: REST API for MedApp medicine kit synchronization and catalog search.
+  version: 0.0.1
+servers:
+- url: http://localhost
+  description: Generated server url
+security:
+- Bearer Authentication: []
+tags:
+- name: Drug Management
+  description: APIs for managing drugs in medicine kits
+- name: MedKit Management
+  description: APIs for managing medicine kits
+- name: User Data
+  description: Endpoints for user profile and synchronization data
+- name: Authentication
+  description: Public endpoints for registration and token issuance
+- name: Treatment Plans
+  description: Endpoints for treatment plans and intake tracking
+paths:
+  /using/drug/{drugId}:
+    get:
+      tags:
+      - Treatment Plans
+      summary: Get treatment plan by drug
+      description: Returns a treatment plan for a specific drug.
+      operationId: getSpecificUsing
+      parameters:
+      - name: drugId
+        in: path
+        description: Drug ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Treatment plan retrieved
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UsingDTO"
+        "404":
+          description: Treatment plan not found
+    put:
+      tags:
+      - Treatment Plans
+      summary: Update treatment plan
+      description: Updates the planned amount for a drug.
+      operationId: updateUsing
+      parameters:
+      - name: drugId
+        in: path
+        description: Drug ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        description: Updated treatment plan
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UsingUpdateDTO"
+        required: true
+      responses:
+        "200":
+          description: Treatment plan updated
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UsingDTO"
+        "400":
+          description: Invalid input
+        "404":
+          description: Treatment plan not found
+    delete:
+      tags:
+      - Treatment Plans
+      summary: Delete treatment plan
+      description: Deletes a planned usage for a drug.
+      operationId: deleteTreatmentPlan
+      parameters:
+      - name: drugId
+        in: path
+        description: Drug ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "204":
+          description: Treatment plan deleted
+        "404":
+          description: Treatment plan not found
+  /drug/{id}:
+    get:
+      tags:
+      - Drug Management
+      summary: Get drug by ID
+      description: Retrieves a drug by its ID if the user has access
+      operationId: getDrug
+      parameters:
+      - name: id
+        in: path
+        description: Drug ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Drug found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DrugDTO"
+        "404":
+          description: Drug not found or access denied
+    put:
+      tags:
+      - Drug Management
+      summary: Update a drug
+      description: Updates an existing drug
+      operationId: updateDrug
+      parameters:
+      - name: id
+        in: path
+        description: Drug ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        description: Drug update details
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DrugUpdateDTO"
+        required: true
+      responses:
+        "200":
+          description: Drug updated successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DrugDTO"
+        "400":
+          description: Invalid input
+        "404":
+          description: Drug not found
+    delete:
+      tags:
+      - Drug Management
+      summary: Delete a drug
+      description: Deletes a drug from the medicine kit
+      operationId: deleteDrug
+      parameters:
+      - name: id
+        in: path
+        description: Drug ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "204":
+          description: Drug deleted successfully
+        "404":
+          description: Drug not found
+  /drug/move/{id}:
+    put:
+      tags:
+      - Drug Management
+      summary: Move drug to another medicine kit
+      description: Transfers a drug between medicine kits
+      operationId: moveDrug
+      parameters:
+      - name: id
+        in: path
+        description: Drug ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        description: Target medicine kit
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MoveDrugRequest"
+        required: true
+      responses:
+        "200":
+          description: Drug moved
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DrugDTO"
+        "400":
+          description: Invalid target medkit
+        "404":
+          description: Drug or medkit not found
+  /drug/consume/{id}:
+    put:
+      tags:
+      - Drug Management
+      summary: Consume drug
+      description: Reduces drug quantity by the consumed amount
+      operationId: consumeDrug
+      parameters:
+      - name: id
+        in: path
+        description: Drug ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        description: Consumption details
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConsumeRequest"
+        required: true
+      responses:
+        "200":
+          description: Drug consumed
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DrugDTO"
+        "400":
+          description: Invalid quantity
+        "404":
+          description: Drug not found
+  /using:
+    get:
+      tags:
+      - Treatment Plans
+      summary: Get all treatment plans
+      description: Returns all planned drug usages for the user.
+      operationId: getUsings
+      responses:
+        "200":
+          description: Treatment plans retrieved
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UsingDTO"
+        "401":
+          description: Unauthorized
+    post:
+      tags:
+      - Treatment Plans
+      summary: Create treatment plan
+      description: Creates a planned usage for a drug.
+      operationId: createUsing
+      requestBody:
+        description: Treatment plan details
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UsingCreateDTO"
+        required: true
+      responses:
+        "201":
+          description: Treatment plan created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UsingDTO"
+        "400":
+          description: Invalid input
+        "409":
+          description: Treatment plan already exists
+  /using/drug/{drugId}/intake:
+    post:
+      tags:
+      - Treatment Plans
+      summary: Record intake
+      description: Registers a drug intake and updates the planned amount.
+      operationId: recordRegularUsing
+      parameters:
+      - name: drugId
+        in: path
+        description: Drug ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        description: Intake details
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IntakeRequest"
+        required: true
+      responses:
+        "200":
+          description: Intake recorded
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UsingDTO"
+        "400":
+          description: Invalid intake amount
+        "404":
+          description: Treatment plan not found
+  /med-kit:
+    get:
+      tags:
+      - MedKit Management
+      summary: Get all medkits
+      description: Returns summary info for all medkits accessible to the user
+      operationId: getAllMedKits
+      responses:
+        "200":
+          description: Medkits retrieved
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MedKitSummaryDTO"
+        "401":
+          description: Unauthorized
+    post:
+      tags:
+      - MedKit Management
+      summary: Create a new medkit
+      description: Creates a new medkit for the authenticated user
+      operationId: createNew
+      responses:
+        "201":
+          description: Medkit created successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MedKitCreatedResponse"
+        "401":
+          description: Unauthorized
+  /med-kit/{medKitId}/share:
+    post:
+      tags:
+      - MedKit Management
+      summary: Generate share key
+      description: "Generates a share key for a medkit. The key stays valid until\
+        \ it expires (medkit.share.termInMinutes) and can be used more than once during\
+        \ that window, so treat it as a short-lived invitation rather than a single-use\
+        \ token."
+      operationId: generateKeyToMedKit
+      parameters:
+      - name: medKitId
+        in: path
+        description: Medkit ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Share key generated
+          content:
+            '*/*':
+              schema:
+                type: string
+        "404":
+          description: Medkit not found or access denied
+  /med-kit/join:
+    post:
+      tags:
+      - MedKit Management
+      summary: Join medkit by share key
+      description: Joins an existing medkit using a share key
+      operationId: joinMedKitByKey
+      requestBody:
+        description: Join request
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JoinMedKitRequest"
+        required: true
+      responses:
+        "200":
+          description: Successfully joined medkit
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MedKitDTO"
+        "404":
+          description: Share key expired or invalid
+  /drug:
+    post:
+      tags:
+      - Drug Management
+      summary: Create a new drug
+      description: Creates a new drug in a medicine kit
+      operationId: createDrug
+      requestBody:
+        description: Drug details to create
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DrugCreateDTO"
+        required: true
+      responses:
+        "201":
+          description: Drug created successfully
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DrugDTO"
+        "400":
+          description: Invalid input
+        "403":
+          description: User does not have access to the medicine kit
+  /auth/register:
+    post:
+      tags:
+      - Authentication
+      summary: Register a new user
+      description: Creates a new user and returns generated credentials.
+      operationId: register
+      parameters:
+      - name: X-Registration-Token
+        in: header
+        description: Shared registration secret
+        required: true
+        schema:
+          type: string
+        example: dev-secret
+      responses:
+        "200":
+          description: User registered
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RegisterResponse"
+        "403":
+          description: Invalid registration secret
+        "504":
+          description: Too many registration attempts
+  /user:
+    get:
+      tags:
+      - User Data
+      summary: Get user snapshot
+      description: Returns user identifier with all accessible medkits and drugs for
+        sync.
+      operationId: getAllDataForUser
+      responses:
+        "200":
+          description: User snapshot retrieved
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UserDto"
+        "401":
+          description: Unauthorized
+  /med-kit/{id}:
+    get:
+      tags:
+      - MedKit Management
+      summary: Get medkit by ID
+      description: Retrieves a medkit if the user has access
+      operationId: getMedKit
+      parameters:
+      - name: id
+        in: path
+        description: Medkit ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Medkit found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MedKitDTO"
+        "404":
+          description: Medkit not found or access denied
+    delete:
+      tags:
+      - MedKit Management
+      summary: Delete medkit
+      description: "Deletes the medkit for everyone who shares it, including its drugs\
+        \ and the treatment plans of other participants. Use when the physical medicine\
+        \ kit has ceased to exist as a shared thing — it was taken away or was damaged\
+        \ beyond use. Pass transferToMedKitId to move the drugs into another of your\
+        \ medkits instead of discarding them. To leave a shared medkit without destroying\
+        \ it, use DELETE /med-kit/{id}/leave."
+      operationId: deleteMedKit
+      parameters:
+      - name: id
+        in: path
+        description: Medkit ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: transferToMedKitId
+        in: query
+        description: Target medkit ID to transfer drugs
+        required: false
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "204":
+          description: Medkit deleted for all participants
+        "404":
+          description: Medkit not found
+  /drug/template/{id}:
+    get:
+      tags:
+      - Drug Management
+      summary: Get drug template by ID
+      description: Retrieves a drug template from the database
+      operationId: getDrugTemplate
+      parameters:
+      - name: id
+        in: path
+        description: Template ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Template retrieved
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DrugTemplateDTO"
+        "404":
+          description: Template not found
+  /drug/template/search:
+    get:
+      tags:
+      - Drug Management
+      summary: Search drug templates
+      description: Fuzzy search for drug templates in the database
+      operationId: searchDrugTemplates
+      parameters:
+      - name: searchTerm
+        in: query
+        description: Search term
+        required: true
+        schema:
+          type: string
+          maxLength: 200
+          minLength: 1
+      - name: limit
+        in: query
+        description: Maximum results
+        required: false
+        schema:
+          type: integer
+          format: int32
+          maximum: 50
+          minimum: 1
+      responses:
+        "200":
+          description: Templates found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DrugTemplateDTO"
+        "400":
+          description: Invalid search term
+  /drug/quantity/{id}:
+    get:
+      tags:
+      - Drug Management
+      summary: Get drug quantity info
+      description: "Returns actual, planned, and available quantities"
+      operationId: getDrugQuantityInfo
+      parameters:
+      - name: id
+        in: path
+        description: Drug ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Quantity info retrieved
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/QuantityInfo"
+        "404":
+          description: Drug not found
+  /auth/login:
+    get:
+      tags:
+      - Authentication
+      summary: Issue JWT token
+      description: Uses HTTP Basic authentication and returns a JWT access token.
+      operationId: login
+      responses:
+        "200":
+          description: JWT token issued
+          content:
+            '*/*':
+              schema:
+                type: string
+        "401":
+          description: Invalid credentials
+  /med-kit/{id}/leave:
+    delete:
+      tags:
+      - MedKit Management
+      summary: Leave medkit
+      description: Removes the authenticated user from the medkit
+      operationId: leaveMedKit
+      parameters:
+      - name: id
+        in: path
+        description: Medkit ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "204":
+          description: User removed from medkit
+        "404":
+          description: Medkit not found
+components:
+  schemas:
+    UsingUpdateDTO:
+      type: object
+      description: Update treatment plan request
+      properties:
+        plannedAmount:
+          type: number
+          format: double
+          description: Planned amount
+          example: 20.0
+          minimum: 0.0
+      required:
+      - plannedAmount
+    UsingDTO:
+      type: object
+      description: Treatment plan information
+      properties:
+        userId:
+          type: string
+          format: uuid
+          description: User identifier
+        drugId:
+          type: string
+          format: uuid
+          description: Drug identifier
+        plannedAmount:
+          type: number
+          format: double
+          description: Planned total amount for the course
+        createdAt:
+          type: string
+          format: date-time
+          description: Date when the plan was created
+        lastModified:
+          type: string
+          format: date-time
+          description: Date of last modification
+    DrugUpdateDTO:
+      type: object
+      description: Request to update a drug
+      properties:
+        name:
+          type: string
+          description: Drug name
+          example: Aspirin
+          maxLength: 300
+          minLength: 1
+        quantity:
+          type: number
+          format: double
+          description: Quantity
+          example: 100.0
+          minimum: 0.0
+        quantityUnit:
+          type: string
+          description: Quantity unit
+          example: mg
+          maxLength: 50
+          minLength: 1
+        formType:
+          type: string
+          description: Form type
+          example: tablet
+          maxLength: 100
+          minLength: 0
+        category:
+          type: string
+          description: Category
+          example: painkiller
+          maxLength: 200
+          minLength: 0
+        manufacturer:
+          type: string
+          description: Manufacturer
+          example: Bayer
+          maxLength: 300
+          minLength: 0
+        country:
+          type: string
+          description: Country
+          example: Germany
+          maxLength: 100
+          minLength: 0
+        description:
+          type: string
+          description: Description
+          maxLength: 4000
+          minLength: 0
+    DrugDTO:
+      type: object
+      description: Drug information with planned quantity
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Drug ID
+        name:
+          type: string
+          description: Drug name
+          example: Aspirin
+        quantity:
+          type: number
+          format: double
+          description: Current quantity
+          example: 100.0
+        plannedQuantity:
+          type: number
+          format: double
+          description: Total planned quantity across treatment plans
+          example: 30.0
+        quantityUnit:
+          type: string
+          description: Quantity unit
+          example: mg
+        formType:
+          type: string
+          description: Form type
+          example: tablet
+        category:
+          type: string
+          description: Category
+          example: painkiller
+        manufacturer:
+          type: string
+          description: Manufacturer
+          example: Bayer
+        country:
+          type: string
+          description: Country
+          example: Germany
+        description:
+          type: string
+          description: Description
+        medKitId:
+          type: string
+          format: uuid
+          description: Medicine kit ID
+    MoveDrugRequest:
+      type: object
+      description: Request to move a drug to another medicine kit
+      properties:
+        targetMedKitId:
+          type: string
+          format: uuid
+          description: Target medicine kit ID
+      required:
+      - targetMedKitId
+    ConsumeRequest:
+      type: object
+      description: Request to consume a drug
+      properties:
+        quantity:
+          type: number
+          format: double
+          description: Quantity to consume
+          example: 2.0
+          minimum: 0.0
+      required:
+      - quantity
+    UsingCreateDTO:
+      type: object
+      description: Create treatment plan request
+      properties:
+        drugId:
+          type: string
+          format: uuid
+          description: Drug identifier
+        plannedAmount:
+          type: number
+          format: double
+          description: Planned amount
+          example: 20.0
+          minimum: 0.0
+      required:
+      - drugId
+      - plannedAmount
+    IntakeRequest:
+      type: object
+      description: Intake request
+      properties:
+        quantityConsumed:
+          type: number
+          format: double
+          description: Amount consumed
+          example: 1.0
+          minimum: 0.0
+      required:
+      - quantityConsumed
+    MedKitCreatedResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Created medkit ID
+      required:
+      - id
+    JoinMedKitRequest:
+      type: object
+      description: Join medkit request
+      properties:
+        key:
+          type: string
+          description: Share key to join medkit
+          example: share-key-123
+          minLength: 1
+      required:
+      - key
+    MedKitDTO:
+      type: object
+      description: Medkit with drugs
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Medkit ID
+        drugs:
+          type: array
+          description: Drugs in medkit
+          items:
+            $ref: "#/components/schemas/DrugDTO"
+          uniqueItems: true
+    DrugCreateDTO:
+      type: object
+      description: Request to create a new drug
+      properties:
+        name:
+          type: string
+          description: Drug name
+          example: Aspirin
+          maxLength: 300
+          minLength: 1
+        quantity:
+          type: number
+          format: double
+          description: Quantity
+          example: 100.0
+          minimum: 0.0
+        quantityUnit:
+          type: string
+          description: Quantity unit
+          example: mg
+          maxLength: 50
+          minLength: 1
+        medKitId:
+          type: string
+          format: uuid
+          description: Medicine kit ID
+        formType:
+          type: string
+          description: Form type
+          example: tablet
+          maxLength: 100
+          minLength: 0
+        category:
+          type: string
+          description: Category
+          example: painkiller
+          maxLength: 200
+          minLength: 0
+        manufacturer:
+          type: string
+          description: Manufacturer
+          example: Bayer
+          maxLength: 300
+          minLength: 0
+        country:
+          type: string
+          description: Country
+          example: Germany
+          maxLength: 100
+          minLength: 0
+        description:
+          type: string
+          description: Description
+          maxLength: 4000
+          minLength: 0
+      required:
+      - medKitId
+      - name
+      - quantity
+      - quantityUnit
+    RegisterResponse:
+      type: object
+      description: Registration response with generated credentials
+      properties:
+        login:
+          type: string
+          format: uuid
+          description: Generated login identifier
+        key:
+          type: string
+          description: Generated secret key for authentication
+    UserDto:
+      type: object
+      description: Full user snapshot
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: User identifier
+        medKits:
+          type: array
+          description: All medkits available to the user
+          items:
+            $ref: "#/components/schemas/MedKitDTO"
+          uniqueItems: true
+    MedKitSummaryDTO:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Medkit ID
+        userCount:
+          type: integer
+          format: int64
+          description: Number of users in medkit
+        drugCount:
+          type: integer
+          format: int64
+          description: Number of drugs in medkit
+      required:
+      - drugCount
+      - id
+      - userCount
+    DrugTemplateDTO:
+      type: object
+      description: Drug template from the database
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Template ID
+        name:
+          type: string
+          description: Drug name
+        formType:
+          type: string
+          description: "Form type (e.g., tablet, syrup)"
+        category:
+          type: string
+          description: Category
+        quantityUnit:
+          type: string
+          description: Quantity unit
+        manufacturer:
+          type: string
+          description: Manufacturer
+        country:
+          type: string
+          description: Country
+        description:
+          type: string
+          description: Description
+    QuantityInfo:
+      type: object
+      description: Drug quantity information
+      properties:
+        actualQuantity:
+          type: number
+          format: double
+          description: Actual quantity in stock
+        plannedQuantity:
+          type: number
+          format: double
+          description: Total planned quantity across all treatment plans
+        availableQuantity:
+          type: number
+          format: double
+          description: Available quantity (actual - planned)
+  securitySchemes:
+    Bearer Authentication:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

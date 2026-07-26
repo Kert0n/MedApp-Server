@@ -8,6 +8,7 @@ import com.nimbusds.jose.proc.SecurityContext
 import jakarta.servlet.DispatcherType
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.core.annotation.Order
 import org.springframework.http.HttpStatus
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
@@ -20,6 +21,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.authentication.HttpStatusEntryPoint
+import org.springframework.security.web.authentication.www.BasicAuthenticationFilter
 
 
 @Configuration
@@ -46,18 +48,58 @@ class SecurityConfiguration(
         return PasswordEncoderFactories.createDelegatingPasswordEncoder()
     }
 
+    /**
+     * HTTP Basic is accepted **only** where a token is issued.
+     *
+     * It used to apply to every endpoint, which meant the long-lived registration key
+     * could be replayed on every request and the short token lifetime bought nothing.
+     */
     @Bean
+    @Order(1)
+    fun tokenIssuingFilterChain(
+        httpSecurity: HttpSecurity,
+        // Injected as a method parameter, not into the constructor: SecurityService needs
+        // the JwtEncoder/JwtDecoder beans defined here, so a constructor dependency would
+        // be a cycle.
+        securityService: SecurityService
+    ): SecurityFilterChain {
+        return httpSecurity
+            .securityMatcher("/auth/login")
+            .csrf { csrf -> csrf.disable() }
+            .addFilterBefore(
+                LoginThrottleFilter(securityService),
+                BasicAuthenticationFilter::class.java
+            )
+            .authorizeHttpRequests { auth -> auth.anyRequest().authenticated() }
+            .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
+            .exceptionHandling { configurer ->
+                // Deliberately no WWW-Authenticate challenge: this is a mobile API, a
+                // browser credential prompt would be noise.
+                configurer.authenticationEntryPoint(HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
+            }
+            .httpBasic { }
+            .build()
+    }
+
+    @Bean
+    @Order(2)
     fun filterChain(httpSecurity: HttpSecurity): SecurityFilterChain {
         return httpSecurity
             .csrf { csrf -> csrf.disable() }
             .authorizeHttpRequests { auth ->
                 auth
                     .requestMatchers(
-                        "/auth/**",
+                        // Registration only. /auth/login is handled by the Basic chain
+                        // above and must not be open here.
+                        "/auth/register",
                         "/swagger",
                         "/swagger-ui/**",
                         "/v3/api-docs/**",
-                        "/actuator/**",
+                        "/v3/api-docs.yaml",
+                        // Liveness only. /actuator/** would open /env and heapdump the
+                        // moment anyone widens management.endpoints.web.exposure.include.
+                        "/actuator/health",
+                        "/actuator/health/**",
                     )
                     .permitAll()
                     .dispatcherTypeMatchers(
@@ -74,7 +116,6 @@ class SecurityConfiguration(
                 configurer
                     .authenticationEntryPoint(HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
             }
-            .httpBasic { }
             .oauth2ResourceServer { oauth2 ->
                 oauth2.jwt { jwt ->
                     jwt.decoder(jwtDecoder())

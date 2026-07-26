@@ -1,5 +1,6 @@
 .gradle
 build
+htmlReport
 .idea
 *.iml
 *.ipr
@@ -7,3 +8,8 @@ build
 .DS_Store
 *.log
 .env
+.local
+
+# Closed reference data (~60 MB). It is loaded into Postgres, never into the app image,
+# and without this line it is uploaded to the Docker daemon on every build.
+init-scripts

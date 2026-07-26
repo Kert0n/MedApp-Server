@@ -19,7 +19,7 @@ import java.util.*
 class UserService(
     private val userRepository: UserRepository,
     private val securityService: SecurityService,
-    private val logger: Logger = LoggerFactory.getLogger(MedKitService::class.java)
+    private val logger: Logger = LoggerFactory.getLogger(UserService::class.java)
 ) : UserDetailsService {
 
     fun registerNewUser(login: UUID, password: String, ip: String): User {

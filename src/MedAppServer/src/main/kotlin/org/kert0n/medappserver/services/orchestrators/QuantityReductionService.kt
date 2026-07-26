@@ -25,7 +25,8 @@ class QuantityReductionService(
         }
         if (drug.totalPlannedAmount <= drug.quantity) return drug
 
-        logger.warn("Drug {} quantity {} is less than planned {}", drug.id, drug.quantity, drug.totalPlannedAmount)
+        // Drug id and amounts left out on purpose: together they describe someone's stock.
+        logger.warn("Planned quantity exceeded current stock; treatment plans were reduced")
 
         // Reducing all fairly
         val reduceFactor = drug.quantity / drug.totalPlannedAmount

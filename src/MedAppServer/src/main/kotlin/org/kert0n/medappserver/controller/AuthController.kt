@@ -59,7 +59,9 @@ class AuthController(
         @RequestHeader("X-Registration-Token") token: String
     ): RegisterResponse {
         // Validate the shared secret first to avoid exposing rate-limit status to unauthorized callers.
-        if (token != registrationSecret) {
+        // Constant-time: `!=` stops at the first differing character, so response time would
+        // reveal how long a correct prefix was.
+        if (!securityService.secretsMatch(token, registrationSecret)) {
             throw ResponseStatusException(HttpStatus.FORBIDDEN, "Invalid secret")
         }
         // Rate limit registration by IP address to reduce abuse without storing user PII.

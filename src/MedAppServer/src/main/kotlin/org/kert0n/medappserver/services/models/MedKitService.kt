@@ -65,6 +65,7 @@ class MedKitService(
         return medKitRepository.findMedKitSummariesByUserId(userId)
     }
 
+    @Transactional(readOnly = true)
     fun generateMedKitShareKey(medKitId: UUID, userId: UUID): String {
         logger.debug("Sharing medkit $medKitId by user: $userId")
         // Checking access
