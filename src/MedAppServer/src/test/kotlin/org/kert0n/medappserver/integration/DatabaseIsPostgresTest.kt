@@ -34,8 +34,7 @@ class DatabaseIsPostgresTest {
                 "интеграционные тесты уехали на ${meta.databaseProductName}; " +
                     "проверьте, что @PostgresIntegrationTest ещё работает"
             )
-            assertEquals(
-                18,
+            assertEquals(18,
                 meta.databaseMajorVersion,
                 "версия Postgres расходится с продовой из compose: ${meta.databaseProductVersion}"
             )

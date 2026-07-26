@@ -1,5 +1,6 @@
 package org.kert0n.medappserver.controller
 
+import org.kert0n.medappserver.testutil.qty
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.services.models.MedKitService
@@ -49,8 +50,8 @@ class UserControllerTest {
     @Test
     fun `GET user data - returns user with medkits`() {
         val drugDTO = DrugDTO(
-            id = UUID.randomUUID(), name = "Aspirin", quantity = 100.0,
-            plannedQuantity = 0.0, quantityUnit = "mg", formType = null,
+            id = UUID.randomUUID(), name = "Aspirin", quantity = qty(100.0),
+            plannedQuantity = qty(0.0), quantityUnit = "mg", formType = null,
             category = null, manufacturer = null, country = null,
             description = null, medKitId = medKitId
         )

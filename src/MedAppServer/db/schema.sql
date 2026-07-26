@@ -49,7 +49,7 @@ CREATE TABLE user_drugs
 (
     id            uuid             NOT NULL,
     name          varchar(300)     NOT NULL,
-    quantity      double precision NOT NULL,
+    quantity      numeric(19, 6)   NOT NULL,
     quantity_unit varchar(50)      NOT NULL,
     form_type     varchar(100),
     category      varchar(200),
@@ -71,7 +71,7 @@ CREATE TABLE usings
 (
     user_id        uuid                        NOT NULL,
     drug_id        uuid                        NOT NULL,
-    planned_amount double precision            NOT NULL,
+    planned_amount numeric(19, 6)              NOT NULL,
     created_at     timestamp(6) with time zone NOT NULL,
     last_modified  timestamp(6) with time zone NOT NULL,
 

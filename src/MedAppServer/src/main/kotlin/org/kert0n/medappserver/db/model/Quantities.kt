@@ -1,0 +1,39 @@
+package org.kert0n.medappserver.db.model
+
+import java.math.BigDecimal
+import java.math.RoundingMode
+
+/**
+ * Количества препаратов и планов хранятся как `NUMERIC(19,6)`.
+ *
+ * До этого был `Double`, и на дробных дозах логика ломалась: после накопленных вычитаний
+ * остаток никогда не равнялся ровно нулю, поэтому кончившийся препарат не удалялся, а планы
+ * оставались с остатком порядка 1e-16. Инвариант «сумма планов не больше остатка» тихо
+ * нарушался.
+ *
+ * Шесть знаков после запятой — с запасом: реальные дозы это доли таблетки и миллилитры.
+ */
+const val QUANTITY_SCALE: Int = 6
+
+val QUANTITY_ROUNDING: RoundingMode = RoundingMode.HALF_UP
+
+/**
+ * Приводит значение к тому виду, в котором оно ляжет в БД.
+ *
+ * Нужно после любой арифметики: без этого scale накапливается (умножение складывает scale
+ * операндов), значения перестают совпадать с прочитанными из базы, и сравнения через
+ * [equals] начинают врать.
+ */
+fun BigDecimal.toQuantityScale(): BigDecimal = setScale(QUANTITY_SCALE, QUANTITY_ROUNDING)
+
+/**
+ * Проверка на ноль. Только так, никогда `== BigDecimal.ZERO`.
+ *
+ * `equals` у [BigDecimal] учитывает scale, поэтому `BigDecimal("0.000000") == BigDecimal.ZERO`
+ * даёт `false`. С `Double` баг был в точном сравнении с `0.0`; наивный перенос на
+ * `BigDecimal` перевёз бы его сюда же, только менее заметно.
+ */
+fun BigDecimal.isZero(): Boolean = signum() == 0
+
+/** Строго положительное значение: `> 0`. */
+fun BigDecimal.isPositive(): Boolean = signum() > 0

@@ -1,5 +1,7 @@
 package org.kert0n.medappserver.integration.userstory
 
+import org.kert0n.medappserver.testutil.assertQty
+import org.kert0n.medappserver.testutil.qty
 import org.kert0n.medappserver.PostgresIntegrationTest
 import jakarta.persistence.EntityManager
 import org.junit.jupiter.api.Test
@@ -64,7 +66,7 @@ class DrugMovementStoriesTest {
 
         val painkiller = Drug(
             id = UUID.randomUUID(), name = "Ibuprofen",
-            quantity = 60.0, quantityUnit = "tablets", formType = "tablet",
+            quantity = qty(60.0), quantityUnit = "tablets", formType = "tablet",
             category = "painkiller", manufacturer = null, country = null,
             description = null, medKit = homeKit
         )
@@ -72,7 +74,7 @@ class DrugMovementStoriesTest {
         entityManager.flush()
 
         // Create treatment plan
-        usingService.createTreatmentPlan(user.id, UsingCreateDTO(painkiller.id, 20.0))
+        usingService.createTreatmentPlan(user.id, UsingCreateDTO(painkiller.id, qty(20.0)))
         entityManager.flush()
 
         // Move drug to travel kit
@@ -96,7 +98,7 @@ class DrugMovementStoriesTest {
         // Treatment plan still exists
         val plan = usingRepository.findByUserIdAndDrugId(user.id, painkiller.id)
         assertNotNull(plan, "Treatment plan should survive drug move")
-        assertEquals(20.0, plan.plannedAmount)
+        assertQty(20.0, plan.plannedAmount)
 
         println("✅ Story 11 passed: Drug moved between medkits with treatment plan intact")
     }
@@ -119,7 +121,7 @@ class DrugMovementStoriesTest {
 
         val drug = Drug(
             id = UUID.randomUUID(), name = "Medicine X",
-            quantity = 100.0, quantityUnit = "ml", formType = "liquid",
+            quantity = qty(100.0), quantityUnit = "ml", formType = "liquid",
             category = null, manufacturer = null, country = null,
             description = null, medKit = medkit
         )
@@ -127,26 +129,26 @@ class DrugMovementStoriesTest {
         entityManager.flush()
 
         // Anna plans 40, Bob plans 30 (total 70, available 30)
-        usingService.createTreatmentPlan(anna.id, UsingCreateDTO(drug.id, 40.0))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, 30.0))
+        usingService.createTreatmentPlan(anna.id, UsingCreateDTO(drug.id, qty(40.0)))
+        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(30.0)))
         entityManager.flush()
 
         // Anna should be able to increase her plan to 70 (available for her = 100 - 30 (bob) = 70)
         val updated = usingService.updateTreatmentPlan(
             anna.id, drug.id,
-            UsingUpdateDTO(70.0)
+            UsingUpdateDTO(qty(70.0))
         )
-        assertEquals(70.0, updated.plannedAmount)
+        assertQty(70.0, updated.plannedAmount)
         entityManager.flush()
         entityManager.clear()
         // Total planned should now be 100 (70 + 30)
-        assertEquals(100.0, drugRepository.findByIdOrNull(drug.id)?.totalPlannedAmount)
+        assertQty(100.0, drugRepository.findByIdOrNull(drug.id)?.totalPlannedAmount)
 
         // Anna should NOT be able to increase to 71 (exceeds available)
         assertFailsWith<ResponseStatusException> {
             usingService.updateTreatmentPlan(
                 anna.id, drug.id,
-                UsingUpdateDTO(71.0)
+                UsingUpdateDTO(qty(71.0))
             )
         }
 
@@ -166,7 +168,7 @@ class DrugMovementStoriesTest {
         val medkit = medKitService.createNew(user.id)
         val drug = Drug(
             id = UUID.randomUUID(), name = "Expired Drug",
-            quantity = 50.0, quantityUnit = "tablets", formType = null,
+            quantity = qty(50.0), quantityUnit = "tablets", formType = null,
             category = null, manufacturer = null, country = null,
             description = null, medKit = medkit
         )
@@ -174,7 +176,7 @@ class DrugMovementStoriesTest {
         entityManager.flush()
 
         // Create treatment plan
-        usingService.createTreatmentPlan(user.id, UsingCreateDTO(drug.id, 25.0))
+        usingService.createTreatmentPlan(user.id, UsingCreateDTO(drug.id, qty(25.0)))
         entityManager.flush()
         entityManager.clear()
 
@@ -220,7 +222,7 @@ class DrugMovementStoriesTest {
         // Add drug to old kit
         val drug = drugRepository.save(
             Drug(
-                id = UUID.randomUUID(), name = "Special Meds", quantity = 90.0,
+                id = UUID.randomUUID(), name = "Special Meds", quantity = qty(90.0),
                 quantityUnit = "pills", medKit = oldKit, formType = null,
                 category = null,
                 manufacturer = null,
@@ -230,9 +232,9 @@ class DrugMovementStoriesTest {
         )
 
         // Everyone creates a plan for 30 pills
-        usingService.createTreatmentPlan(anna.id, UsingCreateDTO(drug.id, 30.0))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, 30.0))
-        usingService.createTreatmentPlan(charlie.id, UsingCreateDTO(drug.id, 30.0))
+        usingService.createTreatmentPlan(anna.id, UsingCreateDTO(drug.id, qty(30.0)))
+        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(30.0)))
+        usingService.createTreatmentPlan(charlie.id, UsingCreateDTO(drug.id, qty(30.0)))
 
         entityManager.flush()
         entityManager.clear()
@@ -269,7 +271,7 @@ class DrugMovementStoriesTest {
         // Drug has 100 total
         val drug = drugRepository.save(
             Drug(
-                id = UUID.randomUUID(), name = "Shared Vitamins", quantity = 100.0,
+                id = UUID.randomUUID(), name = "Shared Vitamins", quantity = qty(100.0),
                 quantityUnit = "pills", medKit = kit, formType = null,
                 category = null,
                 manufacturer = null,
@@ -279,8 +281,8 @@ class DrugMovementStoriesTest {
         )
 
         // Anna plans 60, Bob plans 40. Total planned = 100.
-        usingService.createTreatmentPlan(anna.id, UsingCreateDTO(drug.id, 60.0))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, 40.0))
+        usingService.createTreatmentPlan(anna.id, UsingCreateDTO(drug.id, qty(60.0)))
+        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(40.0)))
 
         entityManager.flush()
         entityManager.clear()
@@ -288,7 +290,7 @@ class DrugMovementStoriesTest {
         // Bob consumes 50 pills (ignoring his plan limit for emergency)
         // Drug quantity drops to 50.
         // Factor should be: 50 / 100 = 0.5
-        drugService.consumeDrug(drug.id, 50.0, bob.id)
+        drugService.consumeDrug(drug.id, qty(50.0), bob.id)
 
         entityManager.flush()
         entityManager.clear()
@@ -297,8 +299,8 @@ class DrugMovementStoriesTest {
         val bobPlan = usingRepository.findByUserIdAndDrugId(bob.id, drug.id)!!
 
         // Plans should be exactly halved
-        assertEquals(30.0, annaPlan.plannedAmount, "Anna's plan should scale from 60 to 30")
-        assertEquals(20.0, bobPlan.plannedAmount, "Bob's plan should scale from 40 to 20")
+        assertQty(30.0, annaPlan.plannedAmount, "Anna's plan should scale from 60 to 30")
+        assertQty(20.0, bobPlan.plannedAmount, "Bob's plan should scale from 40 to 20")
 
         println("✅ Story 15 passed: Treatment plans scaled proportionally after heavy consumption")
     }
@@ -316,7 +318,7 @@ class DrugMovementStoriesTest {
 
         val drugToMove = drugRepository.save(
             Drug(
-                id = UUID.randomUUID(), name = "Moving Pill", quantity = 10.0,
+                id = UUID.randomUUID(), name = "Moving Pill", quantity = qty(10.0),
                 quantityUnit = "pills", medKit = sourceKit, formType = null,
                 category = null,
                 manufacturer = null,
@@ -327,7 +329,7 @@ class DrugMovementStoriesTest {
 
         val drugToStay = drugRepository.save(
             Drug(
-                id = UUID.randomUUID(), name = "Staying Pill", quantity = 10.0,
+                id = UUID.randomUUID(), name = "Staying Pill", quantity = qty(10.0),
                 quantityUnit = "pills", medKit = sourceKit, formType = null,
                 category = null,
                 manufacturer = null,

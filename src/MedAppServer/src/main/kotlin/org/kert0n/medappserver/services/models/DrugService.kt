@@ -5,6 +5,7 @@ import org.kert0n.medappserver.controller.DrugDTO
 import org.kert0n.medappserver.controller.DrugUpdateDTO
 import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.MedKit
+import org.kert0n.medappserver.db.model.toQuantityScale
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.services.orchestrators.QuantityReductionService
 import org.slf4j.LoggerFactory
@@ -13,6 +14,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
+import java.math.BigDecimal
 import java.util.*
 
 @Service
@@ -114,7 +116,7 @@ class DrugService(
 
 
     @Transactional
-    fun consumeDrug(drugId: UUID, quantity: Double, userId: UUID): Drug? {
+    fun consumeDrug(drugId: UUID, quantity: BigDecimal, userId: UUID): Drug? {
         logger.debug("Consuming {} of drug {}", quantity, drugId)
 
         val drug = findByIdForUserForUpdate(drugId, userId)
@@ -123,7 +125,7 @@ class DrugService(
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Insufficient quantity available")
         }
 
-        drug.quantity -= quantity
+        drug.quantity = (drug.quantity - quantity).toQuantityScale()
         drugRepository.save(drug)
         return quantityReductionService.handleQuantityReduction(drug)
 

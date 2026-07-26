@@ -639,7 +639,6 @@ components:
       properties:
         plannedAmount:
           type: number
-          format: double
           description: Planned amount
           example: 20.0
           minimum: 0.0
@@ -659,7 +658,6 @@ components:
           description: Drug identifier
         plannedAmount:
           type: number
-          format: double
           description: Planned total amount for the course
         createdAt:
           type: string
@@ -681,7 +679,6 @@ components:
           minLength: 1
         quantity:
           type: number
-          format: double
           description: Quantity
           example: 100.0
           minimum: 0.0
@@ -734,12 +731,10 @@ components:
           example: Aspirin
         quantity:
           type: number
-          format: double
           description: Current quantity
           example: 100.0
         plannedQuantity:
           type: number
-          format: double
           description: Total planned quantity across treatment plans
           example: 30.0
         quantityUnit:
@@ -785,7 +780,6 @@ components:
       properties:
         quantity:
           type: number
-          format: double
           description: Quantity to consume
           example: 2.0
           minimum: 0.0
@@ -801,7 +795,6 @@ components:
           description: Drug identifier
         plannedAmount:
           type: number
-          format: double
           description: Planned amount
           example: 20.0
           minimum: 0.0
@@ -814,7 +807,6 @@ components:
       properties:
         quantityConsumed:
           type: number
-          format: double
           description: Amount consumed
           example: 1.0
           minimum: 0.0
@@ -866,7 +858,6 @@ components:
           minLength: 1
         quantity:
           type: number
-          format: double
           description: Quantity
           example: 100.0
           minimum: 0.0
@@ -993,15 +984,12 @@ components:
       properties:
         actualQuantity:
           type: number
-          format: double
           description: Actual quantity in stock
         plannedQuantity:
           type: number
-          format: double
           description: Total planned quantity across all treatment plans
         availableQuantity:
           type: number
-          format: double
           description: Available quantity (actual - planned)
   securitySchemes:
     Bearer Authentication:

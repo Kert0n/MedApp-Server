@@ -1,5 +1,7 @@
 package org.kert0n.medappserver.services.models
 
+import org.kert0n.medappserver.testutil.assertQty
+import org.kert0n.medappserver.testutil.qty
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.kert0n.medappserver.controller.DrugCreateDTO
@@ -91,7 +93,7 @@ class DrugServiceTest {
 
         assertEquals(0, drugService.findAllByUser(alice.id).size)
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 10.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(10.0)))
         dbHelper.flushAndClear()
 
         assertEquals(1, drugService.findAllByUser(alice.id).size)
@@ -106,13 +108,13 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         val drug = drugService.create(
-            DrugCreateDTO(name = "Aspirin", quantity = 100.0, quantityUnit = "mg", medKitId = kit.id),
+            DrugCreateDTO(name = "Aspirin", quantity = qty(100.0), quantityUnit = "mg", medKitId = kit.id),
             kit, alice.id
         )
 
         assertNotNull(drug.id)
         assertEquals("Aspirin", drug.name)
-        assertEquals(100.0, drug.quantity)
+        assertQty(100.0, drug.quantity)
         assertEquals(kit.id, drug.medKit.id)
     }
 
@@ -129,7 +131,7 @@ class DrugServiceTest {
         drugService.update(drug.id, emptyUpdate, alice.id)
         dbHelper.flushAndClear()
 
-        assertEquals(10.0, drugService.findById(drug.id).quantity)
+        assertQty(10.0, drugService.findById(drug.id).quantity)
     }
 
     @Test
@@ -140,7 +142,7 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         val fullUpdate = DrugUpdateDTO(
-            name = "New Name", quantity = 100.0, quantityUnit = "ml",
+            name = "New Name", quantity = qty(100.0), quantityUnit = "ml",
             formType = "liquid", category = "cat", manufacturer = "man",
             country = "co", description = "desc"
         )
@@ -149,7 +151,7 @@ class DrugServiceTest {
 
         val updated = drugService.findById(drug.id)
         assertEquals("New Name", updated.name)
-        assertEquals(100.0, updated.quantity)
+        assertQty(100.0, updated.quantity)
         assertEquals("ml", updated.quantityUnit)
         assertEquals("liquid", updated.formType)
         assertEquals("cat", updated.category)
@@ -165,10 +167,10 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit, 10.0)
         dbHelper.flushAndClear()
 
-        drugService.update(drug.id, DrugUpdateDTO(quantity = 20.0), alice.id)
+        drugService.update(drug.id, DrugUpdateDTO(quantity = qty(20.0)), alice.id)
         dbHelper.flushAndClear()
 
-        assertEquals(20.0, dbHelper.drugQuantity(drug.id))
+        assertQty(20.0, dbHelper.drugQuantity(drug.id))
     }
 
     @Test
@@ -178,14 +180,14 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 80.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(80.0)))
         dbHelper.flushAndClear()
 
-        drugService.update(drug.id, DrugUpdateDTO(quantity = 40.0), alice.id)
+        drugService.update(drug.id, DrugUpdateDTO(quantity = qty(40.0)), alice.id)
         dbHelper.flushAndClear()
 
-        assertEquals(40.0, dbHelper.drugQuantity(drug.id)!!, 0.001)
-        assertEquals(40.0, dbHelper.userPlan(alice.id, drug.id)!!, 0.001)
+        assertQty(40.0, dbHelper.drugQuantity(drug.id))
+        assertQty(40.0, dbHelper.userPlan(alice.id, drug.id))
     }
 
     // ── delete ──
@@ -214,8 +216,8 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
-        val consumed = drugService.consumeDrug(drug.id, 30.0, alice.id)
-        assertEquals(70.0, consumed?.quantity)
+        val consumed = drugService.consumeDrug(drug.id, qty(30.0), alice.id)
+        assertQty(70.0, consumed?.quantity)
     }
 
     @Test
@@ -226,7 +228,7 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         assertThrows<ResponseStatusException> {
-            drugService.consumeDrug(drug.id, 20.0, alice.id)
+            drugService.consumeDrug(drug.id, qty(20.0), alice.id)
         }
     }
 
@@ -237,14 +239,14 @@ class DrugServiceTest {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
         val drug = drugService.create(
-            DrugCreateDTO(name = "Drug", quantity = 100.0, quantityUnit = "mg", medKitId = kit.id),
+            DrugCreateDTO(name = "Drug", quantity = qty(100.0), quantityUnit = "mg", medKitId = kit.id),
             kit, alice.id
         )
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 25.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(25.0)))
         dbHelper.flushAndClear()
 
         val dto = drugService.toDrugDTO(drugService.findById(drug.id))
-        assertEquals(25.0, dto.plannedQuantity)
-        assertEquals(100.0, dto.quantity)
+        assertQty(25.0, dto.plannedQuantity)
+        assertQty(100.0, dto.quantity)
     }
 }
