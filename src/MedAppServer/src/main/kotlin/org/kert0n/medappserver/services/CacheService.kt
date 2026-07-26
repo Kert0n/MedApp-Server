@@ -17,7 +17,12 @@ class CacheService(
     @Value($$"${registration.timeout.InSeconds}") private val registrationTimeOut: Long,
     @Value($$"${authentication.throttle.windowInSeconds:300}") private val loginThrottleWindow: Long,
 ) {
-    // Storage for medkit share tokens
+    // Storage for medkit share tokens.
+    //
+    // maximumSize is a hard cap, not a hint: under enough concurrent sharing a key can be
+    // evicted before medkit.share.termInMinutes elapses, so the advertised validity window
+    // is an upper bound rather than a guarantee. Acceptable — the caller simply asks for a
+    // new key — but do not document the TTL as absolute.
     @Bean
     fun medKitTokenCache(): Cache<String, UUID> = Caffeine.newBuilder()
         .expireAfterWrite(medKitShareTerm.minutes)
