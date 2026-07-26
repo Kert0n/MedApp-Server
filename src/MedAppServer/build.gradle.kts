@@ -62,4 +62,7 @@ allOpen {
 tasks.withType<Test> {
     useJUnitPlatform()
     jvmArgs("-XX:+EnableDynamicAgentLoading")
+    // Lets OpenApiSnapshotTest rewrite open-api.yaml instead of asserting against it:
+    //     ./gradlew test -DupdateOpenApi=true
+    systemProperty("updateOpenApi", System.getProperty("updateOpenApi") ?: "false")
 }
