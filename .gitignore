@@ -9,6 +9,10 @@ local.properties
 *.log
 .DS_Store
 
+# Локальные секреты для docker compose
+.env
+secrets/
+
 # Android Studio generated files and folders
 captures/
 .externalNativeBuild/

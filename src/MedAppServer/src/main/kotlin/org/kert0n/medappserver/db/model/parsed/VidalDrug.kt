@@ -5,27 +5,37 @@ import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
 import java.util.*
 
+/**
+ * Каталог препаратов, по которому ищет приложение.
+ *
+ * Не путать с таблицей `drugs` из дампа справочника: та принадлежит внешнему источнику и
+ * несёт его колонки (`drug_id`, `name_lat`, `form`, `dosage`, `url`). `parsed_drugs`
+ * наполняется переносом из неё, см. `db/fill-parsed-drugs.sql`.
+ */
 @Entity
 @Table(
+    // Индексы названы по своей таблице. Раньше они назывались ix_drugs_*/idx_drugs_* и
+    // сталкивались с одноимёнными индексами таблицы drugs из дампа — имена индексов в
+    // Postgres уникальны на схему, поэтому init базы падал.
     name = "parsed_drugs", indexes = [
         Index(
-            name = "ix_drugs_name",
+            name = "ix_parsed_drugs_name",
             columnList = "name"
         ),
         Index(
-            name = "idx_drugs_form_type_id",
+            name = "ix_parsed_drugs_form_type_id",
             columnList = "form_type_id"
         ),
         Index(
-            name = "idx_drugs_quantity_unit_id",
+            name = "ix_parsed_drugs_quantity_unit_id",
             columnList = "quantity_unit_id"
         ),
         Index(
-            name = "ix_drugs_active_substance",
+            name = "ix_parsed_drugs_active_substance",
             columnList = "active_substance"
         ),
         Index(
-            name = "ix_drugs_manufacturer",
+            name = "ix_parsed_drugs_manufacturer",
             columnList = "manufacturer"
         )]
 )

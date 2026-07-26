@@ -2,12 +2,14 @@
 FROM gradle:9.3-jdk21 AS build
 WORKDIR /app
 
-# Copy gradle files for dependency caching
-COPY build.gradle.kts settings.gradle.kts ./
+# Copy gradle files for dependency caching. The wrapper is committed, so the build uses the
+# Gradle version the project pins rather than whatever the base image happens to ship.
+COPY build.gradle.kts settings.gradle.kts gradlew ./
 COPY gradle ./gradle
 
-# Download dependencies
-RUN gradle dependencies --no-daemon || true
+# Resolve dependencies in their own layer. No `|| true`: a failure here used to be swallowed
+# and resurfaced later as a confusing build error.
+RUN ./gradlew dependencies --no-daemon
 
 # Copy source code
 COPY src ./src
@@ -19,7 +21,7 @@ COPY src ./src
 RUN sh src/main/resources/certs/gen.sh
 
 # Build application
-RUN gradle bootJar --no-daemon
+RUN ./gradlew bootJar --no-daemon
 
 # Runtime stage
 FROM eclipse-temurin:21-jre-alpine
@@ -38,7 +40,7 @@ RUN chown spring:spring app.jar
 
 USER spring:spring
 
-ENV SPRING_PROFILES_ACTIVE=prod
+ENV SPRING_PROFILES_ACTIVE=mock-prod,prod
 
 # Expose port
 EXPOSE 8080

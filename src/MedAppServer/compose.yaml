@@ -1,59 +1,111 @@
+# Продовый стек. Запуск: docker compose -f compose.yaml up -d --build
+#
+# Пароль Postgres лежит в файле secrets/postgres_password, которого нет в git. Создать
+# один раз:
+#
+#   mkdir -p secrets && openssl rand -base64 32 > secrets/postgres_password
+#
+# Приложение получает тот же секрет через configtree: Spring читает /run/secrets как
+# дерево свойств, где имя файла и есть имя свойства — поэтому второй секрет смонтирован
+# под именем spring.datasource.password и указывает на тот же файл. Значение не
+# дублируется, обёртка над entrypoint не нужна.
+#
+# Локальная разработка: приложение с профилем dev само поднимает compose.dev.yaml.
+# Прод-подобная проверка без продовых секретов: compose.mock-prod.yaml.
+
 services:
   postgres:
     image: 'postgres:18.3-trixie'
     environment:
       - 'POSTGRES_DB=medapp-server-db'
-      - 'POSTGRES_PASSWORD=secret'
-      - 'POSTGRES_USER=myuser'
+      # Логин секретом не является, поэтому здесь явным значением.
+      - 'POSTGRES_USER=medapp'
+      # Официальный образ поддерживает *_FILE из коробки.
+      - 'POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password'
+    secrets:
+      - postgres_password
     volumes:
       - postgres_data:/var/lib/postgresql
-      - ./init-scripts/dump.sql:/docker-entrypoint-initdb.d/dump.sql
-    ports:
-      - "5432:5432"
+      # Порядок важен, entrypoint применяет файлы по алфавиту:
+      # 01 — справочник, если дамп есть (form_types, quantity_units, drugs с данными);
+      # 02 — схема приложения;
+      # 03 — перенос drugs -> parsed_drugs.
+      - ./db/load-catalogue.sh:/docker-entrypoint-initdb.d/01-load-catalogue.sh:ro
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/02-schema.sql:ro
+      - ./db/fill-parsed-drugs.sql:/docker-entrypoint-initdb.d/03-fill-parsed-drugs.sql:ro
+      # Каталогом, а не файлом: дампа в git нет, и при отсутствии файла Docker создал бы
+      # на его месте каталог, из-за чего init базы падает. Отсутствие каталога безвредно.
+      - ./init-scripts:/catalogue:ro
+    # Порт наружу не публикуется: доступ только из сети data.
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U myuser -d medapp-server-db" ]
+      test: [ "CMD-SHELL", "pg_isready -U medapp -d medapp-server-db" ]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
-      - med-app-network
+      - data
+    restart: unless-stopped
 
-#  med-app-server:
-#    build:
-#      context: .
-#      dockerfile: Dockerfile
-#    environment:
-#      - 'SPRING_PROFILES_ACTIVE=prod'
-#      - 'SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/medapp-server-db'
-#      - 'SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT=60000'
-#    expose:
-#      - "8080"
-#    depends_on:
-#      postgres:
-#        condition: service_healthy
-#    networks:
-#      - med-app-network
-#    healthcheck:
-#      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
-#      interval: 30s
-#      timeout: 10s
-#      retries: 3
-#      start_period: 40s
-#    restart: unless-stopped
-#
-#  caddy:
-#    image: caddy:2-alpine
-#    ports:
-#      - "80:80"
-#      - "443:443"
-#    volumes:
-#      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-#      - caddy_data:/data       # тут Caddy хранит сертификаты
-#      - caddy_config:/config
-#    networks:
-#      - med-app-network
-#    restart: unless-stopped
+  med-app-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      # mock-prod несёт всю продовую конфигурацию, prod доописывает поверх только скрытые
+      # значения. Порядок важен: последний профиль перебивает предыдущий.
+      - 'SPRING_PROFILES_ACTIVE=mock-prod,prod'
+      - 'SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/medapp-server-db'
+      - 'SPRING_DATASOURCE_USERNAME=medapp'
+      # Секреты приходят файлами: configtree читает /run/secrets как дерево свойств, где
+      # имя файла становится именем свойства, и перебивает даже профиль prod.
+      - 'SPRING_CONFIG_IMPORT=optional:configtree:/run/secrets/'
+      - 'SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT=60000'
+    secrets:
+      - spring.datasource.password
+      - registration.secret
+    expose:
+      - "8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # В edge — чтобы был виден Caddy, в data — чтобы видеть Postgres. Наружу не
+    # публикуется: на этом держится доверие к X-Forwarded-For
+    # (forward-headers-strategy=native).
+    networks:
+      - edge
+      - data
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
 
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data       # тут Caddy хранит сертификаты
+      - caddy_config:/config
+    depends_on:
+      - med-app-server
+    networks:
+      - edge
+    restart: unless-stopped
+
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password
+  # Тот же файл под именем свойства Spring: configtree читает /run/secrets, где имя файла
+  # становится именем свойства.
+  spring.datasource.password:
+    file: ./secrets/postgres_password
+  registration.secret:
+    file: ./secrets/registration.secret
 
 volumes:
   postgres_data:
@@ -61,5 +113,9 @@ volumes:
   caddy_config:
 
 networks:
-  med-app-network:
+  # Единственная сеть, куда смотрит внешний мир.
+  edge:
+    driver: bridge
+  # Postgres виден только приложению.
+  data:
     driver: bridge

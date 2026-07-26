@@ -22,10 +22,24 @@ import java.util.*
 @RequestMapping("/auth")
 @Tag(name = "Authentication", description = "Public endpoints for registration and token issuance")
 class AuthController(
-    @Value($$"${registration.secret}") private val registrationSecret: String,
+    // Пустая строка по умолчанию, а не отсутствие значения: так секрет может прийти любым
+    // путём (переменная окружения, файл секрета через configtree, профиль), а проверка
+    // ниже одинаково поймает случай, когда он не пришёл ниоткуда.
+    @Value($$"${registration.secret:}") private val registrationSecret: String,
     private val userService: UserService,
     private val securityService: SecurityService
 ) {
+
+    init {
+        // Пустой секрет — не конфигурация, а обходимый барьер. Падаем при старте, а не
+        // принимаем любую регистрацию: базовый application.properties оставляет значение
+        // пустым специально, чтобы его обязательно задали через REGISTRATION_SECRET или
+        // application-prod.properties.
+        require(registrationSecret.isNotBlank()) {
+            "registration.secret must not be blank: set the REGISTRATION_SECRET environment " +
+                "variable or provide application-prod.properties"
+        }
+    }
 
 
     @Schema(description = "Registration response with generated credentials")

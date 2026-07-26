@@ -1,0 +1,36 @@
+# Локальная БД для разработки. Поднимается автоматически при запуске приложения с профилем
+# dev: spring-boot-docker-compose подхватывает этот файл (см. spring.docker.compose.file в
+# application-dev.properties) и сам подставляет параметры подключения.
+#
+# Значения захардкожены: база одноразовая, живёт на localhost и пересоздаётся. Требовать
+# внешние секреты для запуска из IDE было бы неправильно.
+#
+# Прод: docker compose -f compose.yaml up -d
+# Прод-подобная проверка: docker compose -f compose.mock-prod.yaml up -d --build
+
+services:
+  postgres:
+    image: 'postgres:18.3-trixie'
+    environment:
+      - 'POSTGRES_DB=medapp-server-db'
+      - 'POSTGRES_USER=medapp'
+      - 'POSTGRES_PASSWORD=medapp'
+    volumes:
+      # Порядок важен, entrypoint применяет файлы по алфавиту:
+      # 01 — справочник, если дамп есть (form_types, quantity_units, drugs с данными);
+      # 02 — схема приложения;
+      # 03 — перенос drugs -> parsed_drugs.
+      - ./db/load-catalogue.sh:/docker-entrypoint-initdb.d/01-load-catalogue.sh:ro
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/02-schema.sql:ro
+      - ./db/fill-parsed-drugs.sql:/docker-entrypoint-initdb.d/03-fill-parsed-drugs.sql:ro
+      # Каталогом, а не файлом: дампа в git нет, и при отсутствии файла Docker создал бы
+      # на его месте каталог, из-за чего init базы падает. Отсутствие каталога безвредно.
+      - ./init-scripts:/catalogue:ro
+    ports:
+      # Публикуется, потому что приложение запускается на хосте, а не в контейнере.
+      - "5432:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U medapp -d medapp-server-db" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
