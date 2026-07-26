@@ -10,13 +10,10 @@ import org.springframework.security.oauth2.jwt.JwtDecoder
 import org.springframework.security.oauth2.jwt.JwtEncoder
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters
 import org.springframework.stereotype.Service
-import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.time.Instant
 import java.time.temporal.ChronoUnit
-import javax.crypto.Mac
-import javax.crypto.spec.SecretKeySpec
 import kotlin.io.encoding.Base64
 
 @Service
@@ -34,17 +31,6 @@ class SecurityService(
 ) {
 
     private val secureRandom = SecureRandom()
-
-    /**
-     * Per-process key used to derive cache keys from client addresses.
-     *
-     * A plain digest would be security theatre here: the whole IPv4 space can be
-     * enumerated in seconds, so SHA-256(address) is trivially reversible. This key never
-     * leaves the process and is never persisted, so a heap dump of the cache cannot be
-     * mapped back to addresses; a restart makes previous keys meaningless, which is
-     * harmless because the cache is in-memory and dies with the process anyway.
-     */
-    private val addressKey = ByteArray(32).also { secureRandom.nextBytes(it) }
 
     fun generateKey(size: Int) = Base64.encode(ByteArray(size).also { secureRandom.nextBytes(it) })
     fun check(raw: String, hashedPassword: String): Boolean = passwordEncoder.matches(raw, hashedPassword)
@@ -68,14 +54,13 @@ class SecurityService(
     }
 
     /**
-     * Derives the cache key for a client address. Addresses are never used as keys
-     * directly, so the cache holds no client address in a recoverable form.
+     * Cache key for a client address, so no address is used as a key verbatim.
+     *
+     * Plain SHA-256 on purpose. A keyed digest would be more machinery for nothing here:
+     * entries expire within minutes, the cache is in-memory and dies with the process, and
+     * anyone able to read that heap can see the live connections anyway.
      */
-    private fun addressCacheKey(clientAddress: String): String {
-        val mac = Mac.getInstance("HmacSHA256")
-        mac.init(SecretKeySpec(addressKey, "HmacSHA256"))
-        return Base64.encode(mac.doFinal(clientAddress.toByteArray(StandardCharsets.UTF_8)))
-    }
+    private fun addressCacheKey(clientAddress: String): String = hashToken(clientAddress)
 
     /**
      * Tracks successful registrations per client address to throttle automated signups.
