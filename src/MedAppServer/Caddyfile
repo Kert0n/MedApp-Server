@@ -1,15 +1,20 @@
 medapp.el-communication.ru {
+	# Ни одна операция API не принимает больших тел, поэтому режем на границе, не доводя
+	# до приложения. Без этого аутентифицированный клиент мог слать тело любого размера.
+	request_body {
+		max_size 64KB
+	}
 
-    # Caddy сам ставит X-Forwarded-For / -Proto / -Host и дописывает к существующей
-    # цепочке. Ручной header_up затирал цепочку, а бэкенд всё равно эти заголовки
-    # игнорировал, пока не был включён forward-headers-strategy=native.
-    reverse_proxy med-app-server:8080
+	# Caddy сам ставит X-Forwarded-For / -Proto / -Host и дописывает к существующей
+	# цепочке. Ручной header_up затирал цепочку, а бэкенд всё равно эти заголовки
+	# игнорировал, пока не был включён forward-headers-strategy=native.
+	reverse_proxy med-app-server:8080
 
-    # Логи в stdout (подхватываются docker logs)
-    log {
-        output stdout
-        format console
-    }
+	# Логи в stdout (подхватываются docker logs)
+	log {
+		output stdout
+		format console
+	}
 }
 
 #localhost {
