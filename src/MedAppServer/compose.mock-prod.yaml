@@ -37,12 +37,8 @@ services:
     environment:
       - 'SPRING_PROFILES_ACTIVE=mock-prod'
       - 'SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/medapp-server-db'
-      # Те же две переменные, что в проде: смысл профиля в том, чтобы поведение совпадало.
-      # Caddy здесь нет, но native позволяет проверить, что лимит регистраций считается по
-      # X-Forwarded-For, а не по одному общему адресу.
-      - 'SERVER_FORWARD_HEADERS_STRATEGY=native'
-      - 'SPRING_WEB_ERROR_INCLUDE_MESSAGE=never'
-      - 'SPRING_WEB_ERROR_INCLUDE_BINDING_ERRORS=never'
+      # Больше ничего не задаётся: вся конфигурация в application-mock-prod.properties,
+      # и прод берёт её же. Если стенд отличался бы переменными, он проверял бы не прод.
       - 'SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT=60000'
     ports:
       # В отличие от прода порт публикуется: по стенду надо стучать руками. Снаружи 18080,

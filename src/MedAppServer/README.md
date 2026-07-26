@@ -75,30 +75,34 @@ Spring сам поднимает Postgres из [compose.dev.yaml](compose.dev.ya
 
 ### Прод-подобная проверка
 
-`compose.mock-prod.yaml` поднимает полный стек с профилем `mock-prod`: те же настройки,
-что в проде (`ddl-auto=validate`, закрытые тексты ошибок, реальный Postgres, приложение в
-контейнере), но с заведомо ненастоящими секретами и без Caddy — то есть без выпуска
-сертификата на настоящий домен. Порт приложения публикуется, по стенду можно стучать.
+`application-mock-prod.properties` — это и есть продовая конфигурация: всё, что не
+секрет, лежит там и в git. Профиль `prod` ничего не повторяет, он активируется вторым
+(`SPRING_PROFILES_ACTIVE=mock-prod,prod`) и доописывает только скрытые значения.
+Поэтому стенд проверяет ровно то, что поедет в прод.
 
 ```bash
 docker compose -f compose.mock-prod.yaml up -d --build
 ```
 
+Порт снаружи 18080, чтобы стенд не конфликтовал с приложением, запущенным из IDE.
+
 ### Прод
 
-Пароль Postgres лежит в файле вне git и подключается через docker secrets. Создать один
-раз:
+Секреты — реальный `registration.secret` и пароль БД — берутся из
+`application-prod.properties` (файл вне git) либо из docker secrets, которые перебивают
+даже его. Пароль Postgres нужен контейнеру БД, поэтому только файлом:
 
 ```bash
-mkdir -p secrets && openssl rand -base64 32 > secrets/postgres_password
+mkdir -p secrets
+openssl rand -base64 32 > secrets/postgres_password
+printf '%s' "ваш-секрет-регистрации" > secrets/registration.secret
 
 docker compose -f compose.yaml up -d --build
 docker compose -f compose.yaml logs -f med-app-server
 ```
 
-Приложение получает тот же секрет через `configtree`: Spring читает `/run/secrets` как
-дерево свойств, где имя файла и есть имя свойства, поэтому значение не дублируется и
-обёртка над entrypoint не нужна.
+Приложение читает `/run/secrets` через `configtree`: имя файла становится именем
+свойства, поэтому значение не дублируется и обёртка над entrypoint не нужна.
 
 Наружу смотрит только Caddy: приложение и Postgres портов не публикуют — на этом же
 держится доверие к `X-Forwarded-For`.
@@ -185,7 +189,19 @@ http://localhost:8080/v3/api-docs
 
 ## Конфигурация
 
-Основные параметры в `application.properties`:
+Три профиля, каждый со своим файлом:
+
+| Профиль | Файл | Роль |
+|---|---|---|
+| `dev` | `application-dev.properties` | локальная работа, ослабленные сроки и лимиты |
+| `mock-prod` | `application-mock-prod.properties` | **вся продовая конфигурация**, лежит в git |
+| `prod` | `application-prod.properties` | только скрытые значения, вне git |
+
+Прод запускается как `mock-prod,prod`: второй профиль доописывает первый. Поэтому
+настройки поведения правятся в `mock-prod` и автоматически действуют в проде, а стенд
+проверяет ровно то, что поедет в прод.
+
+Основные параметры:
 
 ```properties
 # Срок действия JWT токена (в минутах)

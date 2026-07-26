@@ -40,7 +40,7 @@ RUN chown spring:spring app.jar
 
 USER spring:spring
 
-ENV SPRING_PROFILES_ACTIVE=prod
+ENV SPRING_PROFILES_ACTIVE=mock-prod,prod
 
 # Expose port
 EXPOSE 8080

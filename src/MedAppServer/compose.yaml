@@ -51,23 +51,14 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
-      - 'SPRING_PROFILES_ACTIVE=prod'
+      # mock-prod несёт всю продовую конфигурацию, prod доописывает поверх только скрытые
+      # значения. Порядок важен: последний профиль перебивает предыдущий.
+      - 'SPRING_PROFILES_ACTIVE=mock-prod,prod'
       - 'SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/medapp-server-db'
       - 'SPRING_DATASOURCE_USERNAME=medapp'
-      # Секреты приходят файлами через configtree: имя файла в /run/secrets становится
-      # именем свойства, поэтому пароль и барьер регистрации не идут переменными.
+      # Секреты приходят файлами: configtree читает /run/secrets как дерево свойств, где
+      # имя файла становится именем свойства, и перебивает даже профиль prod.
       - 'SPRING_CONFIG_IMPORT=optional:configtree:/run/secrets/'
-      # Переменными окружения, а не в properties, сознательно: они перебивают любые
-      # значения из application-prod.properties, который лежит вне git и которому нельзя
-      # доверять в этих двух вопросах.
-      #
-      # За Caddy request.remoteAddr — адрес контейнера прокси, поэтому без native лимит
-      # регистраций остаётся одним общим счётчиком на всех клиентов. Верно только пока
-      # порт бэкенда не публикуется, что и обеспечивают сети ниже.
-      - 'SERVER_FORWARD_HEADERS_STRATEGY=native'
-      # Наружу ни текста исключений, ни отклонённых значений.
-      - 'SPRING_WEB_ERROR_INCLUDE_MESSAGE=never'
-      - 'SPRING_WEB_ERROR_INCLUDE_BINDING_ERRORS=never'
       - 'SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT=60000'
     secrets:
       - spring.datasource.password
