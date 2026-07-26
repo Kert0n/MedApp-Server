@@ -5,6 +5,19 @@ medapp.el-communication.ru {
 		max_size 64KB
 	}
 
+	header {
+		# Год, с поддоменами. Caddy сам делает HTTP->HTTPS редирект, но HSTS убирает и
+		# первый незащищённый запрос при повторных визитах.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		# API отдаёт только JSON; браузеру угадывать тип нечего.
+		X-Content-Type-Options "nosniff"
+		# Referer не нужен никому снаружи, а пути содержат идентификаторы аптечек и
+		# препаратов.
+		Referrer-Policy "no-referrer"
+		# Версию сервера не сообщаем.
+		-Server
+	}
+
 	# Caddy сам ставит X-Forwarded-For / -Proto / -Host и дописывает к существующей
 	# цепочке. Ручной header_up затирал цепочку, а бэкенд всё равно эти заголовки
 	# игнорировал, пока не был включён forward-headers-strategy=native.
