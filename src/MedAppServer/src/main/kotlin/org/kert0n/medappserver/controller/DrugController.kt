@@ -205,7 +205,15 @@ class DrugController(
         @RequestParam @Size(min = 1, max = 200) searchTerm: String,
         // Unbounded before: limit=-1 reached Postgres as LIMIT -1 and failed with a 500,
         // limit=10000000 was an out-of-memory lever on an authenticated endpoint.
-        @Parameter(description = "Maximum results")
+        //
+        // The bounds are stated twice on purpose. @Min/@Max are what actually enforce them,
+        // but springdoc does not render them into the schema for a query parameter (it does
+        // render @Size, see searchTerm above), so without the explicit schema the published
+        // contract would not mention the limit at all. Keep the two in step.
+        @Parameter(
+            description = "Maximum results",
+            schema = Schema(type = "integer", format = "int32", minimum = "1", maximum = "50")
+        )
         @RequestParam(defaultValue = "10") @Min(1) @Max(50) limit: Int
     ): List<DrugTemplateDTO> {
         logger.debug(

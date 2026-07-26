@@ -560,7 +560,6 @@ paths:
         schema:
           type: integer
           format: int32
-          default: 10
           maximum: 50
           minimum: 1
       responses:
