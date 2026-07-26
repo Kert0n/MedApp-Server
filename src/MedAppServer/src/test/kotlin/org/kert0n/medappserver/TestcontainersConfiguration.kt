@@ -12,7 +12,10 @@ class TestcontainersConfiguration {
     @Bean
     @ServiceConnection
     fun postgresContainer(): PostgreSQLContainer {
-        return PostgreSQLContainer(DockerImageName.parse("postgres:latest"))
+        // Версия пришпилена и совпадает с продовой из compose. Было postgres:latest — то
+        // есть тесты молча меняли СУБД под собой при каждом обновлении образа, и разница с
+        // продом обнаруживалась бы уже в проде.
+        return PostgreSQLContainer(DockerImageName.parse("postgres:18.3-trixie"))
             .withInitScript("init-pg-trgm.sql")
     }
 

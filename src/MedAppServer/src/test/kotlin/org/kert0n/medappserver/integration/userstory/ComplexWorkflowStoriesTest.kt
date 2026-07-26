@@ -1,5 +1,6 @@
 package org.kert0n.medappserver.integration.userstory
 
+import org.kert0n.medappserver.PostgresIntegrationTest
 import jakarta.persistence.EntityManager
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertDoesNotThrow
@@ -19,17 +20,14 @@ import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.data.repository.findByIdOrNull
-import org.springframework.test.context.ActiveProfiles
 import org.springframework.transaction.annotation.Transactional
 import java.util.*
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
-@SpringBootTest
-@ActiveProfiles("test")
+@PostgresIntegrationTest
 @Transactional
 class ComplexWorkflowStoriesTest {
 
