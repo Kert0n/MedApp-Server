@@ -67,17 +67,24 @@ src/main/resources/certs/gen.sh
 
 ## Запуск с Docker Compose
 
-Один раз — создать `.env` рядом с `compose.yaml` по образцу
-[.env.example](.env.example). Это единственный обязательный шаг: он нужен, чтобы пароль
-базы не лежал в репозитории. Без него `compose` падает сразу, а не поднимает базу со
-слабым паролем.
+### Локальная разработка
+
+Ничего настраивать не нужно: при запуске с профилем `dev` (из IDE или `./gradlew bootRun`)
+Spring сам поднимает Postgres из [compose.dev.yaml](compose.dev.yaml) и подставляет
+параметры подключения. Схема та же, что в проде.
+
+### Прод
+
+Один раз — создать `.env` рядом с `compose.yaml` по образцу [.env.example](.env.example),
+чтобы пароль базы не лежал в репозитории. Без него `compose` падает сразу, а не поднимает
+базу со слабым паролем.
 
 ```bash
 cp .env.example .env && $EDITOR .env
 
-docker compose up -d --build
+docker compose -f compose.yaml up -d --build
 
-docker compose logs -f med-app-server
+docker compose -f compose.yaml logs -f med-app-server
 ```
 
 Схема создаётся автоматически из [db/schema.sql](db/schema.sql) при инициализации

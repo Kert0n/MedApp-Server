@@ -1,0 +1,29 @@
+# Локальная БД для разработки. Поднимается автоматически при запуске приложения с профилем
+# dev: spring-boot-docker-compose подхватывает этот файл (см. spring.docker.compose.file в
+# application-dev.properties) и сам подставляет параметры подключения.
+#
+# Отдельный файл, а не compose.yaml, по одной причине: в продовом compose.yaml логин и
+# пароль обязательны и берутся из .env, чтобы не лежать в репозитории. Здесь база
+# одноразовая и живёт на localhost, поэтому значения захардкожены — иначе запуск из IDE
+# требовал бы .env, чего быть не должно.
+#
+# Продовый стек поднимается своим файлом: docker compose -f compose.yaml up -d
+
+services:
+  postgres:
+    image: 'postgres:18.3-trixie'
+    environment:
+      - 'POSTGRES_DB=medapp-server-db'
+      - 'POSTGRES_USER=medapp'
+      - 'POSTGRES_PASSWORD=medapp'
+    volumes:
+      # Та же схема, что и в проде: локальная база не отличается от продовой.
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    ports:
+      # Публикуется, потому что приложение запускается на хосте, а не в контейнере.
+      - "5432:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U medapp -d medapp-server-db" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
