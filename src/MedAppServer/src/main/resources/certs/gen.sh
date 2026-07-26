@@ -7,7 +7,11 @@
 # Idempotent by default so a stray run cannot invalidate every token already issued.
 # Pass --force to rotate deliberately.
 #
+# Only needed to run the app directly on the host: the Docker image generates its own
+# pair at build time.
+#
 # Usage (from anywhere):  src/main/resources/certs/gen.sh [--force]
+# Target directory:       SECRETS_DIR=/somewhere src/main/resources/certs/gen.sh
 
 set -eu
 
@@ -15,7 +19,10 @@ set -eu
 # what the current directory is.
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 project_root=$(CDPATH= cd -- "$script_dir/../../../.." && pwd)
-secrets_dir="$project_root/.local/secrets"
+
+# SECRETS_DIR lets the image build reuse this script instead of duplicating the openssl
+# invocations; see Dockerfile.
+secrets_dir="${SECRETS_DIR:-$project_root/.local/secrets}"
 
 private_key="$secrets_dir/jwt-private.pem"
 public_key="$secrets_dir/jwt-public.pem"
