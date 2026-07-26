@@ -12,6 +12,12 @@ RUN gradle dependencies --no-daemon || true
 # Copy source code
 COPY src ./src
 
+# Make sure a signing key pair exists before packaging. The script is idempotent: keys
+# copied in with the sources are left alone, and only a missing pair is generated. So the
+# image needs no key handed to it and no key committed to git, and there is nothing to
+# configure either way.
+RUN sh src/main/resources/certs/gen.sh
+
 # Build application
 RUN gradle bootJar --no-daemon
 
@@ -21,14 +27,18 @@ WORKDIR /app
 
 # Install wget for healthcheck
 RUN apk add --no-cache wget
-RUN apk add --no-cache curl
 
 # Create non-root user for security
 RUN addgroup -S spring && adduser -S spring -G spring
+
+# Copy built jar from build stage as root, then hand it to the runtime user, so the files
+# are not left owned by root.
+COPY --from=build /app/build/libs/*.jar app.jar
+RUN chown spring:spring app.jar
+
 USER spring:spring
 
-# Copy built jar from build stage
-COPY --from=build /app/build/libs/*.jar app.jar
+ENV SPRING_PROFILES_ACTIVE=prod
 
 # Expose port
 EXPOSE 8080
