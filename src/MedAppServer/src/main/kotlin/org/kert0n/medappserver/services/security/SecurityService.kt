@@ -2,6 +2,7 @@ package org.kert0n.medappserver.services.security
 
 import com.sksamuel.aedile.core.Cache
 import org.kert0n.medappserver.db.model.User
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.security.oauth2.jwt.JwtClaimsSet
@@ -22,11 +23,14 @@ class SecurityService(
     private val decoder: JwtDecoder,
     @Value($$"${authentication.termInMinutes}") private val authenticationTerm: Long,
     @Value($$"${registration.timeout.BanNumber}") private val registrationNumber: Long,
-    private val successfulRegistrationsCache: Cache<String, Int>
+    @Value($$"${authentication.throttle.maxAttempts:20}") private val maxLoginAttempts: Int,
+    // Both caches are Cache<String, Int>; qualify them so resolution does not rely on
+    // parameter-name matching.
+    @Qualifier("successfulRegistrationsCache") private val successfulRegistrationsCache: Cache<String, Int>,
+    @Qualifier("loginAttemptsCache") private val loginAttemptsCache: Cache<String, Int>
 ) {
 
     private val secureRandom = SecureRandom()
-
 
     fun generateKey(size: Int) = Base64.encode(ByteArray(size).also { secureRandom.nextBytes(it) })
     fun check(raw: String, hashedPassword: String): Boolean = passwordEncoder.matches(raw, hashedPassword)
@@ -74,6 +78,26 @@ class SecurityService(
      */
     fun validateRequest(ip: String): Boolean =
         (successfulRegistrationsCache.getOrNull(addressCacheKey(ip)) ?: 0) <= registrationNumber
+
+    /**
+     * Whether another token request from this address may proceed to authentication.
+     *
+     * Unlike [validateRequest] this uses a strict comparison: it guards a real cost
+     * (a bcrypt verification per request) rather than merely deterring bots.
+     */
+    fun isLoginAllowed(clientAddress: String): Boolean =
+        (loginAttemptsCache.getOrNull(addressCacheKey(clientAddress)) ?: 0) < maxLoginAttempts
+
+    /**
+     * Counts a token request. Every attempt is counted, not just failures: a legitimate
+     * client asks for a token roughly once per token lifetime, so the limit is far above
+     * normal use, and counting all attempts also covers an attacker holding valid
+     * credentials.
+     */
+    fun recordLoginAttempt(clientAddress: String) {
+        val key = addressCacheKey(clientAddress)
+        loginAttemptsCache[key] = (loginAttemptsCache.getOrNull(key) ?: 0) + 1
+    }
 
     // Creates or increases successful registration attempt from a client address
     fun registerIncrease(ip: String) {

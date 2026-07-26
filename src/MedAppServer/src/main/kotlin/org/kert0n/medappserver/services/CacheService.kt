@@ -15,6 +15,7 @@ import kotlin.time.Duration.Companion.seconds
 class CacheService(
     @Value($$"${medkit.share.termInMinutes}") private val medKitShareTerm: Long,
     @Value($$"${registration.timeout.InSeconds}") private val registrationTimeOut: Long,
+    @Value($$"${authentication.throttle.windowInSeconds:300}") private val loginThrottleWindow: Long,
 ) {
     // Storage for medkit share tokens
     @Bean
@@ -27,6 +28,14 @@ class CacheService(
     // Storage for successful registration attempt
     fun successfulRegistrationsCache(): Cache<String, Int> = Caffeine.newBuilder()
         .expireAfterWrite(registrationTimeOut.seconds)
+        .maximumSize(10_000)
+        .asCache()
+
+    // Token requests per client address. Every /auth/login costs a bcrypt verification,
+    // so an unauthenticated caller could otherwise burn CPU for free.
+    @Bean
+    fun loginAttemptsCache(): Cache<String, Int> = Caffeine.newBuilder()
+        .expireAfterWrite(loginThrottleWindow.seconds)
         .maximumSize(10_000)
         .asCache()
 }

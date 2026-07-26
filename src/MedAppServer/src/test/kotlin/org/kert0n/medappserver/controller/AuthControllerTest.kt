@@ -43,6 +43,10 @@ class AuthControllerTest {
         mockMvc = MockMvcBuilders.webAppContextSetup(context)
             .apply<DefaultMockMvcBuilder>(SecurityMockMvcConfigurers.springSecurity())
             .build()
+        // SecurityService is mocked, so the token-request throttle would otherwise see the
+        // default `false` and reject every /auth/login with 429 before authentication.
+        // Throttling itself is covered by LoginThrottleTest.
+        whenever(securityService.isLoginAllowed(any())).thenReturn(true)
     }
 
     @Test

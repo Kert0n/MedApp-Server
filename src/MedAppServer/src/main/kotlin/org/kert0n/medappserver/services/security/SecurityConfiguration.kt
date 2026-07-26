@@ -21,6 +21,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.authentication.HttpStatusEntryPoint
+import org.springframework.security.web.authentication.www.BasicAuthenticationFilter
 
 
 @Configuration
@@ -55,10 +56,20 @@ class SecurityConfiguration(
      */
     @Bean
     @Order(1)
-    fun tokenIssuingFilterChain(httpSecurity: HttpSecurity): SecurityFilterChain {
+    fun tokenIssuingFilterChain(
+        httpSecurity: HttpSecurity,
+        // Injected as a method parameter, not into the constructor: SecurityService needs
+        // the JwtEncoder/JwtDecoder beans defined here, so a constructor dependency would
+        // be a cycle.
+        securityService: SecurityService
+    ): SecurityFilterChain {
         return httpSecurity
             .securityMatcher("/auth/login")
             .csrf { csrf -> csrf.disable() }
+            .addFilterBefore(
+                LoginThrottleFilter(securityService),
+                BasicAuthenticationFilter::class.java
+            )
             .authorizeHttpRequests { auth -> auth.anyRequest().authenticated() }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .exceptionHandling { configurer ->
