@@ -9,10 +9,13 @@ import org.springframework.security.oauth2.jwt.JwtDecoder
 import org.springframework.security.oauth2.jwt.JwtEncoder
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters
 import org.springframework.stereotype.Service
+import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
 import kotlin.io.encoding.Base64
 
 @Service
@@ -25,7 +28,20 @@ class SecurityService(
     private val successfulRegistrationsCache: Cache<String, Int>
 ) {
 
-    fun generateKey(size: Int) = Base64.encode(ByteArray(size).also { SecureRandom().nextBytes(it) })
+    private val secureRandom = SecureRandom()
+
+    /**
+     * Per-process key used to derive cache keys from client addresses.
+     *
+     * A plain digest would be security theatre here: the whole IPv4 space can be
+     * enumerated in seconds, so SHA-256(address) is trivially reversible. This key never
+     * leaves the process and is never persisted, so a heap dump of the cache cannot be
+     * mapped back to addresses; a restart makes previous keys meaningless, which is
+     * harmless because the cache is in-memory and dies with the process anyway.
+     */
+    private val addressKey = ByteArray(32).also { secureRandom.nextBytes(it) }
+
+    fun generateKey(size: Int) = Base64.encode(ByteArray(size).also { secureRandom.nextBytes(it) })
     fun check(raw: String, hashedPassword: String): Boolean = passwordEncoder.matches(raw, hashedPassword)
     fun hashPassword(rawPassword: String): String = passwordEncoder.encode(rawPassword)!!
     fun hashToken(token: String): String =
@@ -46,17 +62,41 @@ class SecurityService(
         ).tokenValue
     }
 
-    // Track successful registrations per IP to throttle automated registrations.
-    fun validateRequest(ip: String): Boolean =
-        (successfulRegistrationsCache.getOrNull(ip) ?: 0) <= registrationNumber
+    /**
+     * Derives the cache key for a client address. Addresses are never used as keys
+     * directly, so the cache holds no client address in a recoverable form.
+     */
+    private fun addressCacheKey(clientAddress: String): String {
+        val mac = Mac.getInstance("HmacSHA256")
+        mac.init(SecretKeySpec(addressKey, "HmacSHA256"))
+        return Base64.encode(mac.doFinal(clientAddress.toByteArray(StandardCharsets.UTF_8)))
+    }
 
-    // Creates or increases successful registration attempt from IP
+    /**
+     * Tracks successful registrations per client address to throttle automated signups.
+     *
+     * Two imprecisions are accepted deliberately, because this only has to deter casual
+     * bots and is not a security boundary:
+     *  - the check happens before the increment, so concurrent requests can slip past the
+     *    limit together;
+     *  - the comparison is `<=`, so one registration more than [registrationNumber] is
+     *    allowed.
+     * Making this exact would need an atomic counter with a release on failed
+     * registration. That is not a coroutine or asynchrony question — an AtomicInteger
+     * would do — but it is extra machinery for no real gain here, so it is left out on
+     * purpose. Do not "fix" this without a reason.
+     */
+    fun validateRequest(ip: String): Boolean =
+        (successfulRegistrationsCache.getOrNull(addressCacheKey(ip)) ?: 0) <= registrationNumber
+
+    // Creates or increases successful registration attempt from a client address
     fun registerIncrease(ip: String) {
-        val current = successfulRegistrationsCache.getOrNull(ip)
+        val key = addressCacheKey(ip)
+        val current = successfulRegistrationsCache.getOrNull(key)
         if (current == null) {
-            successfulRegistrationsCache.put(ip, 1)
+            successfulRegistrationsCache.put(key, 1)
         } else {
-            successfulRegistrationsCache[ip] = current + 1
+            successfulRegistrationsCache[key] = current + 1
         }
     }
 }
