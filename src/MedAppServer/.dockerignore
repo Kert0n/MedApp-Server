@@ -8,11 +8,7 @@ htmlReport
 .DS_Store
 *.log
 .env
-
-# Host-side developer keys. The image generates its own pair at build time, so these must
-# never be copied in: a dev key in a shipped image is exactly what we are avoiding.
 .local
-src/main/resources/certs/*.pem
 
 # Closed reference data (~60 MB). It is loaded into Postgres, never into the app image,
 # and without this line it is uploaded to the Docker daemon on every build.

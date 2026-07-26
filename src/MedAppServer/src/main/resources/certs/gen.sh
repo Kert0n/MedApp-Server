@@ -1,31 +1,20 @@
 #!/bin/sh
-# Creates the local JWT signing key pair used by the dev profile.
+# Creates the JWT signing key pair next to this script, as certs/private.pem and
+# certs/public.pem — the location the application reads via classpath:certs/.
 #
-# Writes to <project>/.local/secrets/, which is git-ignored and excluded from both the
-# jar and the Docker build context: signing keys are a runtime input, never an artifact.
+# Idempotent: if both files already exist it does nothing. Keys that are there on purpose
+# stay untouched, so the image build can just run this unconditionally. Pass --force to
+# rotate deliberately; that invalidates every token already issued.
 #
-# Idempotent by default so a stray run cannot invalidate every token already issued.
-# Pass --force to rotate deliberately.
-#
-# Only needed to run the app directly on the host: the Docker image generates its own
-# pair at build time.
-#
-# Usage (from anywhere):  src/main/resources/certs/gen.sh [--force]
-# Target directory:       SECRETS_DIR=/somewhere src/main/resources/certs/gen.sh
+# Usage (from anywhere): src/main/resources/certs/gen.sh [--force]
 
 set -eu
 
-# Resolve the project root from this script's own location, so the script works no matter
-# what the current directory is.
-script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-project_root=$(CDPATH= cd -- "$script_dir/../../../.." && pwd)
+# Resolve from this script's own location so the working directory does not matter.
+certs_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
-# SECRETS_DIR lets the image build reuse this script instead of duplicating the openssl
-# invocations; see Dockerfile.
-secrets_dir="${SECRETS_DIR:-$project_root/.local/secrets}"
-
-private_key="$secrets_dir/jwt-private.pem"
-public_key="$secrets_dir/jwt-public.pem"
+private_key="$certs_dir/private.pem"
+public_key="$certs_dir/public.pem"
 
 force=0
 if [ "${1:-}" = "--force" ]; then
@@ -33,14 +22,11 @@ if [ "${1:-}" = "--force" ]; then
 fi
 
 if [ -f "$private_key" ] && [ -f "$public_key" ] && [ "$force" -eq 0 ]; then
-    echo "Key pair already present in $secrets_dir; nothing to do."
-    echo "Pass --force to rotate (this invalidates every issued token)."
+    echo "Key pair already present in $certs_dir; leaving it alone."
     exit 0
 fi
 
-mkdir -p "$secrets_dir"
-
-tmp_keypair=$(mktemp "$secrets_dir/keypair.XXXXXX")
+tmp_keypair=$(mktemp "$certs_dir/keypair.XXXXXX")
 trap 'rm -f "$tmp_keypair"' EXIT INT TERM
 
 openssl genrsa -out "$tmp_keypair" 4096

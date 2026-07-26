@@ -20,14 +20,6 @@ repositories {
     mavenCentral()
 }
 
-sourceSets {
-    main {
-        // JWT signing keys are a runtime input, not a build artifact: bootJar would
-        // otherwise package the private key into the executable jar.
-        resources.exclude("certs/*.pem")
-    }
-}
-
 dependencies {
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.1")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
