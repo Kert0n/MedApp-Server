@@ -5,7 +5,6 @@ import org.kert0n.medappserver.controller.UsingDTO
 import org.kert0n.medappserver.controller.UsingUpdateDTO
 import org.kert0n.medappserver.db.model.Using
 import org.kert0n.medappserver.db.model.isZero
-import org.kert0n.medappserver.db.model.toQuantityScale
 import org.kert0n.medappserver.db.model.UsingKey
 import org.kert0n.medappserver.db.repository.UsingRepository
 import org.kert0n.medappserver.services.orchestrators.QuantityReductionService
@@ -126,12 +125,10 @@ class UsingService(
         // Update planned amount
         // IMPORTANT! THIS MUST ALWAYS BE BEFORE QUANTITY REDUCTION, SO IT CAN PROPERLY ASSESS TOTAL PLANNED QUANTITY
         using.plannedAmount = maxOf(BigDecimal.ZERO, using.plannedAmount - quantityConsumed)
-            .toQuantityScale()
         // Reduce drug quantity
-        using.drug.quantity = (using.drug.quantity - quantityConsumed).toQuantityScale()
+        using.drug.quantity = using.drug.quantity - quantityConsumed
         // This could be replaced with reloading drug from db, but this much quicker
-        using.drug.totalPlannedAmount = (using.drug.totalPlannedAmount - quantityConsumed)
-            .toQuantityScale()
+        using.drug.totalPlannedAmount = using.drug.totalPlannedAmount - quantityConsumed
         quantityReductionService.handleQuantityReduction(using.drug)
         if (using.plannedAmount.isZero()) {
             usingRepository.delete(using)

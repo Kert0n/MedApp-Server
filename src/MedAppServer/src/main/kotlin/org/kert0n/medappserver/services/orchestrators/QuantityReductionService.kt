@@ -5,7 +5,6 @@ import org.kert0n.medappserver.db.model.QUANTITY_ROUNDING
 import org.kert0n.medappserver.db.model.QUANTITY_SCALE
 import org.kert0n.medappserver.db.model.Using
 import org.kert0n.medappserver.db.model.isZero
-import org.kert0n.medappserver.db.model.toQuantityScale
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.UsingRepository
 import org.kert0n.medappserver.services.models.UsingService
@@ -77,15 +76,17 @@ class QuantityReductionService(
         val usings = usingRepository.findAllByUsingKeyDrugId(drugId)
         if (usings.isEmpty()) return
 
-        usings.forEach { it.plannedAmount = (it.plannedAmount * factor).toQuantityScale() }
+        // Округление до scale базы делает сеттер plannedAmount, поэтому произведение здесь
+        // записывается как есть, а сумма ниже читается уже округлённой.
+        usings.forEach { it.plannedAmount = it.plannedAmount * factor }
 
         val rounded = usings.fold(BigDecimal.ZERO) { sum, using -> sum + using.plannedAmount }
-        val residual = targetTotal.toQuantityScale() - rounded
+        val residual = targetTotal - rounded
         if (!residual.isZero()) {
             val adjusted = usings.maxWith(
                 compareBy<Using>({ it.plannedAmount }, { it.usingKey.userId })
             )
-            adjusted.plannedAmount = (adjusted.plannedAmount + residual).toQuantityScale()
+            adjusted.plannedAmount = adjusted.plannedAmount + residual
         }
 
         usingRepository.saveAll(usings)

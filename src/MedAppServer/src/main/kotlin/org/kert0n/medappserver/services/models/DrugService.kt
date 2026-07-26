@@ -5,7 +5,6 @@ import org.kert0n.medappserver.controller.DrugDTO
 import org.kert0n.medappserver.controller.DrugUpdateDTO
 import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.MedKit
-import org.kert0n.medappserver.db.model.toQuantityScale
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.services.orchestrators.QuantityReductionService
 import org.slf4j.LoggerFactory
@@ -134,7 +133,7 @@ class DrugService(
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Insufficient quantity available")
         }
 
-        drug.quantity = (drug.quantity - quantity).toQuantityScale()
+        drug.quantity = drug.quantity - quantity
         drugRepository.save(drug)
         return quantityReductionService.handleQuantityReduction(drug)
 
