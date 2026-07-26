@@ -88,7 +88,12 @@ CREATE INDEX ix_usings_drug_id ON usings (drug_id);
 -- Справочник препаратов (данные из скраппера Vidal)
 -- ============================================================
 
-CREATE TABLE form_types
+-- IF NOT EXISTS у этих двух таблиц не для красоты: их создаёт и наполняет дамп
+-- справочника (01-load-catalogue.sh), который применяется раньше. Без IF NOT EXISTS
+-- второй по порядку скрипт падал бы с "relation already exists" — проверено в обоих
+-- направлениях. Определения ниже совпадают с дамповыми, поэтому файл остаётся
+-- самодостаточным и когда дампа нет.
+CREATE TABLE IF NOT EXISTS form_types
 (
     id   uuid         NOT NULL,
     name varchar(100) NOT NULL,
@@ -97,7 +102,7 @@ CREATE TABLE form_types
     CONSTRAINT form_types_name_key UNIQUE (name)
 );
 
-CREATE TABLE quantity_units
+CREATE TABLE IF NOT EXISTS quantity_units
 (
     id   uuid        NOT NULL,
     name varchar(30) NOT NULL,
@@ -125,8 +130,10 @@ CREATE TABLE parsed_drugs
     CONSTRAINT parsed_drugs_quantity_unit_fkey FOREIGN KEY (quantity_unit_id) REFERENCES quantity_units (id)
 );
 
-CREATE INDEX ix_drugs_name ON parsed_drugs (name);
-CREATE INDEX ix_drugs_active_substance ON parsed_drugs (active_substance);
-CREATE INDEX ix_drugs_manufacturer ON parsed_drugs (manufacturer);
-CREATE INDEX idx_drugs_form_type_id ON parsed_drugs (form_type_id);
-CREATE INDEX idx_drugs_quantity_unit_id ON parsed_drugs (quantity_unit_id);
+-- Имена по своей таблице: ix_drugs_* сталкивались с индексами таблицы drugs из дампа
+-- справочника, а имена индексов в Postgres уникальны на схему.
+CREATE INDEX ix_parsed_drugs_name ON parsed_drugs (name);
+CREATE INDEX ix_parsed_drugs_active_substance ON parsed_drugs (active_substance);
+CREATE INDEX ix_parsed_drugs_manufacturer ON parsed_drugs (manufacturer);
+CREATE INDEX ix_parsed_drugs_form_type_id ON parsed_drugs (form_type_id);
+CREATE INDEX ix_parsed_drugs_quantity_unit_id ON parsed_drugs (quantity_unit_id);
