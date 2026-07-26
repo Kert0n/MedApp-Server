@@ -26,7 +26,6 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
 import org.springframework.web.server.ResponseStatusException
 import tools.jackson.databind.ObjectMapper
-import java.time.Instant
 import java.util.*
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -46,7 +45,6 @@ class UsingsControllerTest {
 
     private val userId = UUID.randomUUID()
     private val drugId = UUID.randomUUID()
-    private val now = Instant.now()
 
     @BeforeEach
     fun setup() {
@@ -68,18 +66,14 @@ class UsingsControllerTest {
             usingKey = UsingKey(userId, drugId),
             user = user,
             drug = drug,
-            plannedAmount = qty(30.0),
-            createdAt = now,
-            lastModified = now
+            plannedAmount = qty(30.0)
         )
     }
 
     private fun createTestUsingDTO(): UsingDTO = UsingDTO(
         userId = userId,
         drugId = drugId,
-        plannedAmount = qty(30.0),
-        createdAt = now,
-        lastModified = now
+        plannedAmount = qty(30.0)
     )
 
     @Test

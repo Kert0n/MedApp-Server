@@ -16,7 +16,6 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 import java.math.BigDecimal
-import java.time.Instant
 import java.util.*
 
 @Service
@@ -81,9 +80,7 @@ class UsingService(
             usingKey = UsingKey(userId, createDTO.drugId),
             user = user,
             drug = drug,
-            plannedAmount = createDTO.plannedAmount,
-            lastModified = Instant.now(),
-            createdAt = Instant.now()
+            plannedAmount = createDTO.plannedAmount
         )
 
         return usingRepository.save(using)
@@ -106,7 +103,6 @@ class UsingService(
         }
 
         using.plannedAmount = updateDTO.plannedAmount
-        using.lastModified = Instant.now()
 
         return usingRepository.save(using)
     }
@@ -141,8 +137,6 @@ class UsingService(
             usingRepository.delete(using)
             return null
         }
-        using.lastModified = Instant.now()
-
         return usingRepository.save(using)
     }
 
@@ -161,9 +155,7 @@ class UsingService(
         return UsingDTO(
             userId = using.user.id,
             drugId = using.drug.id,
-            plannedAmount = using.plannedAmount,
-            createdAt = using.createdAt,
-            lastModified = using.lastModified
+            plannedAmount = using.plannedAmount
         )
     }
 }

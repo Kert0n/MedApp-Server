@@ -659,14 +659,6 @@ components:
         plannedAmount:
           type: number
           description: Planned total amount for the course
-        createdAt:
-          type: string
-          format: date-time
-          description: Date when the plan was created
-        lastModified:
-          type: string
-          format: date-time
-          description: Date of last modification
     DrugUpdateDTO:
       type: object
       description: Request to update a drug

@@ -4,7 +4,6 @@ import jakarta.persistence.*
 import jakarta.validation.constraints.NotNull
 import java.io.Serializable
 import java.math.BigDecimal
-import java.time.Instant
 import java.util.*
 
 
@@ -33,15 +32,7 @@ class Using(
 
     @NotNull
     @Column(name = "planned_amount", nullable = false, precision = 19, scale = QUANTITY_SCALE)
-    var plannedAmount: BigDecimal,
-
-    @NotNull
-    @Column(name = "last_modified", nullable = false)
-    var lastModified: Instant = Instant.now(),
-
-    @NotNull
-    @Column(name = "created_at", nullable = false)
-    var createdAt: Instant = Instant.now()
+    var plannedAmount: BigDecimal
 ) {
 
     override fun equals(other: Any?): Boolean {

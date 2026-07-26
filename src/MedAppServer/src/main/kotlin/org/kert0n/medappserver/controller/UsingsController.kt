@@ -17,7 +17,6 @@ import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
-import java.time.Instant
 import java.math.BigDecimal
 import java.util.*
 import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBody
@@ -180,11 +179,7 @@ data class UsingDTO(
     @Schema(description = "Drug identifier")
     val drugId: UUID,
     @Schema(description = "Planned total amount for the course")
-    val plannedAmount: BigDecimal,
-    @Schema(description = "Date when the plan was created")
-    val createdAt: Instant,
-    @Schema(description = "Date of last modification")
-    val lastModified: Instant
+    val plannedAmount: BigDecimal
 )
 
 @Schema(description = "Create treatment plan request")
