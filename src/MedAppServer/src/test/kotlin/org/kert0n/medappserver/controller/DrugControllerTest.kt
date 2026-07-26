@@ -105,7 +105,7 @@ class DrugControllerTest {
         whenever(drugService.toDrugDTO(drug)).thenReturn(dto)
 
         mockMvc.perform(
-            get("/drug/$drugId")
+            get("/v1/drug/$drugId")
                 .with(jwt().jwt { it.subject(userId.toString()) })
         )
             .andExpect(status().isOk)
@@ -121,7 +121,7 @@ class DrugControllerTest {
             .thenThrow(ResponseStatusException(HttpStatus.NOT_FOUND, "Drug not found"))
 
         mockMvc.perform(
-            get("/drug/$drugId")
+            get("/v1/drug/$drugId")
                 .with(jwt().jwt { it.subject(userId.toString()) })
         )
             .andExpect(status().isNotFound)
@@ -129,7 +129,7 @@ class DrugControllerTest {
 
     @Test
     fun `GET drug by id - returns 401 without authentication`() {
-        mockMvc.perform(get("/drug/$drugId"))
+        mockMvc.perform(get("/v1/drug/$drugId"))
             .andExpect(status().isUnauthorized)
     }
 
@@ -148,7 +148,7 @@ class DrugControllerTest {
         )
 
         mockMvc.perform(
-            post("/drug")
+            post("/v1/drug")
                 .with(jwt().jwt { it.subject(userId.toString()) })
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(createDTO))
@@ -167,7 +167,7 @@ class DrugControllerTest {
         val updateDTO = DrugUpdateDTO(name = "Updated Aspirin")
 
         mockMvc.perform(
-            put("/drug/$drugId")
+            put("/v1/drug/$drugId")
                 .with(jwt().jwt { it.subject(userId.toString()) })
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(updateDTO))
@@ -181,7 +181,7 @@ class DrugControllerTest {
         doNothing().whenever(drugService).delete(drugId, userId)
 
         mockMvc.perform(
-            delete("/drug/$drugId")
+            delete("/v1/drug/$drugId")
                 .with(jwt().jwt { it.subject(userId.toString()) })
         )
             .andExpect(status().isNoContent)
@@ -194,7 +194,7 @@ class DrugControllerTest {
         drug.totalPlannedAmount = qty(30.0)
 
         mockMvc.perform(
-            get("/drug/quantity/$drugId")
+            get("/v1/drug/quantity/$drugId")
                 .with(jwt().jwt { it.subject(userId.toString()) })
         )
             .andExpect(status().isOk)
@@ -213,7 +213,7 @@ class DrugControllerTest {
         val consumeRequest = ConsumeRequest(quantity = qty(10.0))
 
         mockMvc.perform(
-            put("/drug/consume/$drugId")
+            put("/v1/drug/consume/$drugId")
                 .with(jwt().jwt { it.subject(userId.toString()) })
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(consumeRequest))
@@ -233,7 +233,7 @@ class DrugControllerTest {
         val moveRequest = MoveDrugRequest(targetMedKitId = targetMedKitId)
 
         mockMvc.perform(
-            put("/drug/move/$drugId")
+            put("/v1/drug/move/$drugId")
                 .with(jwt().jwt { it.subject(userId.toString()) })
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(moveRequest))
@@ -252,7 +252,7 @@ class DrugControllerTest {
         whenever(vidalDrugService.fuzzySearchByName("asp", 10)).thenReturn(listOf(vd))
 
         mockMvc.perform(
-            get("/drug/template/search")
+            get("/v1/drug/template/search")
                 .with(jwt().jwt { it.subject(userId.toString()) })
                 .param("searchTerm", "asp")
         )
@@ -271,7 +271,7 @@ class DrugControllerTest {
         whenever(vidalDrugService.fuzzySearchByName("аспир", 10)).thenReturn(listOf(vd))
 
         mockMvc.perform(
-            get("/drug/template/search")
+            get("/v1/drug/template/search")
                 .with(jwt().jwt { it.subject(userId.toString()) })
                 .param("searchTerm", "аспир")
         )
@@ -291,7 +291,7 @@ class DrugControllerTest {
         whenever(vidalDrugService.findById(templateId)).thenReturn(vd)
 
         mockMvc.perform(
-            get("/drug/template/$templateId")
+            get("/v1/drug/template/$templateId")
                 .with(jwt().jwt { it.subject(userId.toString()) })
         )
             .andExpect(status().isOk)
@@ -304,7 +304,7 @@ class DrugControllerTest {
         whenever(vidalDrugService.findById(templateId)).thenReturn(null)
 
         mockMvc.perform(
-            get("/drug/template/$templateId")
+            get("/v1/drug/template/$templateId")
                 .with(jwt().jwt { it.subject(userId.toString()) })
         )
             .andExpect(status().isNotFound)

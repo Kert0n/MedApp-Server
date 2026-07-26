@@ -56,7 +56,7 @@ class AuthControllerTest {
     @Test
     fun `POST register - returns 403 with wrong secret`() {
         mockMvc.perform(
-            post("/auth/register")
+            post("/v1/auth/register")
                 .header("X-Registration-Token", "wrong-secret")
         )
             .andExpect(status().isForbidden)
@@ -71,7 +71,7 @@ class AuthControllerTest {
         whenever(userService.registerNewUser(any(), eq("generated-key"), any())).thenReturn(user)
 
         mockMvc.perform(
-            post("/auth/register")
+            post("/v1/auth/register")
                 .header("X-Registration-Token", "test-secret")
         )
             .andExpect(status().isOk)
@@ -83,7 +83,7 @@ class AuthControllerTest {
         whenever(securityService.validateRequest(any())).thenReturn(false)
 
         mockMvc.perform(
-            post("/auth/register")
+            post("/v1/auth/register")
                 .header("X-Registration-Token", "test-secret")
         )
             .andExpect(status().isGatewayTimeout)
@@ -98,7 +98,7 @@ class AuthControllerTest {
         whenever(securityService.generateToken(any<User>(), any())).thenReturn("jwt-token-123")
 
         mockMvc.perform(
-            get("/auth/login")
+            get("/v1/auth/login")
                 .with(httpBasic(userId.toString(), "password"))
         )
             .andExpect(status().isOk)
@@ -113,7 +113,7 @@ class AuthControllerTest {
         whenever(userService.loadUserByUsername(userId.toString())).thenReturn(user)
 
         mockMvc.perform(
-            get("/auth/login")
+            get("/v1/auth/login")
                 .with(httpBasic(userId.toString(), "wrong-password"))
         )
             .andExpect(status().isUnauthorized)

@@ -84,7 +84,7 @@ class UsingsControllerTest {
         whenever(usingService.toUsingDTO(using)).thenReturn(dto)
 
         mockMvc.perform(
-            get("/using")
+            get("/v1/using")
                 .with(jwt().jwt { it.subject(userId.toString()) })
         )
             .andExpect(status().isOk)
@@ -95,7 +95,7 @@ class UsingsControllerTest {
 
     @Test
     fun `GET all usings - returns 401 without authentication`() {
-        mockMvc.perform(get("/using"))
+        mockMvc.perform(get("/v1/using"))
             .andExpect(status().isUnauthorized)
     }
 
@@ -107,7 +107,7 @@ class UsingsControllerTest {
         whenever(usingService.toUsingDTO(using)).thenReturn(dto)
 
         mockMvc.perform(
-            get("/using/drug/$drugId")
+            get("/v1/using/drug/$drugId")
                 .with(jwt().jwt { it.subject(userId.toString()) })
         )
             .andExpect(status().isOk)
@@ -121,7 +121,7 @@ class UsingsControllerTest {
             .thenThrow(ResponseStatusException(HttpStatus.NOT_FOUND, "Not found"))
 
         mockMvc.perform(
-            get("/using/drug/$drugId")
+            get("/v1/using/drug/$drugId")
                 .with(jwt().jwt { it.subject(userId.toString()) })
         )
             .andExpect(status().isNotFound)
@@ -137,7 +137,7 @@ class UsingsControllerTest {
         val createDTO = UsingCreateDTO(drugId = drugId, plannedAmount = qty(30.0))
 
         mockMvc.perform(
-            post("/using")
+            post("/v1/using")
                 .with(jwt().jwt { it.subject(userId.toString()) })
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(createDTO))
@@ -154,7 +154,7 @@ class UsingsControllerTest {
         val createDTO = UsingCreateDTO(drugId = drugId, plannedAmount = qty(30.0))
 
         mockMvc.perform(
-            post("/using")
+            post("/v1/using")
                 .with(jwt().jwt { it.subject(userId.toString()) })
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(createDTO))
@@ -172,7 +172,7 @@ class UsingsControllerTest {
         val updateDTO = UsingUpdateDTO(plannedAmount = qty(50.0))
 
         mockMvc.perform(
-            put("/using/drug/$drugId")
+            put("/v1/using/drug/$drugId")
                 .with(jwt().jwt { it.subject(userId.toString()) })
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(updateDTO))
@@ -191,7 +191,7 @@ class UsingsControllerTest {
         val intakeRequest = IntakeRequest(quantityConsumed = qty(10.0), intakeId = UUID.randomUUID())
 
         mockMvc.perform(
-            post("/using/drug/$drugId/intake")
+            post("/v1/using/drug/$drugId/intake")
                 .with(jwt().jwt { it.subject(userId.toString()) })
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(intakeRequest))
@@ -208,7 +208,7 @@ class UsingsControllerTest {
         val intakeRequest = IntakeRequest(quantityConsumed = qty(100.0), intakeId = UUID.randomUUID())
 
         mockMvc.perform(
-            post("/using/drug/$drugId/intake")
+            post("/v1/using/drug/$drugId/intake")
                 .with(jwt().jwt { it.subject(userId.toString()) })
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(intakeRequest))
@@ -221,7 +221,7 @@ class UsingsControllerTest {
         doNothing().whenever(usingService).deleteTreatmentPlan(userId, drugId)
 
         mockMvc.perform(
-            delete("/using/drug/$drugId")
+            delete("/v1/using/drug/$drugId")
                 .with(jwt().jwt { it.subject(userId.toString()) })
         )
             .andExpect(status().isNoContent)

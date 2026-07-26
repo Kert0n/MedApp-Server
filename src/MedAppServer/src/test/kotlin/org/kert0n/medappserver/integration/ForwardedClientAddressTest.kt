@@ -36,7 +36,7 @@ class ForwardedClientAddressTest {
     private val client: HttpClient = HttpClient.newHttpClient()
 
     private fun register(forwardedFor: String): Int {
-        val request = HttpRequest.newBuilder(URI.create("http://localhost:$port/auth/register"))
+        val request = HttpRequest.newBuilder(URI.create("http://localhost:$port/v1/auth/register"))
             .header("X-Registration-Token", "test-secret")
             .header("X-Forwarded-For", forwardedFor)
             .POST(HttpRequest.BodyPublishers.noBody())

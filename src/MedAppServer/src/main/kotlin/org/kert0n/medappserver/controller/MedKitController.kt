@@ -22,7 +22,7 @@ import java.util.*
 import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBody
 
 @RestController
-@RequestMapping("/med-kit")
+@RequestMapping("/v1/med-kit")
 @Tag(name = "MedKit Management", description = "APIs for managing medicine kits")
 class MedKitController(
     private val medKitService: MedKitService,
@@ -59,7 +59,7 @@ class MedKitController(
         ]
     )
     fun createNew(authentication: Authentication): MedKitCreatedResponse {
-        logger.debug("POST /med-kit by user {}", authentication.userId)
+        logger.debug("POST /v1/med-kit by user {}", authentication.userId)
         val medKit = medKitService.createNew(authentication.userId)
         return MedKitCreatedResponse(medKit.id)
     }
@@ -76,7 +76,7 @@ class MedKitController(
         authentication: Authentication,
         @Parameter(description = "Medkit ID") @PathVariable id: UUID
     ): MedKitDTO {
-        logger.debug("GET /med-kit/{} by user {}", id, authentication.userId)
+        logger.debug("GET /v1/med-kit/{} by user {}", id, authentication.userId)
         val medKit = medKitService.findByIdForUser(id, authentication.userId)
         return medKitDrugServices.toMedKitDTO(medKit)
     }
@@ -94,7 +94,7 @@ class MedKitController(
         ]
     )
     fun getAllMedKits(authentication: Authentication): Set<MedKitSummaryDTO> {
-        logger.debug("GET /med-kit by user {}", authentication.userId)
+        logger.debug("GET /v1/med-kit by user {}", authentication.userId)
         return medKitService.findMedKitSummaries(authentication.userId)
     }
 
@@ -115,7 +115,7 @@ class MedKitController(
         authentication: Authentication,
         @Parameter(description = "Medkit ID") @PathVariable medKitId: UUID
     ): String {
-        logger.debug("POST /med-kit/{}/share by user {}", medKitId, authentication.userId)
+        logger.debug("POST /v1/med-kit/{}/share by user {}", medKitId, authentication.userId)
         return medKitService.generateMedKitShareKey(medKitId, authentication.userId)
     }
 
@@ -132,7 +132,7 @@ class MedKitController(
         @SwaggerRequestBody(description = "Join request")
         @Valid @RequestBody request: JoinMedKitRequest
     ): MedKitDTO {
-        logger.debug("POST /med-kit/join by user {}", authentication.userId)
+        logger.debug("POST /v1/med-kit/join by user {}", authentication.userId)
         val medKit = medKitService.joinMedKitByKey(request.key, authentication.userId)
         return medKitDrugServices.toMedKitDTO(medKit)
     }
@@ -150,7 +150,7 @@ class MedKitController(
         authentication: Authentication,
         @Parameter(description = "Medkit ID") @PathVariable id: UUID
     ) {
-        logger.debug("DELETE /med-kit/{}/leave by user {}", id, authentication.userId)
+        logger.debug("DELETE /v1/med-kit/{}/leave by user {}", id, authentication.userId)
         medKitDrugServices.removeUserFromMedKit(id, authentication.userId)
     }
 
@@ -163,7 +163,7 @@ class MedKitController(
             "ceased to exist as a shared thing — it was taken away or was damaged beyond use. " +
             "Pass transferToMedKitId to move the drugs into another of your medkits instead of " +
             "discarding them. To leave a shared medkit without destroying it, use " +
-            "DELETE /med-kit/{id}/leave."
+            "DELETE /v1/med-kit/{id}/leave."
     )
     @ApiResponses(
         value = [
@@ -177,7 +177,7 @@ class MedKitController(
         @Parameter(description = "Target medkit ID to transfer drugs")
         @RequestParam(required = false) transferToMedKitId: UUID?
     ) {
-        logger.debug("DELETE /med-kit/{} by user {}, transfer to: {}", id, authentication.userId, transferToMedKitId)
+        logger.debug("DELETE /v1/med-kit/{} by user {}, transfer to: {}", id, authentication.userId, transferToMedKitId)
         medKitDrugServices.delete(id, authentication.userId, transferToMedKitId)
     }
 }

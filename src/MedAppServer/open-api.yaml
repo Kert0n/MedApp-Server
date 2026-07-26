@@ -20,7 +20,7 @@ tags:
 - name: Treatment Plans
   description: Endpoints for treatment plans and intake tracking
 paths:
-  /using/drug/{drugId}:
+  /v1/using/drug/{drugId}:
     get:
       tags:
       - Treatment Plans
@@ -95,7 +95,7 @@ paths:
           description: Treatment plan deleted
         "404":
           description: Treatment plan not found
-  /drug/{id}:
+  /v1/drug/{id}:
     get:
       tags:
       - Drug Management
@@ -170,7 +170,7 @@ paths:
           description: Drug deleted successfully
         "404":
           description: Drug not found
-  /drug/move/{id}:
+  /v1/drug/move/{id}:
     put:
       tags:
       - Drug Management
@@ -203,7 +203,7 @@ paths:
           description: Invalid target medkit
         "404":
           description: Drug or medkit not found
-  /drug/consume/{id}:
+  /v1/drug/consume/{id}:
     put:
       tags:
       - Drug Management
@@ -236,7 +236,7 @@ paths:
           description: Invalid quantity
         "404":
           description: Drug not found
-  /using:
+  /v1/using:
     get:
       tags:
       - Treatment Plans
@@ -276,7 +276,7 @@ paths:
           description: Invalid input
         "409":
           description: Treatment plan already exists
-  /using/drug/{drugId}/intake:
+  /v1/using/drug/{drugId}/intake:
     post:
       tags:
       - Treatment Plans
@@ -309,7 +309,7 @@ paths:
           description: Invalid intake amount
         "404":
           description: Treatment plan not found
-  /med-kit:
+  /v1/med-kit:
     get:
       tags:
       - MedKit Management
@@ -340,7 +340,7 @@ paths:
                 $ref: "#/components/schemas/MedKitCreatedResponse"
         "401":
           description: Unauthorized
-  /med-kit/{medKitId}/share:
+  /v1/med-kit/{medKitId}/share:
     post:
       tags:
       - MedKit Management
@@ -367,7 +367,7 @@ paths:
                 type: string
         "404":
           description: Medkit not found or access denied
-  /med-kit/join:
+  /v1/med-kit/join:
     post:
       tags:
       - MedKit Management
@@ -390,7 +390,7 @@ paths:
                 $ref: "#/components/schemas/MedKitDTO"
         "404":
           description: Share key expired or invalid
-  /drug:
+  /v1/drug:
     post:
       tags:
       - Drug Management
@@ -415,7 +415,7 @@ paths:
           description: Invalid input
         "403":
           description: User does not have access to the medicine kit
-  /auth/register:
+  /v1/auth/register:
     post:
       tags:
       - Authentication
@@ -441,7 +441,7 @@ paths:
           description: Invalid registration secret
         "504":
           description: Too many registration attempts
-  /user:
+  /v1/user:
     get:
       tags:
       - User Data
@@ -458,7 +458,7 @@ paths:
                 $ref: "#/components/schemas/UserDto"
         "401":
           description: Unauthorized
-  /med-kit/{id}:
+  /v1/med-kit/{id}:
     get:
       tags:
       - MedKit Management
@@ -491,7 +491,7 @@ paths:
         \ kit has ceased to exist as a shared thing — it was taken away or was damaged\
         \ beyond use. Pass transferToMedKitId to move the drugs into another of your\
         \ medkits instead of discarding them. To leave a shared medkit without destroying\
-        \ it, use DELETE /med-kit/{id}/leave."
+        \ it, use DELETE /v1/med-kit/{id}/leave."
       operationId: deleteMedKit
       parameters:
       - name: id
@@ -513,7 +513,7 @@ paths:
           description: Medkit deleted for all participants
         "404":
           description: Medkit not found
-  /drug/template/{id}:
+  /v1/drug/template/{id}:
     get:
       tags:
       - Drug Management
@@ -537,7 +537,7 @@ paths:
                 $ref: "#/components/schemas/DrugTemplateDTO"
         "404":
           description: Template not found
-  /drug/template/search:
+  /v1/drug/template/search:
     get:
       tags:
       - Drug Management
@@ -571,7 +571,7 @@ paths:
                 $ref: "#/components/schemas/DrugTemplateDTO"
         "400":
           description: Invalid search term
-  /drug/quantity/{id}:
+  /v1/drug/quantity/{id}:
     get:
       tags:
       - Drug Management
@@ -595,7 +595,7 @@ paths:
                 $ref: "#/components/schemas/QuantityInfo"
         "404":
           description: Drug not found
-  /auth/login:
+  /v1/auth/login:
     get:
       tags:
       - Authentication
@@ -611,7 +611,7 @@ paths:
                 type: string
         "401":
           description: Invalid credentials
-  /med-kit/{id}/leave:
+  /v1/med-kit/{id}/leave:
     delete:
       tags:
       - MedKit Management

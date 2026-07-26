@@ -96,7 +96,7 @@ class IntakeIdempotencyTest {
 
     private fun intake(user: User, drug: Drug, amount: Double, intakeId: UUID) =
         mockMvc.perform(
-            post("/using/drug/${drug.id}/intake")
+            post("/v1/using/drug/${drug.id}/intake")
                 .with(jwt().jwt { it.subject(user.id.toString()) })
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"quantityConsumed":$amount,"intakeId":"$intakeId"}""")
