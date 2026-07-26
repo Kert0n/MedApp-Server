@@ -22,7 +22,10 @@ import java.util.*
 @RequestMapping("/auth")
 @Tag(name = "Authentication", description = "Public endpoints for registration and token issuance")
 class AuthController(
-    @Value($$"${registration.secret}") private val registrationSecret: String,
+    // Пустая строка по умолчанию, а не отсутствие значения: так секрет может прийти любым
+    // путём (переменная окружения, файл секрета через configtree, профиль), а проверка
+    // ниже одинаково поймает случай, когда он не пришёл ниоткуда.
+    @Value($$"${registration.secret:}") private val registrationSecret: String,
     private val userService: UserService,
     private val securityService: SecurityService
 ) {

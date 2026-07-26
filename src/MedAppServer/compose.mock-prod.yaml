@@ -1,0 +1,69 @@
+# Прод-подобный стек для локальной проверки.
+#
+# Отличия от прода ровно два: секреты заведомо ненастоящие (поэтому файл спокойно лежит в
+# git) и нет Caddy, чтобы не выпускать сертификат на настоящий домен. Всё остальное как в
+# проде: ddl-auto=validate, закрытые тексты ошибок, реальный Postgres, приложение в
+# контейнере.
+#
+# Нужен затем, чтобы продовый путь можно было проверить, не имея продовых секретов.
+#
+# Запуск: docker compose -f compose.mock-prod.yaml up -d --build
+
+services:
+  postgres:
+    image: 'postgres:18.3-trixie'
+    environment:
+      - 'POSTGRES_DB=medapp-server-db'
+      - 'POSTGRES_USER=medapp'
+      - 'POSTGRES_PASSWORD=mock-prod-password'
+    volumes:
+      - mock_prod_postgres_data:/var/lib/postgresql
+      - ./db/load-catalogue.sh:/docker-entrypoint-initdb.d/01-load-catalogue.sh:ro
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/02-schema.sql:ro
+      - ./db/fill-parsed-drugs.sql:/docker-entrypoint-initdb.d/03-fill-parsed-drugs.sql:ro
+      - ./init-scripts:/catalogue:ro
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U medapp -d medapp-server-db" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - mock-prod
+
+  med-app-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - 'SPRING_PROFILES_ACTIVE=mock-prod'
+      - 'SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/medapp-server-db'
+      # Те же две переменные, что в проде: смысл профиля в том, чтобы поведение совпадало.
+      # Caddy здесь нет, но native позволяет проверить, что лимит регистраций считается по
+      # X-Forwarded-For, а не по одному общему адресу.
+      - 'SERVER_FORWARD_HEADERS_STRATEGY=native'
+      - 'SPRING_WEB_ERROR_INCLUDE_MESSAGE=never'
+      - 'SPRING_WEB_ERROR_INCLUDE_BINDING_ERRORS=never'
+      - 'SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT=60000'
+    ports:
+      # В отличие от прода порт публикуется: по стенду надо стучать руками. Снаружи 18080,
+      # а не 8080, чтобы стенд можно было поднять, не останавливая приложение, запущенное
+      # локально из IDE, — оно занимает 8080.
+      - "18080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    networks:
+      - mock-prod
+
+volumes:
+  mock_prod_postgres_data:
+
+networks:
+  mock-prod:
+    driver: bridge

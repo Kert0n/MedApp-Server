@@ -1,23 +1,44 @@
+# Продовый стек. Запуск: docker compose -f compose.yaml up -d --build
+#
+# Пароль Postgres лежит в файле secrets/postgres_password, которого нет в git. Создать
+# один раз:
+#
+#   mkdir -p secrets && openssl rand -base64 32 > secrets/postgres_password
+#
+# Приложение получает тот же секрет через configtree: Spring читает /run/secrets как
+# дерево свойств, где имя файла и есть имя свойства — поэтому второй секрет смонтирован
+# под именем spring.datasource.password и указывает на тот же файл. Значение не
+# дублируется, обёртка над entrypoint не нужна.
+#
+# Локальная разработка: приложение с профилем dev само поднимает compose.dev.yaml.
+# Прод-подобная проверка без продовых секретов: compose.mock-prod.yaml.
+
 services:
   postgres:
     image: 'postgres:18.3-trixie'
     environment:
       - 'POSTGRES_DB=medapp-server-db'
-      - 'POSTGRES_USER=${POSTGRES_USER:?POSTGRES_USER must be set}'
-      - 'POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}'
+      # Логин секретом не является, поэтому здесь явным значением.
+      - 'POSTGRES_USER=medapp'
+      # Официальный образ поддерживает *_FILE из коробки.
+      - 'POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password'
+    secrets:
+      - postgres_password
     volumes:
       - postgres_data:/var/lib/postgresql
-      # Схема приложения. Раньше здесь монтировался ./init-scripts/dump.sql, которого не
-      # существует: Docker создавал каталог с таким именем, init не выполнялся, pg_trgm не
-      # ставился, и поиск по справочнику падал с 500.
-      #
-      # Справочник Vidal сюда НЕ монтируется: это закрытые данные вне git, на чистом клоне
-      # файла нет, и безусловный монтаж воспроизвёл бы ровно тот же баг. Он заливается
-      # отдельным шагом, см. README.
-      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      # Порядок важен, entrypoint применяет файлы по алфавиту:
+      # 01 — справочник, если дамп есть (form_types, quantity_units, drugs с данными);
+      # 02 — схема приложения;
+      # 03 — перенос drugs -> parsed_drugs.
+      - ./db/load-catalogue.sh:/docker-entrypoint-initdb.d/01-load-catalogue.sh:ro
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/02-schema.sql:ro
+      - ./db/fill-parsed-drugs.sql:/docker-entrypoint-initdb.d/03-fill-parsed-drugs.sql:ro
+      # Каталогом, а не файлом: дампа в git нет, и при отсутствии файла Docker создал бы
+      # на его месте каталог, из-за чего init базы падает. Отсутствие каталога безвредно.
+      - ./init-scripts:/catalogue:ro
     # Порт наружу не публикуется: доступ только из сети data.
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d medapp-server-db" ]
+      test: [ "CMD-SHELL", "pg_isready -U medapp -d medapp-server-db" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -32,20 +53,33 @@ services:
     environment:
       - 'SPRING_PROFILES_ACTIVE=prod'
       - 'SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/medapp-server-db'
-      - 'SPRING_DATASOURCE_USERNAME=${POSTGRES_USER:?POSTGRES_USER must be set}'
-      - 'SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}'
-      # Пробрасывается только если задан в окружении или .env. Не обязателен: в образе с
-      # application-prod.properties секрет уже есть, а на чистом клоне его надо задать —
-      # иначе приложение осознанно падает при старте.
-      - REGISTRATION_SECRET
+      - 'SPRING_DATASOURCE_USERNAME=medapp'
+      # Секреты приходят файлами через configtree: имя файла в /run/secrets становится
+      # именем свойства, поэтому пароль и барьер регистрации не идут переменными.
+      - 'SPRING_CONFIG_IMPORT=optional:configtree:/run/secrets/'
+      # Переменными окружения, а не в properties, сознательно: они перебивают любые
+      # значения из application-prod.properties, который лежит вне git и которому нельзя
+      # доверять в этих двух вопросах.
+      #
+      # За Caddy request.remoteAddr — адрес контейнера прокси, поэтому без native лимит
+      # регистраций остаётся одним общим счётчиком на всех клиентов. Верно только пока
+      # порт бэкенда не публикуется, что и обеспечивают сети ниже.
+      - 'SERVER_FORWARD_HEADERS_STRATEGY=native'
+      # Наружу ни текста исключений, ни отклонённых значений.
+      - 'SPRING_WEB_ERROR_INCLUDE_MESSAGE=never'
+      - 'SPRING_WEB_ERROR_INCLUDE_BINDING_ERRORS=never'
       - 'SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT=60000'
+    secrets:
+      - spring.datasource.password
+      - registration.secret
     expose:
       - "8080"
     depends_on:
       postgres:
         condition: service_healthy
-    # В edge — чтобы был виден Caddy, в data — чтобы видеть Postgres. Наружу не публикуется:
-    # на этом держится доверие к X-Forwarded-For (forward-headers-strategy=native).
+    # В edge — чтобы был виден Caddy, в data — чтобы видеть Postgres. Наружу не
+    # публикуется: на этом держится доверие к X-Forwarded-For
+    # (forward-headers-strategy=native).
     networks:
       - edge
       - data
@@ -71,6 +105,16 @@ services:
     networks:
       - edge
     restart: unless-stopped
+
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password
+  # Тот же файл под именем свойства Spring: configtree читает /run/secrets, где имя файла
+  # становится именем свойства.
+  spring.datasource.password:
+    file: ./secrets/postgres_password
+  registration.secret:
+    file: ./secrets/registration.secret
 
 volumes:
   postgres_data:

@@ -2,12 +2,11 @@
 # dev: spring-boot-docker-compose подхватывает этот файл (см. spring.docker.compose.file в
 # application-dev.properties) и сам подставляет параметры подключения.
 #
-# Отдельный файл, а не compose.yaml, по одной причине: в продовом compose.yaml логин и
-# пароль обязательны и берутся из .env, чтобы не лежать в репозитории. Здесь база
-# одноразовая и живёт на localhost, поэтому значения захардкожены — иначе запуск из IDE
-# требовал бы .env, чего быть не должно.
+# Значения захардкожены: база одноразовая, живёт на localhost и пересоздаётся. Требовать
+# внешние секреты для запуска из IDE было бы неправильно.
 #
-# Продовый стек поднимается своим файлом: docker compose -f compose.yaml up -d
+# Прод: docker compose -f compose.yaml up -d
+# Прод-подобная проверка: docker compose -f compose.mock-prod.yaml up -d --build
 
 services:
   postgres:
@@ -17,8 +16,16 @@ services:
       - 'POSTGRES_USER=medapp'
       - 'POSTGRES_PASSWORD=medapp'
     volumes:
-      # Та же схема, что и в проде: локальная база не отличается от продовой.
-      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      # Порядок важен, entrypoint применяет файлы по алфавиту:
+      # 01 — справочник, если дамп есть (form_types, quantity_units, drugs с данными);
+      # 02 — схема приложения;
+      # 03 — перенос drugs -> parsed_drugs.
+      - ./db/load-catalogue.sh:/docker-entrypoint-initdb.d/01-load-catalogue.sh:ro
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/02-schema.sql:ro
+      - ./db/fill-parsed-drugs.sql:/docker-entrypoint-initdb.d/03-fill-parsed-drugs.sql:ro
+      # Каталогом, а не файлом: дампа в git нет, и при отсутствии файла Docker создал бы
+      # на его месте каталог, из-за чего init базы падает. Отсутствие каталога безвредно.
+      - ./init-scripts:/catalogue:ro
     ports:
       # Публикуется, потому что приложение запускается на хосте, а не в контейнере.
       - "5432:5432"
