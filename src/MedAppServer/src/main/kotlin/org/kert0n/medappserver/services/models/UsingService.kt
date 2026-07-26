@@ -68,15 +68,10 @@ class UsingService(
         val availableQuantity = drug.quantity - currentPlanned
 
         if (createDTO.plannedAmount > availableQuantity) {
-            logger.warn(
-                "Requested planned amount {} exceeds available quantity {}",
-                createDTO.plannedAmount,
-                availableQuantity
-            )
-            throw ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "Insufficient quantity available. Available: $availableQuantity, Requested: ${createDTO.plannedAmount}"
-            )
+            // No amounts in the message or the log line: both end up somewhere readable,
+            // and a drug plus a quantity is the kind of detail this server does not hand out.
+            logger.warn("Rejected treatment plan: requested amount exceeds availability")
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Insufficient quantity available")
         }
 
         val using = Using(
@@ -103,15 +98,8 @@ class UsingService(
         val availableQuantity = using.drug.quantity - otherPlanned
 
         if (updateDTO.plannedAmount > availableQuantity) {
-            logger.warn(
-                "Updated planned amount {} exceeds available quantity {}",
-                updateDTO.plannedAmount,
-                availableQuantity
-            )
-            throw ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "Insufficient quantity available. Available: $availableQuantity, Requested: ${updateDTO.plannedAmount}"
-            )
+            logger.warn("Rejected treatment plan update: requested amount exceeds availability")
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Insufficient quantity available")
         }
 
         using.plannedAmount = updateDTO.plannedAmount
@@ -128,7 +116,7 @@ class UsingService(
         if (quantityConsumed > using.plannedAmount) {
             throw ResponseStatusException(
                 HttpStatus.BAD_REQUEST,
-                "Consumed quantity exceeds planned amount. Planned: ${using.plannedAmount}, Consumed: $quantityConsumed"
+                "Consumed quantity exceeds planned amount"
             )
         }
 
