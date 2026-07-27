@@ -58,7 +58,6 @@ class ApiExceptionHandler {
         HttpStatus.NOT_FOUND -> "Requested resource does not exist"
         HttpStatus.CONFLICT -> "Request conflicts with the current state"
         HttpStatus.TOO_MANY_REQUESTS -> "Too many requests"
-        HttpStatus.GATEWAY_TIMEOUT -> "Too many registration requests"
         else -> status.reasonPhrase
     }
 }
