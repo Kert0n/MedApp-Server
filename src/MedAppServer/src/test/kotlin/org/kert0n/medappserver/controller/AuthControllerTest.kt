@@ -3,6 +3,7 @@ package org.kert0n.medappserver.controller
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.db.model.User
+import org.springframework.security.core.Authentication
 import org.kert0n.medappserver.services.models.UserService
 import org.kert0n.medappserver.services.security.SecurityService
 import org.mockito.kotlin.any
@@ -95,7 +96,10 @@ class AuthControllerTest {
         val hashedPassword = "{noop}password"
         val user = User(id = userId, hashedKey = hashedPassword)
         whenever(userService.loadUserByUsername(userId.toString())).thenReturn(user)
-        whenever(securityService.generateToken(any<User>(), any())).thenReturn("jwt-token-123")
+        // Перегрузка от Authentication, а не от User: каст принципала переехал в
+        // SecurityService, и контроллер зовёт теперь именно её. На моке делегирование
+        // одной перегрузки к другой не работает — стабить надо ту, что вызывается.
+        whenever(securityService.generateToken(any<Authentication>())).thenReturn("jwt-token-123")
 
         mockMvc.perform(
             get("/v1/auth/login")

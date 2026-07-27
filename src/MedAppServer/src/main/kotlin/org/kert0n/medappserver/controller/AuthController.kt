@@ -9,7 +9,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.servlet.http.HttpServletRequest
 import org.kert0n.medappserver.config.RegistrationProperties
-import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.services.models.UserService
 import org.kert0n.medappserver.services.security.SecurityService
 import org.springframework.http.HttpStatus
@@ -99,5 +98,5 @@ class AuthController(
         ]
     )
     fun login(authentication: Authentication): String =
-        securityService.generateToken(authentication.principal as User)
+        securityService.generateToken(authentication)
 }

@@ -14,7 +14,6 @@ import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
 import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.models.userId
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus

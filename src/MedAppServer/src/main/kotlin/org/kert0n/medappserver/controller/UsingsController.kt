@@ -14,7 +14,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
 import org.kert0n.medappserver.services.models.UsingService
-import org.kert0n.medappserver.services.models.userId
 import org.kert0n.medappserver.services.orchestrators.IntakeService
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus

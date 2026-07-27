@@ -6,7 +6,6 @@ import org.kert0n.medappserver.services.security.SecurityService
 import org.slf4j.LoggerFactory
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.http.HttpStatus
-import org.springframework.security.core.Authentication
 import org.springframework.security.core.userdetails.UserDetails
 import org.springframework.security.core.userdetails.UserDetailsService
 import org.springframework.security.core.userdetails.UsernameNotFoundException
@@ -63,6 +62,3 @@ class UserService(
 
 
 }
-
-val Authentication.userId: UUID
-    get() = UUID.fromString(this.name)

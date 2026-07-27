@@ -22,7 +22,6 @@ import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.Size
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.VidalDrugService
-import org.kert0n.medappserver.services.models.userId
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
 import org.kert0n.medappserver.services.orchestrators.QuantityReductionService
 import org.slf4j.LoggerFactory
