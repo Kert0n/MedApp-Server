@@ -6,6 +6,8 @@ import org.kert0n.medappserver.PostgresIntegrationTest
 import jakarta.persistence.EntityManager
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.controller.UsingCreateDTO
+import org.kert0n.medappserver.db.model.Using
+import org.kert0n.medappserver.db.model.UsingKey
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.db.repository.UsingRepository
@@ -391,5 +393,52 @@ class QuantityReductionTests {
         assertNull(dbHelper.userPlan(bob.id, drug.id), "Bob's plan must be null")
 
         println("✅ Two-step reduction to zero: Intermediate scaling worked, and final purge was successful")
+    }
+
+    // ── Test 9: приём, обнуливший остаток при ненулевом плане ────────────────────────
+
+    /**
+     * Приём не должен пытаться сохранить план, чей препарат только что удалён.
+     *
+     * `handleQuantityReduction` возвращает `Drug?`, где `null` значит «препарат кончился и
+     * удалён вместе со всеми планами». Раньше это значение отбрасывалось, и `recordIntake`
+     * шёл дальше: план не обнулился, значит `usingRepository.save(using)` — то есть вставка
+     * строки с внешним ключом на удалённый препарат.
+     *
+     * Через сервисы такое состояние не собрать: `createTreatmentPlan` не даёт запланировать
+     * больше остатка, а `handleQuantityReduction` держит инвариант «сумма планов не больше
+     * остатка». Поэтому план создаётся напрямую репозиторием — тест проверяет само условие в
+     * `recordIntake`, а не достижимость состояния. Корректность, которая держится на цепочке
+     * проверок в трёх других методах, ломается от первой правки любого из них.
+     */
+    @Test
+    fun `Intake that empties the drug returns null instead of saving an orphan plan`() {
+        val alice = dbHelper.freshUser("alice")
+        val kit = medKitService.createNew(alice.id)
+        val drug = dbHelper.freshDrug(kit, 2.0)
+        dbHelper.flushAndClear()
+
+        // План больше остатка — состояние, которое сервисы не допускают.
+        usingRepository.save(
+            Using(
+                usingKey = UsingKey(alice.id, drug.id),
+                user = userRepository.findByIdOrNull(alice.id)!!,
+                drug = drugRepository.findByIdOrNull(drug.id)!!,
+                plannedAmount = qty(5.0)
+            )
+        )
+        dbHelper.flushAndClear()
+
+        // Забирает весь остаток; план при этом остаётся ненулевым (5 - 2 = 3).
+        val result = usingService.recordIntake(alice.id, drug.id, qty(2.0))
+
+        assertNull(result, "препарат удалён, поэтому возвращать план нечего")
+        // Без guard'а здесь падал бы flush: план сохранялся бы со ссылкой на удалённую строку.
+        dbHelper.flushAndClear()
+
+        assertNull(drugRepository.findByIdOrNull(drug.id), "препарат с нулевым остатком удаляется")
+        assertEquals(0, usingService.findAllByDrug(drug.id).size, "планы уходят каскадом")
+
+        println("✅ Guard на удалённый препарат сработал, сирота не сохранён")
     }
 }

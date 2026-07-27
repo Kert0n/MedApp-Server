@@ -136,7 +136,12 @@ class UsingService(
         using.drug.quantity = using.drug.quantity - quantityConsumed
         // This could be replaced with reloading drug from db, but this much quicker
         using.drug.totalPlannedAmount = using.drug.totalPlannedAmount - quantityConsumed
-        quantityReductionService.handleQuantityReduction(using.drug)
+        // null означает, что препарат кончился и удалён вместе со всеми планами. Продолжать
+        // нельзя: save ниже вставил бы план на удалённый препарат, то есть нарушил бы внешний
+        // ключ. Раньше это значение отбрасывалось, и корректность держалась на том, что
+        // комбинация «остаток нулевой, план ненулевой» недостижима из-за проверок в других
+        // методах — то есть на совпадении, а не на явном условии.
+        if (quantityReductionService.handleQuantityReduction(using.drug) == null) return null
 
         if (using.plannedAmount.isZero()) {
             // Через коллекцию: orphanRemoval удалит строку сам, а Drug.usings остаётся
