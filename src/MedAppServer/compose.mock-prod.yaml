@@ -24,9 +24,8 @@ services:
       - 'POSTGRES_PASSWORD=mock-prod-password'
     volumes:
       - mock_prod_postgres_data:/var/lib/postgresql
-      - ./db/load-catalogue.sh:/docker-entrypoint-initdb.d/01-load-catalogue.sh:ro
-      - ./db/schema.sql:/docker-entrypoint-initdb.d/02-schema.sql:ro
-      - ./db/fill-parsed-drugs.sql:/docker-entrypoint-initdb.d/03-fill-parsed-drugs.sql:ro
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./db/load-catalogue.sh:/docker-entrypoint-initdb.d/02-load-catalogue.sh:ro
       - ./init-scripts:/catalogue:ro
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U medapp -d medapp-server-db" ]
