@@ -1,11 +1,8 @@
 package org.kert0n.medappserver.services.orchestrators
 
 import org.kert0n.medappserver.api.DrugCreateDTO
-import org.kert0n.medappserver.api.MedKitDTO
 import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.MedKit
-import org.kert0n.medappserver.db.repository.DrugRepository
-import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.UserService
@@ -22,9 +19,7 @@ class MedKitDrugServices(
     private val drugService: DrugService,
     private val medKitService: MedKitService,
     private val userService: UserService,
-    private val logger: Logger = LoggerFactory.getLogger(DrugService::class.java),
-    private val medKitRepository: MedKitRepository,
-    private val drugRepository: DrugRepository
+    private val logger: Logger = LoggerFactory.getLogger(MedKitDrugServices::class.java)
 ) {
     @Transactional
     fun createDrugInMedkit(createDTO: DrugCreateDTO, userId: UUID): Drug {
@@ -36,13 +31,8 @@ class MedKitDrugServices(
     @Transactional
     fun moveDrug(drugId: UUID, targetMedKitId: UUID, userId: UUID): Drug {
         logger.debug("Moving drug {} to medkit {}", drugId, targetMedKitId)
-        val targetMedKit =
-            medKitRepository.findByIdAndUsersIdWithUsers(targetMedKitId, userId) ?: throw ResponseStatusException(
-                HttpStatus.NOT_FOUND
-            )
-        val drug = drugRepository.findByIdAndMedKitUsersIdWithUsings(drugId, userId) ?: throw ResponseStatusException(
-            HttpStatus.NOT_FOUND
-        )
+        val targetMedKit = medKitService.findByIdForUserWithUsers(targetMedKitId, userId)
+        val drug = drugService.findByIdForUserWithPlans(drugId, userId)
 
         val targetUserIds = targetMedKit.users.map { it.id }.toSet()
         val usingsToRemove = drug.usings.filter { it.user.id !in targetUserIds }.toSet()
@@ -51,7 +41,7 @@ class MedKitDrugServices(
         }
 
         drug.medKit = targetMedKit
-        return drugRepository.save(drug)
+        return drugService.save(drug)
     }
 
  //   fun findAllDrugsInMedkit(medKitId: UUID): List<Drug> = drugService.findAllByMedKit(medKitId)
@@ -61,7 +51,7 @@ class MedKitDrugServices(
         logger.debug("Removing user {} from MedKit {}",userId, medKitId)
         val medKit = medKitService.findByIdForUser(medKitId, userId)
         val user = userService.findById(userId)
-        val drugs = drugRepository.findAllWithUsingsByMedKitId(medKitId)
+        val drugs = drugService.findAllWithPlansByMedKit(medKitId)
         drugs.forEach { drug ->
             drug.usings.removeIf { it.usingKey.userId == userId }
         }
@@ -70,9 +60,7 @@ class MedKitDrugServices(
 
     @Transactional
     fun delete(medKitId: UUID, userId: UUID, transferToMedKitId: UUID? = null) {
-        val medKit = medKitRepository.findByIdAndUserIdForDeletion(medKitId, userId) ?: throw ResponseStatusException(
-            HttpStatus.NOT_FOUND, "Cant find deletion target"
-        )
+        val medKit = medKitService.findByIdForUserForDeletion(medKitId, userId)
 
         if (transferToMedKitId != null) {
             val targetMedKit = medKitService.findByIdForUser(transferToMedKitId, userId)
@@ -97,7 +85,7 @@ class MedKitDrugServices(
             user.medKits.remove(medKit)
         }
         // Sync
-        medKitRepository.delete(medKit)
+        medKitService.delete(medKit)
     }
 
     /**
@@ -110,5 +98,5 @@ class MedKitDrugServices(
      */
     @Transactional(readOnly = true)
     fun drugsWithPlans(medKit: MedKit): List<Drug> =
-        drugRepository.findAllWithUsingsByMedKitId(medKit.id)
+        drugService.findAllWithPlansByMedKit(medKit.id)
 }

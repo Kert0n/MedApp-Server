@@ -6,7 +6,6 @@ import org.kert0n.medappserver.db.model.QUANTITY_SCALE
 import org.kert0n.medappserver.db.model.Using
 import org.kert0n.medappserver.db.model.isZero
 import org.kert0n.medappserver.api.DrugUpdateDTO
-import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.UsingService
 import org.slf4j.Logger
@@ -33,7 +32,6 @@ import java.util.UUID
  */
 @Service
 class QuantityReductionService(
-    private val drugRepository: DrugRepository,
     private val drugService: DrugService,
     private val usingService: UsingService,
     val logger: Logger = LoggerFactory.getLogger(QuantityReductionService::class.java)
@@ -130,7 +128,7 @@ class QuantityReductionService(
             //
             // На Double эта ветка почти не исполнялась: quantity == 0.0 после дробных
             // списаний было недостижимо, поэтому дефект и не проявлялся.
-            drugRepository.delete(withUsings(drug))
+            drugService.delete(withUsings(drug))
             return null
         }
         if (drug.totalPlannedAmount <= drug.quantity) return drug
@@ -147,7 +145,7 @@ class QuantityReductionService(
         )
         handleUsingReduction(withUsings(drug), reduceFactor)
         drug.totalPlannedAmount = drug.quantity
-        return drugRepository.save(drug)
+        return drugService.save(drug)
         // TODO FIREBASE NOTIFICATION
     }
 
@@ -160,7 +158,7 @@ class QuantityReductionService(
      * (`Using.user` объявлен EAGER).
      */
     private fun withUsings(drug: Drug): Drug =
-        drugRepository.findWithUsingsById(drug.id) ?: drug
+        drugService.findWithPlans(drug.id) ?: drug
 
     /**
      * Уменьшает все планы пропорционально, сохраняя инвариант «сумма планов равна остатку».

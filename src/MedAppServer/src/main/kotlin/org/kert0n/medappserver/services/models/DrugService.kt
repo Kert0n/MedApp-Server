@@ -116,6 +116,35 @@ class DrugService(
     @Transactional
     fun save(drug: Drug): Drug = drugRepository.save(drug)
 
+    /** Удалить препарат. Планы уходят каскадом — при условии, что коллекция загружена. */
+    @Transactional
+    fun delete(drug: Drug) = drugRepository.delete(drug)
+
+    /**
+     * Препарат с загруженными планами и проверкой доступа.
+     *
+     * Граф обязателен там, где дальше правится коллекция планов: `Drug.usings` объявлена с
+     * `orphanRemoval`, и по неинициализированной коллекции удаление проходит впустую.
+     */
+    @Transactional(readOnly = true)
+    fun findByIdForUserWithPlans(drugId: UUID, userId: UUID): Drug =
+        drugRepository.findByIdAndMedKitUsersIdWithUsings(drugId, userId)
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Drug not found or access denied")
+
+    /**
+     * Тот же препарат, но с инициализированной коллекцией планов и без проверки доступа.
+     *
+     * Для путей, где доступ уже проверен выборкой под блокировку: повторять проверку значит
+     * повторять join к аптечке и её участникам ни за чем.
+     */
+    @Transactional(readOnly = true)
+    fun findWithPlans(drugId: UUID): Drug? = drugRepository.findWithUsingsById(drugId)
+
+    /** Все препараты аптечки вместе с планами — одним запросом. */
+    @Transactional(readOnly = true)
+    fun findAllWithPlansByMedKit(medKitId: UUID): List<Drug> =
+        drugRepository.findAllWithUsingsByMedKitId(medKitId)
+
     @Transactional
     fun delete(drugId: UUID, userId: UUID) {
         logger.debug("Deleting drug: {}", drugId)

@@ -54,6 +54,36 @@ class MedKitService(
 
     }
 
+    /**
+     * Аптечка с загруженными участниками.
+     *
+     * Отдельный метод, а не флаг у [findByIdForUser]: форма выборки — часть контракта, и по
+     * имени должно быть видно, что участники уже здесь и обращение к `users` не превратится
+     * в запрос.
+     */
+    @Transactional(readOnly = true)
+    fun findByIdForUserWithUsers(medKitId: UUID, userId: UUID): MedKit =
+        medKitRepository.findByIdAndUsersIdWithUsers(medKitId, userId)
+            ?: throw ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "Medkit not found or user has insufficient privileges"
+            )
+
+    /**
+     * Аптечка со всем, что нужно для удаления: участники, препараты и их планы.
+     *
+     * Граф здесь не оптимизация, а условие корректности: удаление идёт каскадом по
+     * `medKit.drugs`, а по неинициализированной коллекции каскад проходит впустую.
+     */
+    @Transactional(readOnly = true)
+    fun findByIdForUserForDeletion(medKitId: UUID, userId: UUID): MedKit =
+        medKitRepository.findByIdAndUserIdForDeletion(medKitId, userId)
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Cant find deletion target")
+
+    /** Удалить аптечку. Каскад по drugs и users — на стороне маппинга. */
+    @Transactional
+    fun delete(medKit: MedKit) = medKitRepository.delete(medKit)
+
     @Transactional(readOnly = true)
     fun findAllByUser(userId: UUID): List<MedKit> {
         logger.debug("Finding all medkits for user: {}", userId)
