@@ -61,3 +61,11 @@ data class PlanSnapshot(
     val drugId: UUID,
     val plannedAmount: BigDecimal
 )
+
+/**
+ * Выданные при регистрации учётные данные.
+ *
+ * Ключ здесь в открытом виде и существует ровно один раз — в ответе на регистрацию. В базе
+ * лежит только его хеш, повторно узнать его нельзя.
+ */
+data class NewCredentials(val login: UUID, val key: String)

@@ -58,20 +58,15 @@ class AuthController(
         if (!securityService.secretsMatch(token, registrationProperties.secret)) {
             throw ResponseStatusException(HttpStatus.FORBIDDEN, "Invalid secret")
         }
-        // Rate limit registration by IP address to reduce abuse without storing user PII.
+        // Лимит по адресу и выпуск учётных данных — внутри сервиса. Здесь остаётся только
+        // проверка секрета: она аутентифицирует сам запрос, то есть относится к границе.
         //
-        // 429, а не 504. Прежний GATEWAY_TIMEOUT врал в обе стороны: за Caddy пятисотый
-        // класс читается как «бэкенд не ответил», то есть отказ клиенту попадал в алерты
-        // как авария инфраструктуры. Плюс соседний лимит на выдачу токена
-        // (LoginThrottleFilter) уже отвечает 429 — два троттлинга на смежных эндпоинтах
-        // обязаны выглядеть одинаково, иначе клиент вынужден знать оба кода.
-        if (!securityService.validateRequest(request.remoteAddr)) {
-            throw ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "Too many registration request")
-        }
-        val login = UUID.randomUUID()
-        val pwd: String = securityService.generateKey(32)
-        userService.registerNewUser(login, pwd, request.remoteAddr)
-        return RegisterResponse(login, pwd)
+        // Порядок сохранён: секрет проверяется раньше лимита, чтобы состояние счётчика не
+        // утекало тем, кто секрета не знает. Отказ по лимиту — 429, а не 504: за Caddy
+        // пятисотый класс читается как «бэкенд не ответил», и отказ клиенту попадал в
+        // алерты как авария инфраструктуры.
+        val credentials = userService.registerNewUser(request.remoteAddr)
+        return RegisterResponse(credentials.login, credentials.key)
     }
 
     @GetMapping("/login")
