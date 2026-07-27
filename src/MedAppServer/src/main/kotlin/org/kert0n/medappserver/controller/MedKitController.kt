@@ -16,7 +16,6 @@ import jakarta.validation.constraints.NotNull
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.userId
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
-import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
@@ -29,9 +28,11 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBod
 @Tag(name = "MedKit Management", description = "APIs for managing medicine kits")
 class MedKitController(
     private val medKitService: MedKitService,
-    private val logger: Logger = LoggerFactory.getLogger(MedKitController::class.java),
     private val medKitDrugServices: MedKitDrugServices
 ) {
+
+    private val logger = LoggerFactory.getLogger(MedKitController::class.java)
+
     data class MedKitCreatedResponse(
         @NotNull
         @Schema(description = "Created medkit ID")

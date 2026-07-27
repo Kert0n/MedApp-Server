@@ -7,7 +7,6 @@ import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.services.security.SecurityService
 import org.kert0n.medappserver.services.security.hashToken
-import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.http.HttpStatus
@@ -20,10 +19,12 @@ import java.util.*
 class MedKitService(
     private val medKitRepository: MedKitRepository,
     private val securityService: SecurityService,
-    private val logger: Logger = LoggerFactory.getLogger(MedKitService::class.java),
     private val medKitTokenCache: Cache<String, UUID>,
     private val userService: UserService
 ) {
+
+    private val logger = LoggerFactory.getLogger(MedKitService::class.java)
+
     @Transactional
     fun createNew(userId: UUID): MedKit {
         logger.debug("Creating new medkit for user: {}", userId)

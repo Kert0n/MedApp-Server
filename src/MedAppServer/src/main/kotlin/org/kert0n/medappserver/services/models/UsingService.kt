@@ -5,7 +5,6 @@ import org.kert0n.medappserver.api.UsingUpdateDTO
 import org.kert0n.medappserver.db.model.Using
 import org.kert0n.medappserver.db.model.UsingKey
 import org.kert0n.medappserver.db.repository.UsingRepository
-import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
@@ -16,11 +15,11 @@ import java.util.*
 @Service
 class UsingService(
     private val usingRepository: UsingRepository,
-    val logger: Logger = LoggerFactory.getLogger(UsingService::class.java),
     private val userService: UserService,
     private val drugService: DrugService
 ) {
 
+    private val logger = LoggerFactory.getLogger(UsingService::class.java)
 
     @Transactional(readOnly = true)
     fun findAllByUser(userId: UUID): List<Using> {
