@@ -84,6 +84,18 @@ class MedKitService(
     @Transactional
     fun delete(medKit: MedKit) = medKitRepository.delete(medKit)
 
+    /**
+     * Перенести все препараты аптечки в другую одним оператором.
+     *
+     * Вызывать только с аптечкой, у которой коллекция препаратов не загружена: подробности
+     * и последствия — в KDoc `MedKitRepository.reassignMedKit`.
+     */
+    @Transactional
+    fun reassignAllDrugs(fromMedKitId: UUID, toMedKitId: UUID) {
+        logger.debug("Reassigning drugs from medkit {} to {}", fromMedKitId, toMedKitId)
+        medKitRepository.reassignMedKit(fromMedKitId, toMedKitId)
+    }
+
     @Transactional(readOnly = true)
     fun findAllByUser(userId: UUID): List<MedKit> {
         logger.debug("Finding all medkits for user: {}", userId)

@@ -6,6 +6,7 @@ import org.kert0n.medappserver.db.model.MedKit
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.UserService
+import org.kert0n.medappserver.services.models.UsingService
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
@@ -19,6 +20,7 @@ class MedKitDrugServices(
     private val drugService: DrugService,
     private val medKitService: MedKitService,
     private val userService: UserService,
+    private val usingService: UsingService,
     private val logger: Logger = LoggerFactory.getLogger(MedKitDrugServices::class.java)
 ) {
     @Transactional
@@ -51,40 +53,60 @@ class MedKitDrugServices(
         logger.debug("Removing user {} from MedKit {}",userId, medKitId)
         val medKit = medKitService.findByIdForUser(medKitId, userId)
         val user = userService.findById(userId)
-        val drugs = drugService.findAllWithPlansByMedKit(medKitId)
-        drugs.forEach { drug ->
-            drug.usings.removeIf { it.usingKey.userId == userId }
-        }
+        // Одним оператором вместо выборки всех препаратов аптечки со всеми их планами ради
+        // вычистки коллекций: это была загрузка всего содержимого плюс DELETE на каждый план.
+        // Препараты здесь не нужны вовсе — уходит только участник и его планы.
+        usingService.deleteAllByUserIdInMedkit(userId, medKitId)
         medKitService.removeUserFromMedKit(medKit, user)
     }
 
+    /**
+     * Удаляет аптечку — с переносом препаратов в другую или вместе с ними.
+     *
+     * Две ветки грузят аптечку **разными** запросами, и это не оптимизация, а условие
+     * корректности.
+     *
+     * Без переноса нужен граф с препаратами и планами: удаление идёт каскадом по
+     * `medKit.drugs`, а по неинициализированной коллекции каскад проходит впустую и упирается
+     * во внешний ключ.
+     *
+     * С переносом препараты переезжают bulk-операторами. Прежний код делал то же циклом по
+     * `medKit.drugs` с ручной синхронизацией трёх коллекций — работало, но держалось на том,
+     * что автор помнит порядок строк.
+     *
+     * Отсюда жёсткий порядок: доступ проверяется **до** любых изменений, дальше идут
+     * bulk-операторы, и только потом аптечка читается заново. Читать её раньше нельзя:
+     * bulk проходит мимо контекста персистентности, и `medKit.drugs`, загруженная где угодно
+     * выше по транзакции, после переноса показывала бы препараты, которых в аптечке уже нет —
+     * а каскад при удалении снёс бы только что перенесённое. Так и случилось при первой
+     * попытке: тест миграции упал, потому что вызов `findAllByUser` в самом тесте успел
+     * инициализировать эту коллекцию своим графом.
+     */
     @Transactional
     fun delete(medKitId: UUID, userId: UUID, transferToMedKitId: UUID? = null) {
-        val medKit = medKitService.findByIdForUserForDeletion(medKitId, userId)
-
         if (transferToMedKitId != null) {
-            val targetMedKit = medKitService.findByIdForUser(transferToMedKitId, userId)
+            // Доступ к обеим аптечкам — до изменений. Иначе bulk успел бы отработать раньше,
+            // чем выяснится, что удалять нечего.
+            medKitService.findByIdForUser(medKitId, userId)
+            val usersWithAccess = medKitService.findByIdForUserWithUsers(transferToMedKitId, userId)
+                .users.map { it.id }.toSet()
 
-            // Get the IDs of everyone who has access to the new MedKit
-            val usersWithAccess = targetMedKit.users.map { it.id }.toSet()
-            // Find which usings are affected
-            val usingsToRemove = medKit.drugs.flatMap { drug ->
-                drug.usings.filter { it.user.id !in usersWithAccess }
-            }.toSet()
-            // Removing
-            medKit.drugs.forEach { drug ->
-                drug.usings.removeAll(usingsToRemove)
-                drug.medKit = targetMedKit
-                targetMedKit.drugs.add(drug)
-            }
-            // Sync
-            medKit.drugs.clear()
+            // Порядок обязателен: сначала планы, потом препараты. После переноса условие по
+            // med_kit_id уже не нашло бы эти планы.
+            usingService.deleteAllInMedkitForUsersOtherThan(medKitId, usersWithAccess)
+            medKitService.reassignAllDrugs(medKitId, transferToMedKitId)
         }
-        // Sync
+
+        // Только теперь: после bulk контекст очищен, и это актуальное состояние.
+        val medKit = if (transferToMedKitId == null) {
+            medKitService.findByIdForUserForDeletion(medKitId, userId)
+        } else {
+            medKitService.findByIdForUserWithUsers(medKitId, userId)
+        }
+
         medKit.users.forEach { user ->
             user.medKits.remove(medKit)
         }
-        // Sync
         medKitService.delete(medKit)
     }
 

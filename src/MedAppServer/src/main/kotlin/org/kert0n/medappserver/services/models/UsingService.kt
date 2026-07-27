@@ -37,6 +37,19 @@ class UsingService(
         usingRepository.deleteByUserIdAndMedKitId(userId, medKitId)
     }
 
+    /**
+     * Планы участников, которых нет в переданном списке, по всем препаратам аптечки.
+     *
+     * Для переноса препаратов: у кого нет доступа к целевой аптечке, у того не должно остаться
+     * и плана. Вызывающий обязан не звать это с пустым списком — `NOT IN ()` в SQL невыразим.
+     */
+    @Transactional
+    fun deleteAllInMedkitForUsersOtherThan(medKitId: UUID, userIds: Collection<UUID>) {
+        require(userIds.isNotEmpty()) { "userIds must not be empty: NOT IN () is not valid SQL" }
+        logger.debug("Deleting usings in medkit {} outside {} users", medKitId, userIds.size)
+        usingRepository.deleteByMedKitIdAndUserIdNotIn(medKitId, userIds)
+    }
+
     @Transactional(readOnly = true)
     fun findAllByDrug(drugId: UUID): List<Using> {
         logger.debug("Finding all usings for drug: {}", drugId)
