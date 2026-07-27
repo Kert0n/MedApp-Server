@@ -17,6 +17,11 @@ import java.util.*
     // Индексы названы по своей таблице. Раньше они назывались ix_drugs_*/idx_drugs_* и
     // сталкивались с одноимёнными индексами таблицы drugs из дампа — имена индексов в
     // Postgres уникальны на схему, поэтому init базы падал.
+    //
+    // Список неполный намеренно: индексы поиска — GIN по триграммам и по выражению
+    // to_tsvector — объявлены только в db/schema.sql, потому что JPA не выражает ни тип
+    // индекса, ни opclass. Btree по active_substance и manufacturer убраны оттуда же: для
+    // `LIKE '%…%'` и similarity() они бесполезны, а вставку замедляют.
     name = "parsed_drugs", indexes = [
         Index(
             name = "ix_parsed_drugs_name",
@@ -29,14 +34,6 @@ import java.util.*
         Index(
             name = "ix_parsed_drugs_quantity_unit_id",
             columnList = "quantity_unit_id"
-        ),
-        Index(
-            name = "ix_parsed_drugs_active_substance",
-            columnList = "active_substance"
-        ),
-        Index(
-            name = "ix_parsed_drugs_manufacturer",
-            columnList = "manufacturer"
         )]
 )
 class VidalDrug(

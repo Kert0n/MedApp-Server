@@ -133,7 +133,44 @@ CREATE TABLE parsed_drugs
 -- Имена по своей таблице: ix_drugs_* сталкивались с индексами таблицы drugs из дампа
 -- справочника, а имена индексов в Postgres уникальны на схему.
 CREATE INDEX ix_parsed_drugs_name ON parsed_drugs (name);
-CREATE INDEX ix_parsed_drugs_active_substance ON parsed_drugs (active_substance);
-CREATE INDEX ix_parsed_drugs_manufacturer ON parsed_drugs (manufacturer);
 CREATE INDEX ix_parsed_drugs_form_type_id ON parsed_drugs (form_type_id);
 CREATE INDEX ix_parsed_drugs_quantity_unit_id ON parsed_drugs (quantity_unit_id);
+
+-- Индексы поиска.
+--
+-- Btree по active_substance и manufacturer убраны: запрос ищет подстроку и похожесть, а
+-- btree не работает ни для `LIKE '%…%'`, ни для similarity(). Они только замедляли вставку.
+-- Btree по name оставлен — им пользуются ORDER BY name и точное сравнение.
+--
+-- Выражение lower(...), а не сама колонка: запрос сравнивает приведённые к нижнему регистру
+-- значения, и индекс по сырой колонке для такого предиката не подойдёт.
+--
+-- Триграммы отдельно по каждому полю, а не по склейке: similarity() делит на общее число
+-- триграмм, поэтому на конкатенации четырёх полей сходство размывается почти до нуля и
+-- поиск с опечаткой перестаёт срабатывать. Склейка годится только для полнотекстового
+-- поиска, где длина значения не влияет на попадание.
+--
+-- Тип индекса и opclass в JPA не выражаются, поэтому эти индексы живут только здесь;
+-- в @Table(indexes = ...) у VidalDrug стоит ссылка на этот файл.
+--
+-- Полнотекстовый индекс — по выражению, а не по генерируемой колонке. Колонку пришлось бы
+-- объявлять в сущности, потому что схему для тестов создаёт Hibernate из неё, а не из этого
+-- файла; при этом tsvector в JPA не отображается. Запрос содержит ровно это же выражение,
+-- поэтому планировщик сопоставляет его с индексом. Выражение и запрос обязаны совпадать
+-- посимвольно — правя одно, править и второе (VidalDrugRepository).
+--
+-- Он нужен для многословных запросов: «Rinzasip Хемофарм» — это слово из name_lat и слово
+-- из manufacturer, и ни одно поле по отдельности такому запросу не удовлетворяет.
+-- plainto_tsquery соединяет слова через AND, поэтому условие выполняется только когда
+-- нашлись все слова, пусть и из разных полей.
+--
+-- Конфигурация 'simple', а не 'russian': названия препаратов и производителей — имена
+-- собственные, стеммить их незачем, а предсказуемость дороже.
+CREATE INDEX ix_parsed_drugs_search_tsv ON parsed_drugs USING gin (
+    to_tsvector('simple',
+                coalesce(name, '') || ' ' || coalesce(name_lat, '') || ' ' ||
+                coalesce(active_substance, '') || ' ' || coalesce(manufacturer, '')));
+CREATE INDEX ix_parsed_drugs_name_trgm ON parsed_drugs USING gin (lower(name) gin_trgm_ops);
+CREATE INDEX ix_parsed_drugs_name_lat_trgm ON parsed_drugs USING gin (lower(name_lat) gin_trgm_ops);
+CREATE INDEX ix_parsed_drugs_substance_trgm ON parsed_drugs USING gin (lower(active_substance) gin_trgm_ops);
+CREATE INDEX ix_parsed_drugs_manufacturer_trgm ON parsed_drugs USING gin (lower(manufacturer) gin_trgm_ops);

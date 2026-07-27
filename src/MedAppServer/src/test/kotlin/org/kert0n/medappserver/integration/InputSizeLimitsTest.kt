@@ -50,7 +50,7 @@ class InputSizeLimitsTest {
         mockMvc = MockMvcBuilders.webAppContextSetup(context)
             .apply<DefaultMockMvcBuilder>(SecurityMockMvcConfigurers.springSecurity())
             .build()
-        whenever(vidalDrugService.fuzzySearchByName(any(), any())).thenReturn(emptyList())
+        whenever(vidalDrugService.fuzzySearch(any(), any())).thenReturn(emptyList())
     }
 
     private fun search(limit: String) = mockMvc.perform(
