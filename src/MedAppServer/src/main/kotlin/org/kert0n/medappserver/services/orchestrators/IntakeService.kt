@@ -3,6 +3,7 @@ package org.kert0n.medappserver.services.orchestrators
 import com.sksamuel.aedile.core.Cache
 import org.kert0n.medappserver.controller.UsingDTO
 import org.kert0n.medappserver.services.models.UsingService
+import org.kert0n.medappserver.services.security.hashToken
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Service
@@ -36,7 +37,11 @@ class IntakeService(
     ): IntakeOutcome {
         // Ключ включает пользователя: intakeId генерирует клиент, и без этого один клиент мог
         // бы получить результат чужой операции, подобрав совпадающий идентификатор.
-        val key = "$userId:$intakeId"
+        //
+        // Хеш, а не пара значений: в кеше не остаётся ни идентификатора пользователя, ни
+        // клиентского intakeId в читаемом виде — тем же приёмом закрыты ключи по адресу
+        // клиента. Пара сворачивается в один хеш, поэтому и разделитель не нужен.
+        val key = hashToken("$userId$intakeId")
 
         intakeResultsCache.getOrNull(key)?.let { seen ->
             logger.debug("Повторный intakeId, отдаю прежний результат без повторного списания")
