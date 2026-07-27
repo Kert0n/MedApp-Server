@@ -1,4 +1,4 @@
-package org.kert0n.medappserver.services
+package org.kert0n.medappserver.config
 
 import com.github.benmanes.caffeine.cache.Caffeine
 import org.kert0n.medappserver.services.orchestrators.IntakeOutcome
@@ -7,13 +7,20 @@ import com.sksamuel.aedile.core.asCache
 import com.sksamuel.aedile.core.expireAfterWrite
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
-import org.springframework.stereotype.Service
+import org.springframework.context.annotation.Configuration
 import java.util.*
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
-@Service
-class CacheService(
+/**
+ * Объявление кешей приложения.
+ *
+ * Была `@Service` в пакете `services`, хотя ни одного метода поведения здесь нет — только
+ * фабрики бинов. `@Configuration` называет вещь своим именем: сервисный слой не должен
+ * состоять наполовину из конфигурации.
+ */
+@Configuration
+class CacheConfiguration(
     @Value($$"${medkit.share.termInMinutes}") private val medKitShareTerm: Long,
     @Value($$"${registration.timeout.InSeconds}") private val registrationTimeOut: Long,
     @Value($$"${authentication.throttle.windowInSeconds:300}") private val loginThrottleWindow: Long,
