@@ -35,16 +35,46 @@ interface DrugRepository : JpaRepository<Drug, UUID> {
     )
     fun findByIdAndMedKitUsersIdWithUsings(drugId: UUID, userId: UUID): Drug?
 
+    /**
+     * Берёт препарат под блокировку на запись.
+     *
+     * **Без `@EntityGraph` намеренно, и это не мелочь.** С fetch join по коллекции Hibernate
+     * не может поставить блокировку в тот же оператор и переходит на follow-on locking: сперва
+     * читает данные соединением с `usings`, потом отдельным запросом берёт
+     * `for no key update of tbl`. Строка в итоге заперта, но между двумя операторами препарат
+     * успевает изменить кто угодно — то есть блокировка перестаёт защищать от гонки, ради
+     * которой стоит. Проверено по сгенерированному SQL; поведенческий тест этого не ловит,
+     * он смотрит на конечное состояние, а не на атомарность.
+     *
+     * Кому нужны планы — догружает их [findWithUsingsById] уже под этой блокировкой.
+     */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query(
         """
-        SELECT d FROM Drug d 
+        SELECT d FROM Drug d
         JOIN d.medKit mk
         JOIN mk.users u
         WHERE d.id = :drugId AND u.id = :userId
     """
     )
     fun findByIdAndMedKitUsersIdForUpdate(@Param("drugId") drugId: UUID, @Param("userId") userId: UUID): Drug?
+
+    /**
+     * Тот же препарат, но с инициализированной коллекцией планов.
+     *
+     * Нужен там, где работает каскад: `Drug.usings` объявлена с `CascadeType.ALL` и
+     * `orphanRemoval`, но по неинициализированной коллекции каскад проходит по пустому набору,
+     * и удаление препарата упирается в внешний ключ `usings_drug_fkey`.
+     *
+     * Дело именно в семантике, а не в числе запросов: `usings.user` в графе не указан
+     * намеренно — `Using.user` объявлен EAGER, и Hibernate присоединяет пользователей сам,
+     * одним оператором. Замерено, см. `StatementCountTest`.
+     *
+     * Проверять доступ здесь не нужно — вызывается после
+     * [findByIdAndMedKitUsersIdForUpdate], который его и проверил.
+     */
+    @EntityGraph(attributePaths = ["usings"])
+    fun findWithUsingsById(@Param("id") id: UUID): Drug?
 
     @Query(
         """

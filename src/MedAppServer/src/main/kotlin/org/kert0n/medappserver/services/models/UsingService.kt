@@ -82,7 +82,14 @@ class UsingService(
             plannedAmount = createDTO.plannedAmount
         )
 
-        return usingRepository.save(using)
+        val saved = usingRepository.save(using)
+        // Обе стороны связи, а не только владеющая. План сохраняется репозиторием, но
+        // Drug.usings объявлена с CascadeType.ALL и orphanRemoval — если не добавить, коллекция
+        // до конца транзакции показывает состояние без нового плана, и весь код, который на неё
+        // опирается (каскадное удаление, перенос препарата между аптечками), работает по
+        // устаревшему набору.
+        drug.usings.add(saved)
+        return saved
     }
 
     @Transactional
@@ -130,8 +137,11 @@ class UsingService(
         // This could be replaced with reloading drug from db, but this much quicker
         using.drug.totalPlannedAmount = using.drug.totalPlannedAmount - quantityConsumed
         quantityReductionService.handleQuantityReduction(using.drug)
+
         if (using.plannedAmount.isZero()) {
-            usingRepository.delete(using)
+            // Через коллекцию: orphanRemoval удалит строку сам, а Drug.usings остаётся
+            // правдой до конца транзакции.
+            using.drug.usings.remove(using)
             return null
         }
         return usingRepository.save(using)
@@ -142,7 +152,9 @@ class UsingService(
     fun deleteTreatmentPlan(userId: UUID, drugId: UUID) {
         logger.debug("Deleting using for user {} and drug {}", userId, drugId)
         val using = findByUserAndDrug(userId, drugId)
-        usingRepository.delete(using)
+        // Тоже через коллекцию: удаление плана — это исключение элемента из drug.usings,
+        // а не независимая операция над таблицей. orphanRemoval доводит её до DELETE.
+        using.drug.usings.remove(using)
     }
 
 

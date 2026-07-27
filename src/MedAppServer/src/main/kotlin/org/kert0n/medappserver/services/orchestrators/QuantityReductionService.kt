@@ -6,17 +6,14 @@ import org.kert0n.medappserver.db.model.QUANTITY_SCALE
 import org.kert0n.medappserver.db.model.Using
 import org.kert0n.medappserver.db.model.isZero
 import org.kert0n.medappserver.db.repository.DrugRepository
-import org.kert0n.medappserver.db.repository.UsingRepository
 import org.kert0n.medappserver.services.models.UsingService
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
-import java.util.*
 
 @Service
 class QuantityReductionService(
-    private val usingRepository: UsingRepository,
     private val drugRepository: DrugRepository,
     val logger: Logger = LoggerFactory.getLogger(UsingService::class.java)
 
@@ -26,23 +23,14 @@ class QuantityReductionService(
 
         // isZero, а не == BigDecimal.ZERO: equals учитывает scale, и 0.000000 не равен ZERO.
         if (drug.quantity.isZero()) {
-            // Планы удаляются запросом, а не каскадом по drug.usings.
+            // Планы удаляет каскад — так и объявлено у Drug.usings (CascadeType.ALL,
+            // orphanRemoval). Единственное, что для этого нужно, — инициализированная
+            // коллекция: по пустому набору каскад проходит впустую, и DELETE препарата
+            // упирается в usings_drug_fkey. Поэтому препарат перечитывается с графом.
             //
-            // Каскад объявлен (CascadeType.ALL, orphanRemoval), но коллекция ленивая и в этом
-            // пути не синхронизирована: createTreatmentPlan сохраняет план через
-            // usingRepository.save и в drug.usings его не добавляет. Каскад тогда проходит по
-            // пустому набору, а удаление препарата упирается в внешний ключ usings_drug_fkey.
-            //
-            // На Double это не проявлялось: quantity == 0.0 после дробных списаний было
-            // недостижимо, поэтому ветка удаления практически не исполнялась.
-            val plans = usingRepository.findAllByUsingKeyDrugId(drug.id)
-            if (plans.isNotEmpty()) {
-                usingRepository.deleteAll(plans)
-                // Явный flush: порядок удалений между разными сущностями иначе определяется
-                // Hibernate, и препарат может уйти в DELETE раньше своих планов.
-                usingRepository.flush()
-            }
-            drugRepository.delete(drug)
+            // На Double эта ветка почти не исполнялась: quantity == 0.0 после дробных
+            // списаний было недостижимо, поэтому дефект и не проявлялся.
+            drugRepository.delete(withUsings(drug))
             return null
         }
         if (drug.totalPlannedAmount <= drug.quantity) return drug
@@ -57,11 +45,22 @@ class QuantityReductionService(
             QUANTITY_SCALE + 4,
             QUANTITY_ROUNDING
         )
-        handleUsingReduction(drug.id, reduceFactor, drug.quantity)
+        handleUsingReduction(withUsings(drug), reduceFactor)
         drug.totalPlannedAmount = drug.quantity
         return drugRepository.save(drug)
         // TODO FIREBASE NOTIFICATION
     }
+
+    /**
+     * Возвращает тот же препарат с инициализированной коллекцией планов.
+     *
+     * Запрос по id внутри той же транзакции отдаёт ровно тот экземпляр, что уже в контексте
+     * персистентности, — новых объектов не появляется, а коллекция заполняется одним
+     * оператором вместо ленивой инициализации с отдельным SELECT на каждого пользователя
+     * (`Using.user` объявлен EAGER).
+     */
+    private fun withUsings(drug: Drug): Drug =
+        drugRepository.findWithUsingsById(drug.id) ?: drug
 
     /**
      * Уменьшает все планы пропорционально, сохраняя инвариант «сумма планов равна остатку».
@@ -72,8 +71,8 @@ class QuantityReductionService(
      * плану — самому большому, чтобы поправка гарантированно не загнала его в минус; при равных
      * значениях выбор детерминирован по userId, иначе результат зависел бы от порядка выборки.
      */
-    private fun handleUsingReduction(drugId: UUID, factor: BigDecimal, targetTotal: BigDecimal) {
-        val usings = usingRepository.findAllByUsingKeyDrugId(drugId)
+    private fun handleUsingReduction(drug: Drug, factor: BigDecimal) {
+        val usings = drug.usings
         if (usings.isEmpty()) return
 
         // Округление до scale базы делает сеттер plannedAmount, поэтому произведение здесь
@@ -81,14 +80,14 @@ class QuantityReductionService(
         usings.forEach { it.plannedAmount = it.plannedAmount * factor }
 
         val rounded = usings.fold(BigDecimal.ZERO) { sum, using -> sum + using.plannedAmount }
-        val residual = targetTotal - rounded
+        val residual = drug.quantity - rounded
         if (!residual.isZero()) {
             val adjusted = usings.maxWith(
                 compareBy<Using>({ it.plannedAmount }, { it.usingKey.userId })
             )
             adjusted.plannedAmount = adjusted.plannedAmount + residual
         }
-
-        usingRepository.saveAll(usings)
+        // saveAll не нужен: планы — управляемые сущности, изменения уйдут при сбросе
+        // контекста. Вызов repository здесь только создавал бы вид, что без него не запишется.
     }
 }
