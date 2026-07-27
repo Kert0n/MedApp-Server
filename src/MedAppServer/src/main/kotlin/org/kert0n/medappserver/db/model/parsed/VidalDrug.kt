@@ -3,6 +3,7 @@ package org.kert0n.medappserver.db.model.parsed
 import jakarta.persistence.*
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
+import org.hibernate.annotations.GeneratedColumn
 import java.util.*
 
 /**
@@ -78,7 +79,35 @@ class VidalDrug(
     @Column(name = "description", length = Integer.MAX_VALUE) var description: String? = null,
 
     @Column(name = "otc", nullable = false)
-    @NotNull var otc: Boolean
+    @NotNull var otc: Boolean,
+
+    /**
+     * Склейка искомых полей для полнотекстового поиска; считает база.
+     *
+     * Отображена только ради того, чтобы схема и модель не расходились: значение
+     * генерируемое, поэтому `insertable`/`updatable` сняты — приложение его не пишет и не
+     * читает, обращается к нему только нативный запрос поиска по имени колонки.
+     *
+     * Без этого объявления колонки не было бы в схеме, которую Hibernate создаёт для тестов,
+     * и поиск падал бы на «column search_tsv does not exist» — притом что в проде, где схема
+     * берётся из `db/schema.sql`, всё работало бы.
+     *
+     * Колонка, а не выражение в индексе: по индексу от выражения Hibernate при старте не
+     * может сопоставить колонку и пишет HHH000475.
+     *
+     * Выражение объявлено через [GeneratedColumn], а не внутри `columnDefinition`. Разница
+     * принципиальная: `columnDefinition` Hibernate подставляет в DDL целиком и **им же**
+     * сравнивает при `validate`, поэтому вариант со встроенным `GENERATED ALWAYS AS` создавал
+     * схему в тестах, но валил прод — база сообщает тип `tsvector`, а ожидалась вся строка
+     * определения. Проверено на стенде. `@GeneratedColumn` разводит эти две роли: в DDL
+     * выражение попадает, в сравнение типов — нет.
+     */
+    @Column(name = "search_tsv", insertable = false, updatable = false, columnDefinition = "tsvector")
+    @GeneratedColumn(
+        "to_tsvector('simple', coalesce(name, '') || ' ' || coalesce(name_lat, '') || ' ' || " +
+            "coalesce(active_substance, '') || ' ' || coalesce(manufacturer, ''))"
+    )
+    var searchTsv: String? = null
 
 
 ) {
