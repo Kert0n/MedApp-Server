@@ -41,6 +41,10 @@ dependencies {
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
     testImplementation("org.testcontainers:testcontainers-junit-jupiter")
     testImplementation("org.testcontainers:testcontainers-postgresql")
+    // Проверка слоёв: ArchitectureTest читает исходники и валит сборку на запрещённом
+    // импорте. Аналог ArchUnit для Kotlin — тот работает с байткодом и не видит ни
+    // top-level функций, ни расширений, которых здесь достаточно.
+    testImplementation("com.lemonappdev:konsist:0.17.3")
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.2.1")
     testImplementation("org.mockito:mockito-inline:5.2.0")
     testImplementation("com.h2database:h2")
