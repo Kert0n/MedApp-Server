@@ -78,7 +78,7 @@ class MedKitController(
     )
     fun getAllMedKits(authentication: Authentication): Set<MedKitSummaryDTO> {
         logger.debug("GET /v1/med-kit by user {}", authentication.userId)
-        return medKitService.findMedKitSummaries(authentication.userId)
+        return medKitService.findMedKitSummaries(authentication.userId).mapTo(mutableSetOf()) { it.toDto() }
     }
 
     @PostMapping("/{medKitId}/share")

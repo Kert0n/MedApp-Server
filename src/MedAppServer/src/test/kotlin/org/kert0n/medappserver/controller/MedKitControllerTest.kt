@@ -2,7 +2,7 @@ package org.kert0n.medappserver.controller
 
 import org.kert0n.medappserver.api.JoinMedKitRequest
 import org.kert0n.medappserver.api.MedKitDTO
-import org.kert0n.medappserver.api.MedKitSummaryDTO
+import org.kert0n.medappserver.db.repository.MedKitSummary
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.db.model.MedKit
@@ -105,8 +105,8 @@ class MedKitControllerTest {
     @Test
     fun `GET all medkits - returns summary list`() {
         val summaries = setOf(
-            MedKitSummaryDTO(medKitId, 2, 5),
-            MedKitSummaryDTO(UUID.randomUUID(), 1, 3)
+            MedKitSummary(medKitId, 2, 5),
+            MedKitSummary(UUID.randomUUID(), 1, 3)
         )
         whenever(medKitService.findMedKitSummaries(userId)).thenReturn(summaries)
 

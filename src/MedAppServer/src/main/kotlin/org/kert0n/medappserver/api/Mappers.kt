@@ -4,6 +4,7 @@ import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.MedKit
 import org.kert0n.medappserver.db.model.Using
 import org.kert0n.medappserver.db.model.parsed.VidalDrug
+import org.kert0n.medappserver.db.repository.MedKitSummary
 
 /**
  * Перевод сущностей в контракт.
@@ -73,4 +74,16 @@ fun VidalDrug.toTemplateDto(): DrugTemplateDTO = DrugTemplateDTO(
     manufacturer = manufacturer,
     country = country,
     description = description
+)
+
+/**
+ * Сводка аптечки наружу.
+ *
+ * Отдельный шаг, а не тот же тип из запроса: пока проекция репозитория и тело ответа были
+ * одним классом, форму ответа нельзя было тронуть, не переписав JPQL.
+ */
+fun MedKitSummary.toDto(): MedKitSummaryDTO = MedKitSummaryDTO(
+    id = id,
+    userCount = userCount,
+    drugCount = drugCount
 )
