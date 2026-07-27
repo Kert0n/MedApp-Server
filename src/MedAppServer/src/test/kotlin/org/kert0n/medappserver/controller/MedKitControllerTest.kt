@@ -1,5 +1,7 @@
 package org.kert0n.medappserver.controller
 
+import org.kert0n.medappserver.api.MedKitDTO
+import org.kert0n.medappserver.api.MedKitSummaryDTO
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.db.model.MedKit

@@ -1,7 +1,7 @@
 package org.kert0n.medappserver.services.orchestrators
 
 import com.sksamuel.aedile.core.Cache
-import org.kert0n.medappserver.controller.UsingDTO
+import org.kert0n.medappserver.api.UsingDTO
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.services.security.hashToken
 import org.slf4j.LoggerFactory

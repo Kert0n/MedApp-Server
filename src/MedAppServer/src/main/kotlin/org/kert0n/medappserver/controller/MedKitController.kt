@@ -1,5 +1,7 @@
 package org.kert0n.medappserver.controller
 
+import org.kert0n.medappserver.api.MedKitDTO
+import org.kert0n.medappserver.api.MedKitSummaryDTO
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.media.Content
@@ -181,23 +183,3 @@ class MedKitController(
         medKitDrugServices.delete(id, authentication.userId, transferToMedKitId)
     }
 }
-
-@Schema(description = "Medkit with drugs")
-data class MedKitDTO(
-    @Schema(description = "Medkit ID")
-    val id: UUID,
-    @Schema(description = "Drugs in medkit")
-    val drugs: Set<DrugDTO>
-)
-
-data class MedKitSummaryDTO(
-    @NotNull
-    @Schema(description = "Medkit ID")
-    val id: UUID,
-    @NotNull
-    @Schema(description = "Number of users in medkit")
-    val userCount: Long,
-    @NotNull
-    @Schema(description = "Number of drugs in medkit")
-    val drugCount: Long
-)

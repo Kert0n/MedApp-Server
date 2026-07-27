@@ -1,7 +1,7 @@
 package org.kert0n.medappserver.services.orchestrators
 
-import org.kert0n.medappserver.controller.DrugCreateDTO
-import org.kert0n.medappserver.controller.MedKitDTO
+import org.kert0n.medappserver.api.DrugCreateDTO
+import org.kert0n.medappserver.api.MedKitDTO
 import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.MedKit
 import org.kert0n.medappserver.db.repository.DrugRepository

@@ -1,6 +1,6 @@
 package org.kert0n.medappserver.db.repository
 
-import org.kert0n.medappserver.controller.MedKitSummaryDTO
+import org.kert0n.medappserver.api.MedKitSummaryDTO
 import org.kert0n.medappserver.db.model.MedKit
 import org.springframework.data.jpa.repository.EntityGraph
 import org.springframework.data.jpa.repository.JpaRepository
@@ -50,7 +50,7 @@ interface MedKitRepository : JpaRepository<MedKit, UUID> {
 
     @Query(
         """
-        SELECT new org.kert0n.medappserver.controller.MedKitSummaryDTO(
+        SELECT new org.kert0n.medappserver.api.MedKitSummaryDTO(
         mk.id, 
         COUNT(DISTINCT u), 
         COUNT(DISTINCT d)

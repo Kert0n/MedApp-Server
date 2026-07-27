@@ -1,8 +1,8 @@
 package org.kert0n.medappserver.services.models
 
-import org.kert0n.medappserver.controller.DrugCreateDTO
-import org.kert0n.medappserver.controller.DrugDTO
-import org.kert0n.medappserver.controller.DrugUpdateDTO
+import org.kert0n.medappserver.api.DrugCreateDTO
+import org.kert0n.medappserver.api.DrugDTO
+import org.kert0n.medappserver.api.DrugUpdateDTO
 import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.MedKit
 import org.kert0n.medappserver.db.repository.DrugRepository

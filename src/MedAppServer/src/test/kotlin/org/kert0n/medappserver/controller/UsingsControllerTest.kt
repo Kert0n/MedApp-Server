@@ -1,5 +1,9 @@
 package org.kert0n.medappserver.controller
 
+import org.kert0n.medappserver.api.IntakeRequest
+import org.kert0n.medappserver.api.UsingCreateDTO
+import org.kert0n.medappserver.api.UsingDTO
+import org.kert0n.medappserver.api.UsingUpdateDTO
 import org.kert0n.medappserver.testutil.qty
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test

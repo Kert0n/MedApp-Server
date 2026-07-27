@@ -1,5 +1,10 @@
 package org.kert0n.medappserver.controller
 
+import org.kert0n.medappserver.api.ConsumeRequest
+import org.kert0n.medappserver.api.DrugCreateDTO
+import org.kert0n.medappserver.api.DrugDTO
+import org.kert0n.medappserver.api.DrugUpdateDTO
+import org.kert0n.medappserver.api.MoveDrugRequest
 import org.kert0n.medappserver.testutil.qty
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test

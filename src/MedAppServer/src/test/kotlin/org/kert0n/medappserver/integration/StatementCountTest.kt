@@ -4,8 +4,8 @@ import jakarta.persistence.EntityManagerFactory
 import org.hibernate.SessionFactory
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
-import org.kert0n.medappserver.controller.DrugUpdateDTO
-import org.kert0n.medappserver.controller.UsingCreateDTO
+import org.kert0n.medappserver.api.DrugUpdateDTO
+import org.kert0n.medappserver.api.UsingCreateDTO
 import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.MedKit
 import org.kert0n.medappserver.db.model.User
