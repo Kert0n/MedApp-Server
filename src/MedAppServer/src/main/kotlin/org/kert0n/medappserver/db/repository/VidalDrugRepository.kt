@@ -34,43 +34,44 @@ interface VidalDrugRepository : JpaRepository<VidalDrug, UUID> {
      *  3. лучшее сходство среди четырёх полей;
      *  4. имя — чтобы порядок был устойчив между запусками.
      *
-     * Выражение `to_tsvector(...)` обязано посимвольно совпадать с индексом
-     * `ix_parsed_drugs_search_tsv` в `db/schema.sql`, иначе планировщик его не подхватит.
+     * `lower()` вокруг полей нет намеренно: `pg_trgm` приводит вход к нижнему регистру сам
+     * (`similarity('АСПИРИН','аспирин')` равна 1), а `ILIKE` складывает регистр по
+     * определению. Обёртка ничего не добавляла, зато превращала индексы в индексы по
+     * выражению — по таким Hibernate при старте не может сопоставить колонку и пишет
+     * HHH000475 на каждый. Единственное место, где `lower()` уместен, — точное сравнение
+     * строк в `ORDER BY`: там регистр действительно надо складывать руками.
+     *
+     * `search_tsv` — генерируемая колонка, объявлена в `db/schema.sql`. В сущности её нет:
+     * приложение её не читает, значение считает база.
      */
     @Query(
         value = """
         SELECT * FROM parsed_drugs
-        WHERE to_tsvector('simple',
-                coalesce(name, '') || ' ' || coalesce(name_lat, '') || ' ' ||
-                coalesce(active_substance, '') || ' ' || coalesce(manufacturer, ''))
-              @@ plainto_tsquery('simple', :term)
-           OR lower(name) LIKE CONCAT('%', lower(:likeTerm), '%')
-           OR lower(name_lat) LIKE CONCAT('%', lower(:likeTerm), '%')
-           OR lower(active_substance) LIKE CONCAT('%', lower(:likeTerm), '%')
-           OR lower(manufacturer) LIKE CONCAT('%', lower(:likeTerm), '%')
-           OR lower(name) % lower(:term)
-           OR lower(name_lat) % lower(:term)
-           OR lower(active_substance) % lower(:term)
-           OR lower(manufacturer) % lower(:term)
+        WHERE search_tsv @@ plainto_tsquery('simple', :term)
+           OR name ILIKE CONCAT('%', :likeTerm, '%')
+           OR name_lat ILIKE CONCAT('%', :likeTerm, '%')
+           OR active_substance ILIKE CONCAT('%', :likeTerm, '%')
+           OR manufacturer ILIKE CONCAT('%', :likeTerm, '%')
+           OR name % :term
+           OR name_lat % :term
+           OR active_substance % :term
+           OR manufacturer % :term
         ORDER BY
-            (to_tsvector('simple',
-                coalesce(name, '') || ' ' || coalesce(name_lat, '') || ' ' ||
-                coalesce(active_substance, '') || ' ' || coalesce(manufacturer, ''))
-             @@ plainto_tsquery('simple', :term)) DESC,
+            (search_tsv @@ plainto_tsquery('simple', :term)) DESC,
             CASE
                 WHEN lower(name) = lower(:term) THEN 0
-                WHEN lower(name) LIKE CONCAT(lower(:likeTerm), '%') THEN 1
-                WHEN lower(name) LIKE CONCAT('%', lower(:likeTerm), '%') THEN 2
-                WHEN lower(name_lat) LIKE CONCAT('%', lower(:likeTerm), '%') THEN 3
-                WHEN lower(active_substance) LIKE CONCAT('%', lower(:likeTerm), '%') THEN 4
-                WHEN lower(manufacturer) LIKE CONCAT('%', lower(:likeTerm), '%') THEN 5
+                WHEN name ILIKE CONCAT(:likeTerm, '%') THEN 1
+                WHEN name ILIKE CONCAT('%', :likeTerm, '%') THEN 2
+                WHEN name_lat ILIKE CONCAT('%', :likeTerm, '%') THEN 3
+                WHEN active_substance ILIKE CONCAT('%', :likeTerm, '%') THEN 4
+                WHEN manufacturer ILIKE CONCAT('%', :likeTerm, '%') THEN 5
                 ELSE 6
             END,
             GREATEST(
-                similarity(lower(name), lower(:term)),
-                similarity(lower(coalesce(name_lat, '')), lower(:term)),
-                similarity(lower(coalesce(active_substance, '')), lower(:term)),
-                similarity(lower(coalesce(manufacturer, '')), lower(:term))
+                similarity(name, :term),
+                similarity(coalesce(name_lat, ''), :term),
+                similarity(coalesce(active_substance, ''), :term),
+                similarity(coalesce(manufacturer, ''), :term)
             ) DESC,
             name
         LIMIT :limit

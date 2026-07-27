@@ -125,6 +125,25 @@ CREATE TABLE parsed_drugs
     description      text,
     otc              boolean      NOT NULL,
 
+    -- Склейка искомых полей для полнотекстового поиска, считает база.
+    --
+    -- Колонка, а не выражение в индексе, по двум причинам. Первая: индекс по выражению
+    -- Hibernate при старте не может сопоставить с колонкой и пишет HHH000475. Вторая:
+    -- выражение пришлось бы повторять в запросе посимвольно, иначе планировщик не сопоставит
+    -- его с индексом, — а такое совпадение ломается при первой же правке.
+    --
+    -- В сущности VidalDrug колонки нет намеренно: приложение её не читает и не пишет.
+    -- ddl-auto=validate лишние колонки игнорирует, а метаданные таблицы Hibernate берёт у
+    -- JDBC, поэтому для индекса ей достаточно существовать в базе.
+    --
+    -- Конфигурация 'simple', а не 'russian': названия препаратов и производителей — имена
+    -- собственные, стеммить их незачем, а предсказуемость дороже.
+    search_tsv       tsvector GENERATED ALWAYS AS (
+        to_tsvector('simple',
+                    coalesce(name, '') || ' ' || coalesce(name_lat, '') || ' ' ||
+                    coalesce(active_substance, '') || ' ' || coalesce(manufacturer, ''))
+        ) STORED,
+
     CONSTRAINT parsed_drugs_pkey PRIMARY KEY (id),
     CONSTRAINT parsed_drugs_form_type_fkey FOREIGN KEY (form_type_id) REFERENCES form_types (id),
     CONSTRAINT parsed_drugs_quantity_unit_fkey FOREIGN KEY (quantity_unit_id) REFERENCES quantity_units (id)
@@ -142,8 +161,11 @@ CREATE INDEX ix_parsed_drugs_quantity_unit_id ON parsed_drugs (quantity_unit_id)
 -- btree не работает ни для `LIKE '%…%'`, ни для similarity(). Они только замедляли вставку.
 -- Btree по name оставлен — им пользуются ORDER BY name и точное сравнение.
 --
--- Выражение lower(...), а не сама колонка: запрос сравнивает приведённые к нижнему регистру
--- значения, и индекс по сырой колонке для такого предиката не подойдёт.
+-- По самим колонкам, без lower(). pg_trgm приводит вход к нижнему регистру сам:
+-- similarity('АСПИРИН','аспирин') равна 1, show_trgm('ASP') совпадает с show_trgm('asp').
+-- Поэтому обёртка lower() ничего не давала, зато делала индекс индексом по выражению — а по
+-- такому Hibernate при старте не может сопоставить колонку и пишет HHH000475 на каждый.
+-- Не возвращать «для надёжности»: надёжности она не добавляет, а шум в логе возвращает.
 --
 -- Триграммы отдельно по каждому полю, а не по склейке: similarity() делит на общее число
 -- триграмм, поэтому на конкатенации четырёх полей сходство размывается почти до нуля и
@@ -153,24 +175,10 @@ CREATE INDEX ix_parsed_drugs_quantity_unit_id ON parsed_drugs (quantity_unit_id)
 -- Тип индекса и opclass в JPA не выражаются, поэтому эти индексы живут только здесь;
 -- в @Table(indexes = ...) у VidalDrug стоит ссылка на этот файл.
 --
--- Полнотекстовый индекс — по выражению, а не по генерируемой колонке. Колонку пришлось бы
--- объявлять в сущности, потому что схему для тестов создаёт Hibernate из неё, а не из этого
--- файла; при этом tsvector в JPA не отображается. Запрос содержит ровно это же выражение,
--- поэтому планировщик сопоставляет его с индексом. Выражение и запрос обязаны совпадать
--- посимвольно — правя одно, править и второе (VidalDrugRepository).
---
--- Он нужен для многословных запросов: «Rinzasip Хемофарм» — это слово из name_lat и слово
--- из manufacturer, и ни одно поле по отдельности такому запросу не удовлетворяет.
--- plainto_tsquery соединяет слова через AND, поэтому условие выполняется только когда
--- нашлись все слова, пусть и из разных полей.
---
--- Конфигурация 'simple', а не 'russian': названия препаратов и производителей — имена
--- собственные, стеммить их незачем, а предсказуемость дороже.
-CREATE INDEX ix_parsed_drugs_search_tsv ON parsed_drugs USING gin (
-    to_tsvector('simple',
-                coalesce(name, '') || ' ' || coalesce(name_lat, '') || ' ' ||
-                coalesce(active_substance, '') || ' ' || coalesce(manufacturer, '')));
-CREATE INDEX ix_parsed_drugs_name_trgm ON parsed_drugs USING gin (lower(name) gin_trgm_ops);
-CREATE INDEX ix_parsed_drugs_name_lat_trgm ON parsed_drugs USING gin (lower(name_lat) gin_trgm_ops);
-CREATE INDEX ix_parsed_drugs_substance_trgm ON parsed_drugs USING gin (lower(active_substance) gin_trgm_ops);
-CREATE INDEX ix_parsed_drugs_manufacturer_trgm ON parsed_drugs USING gin (lower(manufacturer) gin_trgm_ops);
+-- Полнотекстовый — по колонке search_tsv, см. её объявление выше: нужен для многословных
+-- запросов, где слова лежат в разных полях.
+CREATE INDEX ix_parsed_drugs_search_tsv ON parsed_drugs USING gin (search_tsv);
+CREATE INDEX ix_parsed_drugs_name_trgm ON parsed_drugs USING gin (name gin_trgm_ops);
+CREATE INDEX ix_parsed_drugs_name_lat_trgm ON parsed_drugs USING gin (name_lat gin_trgm_ops);
+CREATE INDEX ix_parsed_drugs_substance_trgm ON parsed_drugs USING gin (active_substance gin_trgm_ops);
+CREATE INDEX ix_parsed_drugs_manufacturer_trgm ON parsed_drugs USING gin (manufacturer gin_trgm_ops);
