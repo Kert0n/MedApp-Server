@@ -1,6 +1,8 @@
 package org.kert0n.medappserver.controller
 
 import org.kert0n.medappserver.api.toDto
+import org.kert0n.medappserver.api.JoinMedKitRequest
+import org.kert0n.medappserver.api.MedKitCreatedResponse
 import org.kert0n.medappserver.api.MedKitDTO
 import org.kert0n.medappserver.api.MedKitSummaryDTO
 import io.swagger.v3.oas.annotations.Operation
@@ -11,8 +13,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
-import jakarta.validation.constraints.NotBlank
-import jakarta.validation.constraints.NotNull
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
 import org.slf4j.LoggerFactory
@@ -31,20 +31,6 @@ class MedKitController(
 ) {
 
     private val logger = LoggerFactory.getLogger(MedKitController::class.java)
-
-    data class MedKitCreatedResponse(
-        @NotNull
-        @Schema(description = "Created medkit ID")
-        val id: UUID
-    )
-
-    @Schema(description = "Join medkit request")
-    data class JoinMedKitRequest(
-        @NotBlank
-        @Schema(description = "Share key to join medkit", example = "share-key-123")
-        val key: String
-    )
-
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)

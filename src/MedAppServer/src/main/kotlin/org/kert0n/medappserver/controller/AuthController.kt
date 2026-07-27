@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.servlet.http.HttpServletRequest
+import org.kert0n.medappserver.api.RegisterResponse
 import org.kert0n.medappserver.config.RegistrationProperties
 import org.kert0n.medappserver.services.models.UserService
 import org.kert0n.medappserver.services.security.SecurityService
@@ -28,14 +29,6 @@ class AuthController(
     private val userService: UserService,
     private val securityService: SecurityService
 ) {
-
-    @Schema(description = "Registration response with generated credentials")
-    data class RegisterResponse(
-        @Schema(description = "Generated login identifier")
-        val login: UUID,
-        @Schema(description = "Generated secret key for authentication")
-        val key: String
-    )
 
     @PostMapping("/register")
     @Operation(

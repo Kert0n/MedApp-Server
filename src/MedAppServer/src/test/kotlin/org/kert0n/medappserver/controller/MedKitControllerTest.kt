@@ -1,5 +1,6 @@
 package org.kert0n.medappserver.controller
 
+import org.kert0n.medappserver.api.JoinMedKitRequest
 import org.kert0n.medappserver.api.MedKitDTO
 import org.kert0n.medappserver.api.MedKitSummaryDTO
 import org.junit.jupiter.api.BeforeEach
@@ -140,7 +141,7 @@ class MedKitControllerTest {
         val medKitDTO = MedKitDTO(id = medKitId, drugs = emptySet())
         whenever(medKitService.joinMedKitByKey("share-key-123", userId)).thenReturn(medKit)
 
-        val joinRequest = MedKitController.JoinMedKitRequest(key = "share-key-123")
+        val joinRequest = JoinMedKitRequest(key = "share-key-123")
 
         mockMvc.perform(
             post("/v1/med-kit/join")
@@ -154,7 +155,7 @@ class MedKitControllerTest {
 
     @Test
     fun `POST join medkit - rejects blank key`() {
-        val joinRequest = MedKitController.JoinMedKitRequest(key = "")
+        val joinRequest = JoinMedKitRequest(key = "")
 
         mockMvc.perform(
             post("/v1/med-kit/join")
