@@ -52,7 +52,7 @@ class QuantityReductionService(
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Insufficient quantity available")
         }
 
-        drug.quantity = drug.quantity - quantity
+        drug.consumeUnplanned(quantity)
         drugService.save(drug)
         return handleQuantityReduction(drug)
     }
@@ -100,10 +100,8 @@ class QuantityReductionService(
 
         // Порядок обязателен: план уменьшается до согласования, иначе оно посчитает сумму
         // планов по старому значению.
-        using.plannedAmount = maxOf(BigDecimal.ZERO, using.plannedAmount - quantityConsumed)
-        using.drug.quantity = using.drug.quantity - quantityConsumed
-        // Дешевле, чем перезагружать препарат: формула сама не пересчитается в транзакции.
-        using.drug.totalPlannedAmount = using.drug.totalPlannedAmount - quantityConsumed
+        using.reduceBy(quantityConsumed)
+        using.drug.consumePlanned(quantityConsumed)
 
         // null означает, что препарат кончился и удалён вместе со всеми планами. Продолжать
         // нельзя: save ниже вставил бы план на удалённый препарат, то есть нарушил бы внешний
@@ -149,7 +147,7 @@ class QuantityReductionService(
             QUANTITY_ROUNDING
         )
         handleUsingReduction(withUsings(drug), reduceFactor)
-        drug.totalPlannedAmount = drug.quantity
+        drug.markPlansMatchStock()
         return drugService.save(drug)
         // TODO FIREBASE NOTIFICATION
     }

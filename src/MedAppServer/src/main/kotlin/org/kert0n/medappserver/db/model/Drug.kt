@@ -98,6 +98,40 @@ class Drug(
     @Formula("(SELECT COALESCE(SUM(u.planned_amount), 0) FROM usings u WHERE u.drug_id = id)")
     var totalPlannedAmount: BigDecimal = totalPlannedAmount
 
+    /**
+     * Внеплановый расход: забрали лекарство мимо чьего-либо плана.
+     *
+     * Сумма планов не меняется — она может стать больше остатка, и согласовать её обязан
+     * вызывающий. Именно поэтому операция отделена от [consumePlanned]: перепутать их
+     * означало бы тихо разойтись с инвариантом.
+     */
+    fun consumeUnplanned(amount: BigDecimal) {
+        quantity = quantity - amount
+    }
+
+    /**
+     * Приём по плану: остаток и сумма планов уменьшаются на одну и ту же величину.
+     *
+     * Оба присваивания живут здесь, а не в сервисе, по одной причине: они обязаны идти
+     * парой. [totalPlannedAmount] считается формулой при загрузке и внутри транзакции сама
+     * не пересчитывается, поэтому её ведут руками — а руками ведённое поле расходится с
+     * правдой при первой же правке, если места правки разнесены по разным файлам.
+     */
+    fun consumePlanned(amount: BigDecimal) {
+        quantity = quantity - amount
+        totalPlannedAmount = totalPlannedAmount - amount
+    }
+
+    /**
+     * Отметить, что планы сжаты ровно под остаток.
+     *
+     * Вызывается после пропорционального уменьшения планов: в базе их сумма теперь равна
+     * количеству, и производное поле обязано это отражать до конца транзакции.
+     */
+    fun markPlansMatchStock() {
+        totalPlannedAmount = quantity
+    }
+
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
