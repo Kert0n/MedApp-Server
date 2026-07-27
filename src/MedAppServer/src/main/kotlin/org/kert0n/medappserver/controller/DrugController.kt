@@ -1,6 +1,8 @@
 package org.kert0n.medappserver.controller
 
 import org.kert0n.medappserver.api.toDto
+import org.kert0n.medappserver.api.toCommand
+import org.kert0n.medappserver.api.toPatch
 import org.kert0n.medappserver.api.toQuantityInfo
 import org.kert0n.medappserver.api.toTemplateDto
 import org.kert0n.medappserver.api.ConsumeRequest
@@ -79,7 +81,7 @@ class DrugController(
         @Valid @RequestBody drugDTO: DrugCreateDTO
     ): DrugDTO {
         logger.debug("POST /v1/drug by user {}: {}", authentication.userId, drugDTO.name)
-        val drug = medKitDrugServices.createDrugInMedkit(drugDTO, authentication.userId)
+        val drug = medKitDrugServices.createDrugInMedkit(drugDTO.medKitId, drugDTO.toCommand(), authentication.userId)
         return drug.toDto()
     }
 
@@ -99,7 +101,7 @@ class DrugController(
         @Valid @RequestBody updateDTO: DrugUpdateDTO
     ): DrugDTO {
         logger.debug("PUT /v1/drug/{} by user {}", id, authentication.userId)
-        val drug = drugService.update(id, updateDTO, authentication.userId)
+        val drug = drugService.update(id, updateDTO.toPatch(), authentication.userId)
         return drug.toDto()
     }
 

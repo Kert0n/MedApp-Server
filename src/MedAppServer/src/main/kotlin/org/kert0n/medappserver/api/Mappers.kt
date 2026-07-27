@@ -5,6 +5,8 @@ import org.kert0n.medappserver.db.model.MedKit
 import org.kert0n.medappserver.db.model.Using
 import org.kert0n.medappserver.db.model.parsed.VidalDrug
 import org.kert0n.medappserver.db.repository.MedKitSummary
+import org.kert0n.medappserver.services.models.DrugCreation
+import org.kert0n.medappserver.services.models.DrugPatch
 
 /**
  * Перевод сущностей в контракт.
@@ -93,4 +95,33 @@ fun Drug.toQuantityInfo(): QuantityInfo = QuantityInfo(
     actualQuantity = quantity,
     plannedQuantity = totalPlannedAmount,
     availableQuantity = availableQuantity
+)
+
+/**
+ * Запрос на создание препарата — в аргументы прикладной операции.
+ *
+ * `medKitId` не переносится: он маршрутный, его разбирает оркестратор, а созданию препарата
+ * он не нужен.
+ */
+fun DrugCreateDTO.toCommand(): DrugCreation = DrugCreation(
+    name = name,
+    quantity = quantity,
+    quantityUnit = quantityUnit,
+    formType = formType,
+    category = category,
+    manufacturer = manufacturer,
+    country = country,
+    description = description
+)
+
+/** Запрос на правку препарата — в частичный патч. `null` по-прежнему значит «не трогать». */
+fun DrugUpdateDTO.toPatch(): DrugPatch = DrugPatch(
+    name = name,
+    quantity = quantity,
+    quantityUnit = quantityUnit,
+    formType = formType,
+    category = category,
+    manufacturer = manufacturer,
+    country = country,
+    description = description
 )

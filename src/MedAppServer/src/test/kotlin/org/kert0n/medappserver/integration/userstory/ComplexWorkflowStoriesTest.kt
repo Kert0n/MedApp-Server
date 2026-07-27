@@ -1,6 +1,8 @@
 package org.kert0n.medappserver.integration.userstory
 
 import org.kert0n.medappserver.testutil.assertQty
+import org.kert0n.medappserver.api.toPatch
+import org.kert0n.medappserver.api.toCommand
 import org.kert0n.medappserver.testutil.qty
 import org.kert0n.medappserver.PostgresIntegrationTest
 import jakarta.persistence.EntityManager
@@ -247,7 +249,7 @@ class ComplexWorkflowStoriesTest {
             medKitId = sourceKit.id, formType = null, category = null,
             manufacturer = null, country = null, description = null
         )
-        val drug = medKitDrugServices.createDrugInMedkit(createDrugDto, alice.id)
+        val drug = medKitDrugServices.createDrugInMedkit(createDrugDto.medKitId, createDrugDto.toCommand(), alice.id)
         dbHelper.flushAndClear()
 
         // Alice and Bob create treatment plans (40 each, total 80)
@@ -268,7 +270,7 @@ class ComplexWorkflowStoriesTest {
         // Alice updates the drug quantity from 100 to 50.
         // This MUST trigger `handleQuantityReduction`. Factor = 50 / 100 = 0.5.
         val updateDrugDto = DrugUpdateDTO(quantity = qty(50.0))
-        drugService.update(drug.id, updateDrugDto, alice.id)
+        drugService.update(drug.id, updateDrugDto.toPatch(), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(50.0, dbHelper.drugQuantity(drug.id), "Drug quantity updated to 50")
@@ -315,7 +317,7 @@ class ComplexWorkflowStoriesTest {
         medKitService.joinMedKitByKey(shareKey, bob.id)
 
         // Alice creates a drug
-        val drug = drugService.create(DrugCreateDTO("Shared Meds", qty(10.0), "pcs", kitA.id), kitA, alice.id)
+        val drug = drugService.create(DrugCreateDTO("Shared Meds", qty(10.0), "pcs", kitA.id).toCommand(), kitA, alice.id)
 
         // Bob creates a private kit
         val kitB = medKitService.createNew(bob.id)
@@ -339,7 +341,7 @@ class ComplexWorkflowStoriesTest {
         val kitA = medKitService.createNew(alice.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kitA.id, alice.id), bob.id)
 
-        val drug = drugService.create(DrugCreateDTO("Audit Meds", qty(10.0), "pcs", kitA.id), kitA, alice.id)
+        val drug = drugService.create(DrugCreateDTO("Audit Meds", qty(10.0), "pcs", kitA.id).toCommand(), kitA, alice.id)
 
         // Both have plans
         treatmentPlanService.create(alice.id, drug.id, qty(5.0))
@@ -369,7 +371,7 @@ class ComplexWorkflowStoriesTest {
         entityManager.flush()
         entityManager.clear()
         val drug =
-            medKitDrugServices.createDrugInMedkit(DrugCreateDTO("Migrating Meds", qty(10.0), "pcs", kitA.id), alice.id)
+            medKitDrugServices.createDrugInMedkit(DrugCreateDTO("Migrating Meds", qty(10.0), "pcs", kitA.id).medKitId, DrugCreateDTO("Migrating Meds", qty(10.0), "pcs", kitA.id).toCommand(), alice.id)
 
         // ACT: Delete Kit A and migrate drugs to Kit B
         entityManager.flush()

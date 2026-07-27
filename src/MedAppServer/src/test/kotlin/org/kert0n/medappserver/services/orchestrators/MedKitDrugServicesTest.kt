@@ -1,6 +1,7 @@
 package org.kert0n.medappserver.services.orchestrators
 
 import org.kert0n.medappserver.api.toDto
+import org.kert0n.medappserver.api.toCommand
 import org.kert0n.medappserver.testutil.qty
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertDoesNotThrow
@@ -56,7 +57,8 @@ class MedKitDrugServicesTest {
         dbHelper.flushAndClear()
 
         val drug = medKitDrugServices.createDrugInMedkit(
-            DrugCreateDTO(name = "Aspirin", quantity = qty(100.0), quantityUnit = "mg", medKitId = kit.id),
+            DrugCreateDTO(name = "Aspirin", quantity = qty(100.0), quantityUnit = "mg", medKitId = kit.id).medKitId,
+            DrugCreateDTO(name = "Aspirin", quantity = qty(100.0), quantityUnit = "mg", medKitId = kit.id).toCommand(),
             alice.id
         )
 
@@ -73,7 +75,8 @@ class MedKitDrugServicesTest {
 
         assertFailsWith<ResponseStatusException> {
             medKitDrugServices.createDrugInMedkit(
-                DrugCreateDTO(name = "Drug", quantity = qty(10.0), quantityUnit = "mg", medKitId = kit.id),
+                DrugCreateDTO(name = "Drug", quantity = qty(10.0), quantityUnit = "mg", medKitId = kit.id).medKitId,
+                DrugCreateDTO(name = "Drug", quantity = qty(10.0), quantityUnit = "mg", medKitId = kit.id).toCommand(),
                 eve.id
             )
         }
@@ -123,7 +126,7 @@ class MedKitDrugServicesTest {
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kitA.id, alice.id), bob.id)
 
         val drug = drugService.create(
-            DrugCreateDTO("Shared Meds", qty(10.0), "pcs", kitA.id), kitA, alice.id
+            DrugCreateDTO("Shared Meds", qty(10.0), "pcs", kitA.id).toCommand(), kitA, alice.id
         )
         val kitB = medKitService.createNew(bob.id)
         dbHelper.flushAndClear()
@@ -193,7 +196,8 @@ class MedKitDrugServicesTest {
         val kitA = medKitService.createNew(alice.id)
         val kitB = medKitService.createNew(alice.id)
         val drug = medKitDrugServices.createDrugInMedkit(
-            DrugCreateDTO("Migrating Drug", qty(10.0), "pcs", kitA.id), alice.id
+            DrugCreateDTO("Migrating Drug", qty(10.0), "pcs", kitA.id).medKitId,
+            DrugCreateDTO("Migrating Drug", qty(10.0), "pcs", kitA.id).toCommand(), alice.id
         )
         dbHelper.flushAndClear()
 
@@ -246,11 +250,11 @@ class MedKitDrugServicesTest {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
         drugService.create(
-            DrugCreateDTO(name = "Drug A", quantity = qty(50.0), quantityUnit = "mg", medKitId = kit.id),
+            DrugCreateDTO(name = "Drug A", quantity = qty(50.0), quantityUnit = "mg", medKitId = kit.id).toCommand(),
             kit, alice.id
         )
         drugService.create(
-            DrugCreateDTO(name = "Drug B", quantity = qty(30.0), quantityUnit = "tablets", medKitId = kit.id),
+            DrugCreateDTO(name = "Drug B", quantity = qty(30.0), quantityUnit = "tablets", medKitId = kit.id).toCommand(),
             kit, alice.id
         )
         dbHelper.flushAndClear()

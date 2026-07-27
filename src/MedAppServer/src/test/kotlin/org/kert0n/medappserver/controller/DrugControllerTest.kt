@@ -145,7 +145,7 @@ class DrugControllerTest {
     fun `POST create drug - creates and returns drug`() {
         val drug = createTestDrug()
         val dto = createTestDrugDTO()
-        whenever(medKitDrugServices.createDrugInMedkit(any(), eq(userId))).thenReturn(drug)
+        whenever(medKitDrugServices.createDrugInMedkit(any(), any(), eq(userId))).thenReturn(drug)
 
         val createDTO = DrugCreateDTO(
             name = "Aspirin",

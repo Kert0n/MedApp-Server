@@ -1,6 +1,8 @@
 package org.kert0n.medappserver.services.models
 
 import org.kert0n.medappserver.api.toDto
+import org.kert0n.medappserver.api.toCommand
+import org.kert0n.medappserver.api.toPatch
 import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -112,7 +114,7 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         val drug = drugService.create(
-            DrugCreateDTO(name = "Aspirin", quantity = qty(100.0), quantityUnit = "mg", medKitId = kit.id),
+            DrugCreateDTO(name = "Aspirin", quantity = qty(100.0), quantityUnit = "mg", medKitId = kit.id).toCommand(),
             kit, alice.id
         )
 
@@ -132,7 +134,7 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         val emptyUpdate = DrugUpdateDTO(null, null, null, null, null, null, null, null)
-        drugService.update(drug.id, emptyUpdate, alice.id)
+        drugService.update(drug.id, emptyUpdate.toPatch(), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(10.0, drugService.findById(drug.id).quantity)
@@ -150,7 +152,7 @@ class DrugServiceTest {
             formType = "liquid", category = "cat", manufacturer = "man",
             country = "co", description = "desc"
         )
-        drugService.update(drug.id, fullUpdate, alice.id)
+        drugService.update(drug.id, fullUpdate.toPatch(), alice.id)
         dbHelper.flushAndClear()
 
         val updated = drugService.findById(drug.id)
@@ -171,7 +173,7 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit, 10.0)
         dbHelper.flushAndClear()
 
-        drugService.update(drug.id, DrugUpdateDTO(quantity = qty(20.0)), alice.id)
+        drugService.update(drug.id, DrugUpdateDTO(quantity = qty(20.0)).toPatch(), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(20.0, dbHelper.drugQuantity(drug.id))
@@ -187,7 +189,7 @@ class DrugServiceTest {
         treatmentPlanService.create(alice.id, drug.id, qty(80.0))
         dbHelper.flushAndClear()
 
-        drugService.update(drug.id, DrugUpdateDTO(quantity = qty(40.0)), alice.id)
+        drugService.update(drug.id, DrugUpdateDTO(quantity = qty(40.0)).toPatch(), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(40.0, dbHelper.drugQuantity(drug.id))
@@ -243,7 +245,7 @@ class DrugServiceTest {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
         val drug = drugService.create(
-            DrugCreateDTO(name = "Drug", quantity = qty(100.0), quantityUnit = "mg", medKitId = kit.id),
+            DrugCreateDTO(name = "Drug", quantity = qty(100.0), quantityUnit = "mg", medKitId = kit.id).toCommand(),
             kit, alice.id
         )
         treatmentPlanService.create(alice.id, drug.id, qty(25.0))

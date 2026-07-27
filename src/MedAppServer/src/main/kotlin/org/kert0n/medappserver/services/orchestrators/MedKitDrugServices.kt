@@ -1,6 +1,6 @@
 package org.kert0n.medappserver.services.orchestrators
 
-import org.kert0n.medappserver.api.DrugCreateDTO
+import org.kert0n.medappserver.services.models.DrugCreation
 import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.MedKit
 import org.kert0n.medappserver.services.models.DrugService
@@ -23,10 +23,10 @@ class MedKitDrugServices(
     private val logger = LoggerFactory.getLogger(MedKitDrugServices::class.java)
 
     @Transactional
-    fun createDrugInMedkit(createDTO: DrugCreateDTO, userId: UUID): Drug {
-        logger.debug("Creating drug: {} for user: {}", createDTO.name, userId)
-        val medKit = medKitService.findByIdForUser(createDTO.medKitId, userId)
-        return drugService.create(createDTO, medKit, userId)
+    fun createDrugInMedkit(medKitId: UUID, command: DrugCreation, userId: UUID): Drug {
+        logger.debug("Creating drug: {} for user: {}", command.name, userId)
+        val medKit = medKitService.findByIdForUser(medKitId, userId)
+        return drugService.create(command, medKit, userId)
     }
 
     @Transactional

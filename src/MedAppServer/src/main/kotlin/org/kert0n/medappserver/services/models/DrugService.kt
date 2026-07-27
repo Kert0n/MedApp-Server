@@ -1,7 +1,5 @@
 package org.kert0n.medappserver.services.models
 
-import org.kert0n.medappserver.api.DrugCreateDTO
-import org.kert0n.medappserver.api.DrugUpdateDTO
 import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.MedKit
 import org.kert0n.medappserver.db.repository.DrugRepository
@@ -71,18 +69,18 @@ class DrugService(
 
 
     @Transactional
-    fun create(createDTO: DrugCreateDTO, medKit: MedKit, userId: UUID): Drug {
-        logger.debug("Creating drug: {} for user: {}", createDTO.name, userId)
+    fun create(command: DrugCreation, medKit: MedKit, userId: UUID): Drug {
+        logger.debug("Creating drug: {} for user: {}", command.name, userId)
 
         val drug = Drug(
-            name = createDTO.name,
-            quantity = createDTO.quantity,
-            quantityUnit = createDTO.quantityUnit,
-            formType = createDTO.formType,
-            category = createDTO.category,
-            manufacturer = createDTO.manufacturer,
-            country = createDTO.country,
-            description = createDTO.description,
+            name = command.name,
+            quantity = command.quantity,
+            quantityUnit = command.quantityUnit,
+            formType = command.formType,
+            category = command.category,
+            manufacturer = command.manufacturer,
+            country = command.country,
+            description = command.description,
             medKit = medKit
         )
 
@@ -101,20 +99,20 @@ class DrugService(
      * ради предыдущего количества и он же внутри `update`.
      */
     @Transactional
-    fun update(drugId: UUID, updateDTO: DrugUpdateDTO, userId: UUID): Drug {
+    fun update(drugId: UUID, patch: DrugPatch, userId: UUID): Drug {
         logger.debug("Updating drug: {}", drugId)
 
         val drug = findByIdForUserForUpdate(drugId, userId)
         val previousQuantity = drug.quantity
 
-        updateDTO.name?.let { drug.name = it }
-        updateDTO.quantity?.let { drug.quantity = it }
-        updateDTO.quantityUnit?.let { drug.quantityUnit = it }
-        updateDTO.formType?.let { drug.formType = it }
-        updateDTO.category?.let { drug.category = it }
-        updateDTO.manufacturer?.let { drug.manufacturer = it }
-        updateDTO.country?.let { drug.country = it }
-        updateDTO.description?.let { drug.description = it }
+        patch.name?.let { drug.name = it }
+        patch.quantity?.let { drug.quantity = it }
+        patch.quantityUnit?.let { drug.quantityUnit = it }
+        patch.formType?.let { drug.formType = it }
+        patch.category?.let { drug.category = it }
+        patch.manufacturer?.let { drug.manufacturer = it }
+        patch.country?.let { drug.country = it }
+        patch.description?.let { drug.description = it }
 
         drugRepository.save(drug)
         if (drug.quantity < previousQuantity) {
