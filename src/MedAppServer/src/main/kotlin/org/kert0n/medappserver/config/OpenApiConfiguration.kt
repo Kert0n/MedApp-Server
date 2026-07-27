@@ -1,4 +1,4 @@
-package org.kert0n.medappserver.services
+package org.kert0n.medappserver.config
 
 import io.swagger.v3.oas.models.Components
 import io.swagger.v3.oas.models.OpenAPI
