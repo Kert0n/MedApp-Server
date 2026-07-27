@@ -43,15 +43,22 @@ interface VidalDrugRepository : JpaRepository<VidalDrug, UUID> {
      *
      * `search_tsv` — генерируемая колонка, объявлена в `db/schema.sql`. В сущности её нет:
      * приложение её не читает, значение считает база.
+     *
+     * Шаблон для ILIKE собирается оператором `||`, а не `CONCAT`, но разница косметическая:
+     * `||` сворачивается в константу на этапе планирования (`'%abc%'::text` в плане), а
+     * `concat(...)` остаётся вызовом функции. **Оба варианта индекс используют** — я
+     * предполагал обратное, и замер это опроверг: на чистом Postgres 18 с триграммным
+     * индексом обе формы дают `Bitmap Index Scan`. Записано, чтобы никто не «чинил» это
+     * обратно, приняв за находку.
      */
     @Query(
         value = """
         SELECT * FROM parsed_drugs
         WHERE search_tsv @@ plainto_tsquery('simple', :term)
-           OR name ILIKE CONCAT('%', :likeTerm, '%')
-           OR name_lat ILIKE CONCAT('%', :likeTerm, '%')
-           OR active_substance ILIKE CONCAT('%', :likeTerm, '%')
-           OR manufacturer ILIKE CONCAT('%', :likeTerm, '%')
+           OR name ILIKE ('%' || :likeTerm || '%')
+           OR name_lat ILIKE ('%' || :likeTerm || '%')
+           OR active_substance ILIKE ('%' || :likeTerm || '%')
+           OR manufacturer ILIKE ('%' || :likeTerm || '%')
            OR name % :term
            OR name_lat % :term
            OR active_substance % :term
@@ -60,11 +67,11 @@ interface VidalDrugRepository : JpaRepository<VidalDrug, UUID> {
             (search_tsv @@ plainto_tsquery('simple', :term)) DESC,
             CASE
                 WHEN lower(name) = lower(:term) THEN 0
-                WHEN name ILIKE CONCAT(:likeTerm, '%') THEN 1
-                WHEN name ILIKE CONCAT('%', :likeTerm, '%') THEN 2
-                WHEN name_lat ILIKE CONCAT('%', :likeTerm, '%') THEN 3
-                WHEN active_substance ILIKE CONCAT('%', :likeTerm, '%') THEN 4
-                WHEN manufacturer ILIKE CONCAT('%', :likeTerm, '%') THEN 5
+                WHEN name ILIKE (:likeTerm || '%') THEN 1
+                WHEN name ILIKE ('%' || :likeTerm || '%') THEN 2
+                WHEN name_lat ILIKE ('%' || :likeTerm || '%') THEN 3
+                WHEN active_substance ILIKE ('%' || :likeTerm || '%') THEN 4
+                WHEN manufacturer ILIKE ('%' || :likeTerm || '%') THEN 5
                 ELSE 6
             END,
             GREATEST(

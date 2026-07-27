@@ -1,0 +1,115 @@
+package org.kert0n.medappserver.queryplan
+
+import jakarta.persistence.EntityManager
+import org.springframework.stereotype.Component
+import org.springframework.transaction.annotation.Transactional
+import java.util.UUID
+
+/**
+ * Синтетика, на которой планы вообще имеют смысл.
+ *
+ * На десятке строк планировщик всегда выберет `Seq Scan` — и будет прав, так что проверять
+ * там нечего. Объёмы ниже подобраны так, чтобы индексный доступ стал выгоднее
+ * последовательного, оставаясь достаточно быстрым для сборки.
+ *
+ * Данные генерирует сама база через `generate_series`: гонять десятки тысяч вставок через
+ * Hibernate значило бы ждать минуты ради фикстуры.
+ */
+@Component
+class QueryPlanFixture(private val entityManager: EntityManager) {
+
+    /** Идентификаторы, за которые цепляются сценарии. Заполняет [seed]. */
+    lateinit var ownerId: UUID
+    lateinit var medKitId: UUID
+    lateinit var drugId: UUID
+    lateinit var catalogueName: String
+
+    @Transactional
+    fun seed() {
+        entityManager.createNativeQuery(
+            """
+            INSERT INTO users (id, hashed_key)
+            SELECT gen_random_uuid(), '{noop}k' || i FROM generate_series(1, $USERS) AS i
+            """
+        ).executeUpdate()
+
+        entityManager.createNativeQuery(
+            "INSERT INTO med_kits (id) SELECT gen_random_uuid() FROM generate_series(1, $MED_KITS)"
+        ).executeUpdate()
+
+        // По три участника на аптечку — как в жизни, семья или соседи. Раскладка «каждый в
+        // каждой» дала бы сотни планов на препарат, план запроса поехал бы под этот объём, и
+        // набор проверял бы нагрузку, которой у приложения не бывает.
+        entityManager.createNativeQuery(
+            """
+            INSERT INTO user_med_kits (user_id, med_kit_id)
+            SELECT u.id, m.id
+            FROM (SELECT id, row_number() OVER () AS n FROM med_kits) m
+            JOIN LATERAL (
+                SELECT id FROM users OFFSET ((m.n * 3) % $USERS) LIMIT 3
+            ) u ON true
+            """
+        ).executeUpdate()
+
+        entityManager.createNativeQuery(
+            """
+            INSERT INTO user_drugs (id, name, quantity, quantity_unit, med_kit_id)
+            SELECT gen_random_uuid(), 'Препарат ' || i, 1000, 'таб',
+                   (SELECT id FROM med_kits OFFSET (i % $MED_KITS) LIMIT 1)
+            FROM generate_series(1, $DRUGS) AS i
+            """
+        ).executeUpdate()
+
+        // Планы только у тех пар «пользователь-препарат», где пользователь имеет доступ к
+        // аптечке препарата: иначе выборки по доступу возвращали бы пустоту и план строился
+        // бы не на тех данных.
+        entityManager.createNativeQuery(
+            """
+            INSERT INTO usings (user_id, drug_id, planned_amount)
+            SELECT umk.user_id, d.id, 10
+            FROM user_drugs d
+            JOIN user_med_kits umk ON umk.med_kit_id = d.med_kit_id
+            """
+        ).executeUpdate()
+
+        entityManager.createNativeQuery(
+            """
+            INSERT INTO parsed_drugs (id, name, name_lat, active_substance, manufacturer, otc)
+            SELECT gen_random_uuid(),
+                   md5(i::text) || ' таблетки',
+                   md5((i + 1)::text) || ' tabs',
+                   'вещество ' || (i % 500),
+                   'Производитель ' || (i % 300),
+                   true
+            FROM generate_series(1, $CATALOGUE) AS i
+            """
+        ).executeUpdate()
+
+        // Без ANALYZE планировщик работает по умолчаниям и выбирает план, которого в проде
+        // не будет: статистика после массовой вставки ещё не собрана.
+        listOf("users", "med_kits", "user_med_kits", "user_drugs", "usings", "parsed_drugs")
+            .forEach { entityManager.createNativeQuery("ANALYZE $it").executeUpdate() }
+
+        // Название реального препарата из синтетики: искать по нему осмысленно, а по
+        // общему префиксу — нет. Первая версия фикстуры давала всем именам общее начало
+        // «Каталог », поэтому любой запрос совпадал почти со всей таблицей, и планировщик
+        // справедливо выбирал Seq Scan. Тест тогда ловил дефект фикстуры, а не кода.
+        catalogueName = entityManager
+            .createNativeQuery("SELECT name FROM parsed_drugs OFFSET 500 LIMIT 1")
+            .singleResult.toString()
+
+        ownerId = single("SELECT id FROM users LIMIT 1")
+        medKitId = single("SELECT med_kit_id FROM user_med_kits WHERE user_id = '$ownerId' LIMIT 1")
+        drugId = single("SELECT id FROM user_drugs WHERE med_kit_id = '$medKitId' LIMIT 1")
+    }
+
+    private fun single(sql: String): UUID =
+        UUID.fromString(entityManager.createNativeQuery(sql).singleResult.toString())
+
+    private companion object {
+        const val USERS = 200
+        const val MED_KITS = 300
+        const val DRUGS = 10_000
+        const val CATALOGUE = 18_000
+    }
+}
