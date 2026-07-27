@@ -13,7 +13,6 @@ import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
-import org.kert0n.medappserver.services.orchestrators.QuantityReductionService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.transaction.annotation.Transactional
 import java.util.*
@@ -28,9 +27,6 @@ class BasicWorkflowStoriesTest {
 
     @Autowired
     private lateinit var userRepository: UserRepository
-
-    @Autowired
-    private lateinit var quantityReductionService: QuantityReductionService
 
     @Autowired
     private lateinit var medKitRepository: MedKitRepository
@@ -100,7 +96,7 @@ class BasicWorkflowStoriesTest {
         entityManager.flush()
 
         // Anna takes 2 tablets of Aspirin
-        quantityReductionService.consume(aspirin.id, qty(2.0), anna.id)
+        drugService.consume(aspirin.id, qty(2.0), anna.id)
         entityManager.flush()
         entityManager.clear()
 
@@ -321,9 +317,9 @@ class BasicWorkflowStoriesTest {
         entityManager.flush()
 
         // Consume all in steps
-        quantityReductionService.consume(drug.id, qty(10.0), user.id)
-        quantityReductionService.consume(drug.id, qty(10.0), user.id)
-        quantityReductionService.consume(drug.id, qty(10.0), user.id)
+        drugService.consume(drug.id, qty(10.0), user.id)
+        drugService.consume(drug.id, qty(10.0), user.id)
+        drugService.consume(drug.id, qty(10.0), user.id)
         entityManager.flush()
         entityManager.clear()
 

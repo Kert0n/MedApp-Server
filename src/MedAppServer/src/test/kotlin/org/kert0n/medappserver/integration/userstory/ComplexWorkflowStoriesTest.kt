@@ -21,7 +21,6 @@ import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
-import org.kert0n.medappserver.services.orchestrators.QuantityReductionService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.transaction.annotation.Transactional
@@ -36,9 +35,6 @@ class ComplexWorkflowStoriesTest {
 
     @Autowired
     private lateinit var dbHelper: DatabaseTestHelper
-
-    @Autowired
-    private lateinit var quantityReductionService: QuantityReductionService
 
     @Autowired
     private lateinit var userRepository: UserRepository
@@ -137,7 +133,7 @@ class ComplexWorkflowStoriesTest {
         // Bob consumes 30 Allergy Meds. Stock drops from 60 to 30.
         // Total planned was 60. Stock is now 30. Scale factor = 30/60 = 0.5.
         // All plans (20) should auto-scale down to 10.
-        quantityReductionService.consume(allergyMeds.id, qty(30.0), bob.id)
+        drugService.consume(allergyMeds.id, qty(30.0), bob.id)
 
         entityManager.flush()
         entityManager.clear()
@@ -269,7 +265,7 @@ class ComplexWorkflowStoriesTest {
         // Alice updates the drug quantity from 100 to 50.
         // This MUST trigger `handleQuantityReduction`. Factor = 50 / 100 = 0.5.
         val updateDrugDto = DrugUpdateDTO(quantity = qty(50.0))
-        quantityReductionService.updateDrug(drug.id, updateDrugDto, alice.id)
+        drugService.update(drug.id, updateDrugDto, alice.id)
         dbHelper.flushAndClear()
 
         assertQty(50.0, dbHelper.drugQuantity(drug.id), "Drug quantity updated to 50")

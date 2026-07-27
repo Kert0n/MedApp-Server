@@ -16,7 +16,6 @@ import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
-import org.kert0n.medappserver.services.orchestrators.QuantityReductionService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.transaction.annotation.Transactional
@@ -30,9 +29,6 @@ class DrugMovementStoriesTest {
 
     @Autowired
     private lateinit var userRepository: UserRepository
-
-    @Autowired
-    private lateinit var quantityReductionService: QuantityReductionService
 
     @Autowired
     private lateinit var drugRepository: DrugRepository
@@ -294,7 +290,7 @@ class DrugMovementStoriesTest {
         // Bob consumes 50 pills (ignoring his plan limit for emergency)
         // Drug quantity drops to 50.
         // Factor should be: 50 / 100 = 0.5
-        quantityReductionService.consume(drug.id, qty(50.0), bob.id)
+        drugService.consume(drug.id, qty(50.0), bob.id)
 
         entityManager.flush()
         entityManager.clear()

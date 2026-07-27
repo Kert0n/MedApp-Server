@@ -15,7 +15,6 @@ import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.services.models.VidalDrugService
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
-import org.kert0n.medappserver.services.orchestrators.QuantityReductionService
 import org.mockito.kotlin.any
 import org.mockito.kotlin.doNothing
 import org.mockito.kotlin.eq
@@ -53,9 +52,6 @@ class DrugControllerTest {
 
     @MockitoBean
     private lateinit var drugService: DrugService
-
-    @MockitoBean
-    private lateinit var quantityReductionService: QuantityReductionService
 
     @MockitoBean
     private lateinit var medKitDrugServices: MedKitDrugServices
@@ -172,7 +168,7 @@ class DrugControllerTest {
     fun `PUT update drug - updates and returns drug`() {
         val drug = createTestDrug()
         val dto = createTestDrugDTO()
-        whenever(quantityReductionService.updateDrug(eq(drugId), any(), eq(userId))).thenReturn(drug)
+        whenever(drugService.update(eq(drugId), any(), eq(userId))).thenReturn(drug)
 
         val updateDTO = DrugUpdateDTO(name = "Updated Aspirin")
 
@@ -217,7 +213,7 @@ class DrugControllerTest {
     fun `PUT consume drug - reduces quantity and returns drug`() {
         val drug = createTestDrug().apply { quantity = qty(90.0) }
         val dto = createTestDrugDTO().copy(quantity = qty(90.0))
-        whenever(quantityReductionService.consume(eq(drugId), eq(qty(10.0)), eq(userId))).thenReturn(drug)
+        whenever(drugService.consume(eq(drugId), eq(qty(10.0)), eq(userId))).thenReturn(drug)
 
         val consumeRequest = ConsumeRequest(quantity = qty(10.0))
 
