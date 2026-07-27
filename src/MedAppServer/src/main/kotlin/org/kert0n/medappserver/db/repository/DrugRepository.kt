@@ -90,6 +90,15 @@ interface DrugRepository : JpaRepository<Drug, UUID> {
     @EntityGraph(attributePaths = ["usings"])
     fun findAllWithUsingsByMedKitId(medKitId: UUID): List<Drug>
 
+    /**
+     * Препараты сразу нескольких аптечек — одним запросом.
+     *
+     * Для выдачи синхронизации: там аптечек у пользователя столько, сколько он завёл, и
+     * вызов [findAllWithUsingsByMedKitId] в цикле давал ровно `1 + M` операторов.
+     */
+    @EntityGraph(attributePaths = ["usings"])
+    fun findAllWithUsingsByMedKitIdIn(medKitIds: Collection<UUID>): List<Drug>
+
 //    @Lock(LockModeType.PESSIMISTIC_WRITE)
 //    @EntityGraph(attributePaths = ["usings"])
 //    @Query("SELECT d FROM Drug d LEFT JOIN FETCH d.usings WHERE d.id = :id")

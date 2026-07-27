@@ -123,15 +123,46 @@ class QueryPlanTest {
         )
     }
 
+    /**
+     * Число запросов не должно расти с числом аптечек.
+     *
+     * Счётчик, а не план: это вопрос «сколько раз», а не «каким способом». План здесь
+     * бессилен — он показывает один запрос, а проблема в их количестве.
+     */
     @Test
-    fun `выдача пользователю не сканирует препараты и планы`() {
-        val plans = plansOf("GET /v1/user") {
-            medKitService.findAllByUser(fixture.ownerId)
-                .forEach { medKitDrugServices.drugsWithPlans(it) }
+    fun `выдача пользователю не делает запрос на каждую аптечку`() {
+        val executed = RecordingDataSource.capture {
+            tx.executeWithoutResult {
+                val medKits = medKitService.findAllByUser(fixture.ownerId)
+                medKitDrugServices.drugsWithPlansByMedKit(medKits)
+            }
+        }
+        println("\n=== GET /v1/user: аптечек ${fixture.ownerMedKitCount}, операторов ${executed.size} ===")
+
+        assertTrue(
+            executed.size <= 3,
+            "у пользователя ${fixture.ownerMedKitCount} аптечек, а операторов ${executed.size}: " +
+                "число запросов растёт с числом аптечек"
+        )
+    }
+
+    /**
+     * Как и в поиске: проверяется способность запроса попасть в индекс, а не выбор
+     * планировщика. На синтетике в тридцать тысяч планов он предпочитает хеш-соединение с
+     * последовательным чтением, и это законно — спорить с его арифметикой нечем.
+     */
+    @Test
+    fun `выдача пользователю умеет читать препараты и планы по индексам`() {
+        val plans = plansOf("GET /v1/user", forceIndexes = true) {
+            val medKits = medKitService.findAllByUser(fixture.ownerId)
+            medKitDrugServices.drugsWithPlansByMedKit(medKits)
         }
 
-        assertNoSeqScanOn("user_drugs", plans)
-        assertNoSeqScanOn("usings", plans)
+        val used = plans.flatMap { it.second.indexes }
+        assertTrue(
+            used.any { it.contains("med_kit_id") } && used.any { it.contains("usings") },
+            "выборка обязана уметь идти по индексам препаратов и планов, а использованы: $used"
+        )
     }
 
     @Test

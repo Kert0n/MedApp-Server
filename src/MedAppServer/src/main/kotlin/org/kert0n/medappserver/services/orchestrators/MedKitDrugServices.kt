@@ -121,4 +121,16 @@ class MedKitDrugServices(
     @Transactional(readOnly = true)
     fun drugsWithPlans(medKit: MedKit): List<Drug> =
         drugService.findAllWithPlansByMedKit(medKit.id)
+
+    /**
+     * Препараты сразу нескольких аптечек, разложенные по аптечкам.
+     *
+     * Для выдачи синхронизации: вызов [drugsWithPlans] в цикле по аптечкам давал `1 + M`
+     * операторов, где M — число аптечек пользователя. Здесь два запроса при любом M, а
+     * раскладка делается в памяти: она дешевле лишнего обращения к базе.
+     */
+    @Transactional(readOnly = true)
+    fun drugsWithPlansByMedKit(medKits: Collection<MedKit>): Map<UUID, List<Drug>> =
+        drugService.findAllWithPlansByMedKits(medKits.map { it.id })
+            .groupBy { it.medKit.id }
 }

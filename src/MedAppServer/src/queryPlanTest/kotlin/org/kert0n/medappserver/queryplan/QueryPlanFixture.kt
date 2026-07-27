@@ -24,6 +24,9 @@ class QueryPlanFixture(private val entityManager: EntityManager) {
     lateinit var drugId: UUID
     lateinit var catalogueName: String
 
+    /** Сколько аптечек у [ownerId]: от этого числа не должно зависеть число запросов. */
+    var ownerMedKitCount: Int = 0
+
     @Transactional
     fun seed() {
         entityManager.createNativeQuery(
@@ -98,7 +101,18 @@ class QueryPlanFixture(private val entityManager: EntityManager) {
             .createNativeQuery("SELECT name FROM parsed_drugs OFFSET 500 LIMIT 1")
             .singleResult.toString()
 
-        ownerId = single("SELECT id FROM users LIMIT 1")
+        // Владелец — тот, кто состоит в наибольшем числе аптечек. Со случайным
+        // пользователем сценарий выдачи мог бы затронуть одну аптечку, и рост числа
+        // запросов от их количества просто не проявился бы.
+        ownerId = single(
+            """
+            SELECT user_id FROM user_med_kits
+            GROUP BY user_id ORDER BY count(*) DESC LIMIT 1
+            """
+        )
+        ownerMedKitCount = entityManager
+            .createNativeQuery("SELECT count(*) FROM user_med_kits WHERE user_id = '$ownerId'")
+            .singleResult.toString().toInt()
         medKitId = single("SELECT med_kit_id FROM user_med_kits WHERE user_id = '$ownerId' LIMIT 1")
         drugId = single("SELECT id FROM user_drugs WHERE med_kit_id = '$medKitId' LIMIT 1")
     }
