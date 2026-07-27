@@ -67,7 +67,13 @@ class IntakeIdempotencyTest {
         intakeResultsCache.invalidateAll()
     }
 
-    private fun prepare(stock: Double, plan: Double): Triple<User, Drug, MedKit> {
+    /**
+     * Именованные поля вместо `Triple`: `val (user, drug, _)` читается только со сверкой по
+     * объявлению, а прочерк на месте третьего элемента ещё и скрывает, что там аптечка.
+     */
+    private class Fixture(val user: User, val drug: Drug, val medKit: MedKit)
+
+    private fun prepare(stock: Double, plan: Double): Fixture {
         // Ключ уникален: класс не @Transactional (иначе HTTP-слой не увидел бы данные),
         // поэтому строки остаются между тестами и упёрлись бы в ix_users_hashed_key.
         val user = userRepository.save(User(hashedKey = "{noop}k-${UUID.randomUUID()}"))
@@ -85,7 +91,7 @@ class IntakeIdempotencyTest {
         usingService.createTreatmentPlan(user.id, UsingCreateDTO(drug.id, qty(plan)))
         // Аптечка возвращается явно: Drug.medKit ленивый, а класс не @Transactional,
         // поэтому обращение к прокси вне сессии даёт LazyInitializationException.
-        return Triple(user, drug, medKit)
+        return Fixture(user = user, drug = drug, medKit = medKit)
     }
 
     private fun intake(user: User, drug: Drug, amount: Double, intakeId: UUID) =
@@ -98,7 +104,9 @@ class IntakeIdempotencyTest {
 
     @Test
     fun `повтор с тем же intakeId не списывает дозу второй раз`() {
-        val (user, drug, _) = prepare(stock = 10.0, plan = 5.0)
+        val fixture = prepare(stock = 10.0, plan = 5.0)
+        val user = fixture.user
+        val drug = fixture.drug
         val intakeId = UUID.randomUUID()
 
         val first = intake(user, drug, 2.0, intakeId).andExpect(status().isOk)
@@ -113,7 +121,9 @@ class IntakeIdempotencyTest {
 
     @Test
     fun `разные intakeId списывают независимо`() {
-        val (user, drug, _) = prepare(stock = 10.0, plan = 5.0)
+        val fixture = prepare(stock = 10.0, plan = 5.0)
+        val user = fixture.user
+        val drug = fixture.drug
 
         intake(user, drug, 2.0, UUID.randomUUID()).andExpect(status().isOk)
         intake(user, drug, 2.0, UUID.randomUUID()).andExpect(status().isOk)
@@ -127,7 +137,9 @@ class IntakeIdempotencyTest {
         // Самый важный случай: приём забирает план целиком, план удаляется. Наивная отметка
         // «уже обработано» заставила бы повтор искать удалённый план и вернуть 404, из-за чего
         // клиент решил бы, что операция не прошла, и повторял бы её дальше.
-        val (user, drug, _) = prepare(stock = 10.0, plan = 3.0)
+        val fixture = prepare(stock = 10.0, plan = 3.0)
+        val user = fixture.user
+        val drug = fixture.drug
         val intakeId = UUID.randomUUID()
 
         val first = intake(user, drug, 3.0, intakeId).andExpect(status().isOk)
@@ -146,7 +158,9 @@ class IntakeIdempotencyTest {
         // Кешируется только состоявшийся приём. Закешированный отказ переживёт исправление
         // своей причины: клиент починил количество, а сервер продолжает отдавать прежнюю
         // ошибку до истечения TTL. Ровно поэтому запись в кеш стоит после успешного вызова.
-        val (user, drug, _) = prepare(stock = 10.0, plan = 2.0)
+        val fixture = prepare(stock = 10.0, plan = 2.0)
+        val user = fixture.user
+        val drug = fixture.drug
         val intakeId = UUID.randomUUID()
 
         intake(user, drug, 5.0, intakeId).andExpect(status().isBadRequest)
@@ -158,7 +172,10 @@ class IntakeIdempotencyTest {
 
     @Test
     fun `один intakeId у разных пользователей не пересекается`() {
-        val (alice, drug, medKit) = prepare(stock = 10.0, plan = 4.0)
+        val fixture = prepare(stock = 10.0, plan = 4.0)
+        val alice = fixture.user
+        val drug = fixture.drug
+        val medKit = fixture.medKit
         val bob = userRepository.save(User(hashedKey = "{noop}k-${UUID.randomUUID()}"))
         // Через сервис, а не правкой коллекций руками: он транзакционный и синхронизирует обе
         // стороны связи. Обращение к drug.medKit.users вне сессии давало

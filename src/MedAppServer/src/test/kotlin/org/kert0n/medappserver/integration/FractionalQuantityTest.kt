@@ -40,7 +40,10 @@ class FractionalQuantityTest {
     @Autowired private lateinit var usingRepository: UsingRepository
     @Autowired private lateinit var usingService: UsingService
 
-    private fun setUp(quantity: BigDecimal): Pair<User, Drug> {
+    /** Именованные поля вместо `Pair`: у него `first` и `second` ничего не сообщают. */
+    private class Fixture(val user: User, val drug: Drug)
+
+    private fun setUp(quantity: BigDecimal): Fixture {
         val user = userRepository.save(User(hashedKey = "{noop}k"))
         val medKit = medKitRepository.save(MedKit())
         medKit.users.add(user)
@@ -53,13 +56,15 @@ class FractionalQuantityTest {
                 country = null, description = null, medKit = medKit
             )
         )
-        return user to drug
+        return Fixture(user = user, drug = drug)
     }
 
     @Test
     fun `потребление всего остатка дробными долями удаляет препарат и план`() {
         // 1 таблетка, план на неё же, приём по 1/3 — на Double остаток не сходился к нулю.
-        val (user, drug) = setUp(qty(1.0))
+        val fixture = setUp(qty(1.0))
+        val user = fixture.user
+        val drug = fixture.drug
         usingService.createTreatmentPlan(user.id, UsingCreateDTO(drug.id, qty(1.0)))
 
         val third = BigDecimal.ONE.divide(BigDecimal(3), 6, java.math.RoundingMode.HALF_UP)
@@ -89,7 +94,9 @@ class FractionalQuantityTest {
         // Двое зарезервировали всё; владелец списывает часть мимо планов, и планы должны
         // сжаться так, чтобы их сумма ровно равнялась остатку. Именно здесь на Double
         // накапливалась разница: каждое умножение на коэффициент давало свой хвост.
-        val (alice, drug) = setUp(qty(10.0))
+        val fixture = setUp(qty(10.0))
+        val alice = fixture.user
+        val drug = fixture.drug
         val bob = userRepository.save(User(hashedKey = "{noop}k2"))
         drug.medKit.users.add(bob)
         bob.medKits.add(drug.medKit)
