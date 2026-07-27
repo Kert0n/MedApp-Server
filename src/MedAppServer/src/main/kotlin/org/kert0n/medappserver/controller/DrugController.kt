@@ -1,6 +1,7 @@
 package org.kert0n.medappserver.controller
 
 import org.kert0n.medappserver.api.toDto
+import org.kert0n.medappserver.api.toQuantityInfo
 import org.kert0n.medappserver.api.toTemplateDto
 import org.kert0n.medappserver.api.ConsumeRequest
 import org.kert0n.medappserver.api.DrugCreateDTO
@@ -139,7 +140,7 @@ class DrugController(
     ): QuantityInfo {
         logger.debug("GET /v1/drug/quantity/{} by user {}", id, authentication.userId)
         val drug = drugService.findByIdForUser(id, authentication.userId)
-        return QuantityInfo(drug.quantity, drug.totalPlannedAmount, drug.quantity - drug.totalPlannedAmount)
+        return drug.toQuantityInfo()
     }
 
     @PutMapping("/consume/{id}")
@@ -230,20 +231,7 @@ class DrugController(
             limit,
             authentication.userId
         )
-        return vidalDrugService.fuzzySearch(searchTerm, limit).map { vd ->
-            DrugTemplateDTO(
-                id = vd.id,
-                name = vd.name,
-                nameLat = vd.nameLat,
-                activeSubstance = vd.activeSubstance,
-                formType = vd.formType?.name,
-                category = vd.category,
-                quantityUnit = vd.quantityUnit?.name,
-                manufacturer = vd.manufacturer,
-                country = vd.country,
-                description = vd.description
-            )
-        }
+        return vidalDrugService.fuzzySearch(searchTerm, limit).map { it.toTemplateDto() }
     }
 
     @GetMapping("/template/{id}")
@@ -264,20 +252,6 @@ class DrugController(
         @PathVariable id: UUID
     ): DrugTemplateDTO {
         logger.debug("GET /v1/drug/template/{} by user {}", id, authentication.userId)
-        val vd = vidalDrugService.findById(id) ?: throw org.springframework.web.server.ResponseStatusException(
-            HttpStatus.NOT_FOUND, "Drug template not found"
-        )
-        return DrugTemplateDTO(
-            id = vd.id,
-            name = vd.name,
-            nameLat = vd.nameLat,
-            activeSubstance = vd.activeSubstance,
-            formType = vd.formType?.name,
-            category = vd.category,
-            quantityUnit = vd.quantityUnit?.name,
-            manufacturer = vd.manufacturer,
-            country = vd.country,
-            description = vd.description
-        )
+        return vidalDrugService.findById(id).toTemplateDto()
     }
 }

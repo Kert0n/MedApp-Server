@@ -309,7 +309,9 @@ class DrugControllerTest {
     @Test
     fun `GET template by id - returns 404 when not found`() {
         val templateId = UUID.randomUUID()
-        whenever(vidalDrugService.findById(templateId)).thenReturn(null)
+        // 404 бросает сервис, а не контроллер: инлайновый ?: throw оттуда убран.
+        whenever(vidalDrugService.findById(templateId))
+            .thenThrow(ResponseStatusException(HttpStatus.NOT_FOUND, "Drug template not found"))
 
         mockMvc.perform(
             get("/v1/drug/template/$templateId")

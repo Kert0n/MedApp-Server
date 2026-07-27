@@ -87,3 +87,10 @@ fun MedKitSummary.toDto(): MedKitSummaryDTO = MedKitSummaryDTO(
     userCount = userCount,
     drugCount = drugCount
 )
+
+/** Остаток, резерв и свободное количество препарата. */
+fun Drug.toQuantityInfo(): QuantityInfo = QuantityInfo(
+    actualQuantity = quantity,
+    plannedQuantity = totalPlannedAmount,
+    availableQuantity = availableQuantity
+)
