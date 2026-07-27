@@ -115,8 +115,42 @@ class MedKitDrugServices(
      * достать нужную форму данных. Планы фетчатся графом, потому что `DrugDTO` несёт
      * плановое количество, а без графа оно тянуло бы по запросу на препарат.
      */
+    /**
+     * Аптечка вместе с её содержимым — одной транзакцией.
+     *
+     * Раньше контроллер звал `medKitService.findByIdForUser`, затем `drugsWithPlans`, и
+     * маппил результат. Каждый из двух вызовов открывал свою транзакцию, между ними
+     * состояние могло измениться, а сущность передавалась из одной в другую и маппилась уже
+     * вне сессии. Число запросов то же, атомарность — нет.
+     */
     @Transactional(readOnly = true)
-    fun drugsWithPlans(medKit: MedKit): List<Drug> =
+    fun medKitContent(medKitId: UUID, userId: UUID): MedKitContent {
+        val medKit = medKitService.findByIdForUser(medKitId, userId)
+        return MedKitContent(medKit, drugsWithPlans(medKit))
+    }
+
+    /** Вступление в аптечку по ключу и её содержимое — одной транзакцией. */
+    @Transactional
+    fun joinByKey(key: String, userId: UUID): MedKitContent {
+        val medKit = medKitService.joinMedKitByKey(key, userId)
+        return MedKitContent(medKit, drugsWithPlans(medKit))
+    }
+
+    /**
+     * Полный снимок пользователя: все его аптечки с содержимым.
+     *
+     * Два запроса при любом числе аптечек — за аптечками и за препаратами всех сразу.
+     * Раскладка по аптечкам делается в памяти: она дешевле лишнего обращения к базе.
+     */
+    @Transactional(readOnly = true)
+    fun userSnapshot(userId: UUID): List<MedKitContent> {
+        val medKits = medKitService.findAllByUser(userId)
+        val drugsByMedKit = drugsWithPlansByMedKit(medKits)
+        return medKits.map { MedKitContent(it, drugsByMedKit[it.id].orEmpty()) }
+    }
+
+    @Transactional(readOnly = true)
+    private fun drugsWithPlans(medKit: MedKit): List<Drug> =
         drugService.findAllWithPlansByMedKit(medKit.id)
 
     /**
@@ -127,7 +161,15 @@ class MedKitDrugServices(
      * раскладка делается в памяти: она дешевле лишнего обращения к базе.
      */
     @Transactional(readOnly = true)
-    fun drugsWithPlansByMedKit(medKits: Collection<MedKit>): Map<UUID, List<Drug>> =
+    private fun drugsWithPlansByMedKit(medKits: Collection<MedKit>): Map<UUID, List<Drug>> =
         drugService.findAllWithPlansByMedKits(medKits.map { it.id })
             .groupBy { it.medKit.id }
 }
+
+/**
+ * Аптечка и её препараты, прочитанные вместе.
+ *
+ * Пара, а не два вызова из контроллера: содержимое имеет смысл только вместе со своей
+ * аптечкой, и читать их порознь — значит собирать ответ из двух моментов времени.
+ */
+data class MedKitContent(val medKit: MedKit, val drugs: List<Drug>)

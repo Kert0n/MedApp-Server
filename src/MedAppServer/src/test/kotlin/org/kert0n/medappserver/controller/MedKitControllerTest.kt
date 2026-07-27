@@ -1,5 +1,6 @@
 package org.kert0n.medappserver.controller
 
+import org.kert0n.medappserver.services.orchestrators.MedKitContent
 import org.kert0n.medappserver.api.JoinMedKitRequest
 import org.kert0n.medappserver.api.MedKitDTO
 import org.kert0n.medappserver.db.repository.MedKitSummary
@@ -80,7 +81,9 @@ class MedKitControllerTest {
     fun `GET medkit by id - returns medkit DTO`() {
         val medKit = MedKit(id = medKitId)
         val medKitDTO = MedKitDTO(id = medKitId, drugs = emptySet())
-        whenever(medKitService.findByIdForUser(medKitId, userId)).thenReturn(medKit)
+        // Чтение аптечки собирает оркестратор одной транзакцией, поэтому стабится он.
+        whenever(medKitDrugServices.medKitContent(medKitId, userId))
+            .thenReturn(MedKitContent(medKit, emptyList()))
 
         mockMvc.perform(
             get("/v1/med-kit/$medKitId")
@@ -92,7 +95,7 @@ class MedKitControllerTest {
 
     @Test
     fun `GET medkit by id - returns 404 for unauthorized user`() {
-        whenever(medKitService.findByIdForUser(any(), any()))
+        whenever(medKitDrugServices.medKitContent(any(), any()))
             .thenThrow(ResponseStatusException(HttpStatus.NOT_FOUND, "Not found"))
 
         mockMvc.perform(
@@ -139,7 +142,8 @@ class MedKitControllerTest {
     fun `POST join medkit - returns medkit DTO`() {
         val medKit = MedKit(id = medKitId)
         val medKitDTO = MedKitDTO(id = medKitId, drugs = emptySet())
-        whenever(medKitService.joinMedKitByKey("share-key-123", userId)).thenReturn(medKit)
+        whenever(medKitDrugServices.joinByKey("share-key-123", userId))
+            .thenReturn(MedKitContent(medKit, emptyList()))
 
         val joinRequest = JoinMedKitRequest(key = "share-key-123")
 

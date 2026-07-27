@@ -259,7 +259,10 @@ class MedKitDrugServicesTest {
         )
         dbHelper.flushAndClear()
 
-        val dto = kit.toDto(medKitDrugServices.drugsWithPlans(kit))
+        // Через medKitContent: drugsWithPlans стал приватным — это внутренний шаг, а не
+        // самостоятельная операция оркестратора.
+        val content = medKitDrugServices.medKitContent(kit.id, alice.id)
+        val dto = content.medKit.toDto(content.drugs)
         assertEquals(kit.id, dto.id)
         assertEquals(2, dto.drugs.size)
     }

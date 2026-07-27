@@ -1,5 +1,7 @@
 package org.kert0n.medappserver.controller
 
+import org.kert0n.medappserver.services.orchestrators.MedKitContent
+import org.kert0n.medappserver.db.model.MedKit
 import org.kert0n.medappserver.api.DrugDTO
 import org.kert0n.medappserver.api.MedKitDTO
 import org.kert0n.medappserver.testutil.qty
@@ -58,8 +60,9 @@ class UserControllerTest {
             description = null, medKitId = medKitId
         )
         val medKitDTO = MedKitDTO(id = medKitId, drugs = setOf(drugDTO))
-        val medKits = listOf(org.kert0n.medappserver.db.model.MedKit(id = medKitId))
-        whenever(medKitService.findAllByUser(userId)).thenReturn(medKits)
+        // Снимок собирает оркестратор: контроллер только раскладывает результат по DTO.
+        whenever(medKitDrugServices.userSnapshot(userId))
+            .thenReturn(listOf(MedKitContent(MedKit(id = medKitId), emptyList())))
 
         mockMvc.perform(
             get("/v1/user")
@@ -79,7 +82,7 @@ class UserControllerTest {
 
     @Test
     fun `GET user data - returns empty medkits for new user`() {
-        whenever(medKitService.findAllByUser(userId)).thenReturn(emptyList())
+        whenever(medKitDrugServices.userSnapshot(userId)).thenReturn(emptyList())
 
         mockMvc.perform(
             get("/v1/user")
