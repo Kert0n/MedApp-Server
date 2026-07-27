@@ -51,7 +51,7 @@ class ForwardedClientAddressTest {
 
         assertEquals(200, register(first), "first registration from $first")
         assertEquals(200, register(first), "second registration from $first")
-        assertEquals(504, register(first), "third registration from $first must exhaust that address' quota")
+        assertEquals(429, register(first), "third registration from $first must exhaust that address' quota")
 
         // The decisive assertion: a different forwarded address still has its own
         // quota. If the header were ignored, this would share the exhausted counter.

@@ -64,7 +64,7 @@ class AuthController(
                 content = [Content(schema = Schema(implementation = RegisterResponse::class))]
             ),
             ApiResponse(responseCode = "403", description = "Invalid registration secret", content = [Content()]),
-            ApiResponse(responseCode = "504", description = "Too many registration attempts", content = [Content()])
+            ApiResponse(responseCode = "429", description = "Too many registration attempts", content = [Content()])
         ]
     )
     fun register(
@@ -79,8 +79,14 @@ class AuthController(
             throw ResponseStatusException(HttpStatus.FORBIDDEN, "Invalid secret")
         }
         // Rate limit registration by IP address to reduce abuse without storing user PII.
+        //
+        // 429, а не 504. Прежний GATEWAY_TIMEOUT врал в обе стороны: за Caddy пятисотый
+        // класс читается как «бэкенд не ответил», то есть отказ клиенту попадал в алерты
+        // как авария инфраструктуры. Плюс соседний лимит на выдачу токена
+        // (LoginThrottleFilter) уже отвечает 429 — два троттлинга на смежных эндпоинтах
+        // обязаны выглядеть одинаково, иначе клиент вынужден знать оба кода.
         if (!securityService.validateRequest(request.remoteAddr)) {
-            throw ResponseStatusException(HttpStatus.GATEWAY_TIMEOUT, "Too many registration request")
+            throw ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "Too many registration request")
         }
         val login = UUID.randomUUID()
         val pwd: String = securityService.generateKey(32)
