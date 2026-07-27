@@ -80,6 +80,11 @@ class QuantityReductionService(
     @Transactional
     fun applyIntake(userId: UUID, drugId: UUID, quantityConsumed: BigDecimal): Using? {
         logger.debug("Recording intake for user {} and drug {}, quantity: {}", userId, drugId, quantityConsumed)
+        // Блокировка первым действием. Приём — самый горячий мутирующий путь, и он
+        // единственный из трёх шёл без неё: consume и updateTreatmentPlan лочили, а здесь
+        // остаток читался и уменьшался на живую. Двое из общей аптечки, принимающие
+        // одновременно, гонялись за одним значением, и одно списание терялось.
+        drugService.findByIdForUserForUpdate(drugId, userId)
         val using = usingService.findByUserAndDrug(userId, drugId)
 
         if (quantityConsumed > using.plannedAmount) {

@@ -123,12 +123,15 @@ class UsingService(
     fun updateTreatmentPlan(userId: UUID, drugId: UUID, updateDTO: UsingUpdateDTO): Using {
         logger.debug("Updating using for user {} and drug {}", userId, drugId)
 
-        // Lock the drug row to prevent concurrent plan modifications
-        drugService.findByIdForUserForUpdate(drugId, userId)
+        // Блокировка первым действием, и её результат используется дальше. Раньше он
+        // отбрасывался, а количества читались через using.drug — тот же экземпляр из
+        // контекста, но по коду этого не видно, и выглядело так, будто запрос сделан ради
+        // побочного эффекта.
+        val drug = drugService.findByIdForUserForUpdate(drugId, userId)
         val using = findByUserAndDrug(userId, drugId)
-        // Exclude the current plan when checking availability.
-        val otherPlanned = using.drug.totalPlannedAmount - using.plannedAmount
-        val availableQuantity = using.drug.quantity - otherPlanned
+        // Свой план исключается из суммы: он же и переписывается.
+        val otherPlanned = drug.totalPlannedAmount - using.plannedAmount
+        val availableQuantity = drug.quantity - otherPlanned
 
         if (updateDTO.plannedAmount > availableQuantity) {
             logger.warn("Rejected treatment plan update: requested amount exceeds availability")
