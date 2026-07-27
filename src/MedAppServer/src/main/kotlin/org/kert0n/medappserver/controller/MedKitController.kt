@@ -38,12 +38,6 @@ class MedKitController(
         val id: UUID
     )
 
-    data class AddUserRequest(
-        @NotNull
-        @Schema(description = "User ID to share medkit with")
-        val userId: UUID
-    )
-
     @Schema(description = "Join medkit request")
     data class JoinMedKitRequest(
         @NotBlank

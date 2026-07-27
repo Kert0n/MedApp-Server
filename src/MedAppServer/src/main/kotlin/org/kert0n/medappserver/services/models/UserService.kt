@@ -60,7 +60,6 @@ class UserService(
         )
     }
 
-    // fun findAllByDrug(drugId: UUID): Set<User> = userRepository.findByUsingsDrugId(drugId)
 
 
 }

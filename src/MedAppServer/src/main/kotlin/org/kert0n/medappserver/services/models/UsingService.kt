@@ -1,10 +1,8 @@
 package org.kert0n.medappserver.services.models
 
 import org.kert0n.medappserver.api.UsingCreateDTO
-import org.kert0n.medappserver.api.UsingDTO
 import org.kert0n.medappserver.api.UsingUpdateDTO
 import org.kert0n.medappserver.db.model.Using
-import org.kert0n.medappserver.db.model.isZero
 import org.kert0n.medappserver.db.model.UsingKey
 import org.kert0n.medappserver.db.repository.UsingRepository
 import org.slf4j.Logger
@@ -13,7 +11,6 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
-import java.math.BigDecimal
 import java.util.*
 
 @Service

@@ -13,8 +13,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
-import jakarta.validation.constraints.DecimalMin
-import jakarta.validation.constraints.NotNull
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.services.models.userId
 import org.kert0n.medappserver.services.orchestrators.IntakeService
@@ -23,7 +21,6 @@ import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
-import java.math.BigDecimal
 import java.util.*
 import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBody
 
