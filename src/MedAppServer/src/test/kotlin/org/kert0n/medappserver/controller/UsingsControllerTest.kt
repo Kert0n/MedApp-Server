@@ -27,6 +27,7 @@ import org.springframework.web.context.WebApplicationContext
 import org.springframework.web.server.ResponseStatusException
 import tools.jackson.databind.ObjectMapper
 import java.util.*
+import kotlin.test.assertTrue
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -103,7 +104,7 @@ class UsingsControllerTest {
     fun `GET specific using - returns using for user and drug`() {
         val using = createTestUsing()
         val dto = createTestUsingDTO()
-        whenever(usingService.findByUserAndDrug(userId, drugId)).thenReturn(using)
+        whenever(usingService.findByUserAndDrugOrNull(userId, drugId)).thenReturn(using)
         whenever(usingService.toUsingDTO(using)).thenReturn(dto)
 
         mockMvc.perform(
@@ -115,16 +116,28 @@ class UsingsControllerTest {
             .andExpect(jsonPath("$.plannedAmount").value(30.0))
     }
 
+    /**
+     * Отсутствие плана — пустой ответ, а не 404.
+     *
+     * Тест заменил прежний, ждавший 404: тот закреплял поведение, разошедшееся с замыслом.
+     * Tombstone'ов проект не ведёт, план исчезает сам — например когда приём забрал остаток
+     * целиком, — и старый клиент законно приходит за уже удалённым. По 404 он не отличит
+     * «плана нет» от «эндпоинт сломался» и будет повторять запрос. Тип `UsingDTO?` у метода
+     * контроллера был рассчитан ровно на это, но `findByUserAndDrug` бросал, и ветка с null
+     * стала недостижимой.
+     */
     @Test
-    fun `GET specific using - returns 404 when not found`() {
-        whenever(usingService.findByUserAndDrug(any(), any()))
-            .thenThrow(ResponseStatusException(HttpStatus.NOT_FOUND, "Not found"))
+    fun `GET specific using - returns empty body when there is no plan`() {
+        whenever(usingService.findByUserAndDrugOrNull(any(), any())).thenReturn(null)
 
-        mockMvc.perform(
+        val body = mockMvc.perform(
             get("/v1/using/drug/$drugId")
                 .with(jwt().jwt { it.subject(userId.toString()) })
         )
-            .andExpect(status().isNotFound)
+            .andExpect(status().isOk)
+            .andReturn().response.contentAsString
+
+        assertTrue(body.isBlank(), "тело должно быть пустым, получено: '$body'")
     }
 
     @Test
@@ -226,4 +239,5 @@ class UsingsControllerTest {
         )
             .andExpect(status().isNoContent)
     }
+
 }
