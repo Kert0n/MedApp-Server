@@ -7,7 +7,6 @@ import org.kert0n.medappserver.db.model.Using
 import org.kert0n.medappserver.db.model.isZero
 import org.kert0n.medappserver.db.model.UsingKey
 import org.kert0n.medappserver.db.repository.UsingRepository
-import org.kert0n.medappserver.services.orchestrators.QuantityReductionService
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
@@ -22,8 +21,7 @@ class UsingService(
     private val usingRepository: UsingRepository,
     val logger: Logger = LoggerFactory.getLogger(UsingService::class.java),
     private val userService: UserService,
-    private val drugService: DrugService,
-    private val quantityReductionService: QuantityReductionService
+    private val drugService: DrugService
 ) {
 
 
@@ -129,45 +127,11 @@ class UsingService(
         return usingRepository.save(using)
     }
 
+
+
+    /** Сохранить план. Нужен оркестраторам: репозиторий им напрямую недоступен. */
     @Transactional
-    fun recordIntake(userId: UUID, drugId: UUID, quantityConsumed: BigDecimal): Using? {
-        logger.debug("Recording intake for user {} and drug {}, quantity: {}", userId, drugId, quantityConsumed)
-        val using = findByUserAndDrug(userId, drugId)
-        // Check if consumed quantity exceeds planned amount
-        if (quantityConsumed > using.plannedAmount) {
-            throw ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "Consumed quantity exceeds planned amount"
-            )
-        }
-
-        if (quantityConsumed > using.drug.quantity) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Insufficient drug quantity available")
-        }
-
-        // Update planned amount
-        // IMPORTANT! THIS MUST ALWAYS BE BEFORE QUANTITY REDUCTION, SO IT CAN PROPERLY ASSESS TOTAL PLANNED QUANTITY
-        using.plannedAmount = maxOf(BigDecimal.ZERO, using.plannedAmount - quantityConsumed)
-        // Reduce drug quantity
-        using.drug.quantity = using.drug.quantity - quantityConsumed
-        // This could be replaced with reloading drug from db, but this much quicker
-        using.drug.totalPlannedAmount = using.drug.totalPlannedAmount - quantityConsumed
-        // null означает, что препарат кончился и удалён вместе со всеми планами. Продолжать
-        // нельзя: save ниже вставил бы план на удалённый препарат, то есть нарушил бы внешний
-        // ключ. Раньше это значение отбрасывалось, и корректность держалась на том, что
-        // комбинация «остаток нулевой, план ненулевой» недостижима из-за проверок в других
-        // методах — то есть на совпадении, а не на явном условии.
-        if (quantityReductionService.handleQuantityReduction(using.drug) == null) return null
-
-        if (using.plannedAmount.isZero()) {
-            // Через коллекцию: orphanRemoval удалит строку сам, а Drug.usings остаётся
-            // правдой до конца транзакции.
-            using.drug.usings.remove(using)
-            return null
-        }
-        return usingRepository.save(using)
-    }
-
+    fun save(using: Using): Using = usingRepository.save(using)
 
     @Transactional
     fun deleteTreatmentPlan(userId: UUID, drugId: UUID) {

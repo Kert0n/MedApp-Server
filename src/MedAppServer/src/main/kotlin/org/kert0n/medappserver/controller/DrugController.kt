@@ -26,6 +26,7 @@ import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.VidalDrugService
 import org.kert0n.medappserver.services.models.userId
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
+import org.kert0n.medappserver.services.orchestrators.QuantityReductionService
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
@@ -40,7 +41,8 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBod
 class DrugController(
     private val drugService: DrugService,
     private val vidalDrugService: VidalDrugService,
-    private val medKitDrugServices: MedKitDrugServices
+    private val medKitDrugServices: MedKitDrugServices,
+    private val quantityReductionService: QuantityReductionService
 ) {
 
     private val logger = LoggerFactory.getLogger(DrugController::class.java)
@@ -102,7 +104,7 @@ class DrugController(
         @Valid @RequestBody updateDTO: DrugUpdateDTO
     ): DrugDTO {
         logger.debug("PUT /v1/drug/{} by user {}", id, authentication.userId)
-        val drug = drugService.update(id, updateDTO, authentication.userId)
+        val drug = quantityReductionService.updateDrug(id, updateDTO, authentication.userId)
         return drug.toDto()
     }
 
@@ -169,7 +171,7 @@ class DrugController(
             authentication.userId,
             consumeRequest.quantity
         )
-        val drug = drugService.consumeDrug(id, consumeRequest.quantity, authentication.userId)
+        val drug = quantityReductionService.consume(id, consumeRequest.quantity, authentication.userId)
         return if (drug != null) drug.toDto() else null
     }
 

@@ -9,6 +9,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.db.model.*
 import org.kert0n.medappserver.services.models.UsingService
+import org.kert0n.medappserver.services.orchestrators.QuantityReductionService
 import org.mockito.kotlin.any
 import org.mockito.kotlin.doNothing
 import org.mockito.kotlin.eq
@@ -47,6 +48,9 @@ class UsingsControllerTest {
 
     @MockitoBean
     private lateinit var usingService: UsingService
+
+    @MockitoBean
+    private lateinit var quantityReductionService: QuantityReductionService
 
     private val userId = UUID.randomUUID()
     private val drugId = UUID.randomUUID()
@@ -198,7 +202,7 @@ class UsingsControllerTest {
     fun `POST record intake - records and returns using`() {
         val using = createTestUsing().apply { plannedAmount = qty(20.0) }
         val dto = createTestUsingDTO().copy(plannedAmount = qty(20.0))
-        whenever(usingService.recordIntake(eq(userId), eq(drugId), eq(qty(10.0)))).thenReturn(using)
+        whenever(quantityReductionService.applyIntake(eq(userId), eq(drugId), eq(qty(10.0)))).thenReturn(using)
 
         val intakeRequest = IntakeRequest(quantityConsumed = qty(10.0), intakeId = UUID.randomUUID())
 
@@ -214,7 +218,7 @@ class UsingsControllerTest {
 
     @Test
     fun `POST record intake - returns 400 when exceeding planned amount`() {
-        whenever(usingService.recordIntake(eq(userId), eq(drugId), any()))
+        whenever(quantityReductionService.applyIntake(eq(userId), eq(drugId), any()))
             .thenThrow(ResponseStatusException(HttpStatus.BAD_REQUEST, "Exceeds planned amount"))
 
         val intakeRequest = IntakeRequest(quantityConsumed = qty(100.0), intakeId = UUID.randomUUID())

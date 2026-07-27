@@ -13,6 +13,7 @@ import org.kert0n.medappserver.db.repository.UsingRepository
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
+import org.kert0n.medappserver.services.orchestrators.QuantityReductionService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
@@ -35,6 +36,9 @@ import kotlin.test.assertTrue
 class FractionalQuantityTest {
 
     @Autowired private lateinit var userRepository: UserRepository
+
+    @Autowired
+    private lateinit var quantityReductionService: QuantityReductionService
     @Autowired private lateinit var medKitRepository: MedKitRepository
     @Autowired private lateinit var drugRepository: DrugRepository
     @Autowired private lateinit var usingRepository: UsingRepository
@@ -68,15 +72,15 @@ class FractionalQuantityTest {
         usingService.createTreatmentPlan(user.id, UsingCreateDTO(drug.id, qty(1.0)))
 
         val third = BigDecimal.ONE.divide(BigDecimal(3), 6, java.math.RoundingMode.HALF_UP)
-        usingService.recordIntake(user.id, drug.id, third)
-        usingService.recordIntake(user.id, drug.id, third)
+        quantityReductionService.applyIntake(user.id, drug.id, third)
+        quantityReductionService.applyIntake(user.id, drug.id, third)
 
         // Остаток после двух приёмов: 1 - 2 * 0.333333 = 0.333334.
         assertQty(0.333334, drugRepository.findById(drug.id).orElse(null)?.quantity)
 
         // Третий приём забирает ровно остаток — препарат кончился.
         val last = drugRepository.findById(drug.id).orElseThrow().quantity
-        val afterLast = usingService.recordIntake(user.id, drug.id, last)
+        val afterLast = quantityReductionService.applyIntake(user.id, drug.id, last)
 
         assertNull(afterLast, "план должен исчезнуть вместе с кончившимся препаратом")
         assertTrue(
@@ -107,7 +111,7 @@ class FractionalQuantityTest {
 
         // Списываем 1/3 остатка — коэффициент сжатия становится бесконечной дробью.
         val consumed = qty(10.0).divide(BigDecimal(3), 6, java.math.RoundingMode.HALF_UP)
-        usingService.recordIntake(alice.id, drug.id, consumed)
+        quantityReductionService.applyIntake(alice.id, drug.id, consumed)
 
         val remaining = drugRepository.findById(drug.id).orElseThrow().quantity
         val plansTotal = usingRepository.findAllByUsingKeyDrugId(drug.id)

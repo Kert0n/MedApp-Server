@@ -6,7 +6,6 @@ import org.kert0n.medappserver.api.DrugUpdateDTO
 import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.MedKit
 import org.kert0n.medappserver.db.repository.DrugRepository
-import org.kert0n.medappserver.services.orchestrators.QuantityReductionService
 import org.slf4j.LoggerFactory
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.http.HttpStatus
@@ -18,8 +17,7 @@ import java.util.*
 
 @Service
 class DrugService(
-    private val drugRepository: DrugRepository,
-    private val quantityReductionService: QuantityReductionService
+    private val drugRepository: DrugRepository
 ) {
 
     private val logger = LoggerFactory.getLogger(DrugService::class.java)
@@ -89,6 +87,13 @@ class DrugService(
         return drugRepository.save(drug)
     }
 
+    /**
+     * Правка полей препарата.
+     *
+     * Согласование планов после уменьшения количества сюда не входит: это координация двух
+     * сущностей, ею занимается `QuantityReductionService.updateDrug`, который этот метод и
+     * вызывает. Здесь только свой агрегат.
+     */
     @Transactional
     fun update(drugId: UUID, updateDTO: DrugUpdateDTO, userId: UUID): Drug {
         logger.debug("Updating drug: {}", drugId)
@@ -96,14 +101,7 @@ class DrugService(
         val drug = findByIdForUserForUpdate(drugId, userId)
 
         updateDTO.name?.let { drug.name = it }
-        updateDTO.quantity?.let {
-            val oldQuantity = drug.quantity
-            drug.quantity = it
-            // Handle quantity reduction - may need to adjust treatment plans
-            if (it < oldQuantity) {
-                quantityReductionService.handleQuantityReduction(drug)
-            }
-        }
+        updateDTO.quantity?.let { drug.quantity = it }
         updateDTO.quantityUnit?.let { drug.quantityUnit = it }
         updateDTO.formType?.let { drug.formType = it }
         updateDTO.category?.let { drug.category = it }
@@ -114,6 +112,10 @@ class DrugService(
         return drugRepository.save(drug)
     }
 
+    /** Сохранить препарат. Нужен оркестраторам: репозиторий им напрямую недоступен. */
+    @Transactional
+    fun save(drug: Drug): Drug = drugRepository.save(drug)
+
     @Transactional
     fun delete(drugId: UUID, userId: UUID) {
         logger.debug("Deleting drug: {}", drugId)
@@ -123,21 +125,6 @@ class DrugService(
     }
 
 
-    @Transactional
-    fun consumeDrug(drugId: UUID, quantity: BigDecimal, userId: UUID): Drug? {
-        logger.debug("Consuming {} of drug {}", quantity, drugId)
-
-        val drug = findByIdForUserForUpdate(drugId, userId)
-
-        if (quantity > drug.quantity) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Insufficient quantity available")
-        }
-
-        drug.quantity = drug.quantity - quantity
-        drugRepository.save(drug)
-        return quantityReductionService.handleQuantityReduction(drug)
-
-    }
 
 
     //    @Transactional(readOnly = true)

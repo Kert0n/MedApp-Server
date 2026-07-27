@@ -16,6 +16,7 @@ import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
+import org.kert0n.medappserver.services.orchestrators.QuantityReductionService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.transaction.annotation.Transactional
@@ -32,6 +33,9 @@ class TreatmentPlanStoriesTest {
 
     @Autowired
     private lateinit var userRepository: UserRepository
+
+    @Autowired
+    private lateinit var quantityReductionService: QuantityReductionService
 
     @Autowired
     private lateinit var medKitRepository: MedKitRepository
@@ -100,8 +104,8 @@ class TreatmentPlanStoriesTest {
         assertQty(30.0, createdPlan.plannedAmount, "Planned amount should be 30")
 
         // Record some intakes
-        usingService.recordIntake(user.id, drug.id, qty(5.0))
-        usingService.recordIntake(user.id, drug.id, qty(5.0))
+        quantityReductionService.applyIntake(user.id, drug.id, qty(5.0))
+        quantityReductionService.applyIntake(user.id, drug.id, qty(5.0))
         entityManager.flush()
         entityManager.clear()
 
@@ -200,7 +204,7 @@ class TreatmentPlanStoriesTest {
 
         // Consume 50 tablets (drug goes to 50, but plan is 80 > 50)
         // handleQuantityReduction should scale the plan down
-        drugService.consumeDrug(drug.id, qty(50.0), user.id)
+        quantityReductionService.consume(drug.id, qty(50.0), user.id)
         entityManager.flush()
         entityManager.clear()
 
@@ -321,11 +325,11 @@ class TreatmentPlanStoriesTest {
         assertQty(90.0, drugRepository.findByIdOrNull(vitamins.id)?.totalPlannedAmount)
 
         // Everyone takes their daily vitamin
-        usingService.recordIntake(mom.id, vitamins.id, qty(1.0))
+        quantityReductionService.applyIntake(mom.id, vitamins.id, qty(1.0))
         entityManager.flush()
-        usingService.recordIntake(dad.id, vitamins.id, qty(1.0))
+        quantityReductionService.applyIntake(dad.id, vitamins.id, qty(1.0))
         entityManager.flush()
-        usingService.recordIntake(child.id, vitamins.id, qty(1.0))
+        quantityReductionService.applyIntake(child.id, vitamins.id, qty(1.0))
         entityManager.flush()
         entityManager.clear()
 

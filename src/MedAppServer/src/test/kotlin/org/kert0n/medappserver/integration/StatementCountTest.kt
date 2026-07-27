@@ -16,6 +16,7 @@ import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.testutil.qty
+import org.kert0n.medappserver.services.orchestrators.QuantityReductionService
 import org.springframework.beans.factory.annotation.Autowired
 import java.util.UUID
 import kotlin.test.assertEquals
@@ -39,6 +40,9 @@ import kotlin.test.assertEquals
 class StatementCountTest {
 
     @Autowired private lateinit var userRepository: UserRepository
+
+    @Autowired
+    private lateinit var quantityReductionService: QuantityReductionService
     @Autowired private lateinit var medKitRepository: MedKitRepository
     @Autowired private lateinit var drugRepository: DrugRepository
     @Autowired private lateinit var usingService: UsingService
@@ -94,7 +98,7 @@ class StatementCountTest {
     private fun shrinkStatements(plans: Int): Long {
         val fixture = fixture(plans)
         return statementsFor {
-            drugService.update(
+            quantityReductionService.updateDrug(
                 fixture.drug.id,
                 DrugUpdateDTO(quantity = qty(plans * 5.0)),
                 fixture.owner.id
@@ -106,7 +110,7 @@ class StatementCountTest {
     private fun deleteStatements(plans: Int): Long {
         val fixture = fixture(plans)
         return statementsFor {
-            drugService.consumeDrug(fixture.drug.id, fixture.drug.quantity, fixture.owner.id)
+            quantityReductionService.consume(fixture.drug.id, fixture.drug.quantity, fixture.owner.id)
         }
     }
 

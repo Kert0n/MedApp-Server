@@ -5,19 +5,119 @@ import org.kert0n.medappserver.db.model.QUANTITY_ROUNDING
 import org.kert0n.medappserver.db.model.QUANTITY_SCALE
 import org.kert0n.medappserver.db.model.Using
 import org.kert0n.medappserver.db.model.isZero
+import org.kert0n.medappserver.api.DrugUpdateDTO
 import org.kert0n.medappserver.db.repository.DrugRepository
+import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.UsingService
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
+import org.springframework.web.server.ResponseStatusException
 import java.math.BigDecimal
+import java.util.UUID
 
+/**
+ * Все изменения остатка препарата и согласование планов после них.
+ *
+ * Сюда стянуты три входа, которые раньше жили в модельных сервисах и оттуда звали этот
+ * оркестратор снизу вверх: [consume] (внеплановый расход), [applyIntake] (приём по плану) и
+ * [updateDrug] (правка карточки, где количество могли уменьшить). Каждый из них — это
+ * координация двух сущностей, то есть работа оркестратора, а не сервиса одного агрегата.
+ *
+ * [applyIntake] лежит здесь, а не в [IntakeService], по одной технической причине:
+ * `IntakeService.record` нетранзакционный (кеш идемпотентности заполняется после коммита), и
+ * вызов транзакционного метода того же класса пошёл бы мимо прокси Spring — транзакция
+ * молча исчезла бы. Разные бины эту границу сохраняют.
+ */
 @Service
 class QuantityReductionService(
     private val drugRepository: DrugRepository,
-    val logger: Logger = LoggerFactory.getLogger(UsingService::class.java)
+    private val drugService: DrugService,
+    private val usingService: UsingService,
+    val logger: Logger = LoggerFactory.getLogger(QuantityReductionService::class.java)
 
 ) {
+    /**
+     * Внеплановый расход: списать количество мимо планов и подтянуть планы под новый остаток.
+     *
+     * Возвращает `null`, если препарат кончился и удалён.
+     */
+    @Transactional
+    fun consume(drugId: UUID, quantity: BigDecimal, userId: UUID): Drug? {
+        logger.debug("Consuming {} of drug {}", quantity, drugId)
+
+        val drug = drugService.findByIdForUserForUpdate(drugId, userId)
+
+        if (quantity > drug.quantity) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Insufficient quantity available")
+        }
+
+        drug.quantity = drug.quantity - quantity
+        drugService.save(drug)
+        return handleQuantityReduction(drug)
+    }
+
+    /**
+     * Правка карточки препарата. Согласование планов запускается только при уменьшении
+     * остатка — увеличение инвариант «сумма планов не больше остатка» нарушить не может.
+     */
+    @Transactional
+    fun updateDrug(drugId: UUID, updateDTO: DrugUpdateDTO, userId: UUID): Drug {
+        val previousQuantity = drugService.findByIdForUserForUpdate(drugId, userId).quantity
+        val drug = drugService.update(drugId, updateDTO, userId)
+        if (drug.quantity < previousQuantity) {
+            handleQuantityReduction(drug)
+        }
+        return drug
+    }
+
+    /**
+     * Приём по плану: уменьшить план и остаток, затем согласовать.
+     *
+     * Возвращает `null`, когда плана больше нет — он обнулился приёмом либо исчез вместе с
+     * кончившимся препаратом.
+     */
+    @Transactional
+    fun applyIntake(userId: UUID, drugId: UUID, quantityConsumed: BigDecimal): Using? {
+        logger.debug("Recording intake for user {} and drug {}, quantity: {}", userId, drugId, quantityConsumed)
+        val using = usingService.findByUserAndDrug(userId, drugId)
+
+        if (quantityConsumed > using.plannedAmount) {
+            throw ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Consumed quantity exceeds planned amount"
+            )
+        }
+
+        if (quantityConsumed > using.drug.quantity) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Insufficient drug quantity available")
+        }
+
+        // Порядок обязателен: план уменьшается до согласования, иначе оно посчитает сумму
+        // планов по старому значению.
+        using.plannedAmount = maxOf(BigDecimal.ZERO, using.plannedAmount - quantityConsumed)
+        using.drug.quantity = using.drug.quantity - quantityConsumed
+        // Дешевле, чем перезагружать препарат: формула сама не пересчитается в транзакции.
+        using.drug.totalPlannedAmount = using.drug.totalPlannedAmount - quantityConsumed
+
+        // null означает, что препарат кончился и удалён вместе со всеми планами. Продолжать
+        // нельзя: save ниже вставил бы план на удалённый препарат, то есть нарушил бы внешний
+        // ключ. Раньше это значение отбрасывалось, и корректность держалась на том, что
+        // комбинация «остаток нулевой, план ненулевой» недостижима из-за проверок в других
+        // методах — то есть на совпадении, а не на явном условии.
+        if (handleQuantityReduction(using.drug) == null) return null
+
+        if (using.plannedAmount.isZero()) {
+            // Через коллекцию: orphanRemoval удалит строку сам, а Drug.usings остаётся
+            // правдой до конца транзакции.
+            using.drug.usings.remove(using)
+            return null
+        }
+        return usingService.save(using)
+    }
+
     fun handleQuantityReduction(drug: Drug): Drug? {
         logger.debug("Handling quantity reduction for drug: {}", drug.id)
 
