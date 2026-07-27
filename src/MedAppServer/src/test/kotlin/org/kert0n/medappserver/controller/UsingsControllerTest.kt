@@ -9,6 +9,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.db.model.*
 import org.kert0n.medappserver.services.models.UsingService
+import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
 import org.kert0n.medappserver.services.models.DrugService
 import org.mockito.kotlin.any
 import org.mockito.kotlin.doNothing
@@ -46,6 +47,8 @@ class UsingsControllerTest {
 
     private lateinit var mockMvc: MockMvc
 
+    @MockitoBean
+    private lateinit var treatmentPlanService: TreatmentPlanService
     @MockitoBean
     private lateinit var usingService: UsingService
 
@@ -150,7 +153,7 @@ class UsingsControllerTest {
     fun `POST create using - creates and returns using`() {
         val using = createTestUsing()
         val dto = createTestUsingDTO()
-        whenever(usingService.createTreatmentPlan(eq(userId), any())).thenReturn(using)
+        whenever(treatmentPlanService.create(eq(userId), any(), any())).thenReturn(using)
 
         val createDTO = UsingCreateDTO(drugId = drugId, plannedAmount = qty(30.0))
 
@@ -166,7 +169,7 @@ class UsingsControllerTest {
 
     @Test
     fun `POST create using - returns 409 for duplicate`() {
-        whenever(usingService.createTreatmentPlan(eq(userId), any()))
+        whenever(treatmentPlanService.create(eq(userId), any(), any()))
             .thenThrow(ResponseStatusException(HttpStatus.CONFLICT, "Already exists"))
 
         val createDTO = UsingCreateDTO(drugId = drugId, plannedAmount = qty(30.0))
@@ -184,7 +187,7 @@ class UsingsControllerTest {
     fun `PUT update using - updates and returns using`() {
         val using = createTestUsing().apply { plannedAmount = qty(50.0) }
         val dto = createTestUsingDTO().copy(plannedAmount = qty(50.0))
-        whenever(usingService.updateTreatmentPlan(eq(userId), eq(drugId), any())).thenReturn(using)
+        whenever(treatmentPlanService.update(eq(userId), eq(drugId), any())).thenReturn(using)
 
         val updateDTO = UsingUpdateDTO(plannedAmount = qty(50.0))
 

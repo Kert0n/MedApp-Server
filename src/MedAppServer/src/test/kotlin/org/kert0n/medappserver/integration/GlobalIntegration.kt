@@ -10,6 +10,7 @@ import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.db.repository.UsingRepository
 import org.kert0n.medappserver.services.models.DrugService
+import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
@@ -59,6 +60,8 @@ class PlannedQuantityTrackingTests {
     private lateinit var medKitService: MedKitService
 
     @Autowired
+    private lateinit var treatmentPlanService: TreatmentPlanService
+    @Autowired
     private lateinit var usingService: UsingService
 
     @Autowired
@@ -88,8 +91,8 @@ class PlannedQuantityTrackingTests {
         val drug = dbHelper.freshDrug(kit, 120.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(40.0)))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(30.0)))
+        treatmentPlanService.create(alice.id, drug.id, qty(40.0))
+        treatmentPlanService.create(bob.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
         // Sanity: initial state
@@ -151,9 +154,9 @@ class PlannedQuantityTrackingTests {
         val drug = dbHelper.freshDrug(kit, 90.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(30.0)))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(30.0)))
-        usingService.createTreatmentPlan(charlie.id, UsingCreateDTO(drug.id, qty(30.0)))
+        treatmentPlanService.create(alice.id, drug.id, qty(30.0))
+        treatmentPlanService.create(bob.id, drug.id, qty(30.0))
+        treatmentPlanService.create(charlie.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
         // Initial state: zero slack
@@ -232,9 +235,9 @@ class PlannedQuantityTrackingTests {
         val drug = dbHelper.freshDrug(kit, 90.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(30.0)))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(30.0)))
-        usingService.createTreatmentPlan(charlie.id, UsingCreateDTO(drug.id, qty(30.0)))
+        treatmentPlanService.create(alice.id, drug.id, qty(30.0))
+        treatmentPlanService.create(bob.id, drug.id, qty(30.0))
+        treatmentPlanService.create(charlie.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
         // Bob emergency-consumes 30 (ignores the plan system)
@@ -293,8 +296,8 @@ class PlannedQuantityTrackingTests {
         val drug = dbHelper.freshDrug(kit, 120.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(40.0)))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(40.0)))
+        treatmentPlanService.create(alice.id, drug.id, qty(40.0))
+        treatmentPlanService.create(bob.id, drug.id, qty(40.0))
         dbHelper.flushAndClear()
 
         assertQty(120.0, dbHelper.drugQuantity(drug.id))

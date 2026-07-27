@@ -13,6 +13,7 @@ import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.db.repository.UsingRepository
 import org.kert0n.medappserver.services.models.DrugService
+import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
@@ -55,6 +56,8 @@ class TreatmentPlanStoriesTest {
     private lateinit var medKitDrugServices: MedKitDrugServices
 
     @Autowired
+    private lateinit var treatmentPlanService: TreatmentPlanService
+    @Autowired
     private lateinit var usingService: UsingService
 
     /**
@@ -84,12 +87,10 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
 
         // Create treatment plan for 30 tablets
-        val plan = usingService.createTreatmentPlan(
+        val plan = treatmentPlanService.create(
             userId = user.id,
-            createDTO = UsingCreateDTO(
-                drugId = drug.id,
-                plannedAmount = qty(30.0)
-            )
+            drugId = drug.id,
+            plannedAmount = qty(30.0)
         )
         assertNotNull(plan)
         entityManager.flush()
@@ -146,11 +147,11 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
 
         // Anna creates a treatment plan for 40 tablets
-        usingService.createTreatmentPlan(anna.id, UsingCreateDTO(vitaminC.id, qty(40.0)))
+        treatmentPlanService.create(anna.id, vitaminC.id, qty(40.0))
         entityManager.flush()
 
         // Bob creates a treatment plan for 50 tablets (should succeed: 100 - 40 = 60 available)
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(vitaminC.id, qty(50.0)))
+        treatmentPlanService.create(bob.id, vitaminC.id, qty(50.0))
         entityManager.flush()
         entityManager.clear()
         // Total planned = 90, should match sumPlannedAmount
@@ -194,7 +195,7 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
 
         // Create plan for 80 tablets
-        usingService.createTreatmentPlan(user.id, UsingCreateDTO(drug.id, qty(80.0)))
+        treatmentPlanService.create(user.id, drug.id, qty(80.0))
         entityManager.flush()
         entityManager.clear()
 
@@ -244,11 +245,11 @@ class TreatmentPlanStoriesTest {
 
         // Try to create a plan for 60 tablets when only 50 available
         assertFailsWith<ResponseStatusException> {
-            usingService.createTreatmentPlan(user.id, UsingCreateDTO(drug.id, qty(60.0)))
+            treatmentPlanService.create(user.id, drug.id, qty(60.0))
         }
 
         // Create a plan for 30
-        usingService.createTreatmentPlan(user.id, UsingCreateDTO(drug.id, qty(30.0)))
+        treatmentPlanService.create(user.id, drug.id, qty(30.0))
         entityManager.flush()
 
         // Another user tries to plan 25 (only 20 available: 50 - 30 = 20)
@@ -259,11 +260,11 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
         entityManager.clear()
         assertFailsWith<ResponseStatusException> {
-            usingService.createTreatmentPlan(user2.id, UsingCreateDTO(drug.id, qty(25.0)))
+            treatmentPlanService.create(user2.id, drug.id, qty(25.0))
         }
 
         // But 20 should work
-        usingService.createTreatmentPlan(user2.id, UsingCreateDTO(drug.id, qty(20.0)))
+        treatmentPlanService.create(user2.id, drug.id, qty(20.0))
         entityManager.flush()
         entityManager.clear()
         assertQty(50.0, drugRepository.findByIdOrNull(drug.id)?.totalPlannedAmount)
@@ -312,9 +313,9 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
 
         // Everyone gets treatment plans for vitamins: 30 each
-        usingService.createTreatmentPlan(mom.id, UsingCreateDTO(vitamins.id, qty(30.0)))
-        usingService.createTreatmentPlan(dad.id, UsingCreateDTO(vitamins.id, qty(30.0)))
-        usingService.createTreatmentPlan(child.id, UsingCreateDTO(vitamins.id, qty(30.0)))
+        treatmentPlanService.create(mom.id, vitamins.id, qty(30.0))
+        treatmentPlanService.create(dad.id, vitamins.id, qty(30.0))
+        treatmentPlanService.create(child.id, vitamins.id, qty(30.0))
         entityManager.flush()
         entityManager.clear()
         // Total planned = 90 (full supply)

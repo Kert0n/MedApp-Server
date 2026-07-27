@@ -1,6 +1,7 @@
 package org.kert0n.medappserver.services.models
 
 import org.kert0n.medappserver.api.toDto
+import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
 import org.junit.jupiter.api.Test
@@ -28,6 +29,8 @@ class DrugServiceTest {
     private lateinit var drugService: DrugService
     @Autowired
     private lateinit var medKitService: MedKitService
+    @Autowired
+    private lateinit var treatmentPlanService: TreatmentPlanService
     @Autowired
     private lateinit var usingService: UsingService
     @Autowired
@@ -94,7 +97,7 @@ class DrugServiceTest {
 
         assertEquals(0, drugService.findAllByUser(alice.id).size)
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(10.0)))
+        treatmentPlanService.create(alice.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
         assertEquals(1, drugService.findAllByUser(alice.id).size)
@@ -181,7 +184,7 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(80.0)))
+        treatmentPlanService.create(alice.id, drug.id, qty(80.0))
         dbHelper.flushAndClear()
 
         drugService.update(drug.id, DrugUpdateDTO(quantity = qty(40.0)), alice.id)
@@ -243,7 +246,7 @@ class DrugServiceTest {
             DrugCreateDTO(name = "Drug", quantity = qty(100.0), quantityUnit = "mg", medKitId = kit.id),
             kit, alice.id
         )
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(25.0)))
+        treatmentPlanService.create(alice.id, drug.id, qty(25.0))
         dbHelper.flushAndClear()
 
         val dto = drugService.findById(drug.id).toDto()

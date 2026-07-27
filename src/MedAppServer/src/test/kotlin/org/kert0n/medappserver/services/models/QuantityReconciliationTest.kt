@@ -7,6 +7,7 @@ import org.kert0n.medappserver.api.UsingCreateDTO
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.UsingRepository
 import org.kert0n.medappserver.services.models.DrugService
+import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
@@ -28,6 +29,8 @@ class QuantityReconciliationTest {
     @Autowired
     private lateinit var medKitService: MedKitService
     @Autowired
+    private lateinit var treatmentPlanService: TreatmentPlanService
+    @Autowired
     private lateinit var usingService: UsingService
     @Autowired
     private lateinit var drugRepository: DrugRepository
@@ -45,7 +48,7 @@ class QuantityReconciliationTest {
         val drug = dbHelper.freshDrug(kit, 50.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(50.0)))
+        treatmentPlanService.create(alice.id, drug.id, qty(50.0))
         dbHelper.flushAndClear()
 
         drugService.consume(drug.id, qty(50.0), alice.id)
@@ -66,8 +69,8 @@ class QuantityReconciliationTest {
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(20.0)))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(20.0)))
+        treatmentPlanService.create(alice.id, drug.id, qty(20.0))
+        treatmentPlanService.create(bob.id, drug.id, qty(20.0))
         dbHelper.flushAndClear()
 
         drugService.consume(drug.id, qty(50.0), alice.id)
@@ -89,8 +92,8 @@ class QuantityReconciliationTest {
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(60.0)))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(40.0)))
+        treatmentPlanService.create(alice.id, drug.id, qty(60.0))
+        treatmentPlanService.create(bob.id, drug.id, qty(40.0))
         dbHelper.flushAndClear()
 
         // Consume 50 → quantity=50, factor=50/100=0.5
@@ -114,8 +117,8 @@ class QuantityReconciliationTest {
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(60.0)))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(40.0)))
+        treatmentPlanService.create(alice.id, drug.id, qty(60.0))
+        treatmentPlanService.create(bob.id, drug.id, qty(40.0))
         dbHelper.flushAndClear()
 
         drugService.consume(drug.id, qty(50.0), alice.id)

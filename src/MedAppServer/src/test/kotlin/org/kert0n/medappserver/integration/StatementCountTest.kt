@@ -13,6 +13,7 @@ import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.services.models.DrugService
+import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.testutil.qty
@@ -41,6 +42,7 @@ class StatementCountTest {
     @Autowired private lateinit var userRepository: UserRepository
     @Autowired private lateinit var medKitRepository: MedKitRepository
     @Autowired private lateinit var drugRepository: DrugRepository
+    @Autowired private lateinit var treatmentPlanService: TreatmentPlanService
     @Autowired private lateinit var usingService: UsingService
     @Autowired private lateinit var drugService: DrugService
     @Autowired private lateinit var medKitService: MedKitService
@@ -79,7 +81,7 @@ class StatementCountTest {
                 userRepository.save(User(hashedKey = "{noop}stat-${UUID.randomUUID()}"))
                     .also { medKitService.addUserToMedKit(medKit.id, it.id) }
             }
-            usingService.createTreatmentPlan(user.id, UsingCreateDTO(drug.id, qty(10.0)))
+            treatmentPlanService.create(user.id, drug.id, qty(10.0))
         }
         return Fixture(owner, drug)
     }

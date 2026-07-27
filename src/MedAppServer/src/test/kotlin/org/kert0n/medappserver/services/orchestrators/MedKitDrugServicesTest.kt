@@ -10,6 +10,7 @@ import org.kert0n.medappserver.api.UsingCreateDTO
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.services.models.DrugService
+import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
@@ -35,6 +36,8 @@ class MedKitDrugServicesTest {
     private lateinit var drugService: DrugService
     @Autowired
     private lateinit var medKitService: MedKitService
+    @Autowired
+    private lateinit var treatmentPlanService: TreatmentPlanService
     @Autowired
     private lateinit var usingService: UsingService
     @Autowired
@@ -101,8 +104,8 @@ class MedKitDrugServicesTest {
         val drug = dbHelper.freshDrug(sourceKit, 50.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(10.0)))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(10.0)))
+        treatmentPlanService.create(alice.id, drug.id, qty(10.0))
+        treatmentPlanService.create(bob.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
         medKitDrugServices.moveDrug(drug.id, targetKit.id, alice.id)
@@ -155,7 +158,7 @@ class MedKitDrugServicesTest {
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(10.0)))
+        treatmentPlanService.create(bob.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
         medKitDrugServices.removeUserFromMedKit(kit.id, bob.id)
@@ -215,8 +218,8 @@ class MedKitDrugServicesTest {
         val drug = dbHelper.freshDrug(oldKit, 90.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(30.0)))
-        usingService.createTreatmentPlan(charlie.id, UsingCreateDTO(drug.id, qty(30.0)))
+        treatmentPlanService.create(alice.id, drug.id, qty(30.0))
+        treatmentPlanService.create(charlie.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
         medKitDrugServices.delete(oldKit.id, alice.id, newKit.id)

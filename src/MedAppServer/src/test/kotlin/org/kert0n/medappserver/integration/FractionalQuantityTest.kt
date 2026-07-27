@@ -11,6 +11,7 @@ import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.db.repository.UsingRepository
 import org.kert0n.medappserver.services.models.UsingService
+import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
 import org.kert0n.medappserver.services.models.DrugService
@@ -42,6 +43,7 @@ class FractionalQuantityTest {
     @Autowired private lateinit var medKitRepository: MedKitRepository
     @Autowired private lateinit var drugRepository: DrugRepository
     @Autowired private lateinit var usingRepository: UsingRepository
+    @Autowired private lateinit var treatmentPlanService: TreatmentPlanService
     @Autowired private lateinit var usingService: UsingService
 
     /** Именованные поля вместо `Pair`: у него `first` и `second` ничего не сообщают. */
@@ -69,7 +71,7 @@ class FractionalQuantityTest {
         val fixture = setUp(qty(1.0))
         val user = fixture.user
         val drug = fixture.drug
-        usingService.createTreatmentPlan(user.id, UsingCreateDTO(drug.id, qty(1.0)))
+        treatmentPlanService.create(user.id, drug.id, qty(1.0))
 
         val third = BigDecimal.ONE.divide(BigDecimal(3), 6, java.math.RoundingMode.HALF_UP)
         drugService.applyIntake(user.id, drug.id, third)
@@ -106,8 +108,8 @@ class FractionalQuantityTest {
         bob.medKits.add(drug.medKit)
         medKitRepository.save(drug.medKit)
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(7.0)))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(3.0)))
+        treatmentPlanService.create(alice.id, drug.id, qty(7.0))
+        treatmentPlanService.create(bob.id, drug.id, qty(3.0))
 
         // Списываем 1/3 остатка — коэффициент сжатия становится бесконечной дробью.
         val consumed = qty(10.0).divide(BigDecimal(3), 6, java.math.RoundingMode.HALF_UP)

@@ -5,6 +5,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.services.orchestrators.IntakeOutcome
+import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
 import org.kert0n.medappserver.api.UsingCreateDTO
 import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.MedKit
@@ -49,6 +50,7 @@ class IntakeIdempotencyTest {
     @Autowired private lateinit var userRepository: UserRepository
     @Autowired private lateinit var medKitRepository: MedKitRepository
     @Autowired private lateinit var drugRepository: DrugRepository
+    @Autowired private lateinit var treatmentPlanService: TreatmentPlanService
     @Autowired private lateinit var usingService: UsingService
     @Autowired private lateinit var medKitService: MedKitService
 
@@ -88,7 +90,7 @@ class IntakeIdempotencyTest {
                 country = null, description = null, medKit = medKit
             )
         )
-        usingService.createTreatmentPlan(user.id, UsingCreateDTO(drug.id, qty(plan)))
+        treatmentPlanService.create(user.id, drug.id, qty(plan))
         // Аптечка возвращается явно: Drug.medKit ленивый, а класс не @Transactional,
         // поэтому обращение к прокси вне сессии даёт LazyInitializationException.
         return Fixture(user = user, drug = drug, medKit = medKit)
@@ -181,7 +183,7 @@ class IntakeIdempotencyTest {
         // стороны связи. Обращение к drug.medKit.users вне сессии давало
         // LazyInitializationException — Drug.medKit ленивый, а класс не @Transactional.
         medKitService.addUserToMedKit(medKit.id, bob.id)
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(4.0)))
+        treatmentPlanService.create(bob.id, drug.id, qty(4.0))
 
         // Клиент генерирует intakeId сам, поэтому совпадение возможно; ключ кеша включает
         // пользователя, и приём Боба не должен получить результат Алисы.
