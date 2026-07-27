@@ -86,7 +86,6 @@ class UsingsControllerTest {
         val using = createTestUsing()
         val dto = createTestUsingDTO()
         whenever(usingService.findAllByUser(userId)).thenReturn(listOf(using))
-        whenever(usingService.toUsingDTO(using)).thenReturn(dto)
 
         mockMvc.perform(
             get("/v1/using")
@@ -109,7 +108,6 @@ class UsingsControllerTest {
         val using = createTestUsing()
         val dto = createTestUsingDTO()
         whenever(usingService.findByUserAndDrugOrNull(userId, drugId)).thenReturn(using)
-        whenever(usingService.toUsingDTO(using)).thenReturn(dto)
 
         mockMvc.perform(
             get("/v1/using/drug/$drugId")
@@ -149,7 +147,6 @@ class UsingsControllerTest {
         val using = createTestUsing()
         val dto = createTestUsingDTO()
         whenever(usingService.createTreatmentPlan(eq(userId), any())).thenReturn(using)
-        whenever(usingService.toUsingDTO(using)).thenReturn(dto)
 
         val createDTO = UsingCreateDTO(drugId = drugId, plannedAmount = qty(30.0))
 
@@ -184,7 +181,6 @@ class UsingsControllerTest {
         val using = createTestUsing().apply { plannedAmount = qty(50.0) }
         val dto = createTestUsingDTO().copy(plannedAmount = qty(50.0))
         whenever(usingService.updateTreatmentPlan(eq(userId), eq(drugId), any())).thenReturn(using)
-        whenever(usingService.toUsingDTO(using)).thenReturn(dto)
 
         val updateDTO = UsingUpdateDTO(plannedAmount = qty(50.0))
 
@@ -203,7 +199,6 @@ class UsingsControllerTest {
         val using = createTestUsing().apply { plannedAmount = qty(20.0) }
         val dto = createTestUsingDTO().copy(plannedAmount = qty(20.0))
         whenever(usingService.recordIntake(eq(userId), eq(drugId), eq(qty(10.0)))).thenReturn(using)
-        whenever(usingService.toUsingDTO(using)).thenReturn(dto)
 
         val intakeRequest = IntakeRequest(quantityConsumed = qty(10.0), intakeId = UUID.randomUUID())
 

@@ -1,5 +1,6 @@
 package org.kert0n.medappserver.services.orchestrators
 
+import org.kert0n.medappserver.api.toDto
 import com.sksamuel.aedile.core.Cache
 import org.kert0n.medappserver.api.UsingDTO
 import org.kert0n.medappserver.services.models.UsingService
@@ -49,7 +50,7 @@ class IntakeService(
         }
 
         val plan = usingService.recordIntake(userId, drugId, quantityConsumed)
-            ?.let { usingService.toUsingDTO(it) }
+            ?.toDto()
 
         // Ошибки не кешируются сознательно: отказ выводится из состояния и при повторе
         // повторится сам, а вот закешированный отказ переживёт исправление причины.

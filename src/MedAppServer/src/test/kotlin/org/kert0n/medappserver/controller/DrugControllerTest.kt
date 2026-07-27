@@ -85,6 +85,10 @@ class DrugControllerTest {
         manufacturer = "Bayer",
         country = "Germany",
         description = "Pain relief",
+        // Раньше не задавалось: маппер был мокнут, и ответ брался из отдельной DTO-фикстуры,
+        // где planned равнялся 30. Сущность при этом несла 0, и тест закреплял соответствие,
+        // которого в проде не существовало. С настоящим маппером фикстуры обязаны сойтись.
+        totalPlannedAmount = qty(30.0),
         medKit = createTestMedKit()
     )
 
@@ -107,7 +111,6 @@ class DrugControllerTest {
         val drug = createTestDrug()
         val dto = createTestDrugDTO()
         whenever(drugService.findByIdForUser(drugId, userId)).thenReturn(drug)
-        whenever(drugService.toDrugDTO(drug)).thenReturn(dto)
 
         mockMvc.perform(
             get("/v1/drug/$drugId")
@@ -143,7 +146,6 @@ class DrugControllerTest {
         val drug = createTestDrug()
         val dto = createTestDrugDTO()
         whenever(medKitDrugServices.createDrugInMedkit(any(), eq(userId))).thenReturn(drug)
-        whenever(drugService.toDrugDTO(drug)).thenReturn(dto)
 
         val createDTO = DrugCreateDTO(
             name = "Aspirin",
@@ -167,7 +169,6 @@ class DrugControllerTest {
         val drug = createTestDrug()
         val dto = createTestDrugDTO()
         whenever(drugService.update(eq(drugId), any(), eq(userId))).thenReturn(drug)
-        whenever(drugService.toDrugDTO(drug)).thenReturn(dto)
 
         val updateDTO = DrugUpdateDTO(name = "Updated Aspirin")
 
@@ -213,7 +214,6 @@ class DrugControllerTest {
         val drug = createTestDrug().apply { quantity = qty(90.0) }
         val dto = createTestDrugDTO().copy(quantity = qty(90.0))
         whenever(drugService.consumeDrug(eq(drugId), eq(qty(10.0)), eq(userId))).thenReturn(drug)
-        whenever(drugService.toDrugDTO(drug)).thenReturn(dto)
 
         val consumeRequest = ConsumeRequest(quantity = qty(10.0))
 
@@ -233,7 +233,6 @@ class DrugControllerTest {
         val drug = createTestDrug()
         val dto = createTestDrugDTO()
         whenever(medKitDrugServices.moveDrug(eq(drugId), eq(targetMedKitId), eq(userId))).thenReturn(drug)
-        whenever(drugService.toDrugDTO(drug)).thenReturn(dto)
 
         val moveRequest = MoveDrugRequest(targetMedKitId = targetMedKitId)
 

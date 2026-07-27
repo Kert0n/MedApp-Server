@@ -144,22 +144,6 @@ class DrugService(
 //    fun getPlannedQuantity(drugId: UUID): Double {
 //        return drugRepository.sumPlannedAmount(drugId)
 //    }
-    @Transactional(readOnly = true)
-    fun toDrugDTO(drug: Drug): DrugDTO {
-        return DrugDTO(
-            id = drug.id,
-            name = drug.name,
-            quantity = drug.quantity,
-            plannedQuantity = drug.totalPlannedAmount,
-            quantityUnit = drug.quantityUnit,
-            formType = drug.formType,
-            category = drug.category,
-            manufacturer = drug.manufacturer,
-            country = drug.country,
-            description = drug.description,
-            medKitId = drug.medKit.id
-        )
-    }
 
 
 }

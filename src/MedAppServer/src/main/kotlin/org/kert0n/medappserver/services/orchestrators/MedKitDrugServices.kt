@@ -100,12 +100,15 @@ class MedKitDrugServices(
         medKitRepository.delete(medKit)
     }
 
+    /**
+     * Препараты аптечки вместе с планами — одним запросом.
+     *
+     * Раньше метод назывался `toMedKitDTO` и сам собирал ответ. Маппинг уехал в `api`, здесь
+     * осталась только загрузка: это и есть работа оркестратора — знать, каким запросом
+     * достать нужную форму данных. Планы фетчатся графом, потому что `DrugDTO` несёт
+     * плановое количество, а без графа оно тянуло бы по запросу на препарат.
+     */
     @Transactional(readOnly = true)
-    fun toMedKitDTO(medKit: MedKit): MedKitDTO {
-        val drugs = drugRepository.findAllWithUsingsByMedKitId(medKit.id)
-        return MedKitDTO(
-            id = medKit.id,
-            drugs = (drugs.map { drugService.toDrugDTO(it) }).toSet()
-        )
-    }
+    fun drugsWithPlans(medKit: MedKit): List<Drug> =
+        drugRepository.findAllWithUsingsByMedKitId(medKit.id)
 }

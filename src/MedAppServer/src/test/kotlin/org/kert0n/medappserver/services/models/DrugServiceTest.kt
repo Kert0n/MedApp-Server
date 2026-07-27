@@ -1,5 +1,6 @@
 package org.kert0n.medappserver.services.models
 
+import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
 import org.junit.jupiter.api.Test
@@ -245,7 +246,7 @@ class DrugServiceTest {
         usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(25.0)))
         dbHelper.flushAndClear()
 
-        val dto = drugService.toDrugDTO(drugService.findById(drug.id))
+        val dto = drugService.findById(drug.id).toDto()
         assertQty(25.0, dto.plannedQuantity)
         assertQty(100.0, dto.quantity)
     }

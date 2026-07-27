@@ -179,13 +179,4 @@ class UsingService(
     }
 
 
-    @Transactional(readOnly = true)
-    fun toUsingDTO(using: Using): UsingDTO {
-
-        return UsingDTO(
-            userId = using.user.id,
-            drugId = using.drug.id,
-            plannedAmount = using.plannedAmount
-        )
-    }
 }

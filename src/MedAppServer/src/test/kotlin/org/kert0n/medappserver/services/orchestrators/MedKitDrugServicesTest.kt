@@ -1,5 +1,6 @@
 package org.kert0n.medappserver.services.orchestrators
 
+import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.testutil.qty
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertDoesNotThrow
@@ -251,7 +252,7 @@ class MedKitDrugServicesTest {
         )
         dbHelper.flushAndClear()
 
-        val dto = medKitDrugServices.toMedKitDTO(kit)
+        val dto = kit.toDto(medKitDrugServices.drugsWithPlans(kit))
         assertEquals(kit.id, dto.id)
         assertEquals(2, dto.drugs.size)
     }

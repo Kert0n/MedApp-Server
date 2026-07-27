@@ -1,5 +1,7 @@
 package org.kert0n.medappserver.controller
 
+import org.kert0n.medappserver.api.toDto
+import org.kert0n.medappserver.api.toTemplateDto
 import org.kert0n.medappserver.api.ConsumeRequest
 import org.kert0n.medappserver.api.DrugCreateDTO
 import org.kert0n.medappserver.api.DrugDTO
@@ -57,7 +59,7 @@ class DrugController(
     ): DrugDTO {
         logger.debug("GET /v1/drug/{} by user {}", id, authentication.userId)
         val drug = drugService.findByIdForUser(id, authentication.userId)
-        return drugService.toDrugDTO(drug)
+        return drug.toDto()
     }
 
     @PostMapping
@@ -81,7 +83,7 @@ class DrugController(
     ): DrugDTO {
         logger.debug("POST /v1/drug by user {}: {}", authentication.userId, drugDTO.name)
         val drug = medKitDrugServices.createDrugInMedkit(drugDTO, authentication.userId)
-        return drugService.toDrugDTO(drug)
+        return drug.toDto()
     }
 
     @PutMapping("/{id}")
@@ -101,7 +103,7 @@ class DrugController(
     ): DrugDTO {
         logger.debug("PUT /v1/drug/{} by user {}", id, authentication.userId)
         val drug = drugService.update(id, updateDTO, authentication.userId)
-        return drugService.toDrugDTO(drug)
+        return drug.toDto()
     }
 
     @DeleteMapping("/{id}")
@@ -168,7 +170,7 @@ class DrugController(
             consumeRequest.quantity
         )
         val drug = drugService.consumeDrug(id, consumeRequest.quantity, authentication.userId)
-        return if (drug != null) drugService.toDrugDTO(drug) else null
+        return if (drug != null) drug.toDto() else null
     }
 
     @PutMapping("/move/{id}")
@@ -192,7 +194,7 @@ class DrugController(
     ): DrugDTO {
         logger.debug("PUT /v1/drug/move/{} to medkit {} by user {}", id, moveRequest.targetMedKitId, authentication.userId)
         val drug = medKitDrugServices.moveDrug(id, moveRequest.targetMedKitId, authentication.userId)
-        return drugService.toDrugDTO(drug)
+        return drug.toDto()
     }
 
     @GetMapping("/template/search")

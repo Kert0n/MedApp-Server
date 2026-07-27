@@ -1,5 +1,6 @@
 package org.kert0n.medappserver.controller
 
+import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.api.UserDto
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.media.Content
@@ -45,7 +46,8 @@ class UserController(
     fun getAllDataForUser(authentication: Authentication): UserDto {
         logger.debug("GET /v1/user by user {}", authentication.userId)
         val medKitDTOs =
-            medKitService.findAllByUser(authentication.userId).map { medKitDrugServices.toMedKitDTO(it) }.toSet()
+            medKitService.findAllByUser(authentication.userId)
+                .map { it.toDto(medKitDrugServices.drugsWithPlans(it)) }.toSet()
         return UserDto(
             id = authentication.userId,
             medKits = medKitDTOs

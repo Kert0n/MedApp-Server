@@ -1,5 +1,6 @@
 package org.kert0n.medappserver.controller
 
+import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.api.MedKitDTO
 import org.kert0n.medappserver.api.MedKitSummaryDTO
 import io.swagger.v3.oas.annotations.Operation
@@ -80,7 +81,7 @@ class MedKitController(
     ): MedKitDTO {
         logger.debug("GET /v1/med-kit/{} by user {}", id, authentication.userId)
         val medKit = medKitService.findByIdForUser(id, authentication.userId)
-        return medKitDrugServices.toMedKitDTO(medKit)
+        return medKit.toDto(medKitDrugServices.drugsWithPlans(medKit))
     }
 
     @GetMapping
@@ -136,7 +137,7 @@ class MedKitController(
     ): MedKitDTO {
         logger.debug("POST /v1/med-kit/join by user {}", authentication.userId)
         val medKit = medKitService.joinMedKitByKey(request.key, authentication.userId)
-        return medKitDrugServices.toMedKitDTO(medKit)
+        return medKit.toDto(medKitDrugServices.drugsWithPlans(medKit))
     }
 
     @DeleteMapping("/{id}/leave")

@@ -60,7 +60,6 @@ class UserControllerTest {
         val medKitDTO = MedKitDTO(id = medKitId, drugs = setOf(drugDTO))
         val medKits = listOf(org.kert0n.medappserver.db.model.MedKit(id = medKitId))
         whenever(medKitService.findAllByUser(userId)).thenReturn(medKits)
-        whenever(medKitDrugServices.toMedKitDTO(any())).thenReturn(medKitDTO)
 
         mockMvc.perform(
             get("/v1/user")

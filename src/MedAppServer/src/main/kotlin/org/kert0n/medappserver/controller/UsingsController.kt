@@ -1,5 +1,6 @@
 package org.kert0n.medappserver.controller
 
+import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.api.IntakeRequest
 import org.kert0n.medappserver.api.UsingCreateDTO
 import org.kert0n.medappserver.api.UsingDTO
@@ -51,7 +52,7 @@ class UsingsController(
     fun getUsings(authentication: Authentication): List<UsingDTO> {
         logger.debug("GET /v1/using by user {}", authentication.userId)
         val usings = usingService.findAllByUser(authentication.userId)
-        return usings.map { usingService.toUsingDTO(it) }
+        return usings.map { it.toDto() }
     }
 
     @GetMapping("/drug/{drugId}")
@@ -75,7 +76,7 @@ class UsingsController(
         // tombstone'ов, поэтому старый клиент законно приходит за уже удалённым планом, и
         // по 404 он не отличит «плана нет» от «эндпоинт сломался».
         val using = usingService.findByUserAndDrugOrNull(authentication.userId, drugId)
-        return using?.let { usingService.toUsingDTO(it) }
+        return using?.toDto()
     }
 
     @PostMapping
@@ -99,7 +100,7 @@ class UsingsController(
     ): UsingDTO {
         logger.debug("POST /v1/using by user {} for drug {}", authentication.userId, createDTO.drugId)
         val using = usingService.createTreatmentPlan(authentication.userId, createDTO)
-        return usingService.toUsingDTO(using)
+        return using.toDto()
     }
 
     @PutMapping("/drug/{drugId}")
@@ -123,7 +124,7 @@ class UsingsController(
     ): UsingDTO {
         logger.debug("PUT /v1/using/drug/{} by user {}", drugId, authentication.userId)
         val using = usingService.updateTreatmentPlan(authentication.userId, drugId, updateDTO)
-        return usingService.toUsingDTO(using)
+        return using.toDto()
     }
 
     @PostMapping("/drug/{drugId}/intake")

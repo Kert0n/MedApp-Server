@@ -80,7 +80,6 @@ class MedKitControllerTest {
         val medKit = MedKit(id = medKitId)
         val medKitDTO = MedKitDTO(id = medKitId, drugs = emptySet())
         whenever(medKitService.findByIdForUser(medKitId, userId)).thenReturn(medKit)
-        whenever(medKitDrugServices.toMedKitDTO(medKit)).thenReturn(medKitDTO)
 
         mockMvc.perform(
             get("/v1/med-kit/$medKitId")
@@ -140,7 +139,6 @@ class MedKitControllerTest {
         val medKit = MedKit(id = medKitId)
         val medKitDTO = MedKitDTO(id = medKitId, drugs = emptySet())
         whenever(medKitService.joinMedKitByKey("share-key-123", userId)).thenReturn(medKit)
-        whenever(medKitDrugServices.toMedKitDTO(medKit)).thenReturn(medKitDTO)
 
         val joinRequest = MedKitController.JoinMedKitRequest(key = "share-key-123")
 
