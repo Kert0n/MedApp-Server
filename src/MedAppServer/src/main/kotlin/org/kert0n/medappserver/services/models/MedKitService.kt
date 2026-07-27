@@ -4,6 +4,7 @@ import com.sksamuel.aedile.core.Cache
 import org.kert0n.medappserver.db.repository.MedKitSummary
 import org.kert0n.medappserver.db.model.MedKit
 import org.kert0n.medappserver.db.model.User
+import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.services.security.SecurityService
 import org.kert0n.medappserver.services.security.hashToken
@@ -20,7 +21,7 @@ class MedKitService(
     private val medKitRepository: MedKitRepository,
     private val securityService: SecurityService,
     private val medKitTokenCache: Cache<String, UUID>,
-    private val userService: UserService
+    private val userRepository: UserRepository
 ) {
 
     private val logger = LoggerFactory.getLogger(MedKitService::class.java)
@@ -28,7 +29,7 @@ class MedKitService(
     @Transactional
     fun createNew(userId: UUID): MedKit {
         logger.debug("Creating new medkit for user: {}", userId)
-        val user: User = userService.findById(userId)
+        val user: User = requireUser(userId)
         val medKit = medKitRepository.save(MedKit())
         user.medKits.add(medKit)
         medKit.users.add(user)
@@ -124,7 +125,7 @@ class MedKitService(
     fun addUserToMedKit(medKitId: UUID, userId: UUID): MedKit {
         logger.debug("Adding user {} to medkit {}", userId, medKitId)
         val medKit = findById(medKitId)
-        val user = userService.findById(userId)
+        val user = requireUser(userId)
         if (medKit.users.contains(user)) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "User already exists")
         }
@@ -158,4 +159,16 @@ class MedKitService(
     }
 
 
+
+    /**
+     * Участник или 404.
+     *
+     * Через свой репозиторий, а не через UserService: аптечке нужна ссылка на пользователя,
+     * а не поведение его сервиса, и ребро модель→модель ради одного findByIdOrNull —
+     * ровно тот случай, когда сервисы начинают звать друг друга без причины. Сообщение
+     * совпадает с UserService.findById, чтобы ответ не зависел от того, кто спросил.
+     */
+    private fun requireUser(userId: UUID): User =
+        userRepository.findByIdOrNull(userId)
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "User with ID $userId not found")
 }
