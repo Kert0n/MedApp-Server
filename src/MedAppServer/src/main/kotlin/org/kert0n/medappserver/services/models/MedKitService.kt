@@ -6,6 +6,7 @@ import org.kert0n.medappserver.db.model.MedKit
 import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.services.security.SecurityService
+import org.kert0n.medappserver.services.security.hashToken
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.data.repository.findByIdOrNull
@@ -72,7 +73,7 @@ class MedKitService(
         findByIdForUser(medKitId, userId)
         val key = securityService.generateKey(16)
         // Cache only a hash so the raw share key is never stored server-side.
-        medKitTokenCache[securityService.hashToken(key)] = medKitId
+        medKitTokenCache[hashToken(key)] = medKitId
         return key
     }
 
@@ -91,7 +92,7 @@ class MedKitService(
 
     @Transactional
     fun joinMedKitByKey(key: String, userId: UUID): MedKit {
-        val hashedKey = securityService.hashToken(key)
+        val hashedKey = hashToken(key)
         val medKitId = medKitTokenCache.getOrNull(hashedKey) ?: throw ResponseStatusException(
             HttpStatus.NOT_FOUND, "Share key has expired or does not exist"
         )

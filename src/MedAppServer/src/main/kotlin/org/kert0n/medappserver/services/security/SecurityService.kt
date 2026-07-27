@@ -17,6 +17,20 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 import kotlin.io.encoding.Base64
 
+/**
+ * SHA-256 в Base64 — то, чем в этом проекте закрываются ключи кешей.
+ *
+ * Функция верхнего уровня, а не метод сервиса: она без состояния и без зависимостей, а
+ * пользователи у неё есть за пределами аутентификации — например кеш идемпотентности приёма.
+ * Ради одного хеша тащить в оркестратор приёма зависимость от [SecurityService] незачем.
+ *
+ * Простой дайджест сознательно. Ключ с секретом был бы механикой ни за чем: записи живут
+ * минуты, кеш в памяти и умирает вместе с процессом, а кто читает эту память — видит и сами
+ * значения.
+ */
+fun hashToken(token: String): String =
+    Base64.encode(MessageDigest.getInstance("SHA-256").digest(token.toByteArray()))
+
 @Service
 class SecurityService(
     private val passwordEncoder: PasswordEncoder,
@@ -36,8 +50,6 @@ class SecurityService(
     fun generateKey(size: Int) = Base64.encode(ByteArray(size).also { secureRandom.nextBytes(it) })
     fun check(raw: String, hashedPassword: String): Boolean = passwordEncoder.matches(raw, hashedPassword)
     fun hashPassword(rawPassword: String): String = passwordEncoder.encode(rawPassword)!!
-    fun hashToken(token: String): String =
-        Base64.encode(MessageDigest.getInstance("SHA-256").digest(token.toByteArray()))
 
     /**
      * Compares two shared secrets without leaking how much of a candidate was correct.
@@ -68,13 +80,7 @@ class SecurityService(
         ).tokenValue
     }
 
-    /**
-     * Cache key for a client address, so no address is used as a key verbatim.
-     *
-     * Plain SHA-256 on purpose. A keyed digest would be more machinery for nothing here:
-     * entries expire within minutes, the cache is in-memory and dies with the process, and
-     * anyone able to read that heap can see the live connections anyway.
-     */
+    /** Cache key for a client address, so no address is used as a key verbatim. */
     private fun addressCacheKey(clientAddress: String): String = hashToken(clientAddress)
 
     /**
