@@ -7,6 +7,7 @@ import org.kert0n.medappserver.db.model.parsed.VidalDrug
 import org.kert0n.medappserver.db.repository.MedKitSummary
 import org.kert0n.medappserver.services.models.DrugCreation
 import org.kert0n.medappserver.services.models.DrugPatch
+import org.kert0n.medappserver.services.models.PlanSnapshot
 
 /**
  * Перевод сущностей в контракт.
@@ -124,4 +125,11 @@ fun DrugUpdateDTO.toPatch(): DrugPatch = DrugPatch(
     manufacturer = manufacturer,
     country = country,
     description = description
+)
+
+/** Снимок плана после приёма — наружу. */
+fun PlanSnapshot.toDto(): UsingDTO = UsingDTO(
+    userId = userId,
+    drugId = drugId,
+    plannedAmount = plannedAmount
 )

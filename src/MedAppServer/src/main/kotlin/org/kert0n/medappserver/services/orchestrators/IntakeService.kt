@@ -1,9 +1,8 @@
 package org.kert0n.medappserver.services.orchestrators
 
-import org.kert0n.medappserver.api.toDto
 import com.sksamuel.aedile.core.Cache
-import org.kert0n.medappserver.api.UsingDTO
 import org.kert0n.medappserver.services.models.DrugService
+import org.kert0n.medappserver.services.models.PlanSnapshot
 import org.kert0n.medappserver.services.security.hashToken
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
@@ -50,7 +49,7 @@ class IntakeService(
         }
 
         val plan = drugService.applyIntake(userId, drugId, quantityConsumed)
-            ?.toDto()
+            ?.let { PlanSnapshot(it.usingKey.userId, it.usingKey.drugId, it.plannedAmount) }
 
         // Ошибки не кешируются сознательно: отказ выводится из состояния и при повторе
         // повторится сам, а вот закешированный отказ переживёт исправление причины.
@@ -68,4 +67,4 @@ class IntakeService(
  * intakeId» и «видели, и план исчез» обязательно: без этого повтор вернул бы 404 вместо
  * первого ответа.
  */
-data class IntakeOutcome(val plan: UsingDTO?)
+data class IntakeOutcome(val plan: PlanSnapshot?)

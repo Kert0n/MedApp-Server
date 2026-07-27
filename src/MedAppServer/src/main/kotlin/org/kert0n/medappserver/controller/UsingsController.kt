@@ -152,7 +152,7 @@ class UsingsController(
             drugId,
             intakeRequest.quantityConsumed,
             intakeRequest.intakeId
-        ).plan
+        ).plan?.toDto()
     }
 
     @DeleteMapping("/drug/{drugId}")

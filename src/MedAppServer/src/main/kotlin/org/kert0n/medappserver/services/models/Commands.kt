@@ -1,6 +1,7 @@
 package org.kert0n.medappserver.services.models
 
 import java.math.BigDecimal
+import java.util.UUID
 
 /**
  * Аргументы прикладных операций, не зависящие от HTTP.
@@ -43,4 +44,20 @@ data class DrugPatch(
     val manufacturer: String? = null,
     val country: String? = null,
     val description: String? = null
+)
+
+/**
+ * Снимок плана лечения: то, чем закончился приём.
+ *
+ * Кеш идемпотентности хранил здесь `UsingDTO` — тип тела ответа. Формат, который сервер
+ * отдаёт клиенту, становился при этом серверным состоянием: правка `UsingDTO` меняла
+ * содержимое живого кеша, а значит и то, что вернёт повтор запроса по тому же `intakeId`.
+ *
+ * Снимок, а не сущность: `Using` управляемый, и класть его в кеш, переживающий транзакцию,
+ * нельзя.
+ */
+data class PlanSnapshot(
+    val userId: UUID,
+    val drugId: UUID,
+    val plannedAmount: BigDecimal
 )
