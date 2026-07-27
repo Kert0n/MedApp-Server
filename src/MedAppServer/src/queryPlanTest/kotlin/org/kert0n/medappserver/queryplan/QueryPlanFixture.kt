@@ -75,22 +75,37 @@ class QueryPlanFixture(private val entityManager: EntityManager) {
             """
         ).executeUpdate()
 
+        // Справочные связи обязаны быть заполнены: VidalDrug.formType и quantityUnit
+        // объявлены EAGER, и с пустыми ссылками набор просто не проверял бы этот путь.
+        entityManager.createNativeQuery(
+            "INSERT INTO form_types (id, name) SELECT gen_random_uuid(), 'форма ' || i " +
+                "FROM generate_series(1, $FORM_TYPES) AS i"
+        ).executeUpdate()
+        entityManager.createNativeQuery(
+            "INSERT INTO quantity_units (id, name) SELECT gen_random_uuid(), 'ед ' || i " +
+                "FROM generate_series(1, $QUANTITY_UNITS) AS i"
+        ).executeUpdate()
+
         entityManager.createNativeQuery(
             """
-            INSERT INTO parsed_drugs (id, name, name_lat, active_substance, manufacturer, otc)
+            INSERT INTO parsed_drugs (id, name, name_lat, active_substance, manufacturer, otc,
+                                      form_type_id, quantity_unit_id)
             SELECT gen_random_uuid(),
                    md5(i::text) || ' таблетки',
                    md5((i + 1)::text) || ' tabs',
                    'вещество ' || (i % 500),
                    'Производитель ' || (i % 300),
-                   true
+                   true,
+                   (SELECT id FROM form_types OFFSET (i % $FORM_TYPES) LIMIT 1),
+                   (SELECT id FROM quantity_units OFFSET (i % $QUANTITY_UNITS) LIMIT 1)
             FROM generate_series(1, $CATALOGUE) AS i
             """
         ).executeUpdate()
 
         // Без ANALYZE планировщик работает по умолчаниям и выбирает план, которого в проде
         // не будет: статистика после массовой вставки ещё не собрана.
-        listOf("users", "med_kits", "user_med_kits", "user_drugs", "usings", "parsed_drugs")
+        listOf("users", "med_kits", "user_med_kits", "user_drugs", "usings", "parsed_drugs",
+            "form_types", "quantity_units")
             .forEach { entityManager.createNativeQuery("ANALYZE $it").executeUpdate() }
 
         // Название реального препарата из синтетики: искать по нему осмысленно, а по
@@ -125,5 +140,7 @@ class QueryPlanFixture(private val entityManager: EntityManager) {
         const val MED_KITS = 300
         const val DRUGS = 10_000
         const val CATALOGUE = 18_000
+        const val FORM_TYPES = 210
+        const val QUANTITY_UNITS = 11
     }
 }

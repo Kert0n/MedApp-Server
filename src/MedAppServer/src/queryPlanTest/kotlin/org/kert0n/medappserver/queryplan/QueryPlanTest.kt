@@ -81,6 +81,11 @@ class QueryPlanTest {
                     ?.let { statement.sql to it }
             }
         println("\n=== $name: операторов ${executed.size}, разобрано планов ${plans.size} ===")
+        executed.groupingBy { it.sql }.eachCount()
+            .entries.sortedByDescending { it.value }.take(3)
+            .forEach { (sql, times) ->
+                if (times > 1) println("  ПОВТОР x$times: ${sql.take(120).replace(Regex("\\s+"), " ")}")
+            }
         plans.forEach { (sql, plan) ->
             val scans = plan.sequentiallyScanned
             val note = if (scans.isEmpty()) "" else "   [Seq Scan: ${scans.joinToString()}]"
@@ -162,6 +167,26 @@ class QueryPlanTest {
         assertTrue(
             used.any { it.contains("med_kit_id") } && used.any { it.contains("usings") },
             "выборка обязана уметь идти по индексам препаратов и планов, а использованы: $used"
+        )
+    }
+
+    /**
+     * Число операторов не должно расти с числом планов.
+     *
+     * `Using.drug` объявлен EAGER, но производный запрос его не присоединяет: Hibernate
+     * достаёт каждый препарат отдельным SELECT. На 167 планах это давало 169 операторов —
+     * самый крупный N+1 в проекте, и в пользовательском эндпоинте.
+     */
+    @Test
+    fun `список планов пользователя не делает запрос на каждый план`() {
+        val executed = RecordingDataSource.capture {
+            tx.executeWithoutResult { usingService.findAllByUser(fixture.ownerId) }
+        }
+        val plans = usingService.findAllByUser(fixture.ownerId).size
+        println("\n=== GET /v1/using: планов $plans, операторов ${executed.size} ===")
+        assertTrue(
+            executed.size <= 3,
+            "планов $plans, а операторов ${executed.size}: запрос на каждый план"
         )
     }
 

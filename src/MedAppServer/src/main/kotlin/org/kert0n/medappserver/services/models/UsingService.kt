@@ -28,7 +28,12 @@ class UsingService(
     @Transactional(readOnly = true)
     fun findAllByUser(userId: UUID): List<Using> {
         logger.debug("Finding all usings for user: {}", userId)
-        return usingRepository.findAllByUsingKeyUserId(userId)
+        // JOIN FETCH, а не простая выборка по user_id. Using.drug объявлен EAGER, но
+        // производный запрос его не присоединяет: Hibernate достаёт каждый препарат
+        // отдельным SELECT. Замерено — 167 планов давали 169 операторов.
+        //
+        // Метод findAllByUserIdWithDrug для этого и был написан, но вызывать его забыли.
+        return usingRepository.findAllByUserIdWithDrug(userId)
     }
 
     @Transactional
