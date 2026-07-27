@@ -113,6 +113,8 @@ CREATE TABLE parsed_drugs
 (
     id               uuid         NOT NULL,
     name             varchar(300) NOT NULL,
+    -- Международное название латиницей; в справочнике заполнено не всюду.
+    name_lat         varchar(300),
     form_type_id     uuid,
     quantity         integer,
     quantity_unit_id uuid,

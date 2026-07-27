@@ -47,6 +47,16 @@ class VidalDrug(
     @NotNull
     @Column(name = "name", nullable = false, length = 300) var name: String,
 
+    /**
+     * Международное название латиницей.
+     *
+     * Nullable: в справочнике заполнено у 17646 записей из 18087. До этого колонка при
+     * переносе из дампа отбрасывалась, из-за чего поиск по латинскому названию не находил
+     * ничего вообще — снаружи это выглядело как «поиск не работает с языками».
+     */
+    @Size(max = 300)
+    @Column(name = "name_lat", length = 300) var nameLat: String? = null,
+
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "form_type_id") var formType: FormType? = null,
 

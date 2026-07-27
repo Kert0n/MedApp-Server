@@ -227,6 +227,8 @@ class DrugController(
             DrugTemplateDTO(
                 id = vd.id,
                 name = vd.name,
+                nameLat = vd.nameLat,
+                activeSubstance = vd.activeSubstance,
                 formType = vd.formType?.name,
                 category = vd.category,
                 quantityUnit = vd.quantityUnit?.name,
@@ -261,6 +263,8 @@ class DrugController(
         return DrugTemplateDTO(
             id = vd.id,
             name = vd.name,
+            nameLat = vd.nameLat,
+            activeSubstance = vd.activeSubstance,
             formType = vd.formType?.name,
             category = vd.category,
             quantityUnit = vd.quantityUnit?.name,
@@ -302,6 +306,10 @@ data class DrugTemplateDTO(
     val id: UUID,
     @Schema(description = "Drug name")
     val name: String,
+    @Schema(description = "International name in Latin script", example = "Aspirin")
+    val nameLat: String?,
+    @Schema(description = "Active substance", example = "Acetylsalicylic acid")
+    val activeSubstance: String?,
     @Schema(description = "Form type (e.g., tablet, syrup)")
     val formType: String?,
     @Schema(description = "Category")
