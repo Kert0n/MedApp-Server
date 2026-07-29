@@ -48,7 +48,28 @@ class SecurityService(
 
     private val secureRandom = SecureRandom()
 
-    fun generateKey(size: Int) = Base64.encode(ByteArray(size).also { secureRandom.nextBytes(it) })
+    private companion object {
+        /** URL-safe без выравнивания: см. [generateKey]. */
+        val KEY_ENCODING: Base64 = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT)
+    }
+
+    /**
+     * Случайный ключ: [size] байт из [SecureRandom], закодированные Base64.
+     *
+     * Алфавит URL-safe и без выравнивания. Обычный Base64 давал три неудобства сразу, и все
+     * три видны в выдаче: 32 байта не кратны трём, поэтому **каждый** ключ заканчивался на
+     * `=`; в алфавите есть `+` и `/`, которые приходится экранировать в URL и в оболочке.
+     * Ключ ходит в заголовке Basic, в ссылках-приглашениях и через копирование руками — там
+     * это мешает, а стойкости не добавляет.
+     *
+     * Энтропия не меняется: те же 8 * size бит, просто записанные без хвоста выравнивания.
+     * Длина при size = 32 — 43 символа вместо 44.
+     *
+     * Старые ключи продолжают работать: в базе лежит их bcrypt-хеш, а не сам ключ, и форма
+     * записи на проверку не влияет.
+     */
+    fun generateKey(size: Int): String =
+        KEY_ENCODING.encode(ByteArray(size).also { secureRandom.nextBytes(it) })
     fun check(raw: String, hashedPassword: String): Boolean = passwordEncoder.matches(raw, hashedPassword)
     fun hashPassword(rawPassword: String): String = passwordEncoder.encode(rawPassword)!!
 
@@ -98,19 +119,22 @@ class SecurityService(
     /**
      * Tracks successful registrations per client address to throttle automated signups.
      *
-     * Two imprecisions are accepted deliberately, because this only has to deter casual
-     * bots and is not a security boundary:
-     *  - the check happens before the increment, so concurrent requests can slip past the
-     *    limit together;
-     *  - the comparison is `<=`, so one registration more than [registrationNumber] is
-     *    allowed.
-     * Making this exact would need an atomic counter with a release on failed
-     * registration. That is not a coroutine or asynchrony question — an AtomicInteger
-     * would do — but it is extra machinery for no real gain here, so it is left out on
-     * purpose. Do not "fix" this without a reason.
+     * Сравнение строгое: [registrationNumber] — это сколько регистраций разрешено, а не
+     * после скольких начинать отказывать. Раньше стояло `<=`, и лимит на деле был на
+     * единицу больше объявленного; послабление было записано осознанно, но правило «не чаще
+     * трёх раз с адреса» его больше не допускает.
+     *
+     * Одна неточность осталась и оставлена намеренно: проверка идёт до инкремента, поэтому
+     * одновременные запросы могут проскочить вместе. Точный счёт потребовал бы атомарного
+     * счётчика с возвратом при неудачной регистрации; на защите от ботов это ничего не
+     * меняет, а машинерии добавляет. Не «чинить» без причины.
+     *
+     * Окно отсчитывается от последней **успешной** регистрации: счётчик живёт в кеше с
+     * expireAfterWrite, а отклонённые попытки его не трогают. То есть после исчерпания
+     * лимита адрес ждёт полное окно, но не может продлевать блокировку сам себе.
      */
     fun validateRequest(ip: String): Boolean =
-        (successfulRegistrationsCache.getOrNull(addressCacheKey(ip)) ?: 0) <= registrationNumber
+        (successfulRegistrationsCache.getOrNull(addressCacheKey(ip)) ?: 0) < registrationNumber
 
     /**
      * Whether another token request from this address may proceed to authentication.
