@@ -16,6 +16,7 @@ import org.springframework.test.context.ActiveProfiles
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 @SpringBootTest
@@ -107,6 +108,47 @@ class DrugCommandServiceTest {
         assertEquals(target.id, moved.medKitId)
         assertQty(20.0, db.userPlan(alice.id, drug.id))
         assertNull(db.userPlan(bob.id, drug.id))
+    }
+
+    @Test
+    fun `empty patch is a no-op and keeps nullable fields`() {
+        val owner = db.freshUser("owner")
+        val medKit = medKits.createNew(owner.id)
+        val drug = db.freshDrug(medKit, 10.0).also {
+            it.description = "keep"
+            it.manufacturer = "maker"
+        }
+        db.flushAndClear()
+
+        val result = commands.patch(owner.id, drug.id, DrugPatch())
+        db.flushAndClear()
+
+        assertEquals("keep", result.description)
+        assertEquals("maker", result.manufacturer)
+        assertQty(10.0, result.quantity)
+    }
+
+    @Test
+    fun `rejected consumption rolls back stock and plans`() {
+        val owner = db.freshUser("owner")
+        val medKit = medKits.createNew(owner.id)
+        val drug = db.freshDrug(medKit, 10.0)
+        db.flushAndClear()
+        treatmentPlans.create(owner.id, drug.id, qty(5.0))
+        db.flushAndClear()
+
+        assertThrows<ResponseStatusException> {
+            commands.consume(owner.id, drug.id, qty(11.0))
+        }
+        assertThrows<ResponseStatusException> {
+            commands.consume(owner.id, drug.id, qty(0.0))
+        }
+        db.flushAndClear()
+
+        val stored = drugs.findByIdOrNull(drug.id)
+        assertNotNull(stored)
+        assertQty(10.0, stored.quantity)
+        assertQty(5.0, db.userPlan(owner.id, drug.id))
     }
 
     private fun creation(quantity: java.math.BigDecimal) =

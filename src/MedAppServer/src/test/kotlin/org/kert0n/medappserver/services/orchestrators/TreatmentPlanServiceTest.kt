@@ -5,6 +5,7 @@ import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
 import org.junit.jupiter.api.Test
+import org.kert0n.medappserver.db.repository.DrugRepository
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
@@ -12,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 
 /** Контракты команд TreatmentPlan на границе агрегатов Using и Drug. */
 @SpringBootTest
@@ -25,6 +27,8 @@ class TreatmentPlanServiceTest {
     private lateinit var medKitFixture: MedKitFixture
     @Autowired
     private lateinit var dbHelper: DatabaseTestHelper
+    @Autowired
+    private lateinit var drugRepository: DrugRepository
 
     // ── create ──
 
@@ -135,5 +139,47 @@ class TreatmentPlanServiceTest {
         assertFailsWith<ResponseStatusException> {
             treatmentPlanService.delete(alice.id, drug.id)
         }
+    }
+
+    @Test
+    fun `missing or foreign plan is never disclosed`() {
+        val alice = dbHelper.freshUser("alice")
+        val outsider = dbHelper.freshUser("outsider")
+        val kit = medKitFixture.createNew(alice.id)
+        val drug = dbHelper.freshDrug(kit, 20.0)
+        dbHelper.flushAndClear()
+        treatmentPlanService.create(alice.id, drug.id, qty(10.0))
+        dbHelper.flushAndClear()
+
+        assertFailsWith<ResponseStatusException> {
+            treatmentPlanService.patch(outsider.id, drug.id, qty(5.0))
+        }
+        assertFailsWith<ResponseStatusException> {
+            treatmentPlanService.delete(outsider.id, drug.id)
+        }
+        assertFailsWith<ResponseStatusException> {
+            treatmentPlanService.delete(alice.id, java.util.UUID.randomUUID())
+        }
+
+        assertQty(10.0, dbHelper.userPlan(alice.id, drug.id))
+        assertNull(dbHelper.userPlan(outsider.id, drug.id))
+    }
+
+    @Test
+    fun `rejected intake does not change stock or plan`() {
+        val alice = dbHelper.freshUser("alice")
+        val kit = medKitFixture.createNew(alice.id)
+        val drug = dbHelper.freshDrug(kit, 20.0)
+        dbHelper.flushAndClear()
+        treatmentPlanService.create(alice.id, drug.id, qty(5.0))
+        dbHelper.flushAndClear()
+
+        assertFailsWith<ResponseStatusException> {
+            treatmentPlanService.applyIntake(alice.id, drug.id, qty(6.0))
+        }
+        dbHelper.flushAndClear()
+
+        assertQty(20.0, drugRepository.findById(drug.id).orElseThrow().quantity)
+        assertQty(5.0, dbHelper.userPlan(alice.id, drug.id))
     }
 }
