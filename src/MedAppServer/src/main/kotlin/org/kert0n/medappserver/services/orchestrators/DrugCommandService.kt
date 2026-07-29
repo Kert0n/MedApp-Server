@@ -70,7 +70,7 @@ class DrugCommandService(
 
         drug.consumeUnplanned(amount)
         if (drug.quantity.isZero()) {
-            drugs.delete(drug)
+            drugs.deleteLockedById(drugId)
             return null
         }
 
@@ -103,7 +103,8 @@ class DrugCommandService(
 
     @Transactional
     fun delete(userId: UUID, drugId: UUID) {
-        drugs.delete(lockAccessible(userId, drugId))
+        lockAccessible(userId, drugId)
+        drugs.deleteLockedById(drugId)
     }
 
     private fun lockAccessible(userId: UUID, drugId: UUID): Drug =

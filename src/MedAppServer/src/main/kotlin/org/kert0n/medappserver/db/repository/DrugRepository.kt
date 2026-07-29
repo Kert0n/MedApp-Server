@@ -51,6 +51,10 @@ interface DrugRepository : JpaRepository<Drug, UUID> {
     @Query("UPDATE Drug d SET d.medKit.id = :targetMedKitId WHERE d.medKit.id = :sourceMedKitId")
     fun moveAllToMedKit(sourceMedKitId: UUID, targetMedKitId: UUID): Int
 
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("DELETE FROM Drug d WHERE d.id = :drugId")
+    fun deleteLockedById(drugId: UUID): Int
+
     @Query(
         """
         SELECT DISTINCT d FROM Drug d 

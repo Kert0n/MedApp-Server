@@ -101,8 +101,8 @@ class TreatmentPlanStoriesTest {
         assertQty(30.0, createdPlan.plannedAmount, "Planned amount should be 30")
 
         // Record some intakes
-        drugService.applyIntake(user.id, drug.id, qty(5.0))
-        drugService.applyIntake(user.id, drug.id, qty(5.0))
+        treatmentPlanService.applyIntake(user.id, drug.id, qty(5.0))
+        treatmentPlanService.applyIntake(user.id, drug.id, qty(5.0))
         entityManager.flush()
         entityManager.clear()
 
@@ -322,11 +322,11 @@ class TreatmentPlanStoriesTest {
         assertQty(90.0, drugRepository.findByIdOrNull(vitamins.id)?.totalPlannedAmount)
 
         // Everyone takes their daily vitamin
-        drugService.applyIntake(mom.id, vitamins.id, qty(1.0))
+        treatmentPlanService.applyIntake(mom.id, vitamins.id, qty(1.0))
         entityManager.flush()
-        drugService.applyIntake(dad.id, vitamins.id, qty(1.0))
+        treatmentPlanService.applyIntake(dad.id, vitamins.id, qty(1.0))
         entityManager.flush()
-        drugService.applyIntake(child.id, vitamins.id, qty(1.0))
+        treatmentPlanService.applyIntake(child.id, vitamins.id, qty(1.0))
         entityManager.flush()
         entityManager.clear()
 

@@ -135,6 +135,17 @@ class IntakeIdempotencyTest {
     }
 
     @Test
+    fun `тот же intakeId с другим payload возвращает conflict`() {
+        val fixture = prepare(stock = 10.0, plan = 5.0)
+        val intakeId = UUID.randomUUID()
+
+        intake(fixture.user, fixture.drug, 1.0, intakeId).andExpect(status().isOk)
+        intake(fixture.user, fixture.drug, 2.0, intakeId).andExpect(status().isConflict)
+
+        assertQty(9.0, drugRepository.findById(fixture.drug.id).orElseThrow().quantity)
+    }
+
+    @Test
     fun `повтор приёма, обнулившего план, возвращает тот же результат, а не 404`() {
         // Самый важный случай: приём забирает план целиком, план удаляется. Наивная отметка
         // «уже обработано» заставила бы повтор искать удалённый план и вернуть 404, из-за чего

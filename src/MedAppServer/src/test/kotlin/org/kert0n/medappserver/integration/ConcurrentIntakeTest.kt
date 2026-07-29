@@ -75,7 +75,7 @@ class ConcurrentIntakeTest {
         val tasks = listOf(alice.id, bob.id).map { userId ->
             pool.submit {
                 start.await()
-                runCatching { drugService.applyIntake(userId, drug.id, qty(10.0)) }
+                runCatching { treatmentPlanService.applyIntake(userId, drug.id, qty(10.0)) }
                     .onFailure { synchronized(errors) { errors += it } }
             }
         }

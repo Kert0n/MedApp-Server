@@ -260,7 +260,7 @@ class ComplexWorkflowStoriesTest {
         // ── Phase 1: Alter Using ──
         // Bob increases his plan from 40 to 60.
         // Allowed because 100 stock - 40 Alice = 60 available.
-        treatmentPlanService.update(bob.id, drug.id, plannedAmount = qty(60.0))
+        treatmentPlanService.patch(bob.id, drug.id, plannedAmount = qty(60.0))
         dbHelper.flushAndClear()
 
         assertQty(60.0, dbHelper.userPlan(bob.id, drug.id), "Bob's plan updated to 60")

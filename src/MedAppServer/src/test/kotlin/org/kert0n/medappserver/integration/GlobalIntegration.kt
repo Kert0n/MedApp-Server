@@ -102,7 +102,7 @@ class PlannedQuantityTrackingTests {
         assertQty(30.0, dbHelper.userPlan(bob.id, drug.id))
 
         // ── Alice takes 10 (within her plan of 40) ──
-        drugService.applyIntake(alice.id, drug.id, qty(10.0))
+        treatmentPlanService.applyIntake(alice.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
         assertQty(110.0, dbHelper.drugQuantity(drug.id), "drug: 120-10=110")
@@ -111,7 +111,7 @@ class PlannedQuantityTrackingTests {
         assertQty(60.0, dbHelper.totalPlanned(drug.id), "total: 30+30=60")
 
         // ── Bob takes 5 (within his plan of 30) ──
-        drugService.applyIntake(bob.id, drug.id, qty(5.0))
+        treatmentPlanService.applyIntake(bob.id, drug.id, qty(5.0))
         dbHelper.flushAndClear()
 
         assertQty(105.0, dbHelper.drugQuantity(drug.id), "drug: 110-5=105")
@@ -167,7 +167,7 @@ class PlannedQuantityTrackingTests {
         assertQty(30.0, dbHelper.userPlan(charlie.id, drug.id))
 
         // ── Alice takes 1 ──
-        drugService.applyIntake(alice.id, drug.id, qty(1.0))
+        treatmentPlanService.applyIntake(alice.id, drug.id, qty(1.0))
         dbHelper.flushAndClear()
 
         assertQty(89.0, dbHelper.drugQuantity(drug.id), "drug: 90-1=89")
@@ -177,7 +177,7 @@ class PlannedQuantityTrackingTests {
         assertQty(89.0, dbHelper.totalPlanned(drug.id), "total: 29+30+30=89")
 
         // ── Bob takes 1 ──
-        drugService.applyIntake(bob.id, drug.id, qty(1.0))
+        treatmentPlanService.applyIntake(bob.id, drug.id, qty(1.0))
         dbHelper.flushAndClear()
 
         assertQty(88.0, dbHelper.drugQuantity(drug.id), "drug: 89-1=88")
@@ -187,7 +187,7 @@ class PlannedQuantityTrackingTests {
         assertQty(88.0, dbHelper.totalPlanned(drug.id), "total: 29+29+30=88")
 
         // ── Charlie takes 1 ──
-        drugService.applyIntake(charlie.id, drug.id, qty(1.0))
+        treatmentPlanService.applyIntake(charlie.id, drug.id, qty(1.0))
         dbHelper.flushAndClear()
 
         assertQty(87.0, dbHelper.drugQuantity(drug.id), "drug: 88-1=87")
@@ -306,7 +306,7 @@ class PlannedQuantityTrackingTests {
         assertQty(40.0, dbHelper.userPlan(bob.id, drug.id))
 
         // ── Step 1: Alice takes 10 ──
-        drugService.applyIntake(alice.id, drug.id, qty(10.0))
+        treatmentPlanService.applyIntake(alice.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
         assertQty(110.0, dbHelper.drugQuantity(drug.id), "step1 drug")
@@ -315,7 +315,7 @@ class PlannedQuantityTrackingTests {
         assertQty(70.0, dbHelper.totalPlanned(drug.id), "step1 total: 30+40=70")
 
         // ── Step 2: Bob takes 10 ──
-        drugService.applyIntake(bob.id, drug.id, qty(10.0))
+        treatmentPlanService.applyIntake(bob.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
         assertQty(100.0, dbHelper.drugQuantity(drug.id), "step2 drug")
@@ -334,7 +334,7 @@ class PlannedQuantityTrackingTests {
         assertQty(40.0, dbHelper.totalPlanned(drug.id), "step3 total=40=drug.quantity")
 
         // ── Step 4: Alice takes 5 of her new plan of 20 ──
-        drugService.applyIntake(alice.id, drug.id, qty(5.0))
+        treatmentPlanService.applyIntake(alice.id, drug.id, qty(5.0))
         dbHelper.flushAndClear()
 
         assertQty(35.0, dbHelper.drugQuantity(drug.id), "step4 drug: 40-5=35")

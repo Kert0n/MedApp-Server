@@ -112,7 +112,7 @@ class UsingServiceTest {
         treatmentPlanService.create(alice.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
-        val updated = drugService.applyIntake(alice.id, drug.id, qty(10.0))
+        val updated = treatmentPlanService.applyIntake(alice.id, drug.id, qty(10.0))
         assertNotNull(updated)
         assertQty(20.0, updated.plannedAmount)
         assertQty(90.0, drugService.findById(drug.id).quantity)
@@ -129,7 +129,7 @@ class UsingServiceTest {
         dbHelper.flushAndClear()
 
         val ex = assertFailsWith<ResponseStatusException> {
-            drugService.applyIntake(alice.id, drug.id, qty(15.0))
+            treatmentPlanService.applyIntake(alice.id, drug.id, qty(15.0))
         }
         assertTrue(ex.reason!!.contains("exceeds planned amount"))
     }
@@ -150,7 +150,7 @@ class UsingServiceTest {
         drugRepository.saveAndFlush(directDrug)
 
         val ex = assertFailsWith<ResponseStatusException> {
-            drugService.applyIntake(alice.id, drug.id, qty(5.0))
+            treatmentPlanService.applyIntake(alice.id, drug.id, qty(5.0))
         }
         assertTrue(ex.reason!!.contains("Insufficient drug quantity"))
     }
@@ -165,7 +165,7 @@ class UsingServiceTest {
         treatmentPlanService.create(alice.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
-        val result = drugService.applyIntake(alice.id, drug.id, qty(10.0))
+        val result = treatmentPlanService.applyIntake(alice.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
         assertNull(result)
