@@ -14,7 +14,7 @@ import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.db.repository.UsingRepository
 import org.kert0n.medappserver.services.orchestrators.DrugCommandService
 import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
-import org.kert0n.medappserver.services.models.MedKitService
+import org.kert0n.medappserver.testutil.MedKitFixture
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.services.orchestrators.MedKitLifecycleService
 import org.springframework.beans.factory.annotation.Autowired
@@ -50,7 +50,7 @@ class TreatmentPlanStoriesTest {
     private lateinit var drugCommands: DrugCommandService
 
     @Autowired
-    private lateinit var medKitService: MedKitService
+    private lateinit var medKitFixture: MedKitFixture
 
     @Autowired
     private lateinit var medKitLifecycle: MedKitLifecycleService
@@ -70,7 +70,7 @@ class TreatmentPlanStoriesTest {
         val user = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
         userRepository.save(user)
 
-        val medkit = medKitService.createNew(user.id)
+        val medkit = medKitFixture.createNew(user.id)
         val drug = Drug(
             id = UUID.randomUUID(),
             name = "Treatment Drug",
@@ -127,9 +127,9 @@ class TreatmentPlanStoriesTest {
         userRepository.save(anna)
         userRepository.save(bob)
 
-        val medkit = medKitService.createNew(anna.id)
-        val shareKey = medKitService.generateMedKitShareKey(medkit.id, anna.id)
-        medKitService.joinMedKitByKey(shareKey, bob.id)
+        val medkit = medKitFixture.createNew(anna.id)
+        val shareKey = medKitFixture.generateMedKitShareKey(medkit.id, anna.id)
+        medKitFixture.joinMedKitByKey(shareKey, bob.id)
 
         val vitaminC = Drug(
             id = UUID.randomUUID(),
@@ -177,7 +177,7 @@ class TreatmentPlanStoriesTest {
     fun `Story 8 - Reducing drug quantity adjusts treatment plans proportionally`() {
         val user = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
         userRepository.save(user)
-        val medkit = medKitService.createNew(user.id)
+        val medkit = medKitFixture.createNew(user.id)
 
         val drug = Drug(
             id = UUID.randomUUID(),
@@ -226,7 +226,7 @@ class TreatmentPlanStoriesTest {
     fun `Story 9 - Cannot over-plan drug quantity`() {
         val user = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
         userRepository.save(user)
-        val medkit = medKitService.createNew(user.id)
+        val medkit = medKitFixture.createNew(user.id)
 
         val drug = Drug(
             id = UUID.randomUUID(),
@@ -255,8 +255,8 @@ class TreatmentPlanStoriesTest {
         // Another user tries to plan 25 (only 20 available: 50 - 30 = 20)
         val user2 = User(id = UUID.randomUUID(), hashedKey = "user2_${UUID.randomUUID()}")
         userRepository.save(user2)
-        val shareKey = medKitService.generateMedKitShareKey(medkit.id, user.id)
-        medKitService.joinMedKitByKey(shareKey, user2.id)
+        val shareKey = medKitFixture.generateMedKitShareKey(medkit.id, user.id)
+        medKitFixture.joinMedKitByKey(shareKey, user2.id)
         entityManager.flush()
         entityManager.clear()
         assertFailsWith<ResponseStatusException> {
@@ -288,11 +288,11 @@ class TreatmentPlanStoriesTest {
         userRepository.save(child)
         entityManager.flush()
 
-        val familyKit = medKitService.createNew(mom.id)
-        val dadKey = medKitService.generateMedKitShareKey(familyKit.id, mom.id)
-        medKitService.joinMedKitByKey(dadKey, dad.id)
-        val childKey = medKitService.generateMedKitShareKey(familyKit.id, mom.id)
-        medKitService.joinMedKitByKey(childKey, child.id)
+        val familyKit = medKitFixture.createNew(mom.id)
+        val dadKey = medKitFixture.generateMedKitShareKey(familyKit.id, mom.id)
+        medKitFixture.joinMedKitByKey(dadKey, dad.id)
+        val childKey = medKitFixture.generateMedKitShareKey(familyKit.id, mom.id)
+        medKitFixture.joinMedKitByKey(childKey, child.id)
         entityManager.flush()
 
         // Add family medications

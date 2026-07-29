@@ -5,11 +5,6 @@ import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.api.IntakeRequest
 import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
 import org.kert0n.medappserver.api.TreatmentPlanPatchRequest
-import org.kert0n.medappserver.db.model.Drug
-import org.kert0n.medappserver.db.model.MedKit
-import org.kert0n.medappserver.db.model.User
-import org.kert0n.medappserver.db.model.Using
-import org.kert0n.medappserver.db.model.UsingKey
 import org.kert0n.medappserver.services.models.PlanSnapshot
 import org.kert0n.medappserver.services.models.TreatmentPlanView
 import org.kert0n.medappserver.services.models.UsingService
@@ -62,16 +57,8 @@ class UsingsControllerTest {
             .build()
     }
 
-    private fun plan(amount: Double = 30.0): Using {
-        val user = User(id = userId, hashedKey = "key")
-        val drug = Drug(
-            id = drugId, name = "Drug", quantity = qty(100.0),
-            quantityUnit = "mg", formType = null, category = null,
-            manufacturer = null, country = null, description = null,
-            medKit = MedKit()
-        )
-        return Using(UsingKey(userId, drugId), user, drug, qty(amount))
-    }
+    private fun plan(amount: Double = 30.0) =
+        TreatmentPlanView(userId, drugId, qty(amount))
 
     @Test
     fun `treatment plan resource supports CRUD`() {

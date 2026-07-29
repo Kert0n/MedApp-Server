@@ -11,7 +11,7 @@ import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.services.orchestrators.DrugCommandService
-import org.kert0n.medappserver.services.models.MedKitService
+import org.kert0n.medappserver.testutil.MedKitFixture
 import org.kert0n.medappserver.services.orchestrators.MedKitLifecycleService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.transaction.annotation.Transactional
@@ -41,7 +41,7 @@ class BasicWorkflowStoriesTest {
     private lateinit var drugCommands: DrugCommandService
 
     @Autowired
-    private lateinit var medKitService: MedKitService
+    private lateinit var medKitFixture: MedKitFixture
 
     @Autowired
     private lateinit var medKitLifecycle: MedKitLifecycleService
@@ -62,7 +62,7 @@ class BasicWorkflowStoriesTest {
         entityManager.flush()
 
         // Creates medkit
-        val homeMedkit = medKitService.createNew(anna.id)
+        val homeMedkit = medKitFixture.createNew(anna.id)
         assertNotNull(homeMedkit)
 
         // Adds drugs using repository directly (simulating controller layer)
@@ -121,7 +121,7 @@ class BasicWorkflowStoriesTest {
         // Anna's medkit
         val anna = User(id = UUID.randomUUID(), hashedKey = "anna_${UUID.randomUUID()}")
         userRepository.save(anna)
-        val medkit = medKitService.createNew(anna.id)
+        val medkit = medKitFixture.createNew(anna.id)
 
         val vitamins = Drug(
             id = UUID.randomUUID(),
@@ -144,14 +144,14 @@ class BasicWorkflowStoriesTest {
         entityManager.flush()
 
         // Anna shares with Bob via share key
-        val shareKey = medKitService.generateMedKitShareKey(medkit.id, anna.id)
-        medKitService.joinMedKitByKey(shareKey, bob.id)
+        val shareKey = medKitFixture.generateMedKitShareKey(medkit.id, anna.id)
+        medKitFixture.joinMedKitByKey(shareKey, bob.id)
         entityManager.flush()
         entityManager.clear()
 
         // Both can see it
-        val annaMedkits = medKitService.findAllByUser(anna.id)
-        val bobMedkits = medKitService.findAllByUser(bob.id)
+        val annaMedkits = medKitFixture.findAllByUser(anna.id)
+        val bobMedkits = medKitFixture.findAllByUser(bob.id)
 
         assertEquals(1, annaMedkits.size)
         assertEquals(1, bobMedkits.size)
@@ -178,9 +178,9 @@ class BasicWorkflowStoriesTest {
         userRepository.save(anna)
         userRepository.save(bob)
 
-        val medkit = medKitService.createNew(anna.id)
-        val shareKey = medKitService.generateMedKitShareKey(medkit.id, anna.id)
-        medKitService.joinMedKitByKey(shareKey, bob.id)
+        val medkit = medKitFixture.createNew(anna.id)
+        val shareKey = medKitFixture.generateMedKitShareKey(medkit.id, anna.id)
+        medKitFixture.joinMedKitByKey(shareKey, bob.id)
 
         val drug = Drug(
             id = UUID.randomUUID(),
@@ -230,7 +230,7 @@ class BasicWorkflowStoriesTest {
         // Create user and first medkit
         val user = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
         userRepository.save(user)
-        val oldMedkit = medKitService.createNew(user.id)
+        val oldMedkit = medKitFixture.createNew(user.id)
 
         // Add drugs
         val drug1 = Drug(
@@ -261,12 +261,12 @@ class BasicWorkflowStoriesTest {
         drugRepository.save(drug2)
 
         // Create new medkit for migration
-        val newMedkit = medKitService.createNew(user.id)
+        val newMedkit = medKitFixture.createNew(user.id)
         entityManager.flush()
         entityManager.clear()
 
         // Verify user has 2 medkits
-        assertEquals(2, medKitService.findAllByUser(user.id).size)
+        assertEquals(2, medKitFixture.findAllByUser(user.id).size)
 
         // Delete old medkit and move drugs
         medKitLifecycle.delete(user.id, oldMedkit.id, newMedkit.id)
@@ -285,7 +285,7 @@ class BasicWorkflowStoriesTest {
         assertNull(oldMedkitCheck, "Old medkit should be deleted")
 
         // User should have only 1 medkit now
-        assertEquals(1, medKitService.findAllByUser(user.id).size)
+        assertEquals(1, medKitFixture.findAllByUser(user.id).size)
 
         println("✅ Story 4 passed: Drugs successfully migrated to new medkit")
     }
@@ -300,7 +300,7 @@ class BasicWorkflowStoriesTest {
         val user = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
         userRepository.save(user)
 
-        val medkit = medKitService.createNew(user.id)
+        val medkit = medKitFixture.createNew(user.id)
         val drug = Drug(
             id = UUID.randomUUID(),
             name = "Limited Drug",

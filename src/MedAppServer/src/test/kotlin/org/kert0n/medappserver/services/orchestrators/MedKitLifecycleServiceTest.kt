@@ -12,7 +12,7 @@ import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.UsingRepository
 import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
-import org.kert0n.medappserver.services.models.MedKitService
+import org.kert0n.medappserver.testutil.MedKitFixture
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -37,7 +37,7 @@ class MedKitLifecycleServiceTest {
     @Autowired
     private lateinit var drugCommands: DrugCommandService
     @Autowired
-    private lateinit var medKitService: MedKitService
+    private lateinit var medKitFixture: MedKitFixture
     @Autowired
     private lateinit var treatmentPlanService: TreatmentPlanService
     @Autowired
@@ -57,7 +57,7 @@ class MedKitLifecycleServiceTest {
 
         val key = lifecycle.createInvitation(alice.id, medKitId)
         assertEquals(medKitId, lifecycle.join(bob.id, key))
-        assertNotNull(medKitService.findByIdForUser(medKitId, bob.id))
+        assertNotNull(medKitFixture.findByIdForUser(medKitId, bob.id))
     }
 
     // ── createDrugInMedkit ──
@@ -65,7 +65,7 @@ class MedKitLifecycleServiceTest {
     @Test
     fun `createDrugInMedkit creates drug in user medkit`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitFixture.createNew(alice.id)
         dbHelper.flushAndClear()
 
         val drug = drugCommands.create(
@@ -82,7 +82,7 @@ class MedKitLifecycleServiceTest {
     fun `createDrugInMedkit fails for unauthorized user`() {
         val alice = dbHelper.freshUser("alice")
         val eve = dbHelper.freshUser("eve")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitFixture.createNew(alice.id)
         dbHelper.flushAndClear()
 
         assertFailsWith<ResponseStatusException> {
@@ -99,23 +99,23 @@ class MedKitLifecycleServiceTest {
     @Test
     fun `moveDrug moves drug to target medkit`() {
         val alice = dbHelper.freshUser("alice")
-        val kit1 = medKitService.createNew(alice.id)
-        val kit2 = medKitService.createNew(alice.id)
+        val kit1 = medKitFixture.createNew(alice.id)
+        val kit2 = medKitFixture.createNew(alice.id)
         val drug = dbHelper.freshDrug(kit1, 50.0)
         dbHelper.flushAndClear()
 
         val moved = drugCommands.move(alice.id, drug.id, kit2.id)
-        assertEquals(kit2.id, moved.medKit.id)
+        assertEquals(kit2.id, moved.medKitId)
     }
 
     @Test
     fun `moveDrug strips access from unauthorized users`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val sourceKit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(sourceKit.id, alice.id), bob.id)
+        val sourceKit = medKitFixture.createNew(alice.id)
+        medKitFixture.joinMedKitByKey(medKitFixture.generateMedKitShareKey(sourceKit.id, alice.id), bob.id)
 
-        val targetKit = medKitService.createNew(alice.id) // Only Alice
+        val targetKit = medKitFixture.createNew(alice.id) // Only Alice
         val drug = dbHelper.freshDrug(sourceKit, 50.0)
         dbHelper.flushAndClear()
 
@@ -134,13 +134,13 @@ class MedKitLifecycleServiceTest {
     fun `moveDrug without personal treatment plan works`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kitA = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kitA.id, alice.id), bob.id)
+        val kitA = medKitFixture.createNew(alice.id)
+        medKitFixture.joinMedKitByKey(medKitFixture.generateMedKitShareKey(kitA.id, alice.id), bob.id)
 
         val drug = drugCommands.create(
             alice.id, kitA.id, DrugCreateDTO("Shared Meds", qty(10.0), "pcs").toCommand()
         )
-        val kitB = medKitService.createNew(bob.id)
+        val kitB = medKitFixture.createNew(bob.id)
         dbHelper.flushAndClear()
 
         assertDoesNotThrow {
@@ -153,7 +153,7 @@ class MedKitLifecycleServiceTest {
     @Test
     fun `moveDrug throws when target medkit not found`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitFixture.createNew(alice.id)
         val drug = dbHelper.freshDrug(kit, 10.0)
         dbHelper.flushAndClear()
 
@@ -168,8 +168,8 @@ class MedKitLifecycleServiceTest {
     fun `removeUserFromMedKit removes user and their usings`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.createNew(alice.id)
-        medKitService.addUserToMedKit(kit.id, bob.id)
+        val kit = medKitFixture.createNew(alice.id)
+        medKitFixture.addUserToMedKit(kit.id, bob.id)
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
@@ -179,16 +179,16 @@ class MedKitLifecycleServiceTest {
         lifecycle.leave(bob.id, kit.id)
         dbHelper.flushAndClear()
 
-        assertNotNull(medKitService.findByIdForUser(kit.id, alice.id))
+        assertNotNull(medKitFixture.findByIdForUser(kit.id, alice.id))
         assertFailsWith<ResponseStatusException> {
-            medKitService.findByIdForUser(kit.id, bob.id)
+            medKitFixture.findByIdForUser(kit.id, bob.id)
         }
     }
 
     @Test
     fun `last member leaving deletes medkit drugs and plans`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitFixture.createNew(alice.id)
         val drug = dbHelper.freshDrug(kit, 20.0)
         dbHelper.flushAndClear()
         treatmentPlanService.create(alice.id, drug.id, qty(10.0))
@@ -207,7 +207,7 @@ class MedKitLifecycleServiceTest {
     @Test
     fun `delete without transfer removes medkit`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitFixture.createNew(alice.id)
         dbHelper.freshDrug(kit, 10.0)
         dbHelper.flushAndClear()
 
@@ -215,15 +215,15 @@ class MedKitLifecycleServiceTest {
         dbHelper.flushAndClear()
 
         assertThrows<ResponseStatusException> {
-            medKitService.findByIdForUser(kit.id, alice.id)
+            medKitFixture.findByIdForUser(kit.id, alice.id)
         }
     }
 
     @Test
     fun `delete with transfer migrates drugs to target medkit`() {
         val alice = dbHelper.freshUser("alice")
-        val kitA = medKitService.createNew(alice.id)
-        val kitB = medKitService.createNew(alice.id)
+        val kitA = medKitFixture.createNew(alice.id)
+        val kitB = medKitFixture.createNew(alice.id)
         val drug = drugCommands.create(
             alice.id,
             kitA.id,
@@ -244,10 +244,10 @@ class MedKitLifecycleServiceTest {
     fun `delete with transfer strips unauthorized usings`() {
         val alice = dbHelper.freshUser("alice")
         val charlie = dbHelper.freshUser("charlie")
-        val oldKit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(oldKit.id, alice.id), charlie.id)
+        val oldKit = medKitFixture.createNew(alice.id)
+        medKitFixture.joinMedKitByKey(medKitFixture.generateMedKitShareKey(oldKit.id, alice.id), charlie.id)
 
-        val newKit = medKitService.createNew(alice.id) // Only Alice
+        val newKit = medKitFixture.createNew(alice.id) // Only Alice
 
         val drug = dbHelper.freshDrug(oldKit, 90.0)
         dbHelper.flushAndClear()
@@ -278,7 +278,7 @@ class MedKitLifecycleServiceTest {
     @Test
     fun `toMedKitDTO returns correct DTO`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitFixture.createNew(alice.id)
         drugCommands.create(
             alice.id, kit.id,
             DrugCreateDTO(name = "Drug A", quantity = qty(50.0), quantityUnit = "mg").toCommand()

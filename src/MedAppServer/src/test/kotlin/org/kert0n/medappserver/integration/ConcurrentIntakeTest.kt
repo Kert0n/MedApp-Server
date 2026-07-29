@@ -9,7 +9,7 @@ import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.UserRepository
-import org.kert0n.medappserver.services.models.MedKitService
+import org.kert0n.medappserver.testutil.MedKitFixture
 import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.services.models.DrugService
@@ -42,7 +42,7 @@ class ConcurrentIntakeTest {
     @Autowired private lateinit var drugRepository: DrugRepository
     @Autowired private lateinit var treatmentPlanService: TreatmentPlanService
     @Autowired private lateinit var usingService: UsingService
-    @Autowired private lateinit var medKitService: MedKitService
+    @Autowired private lateinit var medKitFixture: MedKitFixture
     @Autowired private lateinit var drugService: DrugService
 
     @Test
@@ -54,7 +54,7 @@ class ConcurrentIntakeTest {
         medKitRepository.save(medKit)
 
         val bob = userRepository.save(User(hashedKey = "{noop}conc-${UUID.randomUUID()}"))
-        medKitService.addUserToMedKit(medKit.id, bob.id)
+        medKitFixture.addUserToMedKit(medKit.id, bob.id)
 
         val drug = drugRepository.save(
             Drug(

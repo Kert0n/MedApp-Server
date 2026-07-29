@@ -6,14 +6,8 @@ import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
 
 /**
- * Синтетика, на которой планы вообще имеют смысл.
- *
- * На десятке строк планировщик всегда выберет `Seq Scan` — и будет прав, так что проверять
- * там нечего. Объёмы ниже подобраны так, чтобы индексный доступ стал выгоднее
- * последовательного, оставаясь достаточно быстрым для сборки.
- *
- * Данные генерирует сама база через `generate_series`: гонять десятки тысяч вставок через
- * Hibernate значило бы ждать минуты ради фикстуры.
+ * Большой PostgreSQL fixture для проверки масштабирования и индексных планов.
+ * Данные создаются через `generate_series`, вне измеряемых интервалов.
  */
 @Component
 class QueryPlanFixture(private val entityManager: EntityManager) {
@@ -44,9 +38,7 @@ class QueryPlanFixture(private val entityManager: EntityManager) {
             "INSERT INTO med_kits (id) SELECT gen_random_uuid() FROM generate_series(1, $MED_KITS)"
         ).executeUpdate()
 
-        // По три участника на аптечку — как в жизни, семья или соседи. Раскладка «каждый в
-        // каждой» дала бы сотни планов на препарат, план запроса поехал бы под этот объём, и
-        // набор проверял бы нагрузку, которой у приложения не бывает.
+        // Три участника дают планы каждому препарату без декартова разрастания fixture.
         entityManager.createNativeQuery(
             """
             INSERT INTO user_med_kits (user_id, med_kit_id)
@@ -116,17 +108,12 @@ class QueryPlanFixture(private val entityManager: EntityManager) {
             "form_types", "quantity_units")
             .forEach { entityManager.createNativeQuery("ANALYZE $it").executeUpdate() }
 
-        // Название реального препарата из синтетики: искать по нему осмысленно, а по
-        // общему префиксу — нет. Первая версия фикстуры давала всем именам общее начало
-        // «Каталог », поэтому любой запрос совпадал почти со всей таблицей, и планировщик
-        // справедливо выбирал Seq Scan. Тест тогда ловил дефект фикстуры, а не кода.
+        // Избирательное существующее значение нужно для содержательного плана поиска.
         catalogueName = entityManager
             .createNativeQuery("SELECT name FROM parsed_drugs OFFSET 500 LIMIT 1")
             .singleResult.toString()
 
-        // Владелец — тот, кто состоит в наибольшем числе аптечек. Со случайным
-        // пользователем сценарий выдачи мог бы затронуть одну аптечку, и рост числа
-        // запросов от их количества просто не проявился бы.
+        // Пользователь с максимальным числом аптечек делает N+1 заметным.
         ownerId = single(
             """
             SELECT user_id FROM user_med_kits

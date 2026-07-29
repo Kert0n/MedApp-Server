@@ -13,7 +13,7 @@ import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.db.repository.UsingRepository
 import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
-import org.kert0n.medappserver.services.models.MedKitService
+import org.kert0n.medappserver.testutil.MedKitFixture
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.services.orchestrators.DrugCommandService
 import org.kert0n.medappserver.services.orchestrators.MedKitLifecycleService
@@ -41,7 +41,7 @@ class DrugMovementStoriesTest {
     private lateinit var entityManager: EntityManager
 
     @Autowired
-    private lateinit var medKitService: MedKitService
+    private lateinit var medKitFixture: MedKitFixture
 
     @Autowired
     private lateinit var drugCommands: DrugCommandService
@@ -63,8 +63,8 @@ class DrugMovementStoriesTest {
         val user = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
         userRepository.save(user)
 
-        val homeKit = medKitService.createNew(user.id)
-        val travelKit = medKitService.createNew(user.id)
+        val homeKit = medKitFixture.createNew(user.id)
+        val travelKit = medKitFixture.createNew(user.id)
 
         val painkiller = Drug(
             id = UUID.randomUUID(), name = "Ibuprofen",
@@ -117,9 +117,9 @@ class DrugMovementStoriesTest {
         userRepository.save(anna)
         userRepository.save(bob)
 
-        val medkit = medKitService.createNew(anna.id)
-        val shareKey = medKitService.generateMedKitShareKey(medkit.id, anna.id)
-        medKitService.joinMedKitByKey(shareKey, bob.id)
+        val medkit = medKitFixture.createNew(anna.id)
+        val shareKey = medKitFixture.generateMedKitShareKey(medkit.id, anna.id)
+        medKitFixture.joinMedKitByKey(shareKey, bob.id)
 
         val drug = Drug(
             id = UUID.randomUUID(), name = "Medicine X",
@@ -163,7 +163,7 @@ class DrugMovementStoriesTest {
         val user = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
         userRepository.save(user)
 
-        val medkit = medKitService.createNew(user.id)
+        val medkit = medKitFixture.createNew(user.id)
         val drug = Drug(
             id = UUID.randomUUID(), name = "Expired Drug",
             quantity = qty(50.0), quantityUnit = "tablets", formType = null,
@@ -209,13 +209,13 @@ class DrugMovementStoriesTest {
         val bob = userRepository.save(User(id = UUID.randomUUID(), hashedKey = "bob_${UUID.randomUUID()}"))
         val charlie = userRepository.save(User(id = UUID.randomUUID(), hashedKey = "charlie_${UUID.randomUUID()}"))
 
-        val oldKit = medKitService.createNew(anna.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(oldKit.id, anna.id), bob.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(oldKit.id, anna.id), charlie.id)
+        val oldKit = medKitFixture.createNew(anna.id)
+        medKitFixture.joinMedKitByKey(medKitFixture.generateMedKitShareKey(oldKit.id, anna.id), bob.id)
+        medKitFixture.joinMedKitByKey(medKitFixture.generateMedKitShareKey(oldKit.id, anna.id), charlie.id)
 
         // Setup: Anna and Bob share a New MedKit (Charlie is excluded)
-        val newKit = medKitService.createNew(anna.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(newKit.id, anna.id), bob.id)
+        val newKit = medKitFixture.createNew(anna.id)
+        medKitFixture.joinMedKitByKey(medKitFixture.generateMedKitShareKey(newKit.id, anna.id), bob.id)
 
         // Add drug to old kit
         val drug = drugRepository.save(
@@ -263,8 +263,8 @@ class DrugMovementStoriesTest {
         val anna = userRepository.save(User(id = UUID.randomUUID(), hashedKey = "anna_${UUID.randomUUID()}"))
         val bob = userRepository.save(User(id = UUID.randomUUID(), hashedKey = "bob_${UUID.randomUUID()}"))
 
-        val kit = medKitService.createNew(anna.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, anna.id), bob.id)
+        val kit = medKitFixture.createNew(anna.id)
+        medKitFixture.joinMedKitByKey(medKitFixture.generateMedKitShareKey(kit.id, anna.id), bob.id)
 
         // Drug has 100 total
         val drug = drugRepository.save(
@@ -311,8 +311,8 @@ class DrugMovementStoriesTest {
     fun `Story 16 - Moving single drug preserves it from orphan removal`() {
         val user = userRepository.save(User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}"))
 
-        val sourceKit = medKitService.createNew(user.id)
-        val targetKit = medKitService.createNew(user.id)
+        val sourceKit = medKitFixture.createNew(user.id)
+        val targetKit = medKitFixture.createNew(user.id)
 
         val drugToMove = drugRepository.save(
             Drug(

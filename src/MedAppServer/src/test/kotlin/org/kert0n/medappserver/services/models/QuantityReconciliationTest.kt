@@ -8,7 +8,7 @@ import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.UsingRepository
 import org.kert0n.medappserver.services.orchestrators.DrugCommandService
 import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
-import org.kert0n.medappserver.services.models.MedKitService
+import org.kert0n.medappserver.testutil.MedKitFixture
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.springframework.beans.factory.annotation.Autowired
@@ -27,7 +27,7 @@ class QuantityReconciliationTest {
     @Autowired
     private lateinit var drugCommands: DrugCommandService
     @Autowired
-    private lateinit var medKitService: MedKitService
+    private lateinit var medKitFixture: MedKitFixture
     @Autowired
     private lateinit var treatmentPlanService: TreatmentPlanService
     @Autowired
@@ -44,7 +44,7 @@ class QuantityReconciliationTest {
     @Test
     fun `drug deleted when quantity reaches zero`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitFixture.createNew(alice.id)
         val drug = dbHelper.freshDrug(kit, 50.0)
         dbHelper.flushAndClear()
 
@@ -64,8 +64,8 @@ class QuantityReconciliationTest {
     fun `no scaling when planned within slack`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
+        val kit = medKitFixture.createNew(alice.id)
+        medKitFixture.joinMedKitByKey(medKitFixture.generateMedKitShareKey(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
@@ -87,8 +87,8 @@ class QuantityReconciliationTest {
     fun `proportional scaling when planned exceeds quantity`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
+        val kit = medKitFixture.createNew(alice.id)
+        medKitFixture.joinMedKitByKey(medKitFixture.generateMedKitShareKey(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
@@ -112,8 +112,8 @@ class QuantityReconciliationTest {
     fun `asymmetric plans preserve ratio after scaling`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
+        val kit = medKitFixture.createNew(alice.id)
+        medKitFixture.joinMedKitByKey(medKitFixture.generateMedKitShareKey(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
