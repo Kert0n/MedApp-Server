@@ -12,7 +12,6 @@ import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.db.repository.UsingRepository
-import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.UsingService
@@ -40,9 +39,6 @@ class DrugMovementStoriesTest {
 
     @Autowired
     private lateinit var entityManager: EntityManager
-
-    @Autowired
-    private lateinit var drugService: DrugService
 
     @Autowired
     private lateinit var medKitService: MedKitService
@@ -187,7 +183,7 @@ class DrugMovementStoriesTest {
         assertNotNull(plan)
 
         // Delete the drug
-        drugService.delete(drug.id, user.id)
+        drugCommands.delete(user.id, drug.id)
         entityManager.flush()
         entityManager.clear()
 
@@ -292,7 +288,7 @@ class DrugMovementStoriesTest {
         // Bob consumes 50 pills (ignoring his plan limit for emergency)
         // Drug quantity drops to 50.
         // Factor should be: 50 / 100 = 0.5
-        drugService.consume(drug.id, qty(50.0), bob.id)
+        drugCommands.consume(bob.id, drug.id, qty(50.0))
 
         entityManager.flush()
         entityManager.clear()

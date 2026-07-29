@@ -31,9 +31,7 @@ class User(
                 "FOREIGN KEY (med_kit_id) REFERENCES med_kits (id) ON DELETE CASCADE"
         )
     )
-    var medKits: MutableSet<MedKit> = mutableSetOf(),
-    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
-    var usings: MutableSet<Using> = mutableSetOf()
+    var medKits: MutableSet<MedKit> = mutableSetOf()
 ) : UserDetails {
 
 

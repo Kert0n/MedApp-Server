@@ -12,7 +12,7 @@ import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.db.repository.UsingRepository
-import org.kert0n.medappserver.services.models.DrugService
+import org.kert0n.medappserver.services.orchestrators.DrugCommandService
 import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.UsingService
@@ -47,7 +47,7 @@ class TreatmentPlanStoriesTest {
     private lateinit var entityManager: EntityManager
 
     @Autowired
-    private lateinit var drugService: DrugService
+    private lateinit var drugCommands: DrugCommandService
 
     @Autowired
     private lateinit var medKitService: MedKitService
@@ -201,7 +201,7 @@ class TreatmentPlanStoriesTest {
 
         // Consume 50 tablets (drug goes to 50, but plan is 80 > 50)
         // handleQuantityReduction should scale the plan down
-        drugService.consume(drug.id, qty(50.0), user.id)
+        drugCommands.consume(user.id, drug.id, qty(50.0))
         entityManager.flush()
         entityManager.clear()
 

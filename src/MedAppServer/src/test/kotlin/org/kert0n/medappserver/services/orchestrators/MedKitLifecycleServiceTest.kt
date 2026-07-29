@@ -10,10 +10,9 @@ import org.kert0n.medappserver.api.DrugCreateDTO
 import org.kert0n.medappserver.api.UsingCreateDTO
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
-import org.kert0n.medappserver.services.models.DrugService
+import org.kert0n.medappserver.db.repository.UsingRepository
 import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
 import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -38,13 +37,11 @@ class MedKitLifecycleServiceTest {
     @Autowired
     private lateinit var drugCommands: DrugCommandService
     @Autowired
-    private lateinit var drugService: DrugService
-    @Autowired
     private lateinit var medKitService: MedKitService
     @Autowired
     private lateinit var treatmentPlanService: TreatmentPlanService
     @Autowired
-    private lateinit var usingService: UsingService
+    private lateinit var usingRepository: UsingRepository
     @Autowired
     private lateinit var drugRepository: DrugRepository
     @Autowired
@@ -140,8 +137,8 @@ class MedKitLifecycleServiceTest {
         val kitA = medKitService.createNew(alice.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kitA.id, alice.id), bob.id)
 
-        val drug = drugService.create(
-            DrugCreateDTO("Shared Meds", qty(10.0), "pcs", kitA.id).toCommand(), kitA, alice.id
+        val drug = drugCommands.create(
+            alice.id, kitA.id, DrugCreateDTO("Shared Meds", qty(10.0), "pcs", kitA.id).toCommand()
         )
         val kitB = medKitService.createNew(bob.id)
         dbHelper.flushAndClear()
@@ -202,7 +199,7 @@ class MedKitLifecycleServiceTest {
 
         assertNull(medKitRepository.findById(kit.id).orElse(null))
         assertNull(drugRepository.findById(drug.id).orElse(null))
-        assertEquals(0, usingService.findAllByDrug(drug.id).size)
+        assertEquals(0, usingRepository.findAllByDrugId(drug.id).size)
     }
 
     // ── delete ──
@@ -282,13 +279,13 @@ class MedKitLifecycleServiceTest {
     fun `toMedKitDTO returns correct DTO`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        drugService.create(
-            DrugCreateDTO(name = "Drug A", quantity = qty(50.0), quantityUnit = "mg", medKitId = kit.id).toCommand(),
-            kit, alice.id
+        drugCommands.create(
+            alice.id, kit.id,
+            DrugCreateDTO(name = "Drug A", quantity = qty(50.0), quantityUnit = "mg", medKitId = kit.id).toCommand()
         )
-        drugService.create(
-            DrugCreateDTO(name = "Drug B", quantity = qty(30.0), quantityUnit = "tablets", medKitId = kit.id).toCommand(),
-            kit, alice.id
+        drugCommands.create(
+            alice.id, kit.id,
+            DrugCreateDTO(name = "Drug B", quantity = qty(30.0), quantityUnit = "tablets", medKitId = kit.id).toCommand()
         )
         dbHelper.flushAndClear()
 

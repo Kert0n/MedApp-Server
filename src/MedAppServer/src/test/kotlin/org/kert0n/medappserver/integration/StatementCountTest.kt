@@ -4,8 +4,6 @@ import jakarta.persistence.EntityManagerFactory
 import org.hibernate.SessionFactory
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
-import org.kert0n.medappserver.api.toPatch
-import org.kert0n.medappserver.api.DrugUpdateDTO
 import org.kert0n.medappserver.api.UsingCreateDTO
 import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.MedKit
@@ -13,7 +11,7 @@ import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.UserRepository
-import org.kert0n.medappserver.services.models.DrugService
+import org.kert0n.medappserver.services.orchestrators.DrugCommandService
 import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.UsingService
@@ -45,7 +43,7 @@ class StatementCountTest {
     @Autowired private lateinit var drugRepository: DrugRepository
     @Autowired private lateinit var treatmentPlanService: TreatmentPlanService
     @Autowired private lateinit var usingService: UsingService
-    @Autowired private lateinit var drugService: DrugService
+    @Autowired private lateinit var drugCommands: DrugCommandService
     @Autowired private lateinit var medKitService: MedKitService
     @Autowired private lateinit var entityManagerFactory: EntityManagerFactory
 
@@ -97,10 +95,10 @@ class StatementCountTest {
     private fun shrinkStatements(plans: Int): Long {
         val fixture = fixture(plans)
         return statementsFor {
-            drugService.update(
+            drugCommands.consume(
+                fixture.owner.id,
                 fixture.drug.id,
-                DrugUpdateDTO(quantity = qty(plans * 5.0)).toPatch(),
-                fixture.owner.id
+                qty(plans * 15.0)
             )
         }
     }
@@ -109,7 +107,7 @@ class StatementCountTest {
     private fun deleteStatements(plans: Int): Long {
         val fixture = fixture(plans)
         return statementsFor {
-            drugService.consume(fixture.drug.id, fixture.drug.quantity, fixture.owner.id)
+            drugCommands.consume(fixture.owner.id, fixture.drug.id, fixture.drug.quantity)
         }
     }
 
@@ -127,14 +125,14 @@ class StatementCountTest {
     }
 
     @Test
-    fun `удаление препарата добавляет один оператор на план, а не два`() {
+    fun `удаление препарата не добавляет операторов на планы`() {
         val two = deleteStatements(2)
         val five = deleteStatements(5)
 
         println("удаление: 2 плана — $two операторов, 5 планов — $five")
         assertEquals(
-            3L, five - two,
-            "три лишних плана должны добавить три DELETE и больше ничего"
+            0L, five - two,
+            "дочерние планы должна удалить база данных тем же каскадом"
         )
     }
 }

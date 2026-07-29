@@ -11,6 +11,7 @@ import org.kert0n.medappserver.services.models.DrugView
 import org.kert0n.medappserver.services.models.MedKitContentView
 import org.kert0n.medappserver.services.models.MedKitSummaryView
 import org.kert0n.medappserver.services.models.PlanSnapshot
+import org.kert0n.medappserver.services.models.TreatmentPlanView
 
 /**
  * Перевод сущностей в контракт.
@@ -59,13 +60,16 @@ fun DrugView.toDto(): DrugDTO = DrugDTO(
     medKitId = medKitId
 )
 
+fun TreatmentPlanView.toDto(): UsingDTO =
+    UsingDTO(userId, drugId, plannedAmount)
+
 fun MedKitContentView.toDto(): MedKitDTO =
     MedKitDTO(id = id, drugs = drugs.mapTo(linkedSetOf()) { it.toDto() })
 
 fun MedKitSummaryView.toDto(): MedKitSummaryDTO =
     MedKitSummaryDTO(id, userCount, drugCount)
 
-/** План лечения в ответ. `user` и `drug` объявлены EAGER, поэтому доступны без догрузки. */
+/** План лечения в ответ. Для LAZY-ссылок читаются только известные Hibernate идентификаторы. */
 fun Using.toDto(): UsingDTO = UsingDTO(
     userId = user.id,
     drugId = drug.id,
@@ -120,6 +124,9 @@ fun Drug.toQuantityInfo(): QuantityInfo = QuantityInfo(
     plannedQuantity = totalPlannedAmount,
     availableQuantity = availableQuantity
 )
+
+fun DrugView.toQuantityInfo(): QuantityInfo =
+    QuantityInfo(quantity, plannedQuantity, availableQuantity)
 
 /**
  * Запрос на создание препарата — в аргументы прикладной операции.

@@ -93,7 +93,7 @@ class PessimisticLockTest {
         val userId = fixture.userId
 
         TransactionTemplate(transactionManager).execute {
-            val locked = drugRepository.findByIdAndMedKitUsersIdForUpdate(drugId, userId)
+            val locked = drugRepository.findAccessibleForUpdate(drugId, userId)
             assertNotNull(locked, "препарат должен найтись")
 
             assertFalse(
@@ -120,7 +120,7 @@ class PessimisticLockTest {
         val userId = fixture.userId
 
         TransactionTemplate(transactionManager).execute {
-            drugRepository.findByIdAndMedKitUsersIdForUpdate(drugId, userId)
+            drugRepository.findAccessibleForUpdate(drugId, userId)
 
             assertTrue(
                 otherConnectionCanLock("users", userId),
