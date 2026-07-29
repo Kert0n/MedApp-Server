@@ -449,6 +449,26 @@ class QueryPlanTest {
     }
 
     @Test
+    fun `блокировка препаратов аптечки сохраняет порядок UUID`() {
+        val command = fixture.createMedKitFixture(100, 0, additionalMember = false)
+        val executed = capture {
+            val ids = drugRepository.lockAllByMedKitIdOrderById(command.medKitId)
+                .map { it.id.toString() }
+            // PostgreSQL сравнивает UUID как беззнаковые байты; UUID.compareTo в Java —
+            // signed long, поэтому эталонный порядок здесь задаётся canonical hex-строкой.
+            assertEquals(ids.sorted(), ids, "строки Drug должны блокироваться в порядке UUID")
+        }
+        assertEquals(1, executed.size)
+        assertTrue(
+            executed.single().fingerprint.contains("order by"),
+            "lock fingerprint обязан содержать ORDER BY: ${executed.single().fingerprint}"
+        )
+        val plans = explainStatements(executed, forceIndexes = true)
+        assertTrue(plans.single().second.nodeTypes.contains("LockRows"))
+        assertNoSeqScanOn("user_drugs", plans)
+    }
+
+    @Test
     fun `препарат с планами берётся по индексу`() {
         val plans = plansOf("drug with plans", forceIndexes = true) {
             drugService.getAccessible(fixture.ownerId, fixture.drugId)
@@ -499,7 +519,7 @@ class QueryPlanTest {
 
     @Test
     fun `удаление препарата не зависит от числа планов`() {
-        listOf(1, 100).forEach { planCount ->
+        listOf(0, 1, 100).forEach { planCount ->
             val command = fixture.createDrugFixture(planCount)
             val statements = captureWrite {
                 drugCommands.delete(command.ownerId, command.drugId)
@@ -563,7 +583,7 @@ class QueryPlanTest {
 
     @Test
     fun `исчерпанный препарат удаляется каскадом без SQL на каждый план`() {
-        val shapes = listOf(1, 100).associateWith { planCount ->
+        val shapes = listOf(0, 1, 100).associateWith { planCount ->
             val command = fixture.createDrugFixture(planCount)
             val stock = BigDecimal.valueOf(maxOf(planCount, 1) * 10L)
             val statements = captureWrite {
@@ -624,22 +644,27 @@ class QueryPlanTest {
             )
         }
 
-        val nonLast = fixture.createMedKitFixture(100, 100, additionalMember = true)
-        val nonLastStatements = captureWrite {
-            medKitLifecycle.leave(nonLast.ownerId, nonLast.medKitId)
+        val nonLast = listOf(1, 100).associateWith { size ->
+            val command = fixture.createMedKitFixture(size, size, additionalMember = true)
+            val statements = captureWrite {
+                medKitLifecycle.leave(command.ownerId, command.medKitId)
+            }
+            val shape = statements.queryShape()
+            assertEquals(2, shape.count(SqlKind.SELECT))
+            assertEquals(2, shape.count(SqlKind.DELETE))
+            assertEquals(1, scalarLong("SELECT count(*) FROM med_kits WHERE id = '${command.medKitId}'"))
+            assertEquals(0, scalarLong("SELECT count(*) FROM usings WHERE user_id = '${command.ownerId}'"))
+            statements
         }
-        val nonLastShape = nonLastStatements.queryShape()
-        assertEquals(2, nonLastShape.count(SqlKind.SELECT))
-        assertEquals(2, nonLastShape.count(SqlKind.DELETE))
-        assertEquals(1, scalarLong("SELECT count(*) FROM med_kits WHERE id = '${nonLast.medKitId}'"))
-        assertEquals(0, scalarLong("SELECT count(*) FROM usings WHERE user_id = '${nonLast.ownerId}'"))
-        record(
-            "MedKitLifecycleService", "leave", "не последний участник", 100,
-            "планы и membership удалены bulk", nonLastStatements
-        )
+        nonLast.forEach { (size, statements) ->
+            record(
+                "MedKitLifecycleService", "leave", "не последний участник", size,
+                "планы и membership удалены bulk", statements
+            )
+        }
 
         val plans = explainStatements(
-            lastLeave.getValue(100) + explicitDelete.getValue(100) + nonLastStatements,
+            lastLeave.getValue(100) + explicitDelete.getValue(100) + nonLast.getValue(100),
             forceIndexes = true
         )
         assertNoSeqScanOn("med_kits", plans)
@@ -650,38 +675,43 @@ class QueryPlanTest {
 
     @Test
     fun `удаление аптечки с переносом использует bulk UPDATE и bulk DELETE`() {
-        val command = fixture.createMedKitFixture(
-            100,
-            100,
-            additionalMember = false,
-            ownerPlans = false
-        )
-        val targetMedKitId = fixture.createTransferTarget(command)
-        val statements = captureWrite {
-            medKitLifecycle.delete(command.ownerId, command.medKitId, targetMedKitId)
-        }
-        val shape = statements.queryShape()
-        assertEquals(3, shape.count(SqlKind.SELECT))
-        assertEquals(2, shape.count(SqlKind.DELETE))
-        assertEquals(1, shape.count(SqlKind.UPDATE))
-        assertEquals(0, scalarLong("SELECT count(*) FROM med_kits WHERE id = '${command.medKitId}'"))
-        assertEquals(
-            100,
-            scalarLong("SELECT count(*) FROM user_drugs WHERE med_kit_id = '$targetMedKitId'")
-        )
-        assertEquals(
-            0,
-            scalarLong(
-                "SELECT count(*) FROM usings u JOIN user_drugs d ON d.id = u.drug_id " +
-                    "WHERE d.med_kit_id = '$targetMedKitId'"
+        val measured = listOf(1, 100).associateWith { size ->
+            val command = fixture.createMedKitFixture(
+                size,
+                size,
+                additionalMember = false,
+                ownerPlans = false
             )
-        )
-        record(
-            "MedKitLifecycleService", "delete", "с переносом", 100,
-            "100 препаратов перенесено bulk", statements
-        )
+            val targetMedKitId = fixture.createTransferTarget(command)
+            val statements = captureWrite {
+                medKitLifecycle.delete(command.ownerId, command.medKitId, targetMedKitId)
+            }
+            val shape = statements.queryShape()
+            assertEquals(3, shape.count(SqlKind.SELECT))
+            assertEquals(2, shape.count(SqlKind.DELETE))
+            assertEquals(1, shape.count(SqlKind.UPDATE))
+            assertEquals(0, scalarLong("SELECT count(*) FROM med_kits WHERE id = '${command.medKitId}'"))
+            assertEquals(
+                size.toLong(),
+                scalarLong("SELECT count(*) FROM user_drugs WHERE med_kit_id = '$targetMedKitId'")
+            )
+            assertEquals(
+                0,
+                scalarLong(
+                    "SELECT count(*) FROM usings u JOIN user_drugs d ON d.id = u.drug_id " +
+                        "WHERE d.med_kit_id = '$targetMedKitId'"
+                )
+            )
+            statements
+        }
+        measured.forEach { (size, statements) ->
+            record(
+                "MedKitLifecycleService", "delete", "с переносом", size,
+                "$size препаратов перенесено bulk", statements
+            )
+        }
 
-        val plans = explainStatements(statements, forceIndexes = true)
+        val plans = explainStatements(measured.getValue(100), forceIndexes = true)
         assertNoSeqScanOn("med_kits", plans)
         assertNoSeqScanOn("user_drugs", plans)
         assertNoSeqScanOn("usings", plans)
@@ -1026,6 +1056,23 @@ class QueryPlanTest {
             "rollback после lock SELECT", overStock
         )
 
+        val inaccessibleDrug = fixture.createDrugFixture(0)
+        val (consumeDenied, _) = captureFailure(ResponseStatusException::class.java) {
+            drugCommands.consume(fixture.emptyUserId, inaccessibleDrug.drugId, BigDecimal.ONE)
+        }
+        record(
+            "DrugCommandService", "consume", "Drug недоступен", 0,
+            "404 после lock SELECT", consumeDenied
+        )
+
+        val (moveMissing, _) = captureFailure(ResponseStatusException::class.java) {
+            drugCommands.move(fixture.emptyUserId, UUID.randomUUID(), UUID.randomUUID())
+        }
+        record(
+            "DrugCommandService", "move", "Drug отсутствует", 0,
+            "404 после первого lock SELECT", moveMissing
+        )
+
         val moveFixture = fixture.createDrugFixture(0)
         val (targetMissing, _) = captureFailure(ResponseStatusException::class.java) {
             drugCommands.move(moveFixture.ownerId, moveFixture.drugId, UUID.randomUUID())
@@ -1084,6 +1131,14 @@ class QueryPlanTest {
         record(
             "TreatmentPlanService", "patch", "увеличение", 1,
             "один Using UPDATE", patchStatements
+        )
+
+        val decreaseStatements = captureWrite {
+            treatmentPlans.patch(patchFixture.ownerId, patchFixture.drugId, BigDecimal.valueOf(3))
+        }
+        record(
+            "TreatmentPlanService", "patch", "уменьшение", 1,
+            "один Using UPDATE", decreaseStatements
         )
 
         val deleteFixture = fixture.createDrugFixture(0)
@@ -1193,6 +1248,15 @@ class QueryPlanTest {
             "2 SELECT, UPDATE отсутствует", missingPatch
         )
 
+        val inaccessiblePatch = fixture.createDrugFixture(0)
+        val (missingDrugPatch, _) = captureFailure(ResponseStatusException::class.java) {
+            treatmentPlans.patch(fixture.emptyUserId, inaccessiblePatch.drugId, BigDecimal.ONE)
+        }
+        record(
+            "TreatmentPlanService", "patch", "Drug недоступен", 0,
+            "404 после первого lock SELECT", missingDrugPatch
+        )
+
         val insufficientPatchFixture = fixture.createDrugFixture(0)
         tx.executeWithoutResult {
             treatmentPlans.create(
@@ -1235,6 +1299,23 @@ class QueryPlanTest {
         record(
             "TreatmentPlanService", "applyIntake", "превышение плана", 1,
             "2 SELECT, DML отсутствует", overPlan
+        )
+
+        val (missingDrugIntake, _) = captureFailure(ResponseStatusException::class.java) {
+            treatmentPlans.applyIntake(fixture.emptyUserId, UUID.randomUUID(), BigDecimal.ONE)
+        }
+        record(
+            "TreatmentPlanService", "applyIntake", "Drug отсутствует", 0,
+            "404 после первого lock SELECT", missingDrugIntake
+        )
+
+        val noPlanIntake = fixture.createDrugFixture(0)
+        val (missingPlanIntake, _) = captureFailure(ResponseStatusException::class.java) {
+            treatmentPlans.applyIntake(noPlanIntake.ownerId, noPlanIntake.drugId, BigDecimal.ONE)
+        }
+        record(
+            "TreatmentPlanService", "applyIntake", "план отсутствует", 0,
+            "404 после двух SELECT", missingPlanIntake
         )
     }
 
@@ -1399,12 +1480,33 @@ class QueryPlanTest {
             "lookup аптечки и пользователя", missingUser
         )
 
+        val deletedKit = fixture.createMedKitFixture(0, 0, additionalMember = false)
+        val staleKey = medKitLifecycle.createInvitation(deletedKit.ownerId, deletedKit.medKitId)
+        medKitLifecycle.delete(deletedKit.ownerId, deletedKit.medKitId)
+        val staleKeyUser = fixture.createUser("stale-invitation")
+        val (deletedFromCache, _) = captureFailure(ResponseStatusException::class.java) {
+            medKitLifecycle.join(staleKeyUser, staleKey)
+        }
+        record(
+            "MedKitLifecycleService", "join", "аптечка из cache удалена", 0,
+            "404 после проверки membership и PK", deletedFromCache
+        )
+
         val (leaveDenied, _) = captureFailure(ResponseStatusException::class.java) {
             medKitLifecycle.leave(fixture.emptyUserId, command.medKitId)
         }
         record(
             "MedKitLifecycleService", "leave", "нет доступа", 0,
             "404 после lock SELECT", leaveDenied
+        )
+
+        val inaccessibleSource = fixture.createMedKitFixture(1, 0, additionalMember = false)
+        val (deleteDenied, _) = captureFailure(ResponseStatusException::class.java) {
+            medKitLifecycle.delete(fixture.emptyUserId, inaccessibleSource.medKitId)
+        }
+        record(
+            "MedKitLifecycleService", "delete", "исходная аптечка недоступна", 0,
+            "404 до блокировки Drug", deleteDenied
         )
 
         val sameTarget = fixture.createMedKitFixture(1, 0, additionalMember = false)
