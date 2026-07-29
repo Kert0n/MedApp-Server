@@ -2,8 +2,11 @@ package org.kert0n.medappserver.integration
 
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
+import org.springframework.core.io.FileSystemResource
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.jdbc.datasource.init.ScriptUtils
+import javax.sql.DataSource
 import kotlin.test.assertEquals
 
 @PostgresIntegrationTest
@@ -11,6 +14,21 @@ class CascadeSchemaTest {
 
     @Autowired
     private lateinit var jdbc: JdbcTemplate
+
+    @Autowired
+    private lateinit var dataSource: DataSource
+
+    @Test
+    fun `cascade migration can be applied twice`() {
+        repeat(2) {
+            dataSource.connection.use { connection ->
+                ScriptUtils.executeSqlScript(
+                    connection,
+                    FileSystemResource("db/migrate-drug-using-cascades.sql")
+                )
+            }
+        }
+    }
 
     @Test
     fun `foreign keys delete drug and medkit children in the database`() {
