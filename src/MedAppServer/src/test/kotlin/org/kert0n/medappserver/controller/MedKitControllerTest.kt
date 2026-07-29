@@ -1,14 +1,13 @@
 package org.kert0n.medappserver.controller
 
-import org.kert0n.medappserver.services.orchestrators.MedKitContent
 import org.kert0n.medappserver.api.JoinMedKitRequest
 import org.kert0n.medappserver.api.MedKitDTO
-import org.kert0n.medappserver.db.repository.MedKitSummary
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.kert0n.medappserver.db.model.MedKit
-import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
+import org.kert0n.medappserver.services.models.MedKitContentView
+import org.kert0n.medappserver.services.models.MedKitSummaryView
+import org.kert0n.medappserver.services.orchestrators.MedKitLifecycleService
+import org.kert0n.medappserver.services.orchestrators.MedKitQueryService
 import org.mockito.kotlin.any
 import org.mockito.kotlin.doNothing
 import org.mockito.kotlin.whenever
@@ -35,7 +34,10 @@ import java.util.*
 class MedKitControllerTest {
 
     @MockitoBean
-    private lateinit var medKitDrugServices: MedKitDrugServices
+    private lateinit var lifecycle: MedKitLifecycleService
+
+    @MockitoBean
+    private lateinit var queries: MedKitQueryService
 
     @Autowired
     private lateinit var context: WebApplicationContext
@@ -44,9 +46,6 @@ class MedKitControllerTest {
     private lateinit var objectMapper: ObjectMapper
 
     private lateinit var mockMvc: MockMvc
-
-    @MockitoBean
-    private lateinit var medKitService: MedKitService
 
     private val userId = UUID.randomUUID()
     private val medKitId = UUID.randomUUID()
@@ -60,8 +59,7 @@ class MedKitControllerTest {
 
     @Test
     fun `POST create medkit - returns 201 with id`() {
-        val medKit = MedKit(id = medKitId)
-        whenever(medKitService.createNew(userId)).thenReturn(medKit)
+        whenever(lifecycle.create(userId)).thenReturn(medKitId)
 
         mockMvc.perform(
             post("/v1/med-kit")
@@ -79,11 +77,8 @@ class MedKitControllerTest {
 
     @Test
     fun `GET medkit by id - returns medkit DTO`() {
-        val medKit = MedKit(id = medKitId)
-        val medKitDTO = MedKitDTO(id = medKitId, drugs = emptySet())
-        // Чтение аптечки собирает оркестратор одной транзакцией, поэтому стабится он.
-        whenever(medKitDrugServices.medKitContent(medKitId, userId))
-            .thenReturn(MedKitContent(medKit, emptyList()))
+        whenever(queries.getContent(userId, medKitId))
+            .thenReturn(MedKitContentView(medKitId, emptyList()))
 
         mockMvc.perform(
             get("/v1/med-kit/$medKitId")
@@ -95,7 +90,7 @@ class MedKitControllerTest {
 
     @Test
     fun `GET medkit by id - returns 404 for unauthorized user`() {
-        whenever(medKitDrugServices.medKitContent(any(), any()))
+        whenever(queries.getContent(any(), any()))
             .thenThrow(ResponseStatusException(HttpStatus.NOT_FOUND, "Not found"))
 
         mockMvc.perform(
@@ -108,10 +103,10 @@ class MedKitControllerTest {
     @Test
     fun `GET all medkits - returns summary list`() {
         val summaries = setOf(
-            MedKitSummary(medKitId, 2, 5),
-            MedKitSummary(UUID.randomUUID(), 1, 3)
+            MedKitSummaryView(medKitId, 2, 5),
+            MedKitSummaryView(UUID.randomUUID(), 1, 3)
         )
-        whenever(medKitService.findMedKitSummaries(userId)).thenReturn(summaries)
+        whenever(queries.listForUser(userId)).thenReturn(summaries)
 
         mockMvc.perform(
             get("/v1/med-kit")
@@ -126,9 +121,7 @@ class MedKitControllerTest {
 
     @Test
     fun `POST share medkit - returns share key`() {
-        val medKit = MedKit(id = medKitId)
-        whenever(medKitService.findByIdForUser(medKitId, userId)).thenReturn(medKit)
-        whenever(medKitService.generateMedKitShareKey(medKitId, userId)).thenReturn("share-key-123")
+        whenever(lifecycle.createInvitation(userId, medKitId)).thenReturn("share-key-123")
 
         mockMvc.perform(
             post("/v1/med-kit/$medKitId/share")
@@ -140,10 +133,9 @@ class MedKitControllerTest {
 
     @Test
     fun `POST join medkit - returns medkit DTO`() {
-        val medKit = MedKit(id = medKitId)
-        val medKitDTO = MedKitDTO(id = medKitId, drugs = emptySet())
-        whenever(medKitDrugServices.joinByKey("share-key-123", userId))
-            .thenReturn(MedKitContent(medKit, emptyList()))
+        whenever(lifecycle.join(userId, "share-key-123")).thenReturn(medKitId)
+        whenever(queries.getContent(userId, medKitId))
+            .thenReturn(MedKitContentView(medKitId, emptyList()))
 
         val joinRequest = JoinMedKitRequest(key = "share-key-123")
 
@@ -172,7 +164,7 @@ class MedKitControllerTest {
 
     @Test
     fun `DELETE leave medkit - returns 204`() {
-        doNothing().whenever(medKitDrugServices).removeUserFromMedKit(medKitId, userId)
+        doNothing().whenever(lifecycle).leave(userId, medKitId)
 
         mockMvc.perform(
             delete("/v1/med-kit/$medKitId/leave")
@@ -183,7 +175,7 @@ class MedKitControllerTest {
 
     @Test
     fun `DELETE medkit - returns 204`() {
-        doNothing().whenever(medKitDrugServices).delete(medKitId, userId, null)
+        doNothing().whenever(lifecycle).delete(userId, medKitId, null)
 
         mockMvc.perform(
             delete("/v1/med-kit/$medKitId")
@@ -195,7 +187,7 @@ class MedKitControllerTest {
     @Test
     fun `DELETE medkit with transfer - returns 204`() {
         val transferId = UUID.randomUUID()
-        doNothing().whenever(medKitDrugServices).delete(medKitId, userId, transferId)
+        doNothing().whenever(lifecycle).delete(userId, medKitId, transferId)
 
         mockMvc.perform(
             delete("/v1/med-kit/$medKitId")

@@ -13,8 +13,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
-import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
+import org.kert0n.medappserver.services.orchestrators.MedKitLifecycleService
+import org.kert0n.medappserver.services.orchestrators.MedKitQueryService
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
@@ -26,8 +26,8 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBod
 @RequestMapping("/v1/med-kit")
 @Tag(name = "MedKit Management", description = "APIs for managing medicine kits")
 class MedKitController(
-    private val medKitService: MedKitService,
-    private val medKitDrugServices: MedKitDrugServices
+    private val lifecycle: MedKitLifecycleService,
+    private val queries: MedKitQueryService
 ) {
 
     private val logger = LoggerFactory.getLogger(MedKitController::class.java)
@@ -43,8 +43,7 @@ class MedKitController(
     )
     fun createNew(authentication: Authentication): MedKitCreatedResponse {
         logger.debug("POST /v1/med-kit by user {}", authentication.userId)
-        val medKit = medKitService.createNew(authentication.userId)
-        return MedKitCreatedResponse(medKit.id)
+        return MedKitCreatedResponse(lifecycle.create(authentication.userId))
     }
 
     @GetMapping("/{id}")
@@ -60,8 +59,7 @@ class MedKitController(
         @Parameter(description = "Medkit ID") @PathVariable id: UUID
     ): MedKitDTO {
         logger.debug("GET /v1/med-kit/{} by user {}", id, authentication.userId)
-        val content = medKitDrugServices.medKitContent(id, authentication.userId)
-        return content.medKit.toDto(content.drugs)
+        return queries.getContent(authentication.userId, id).toDto()
     }
 
     @GetMapping
@@ -78,7 +76,7 @@ class MedKitController(
     )
     fun getAllMedKits(authentication: Authentication): Set<MedKitSummaryDTO> {
         logger.debug("GET /v1/med-kit by user {}", authentication.userId)
-        return medKitService.findMedKitSummaries(authentication.userId).mapTo(mutableSetOf()) { it.toDto() }
+        return queries.listForUser(authentication.userId).mapTo(linkedSetOf()) { it.toDto() }
     }
 
     @PostMapping("/{medKitId}/share")
@@ -99,7 +97,7 @@ class MedKitController(
         @Parameter(description = "Medkit ID") @PathVariable medKitId: UUID
     ): String {
         logger.debug("POST /v1/med-kit/{}/share by user {}", medKitId, authentication.userId)
-        return medKitService.generateMedKitShareKey(medKitId, authentication.userId)
+        return lifecycle.createInvitation(authentication.userId, medKitId)
     }
 
     @PostMapping("/join")
@@ -116,8 +114,8 @@ class MedKitController(
         @Valid @RequestBody request: JoinMedKitRequest
     ): MedKitDTO {
         logger.debug("POST /v1/med-kit/join by user {}", authentication.userId)
-        val content = medKitDrugServices.joinByKey(request.key, authentication.userId)
-        return content.medKit.toDto(content.drugs)
+        val medKitId = lifecycle.join(authentication.userId, request.key)
+        return queries.getContent(authentication.userId, medKitId).toDto()
     }
 
     @DeleteMapping("/{id}/leave")
@@ -134,7 +132,7 @@ class MedKitController(
         @Parameter(description = "Medkit ID") @PathVariable id: UUID
     ) {
         logger.debug("DELETE /v1/med-kit/{}/leave by user {}", id, authentication.userId)
-        medKitDrugServices.removeUserFromMedKit(id, authentication.userId)
+        lifecycle.leave(authentication.userId, id)
     }
 
     @DeleteMapping("/{id}")
@@ -161,6 +159,6 @@ class MedKitController(
         @RequestParam(required = false) transferToMedKitId: UUID?
     ) {
         logger.debug("DELETE /v1/med-kit/{} by user {}, transfer to: {}", id, authentication.userId, transferToMedKitId)
-        medKitDrugServices.delete(id, authentication.userId, transferToMedKitId)
+        lifecycle.delete(authentication.userId, id, transferToMedKitId)
     }
 }

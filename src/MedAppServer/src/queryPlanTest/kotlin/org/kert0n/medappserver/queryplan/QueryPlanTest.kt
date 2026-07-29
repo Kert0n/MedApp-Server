@@ -9,7 +9,7 @@ import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.services.models.VidalDrugService
-import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
+import org.kert0n.medappserver.services.orchestrators.MedKitQueryService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
@@ -46,7 +46,7 @@ class QueryPlanTest {
     @Autowired private lateinit var drugService: DrugService
     @Autowired private lateinit var usingService: UsingService
     @Autowired private lateinit var medKitService: MedKitService
-    @Autowired private lateinit var medKitDrugServices: MedKitDrugServices
+    @Autowired private lateinit var medKitQueries: MedKitQueryService
     @Autowired private lateinit var vidalDrugService: VidalDrugService
     @Autowired private lateinit var entityManager: EntityManager
 
@@ -177,7 +177,7 @@ class QueryPlanTest {
         assertConstantQueryShape(
             name = "GET /v1/user",
             scenarios = fixture.snapshotUsers.mapValues { (_, userId) ->
-                { medKitDrugServices.userSnapshot(userId) }
+                { medKitQueries.getUserSnapshot(userId) }
             },
             expected = mapOf(SqlKind.SELECT to 2)
         )
@@ -191,7 +191,7 @@ class QueryPlanTest {
     @Test
     fun `выдача пользователю умеет читать препараты и планы по индексам`() {
         val plans = plansOf("GET /v1/user", forceIndexes = true) {
-            medKitDrugServices.userSnapshot(fixture.ownerId)
+            medKitQueries.getUserSnapshot(fixture.ownerId)
         }
 
         val used = plans.flatMap { it.second.indexes }
