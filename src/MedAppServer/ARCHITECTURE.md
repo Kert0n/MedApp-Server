@@ -128,10 +128,20 @@ PATCH использует `null` как «поле не передано». У�
 ./gradlew queryPlanTest --no-daemon
 ```
 
-`RecordingDataSource` сохраняет SQL fingerprints, тип оператора и параметры. Масштабные
-сценарии выполняются после warm-up с очищенным persistence context и сравнивают точную форму
-SQL на нескольких размерах результата. `queryPlanTest` поднимает PostgreSQL fixture с
-10 000 препаратов, примерно 30 000 планов и 18 000 записей каталога и проверяет новые
-SELECT/UPDATE/DELETE через `EXPLAIN (FORMAT JSON)` без `ANALYZE`.
+`RecordingDataSource` сохраняет SQL fingerprints, тип оператора, batch-выполнения и
+упорядоченные параметры. Масштабные сценарии выполняются после warm-up с очищенным
+persistence context и сравнивают точную форму SQL на нескольких размерах результата.
+`queryPlanTest` поднимает PostgreSQL fixture с 10 000 препаратов, примерно 30 000 планов и
+18 000 записей каталога. Каждый уникальный SQL проверяется через natural и forced-index
+`EXPLAIN (FORMAT JSON)` без `ANALYZE`.
+
+После прогона формируются фактические отчёты:
+
+- `build/reports/query-plans/database-query-report.md`;
+- `build/reports/query-plans/database-query-report.json`.
+
+Асимптотика вычисляется из измеренных точек. Постоянная форма помечается `Θ(1)`, чистые
+операции — `0 SQL`; линейный рост допускается только для UPDATE действительно изменённых
+Using при reconciliation. Необъяснённое изменение формы проваливает набор.
 
 CI запускает `test` и `queryPlanTest` независимыми jobs и публикует оба отчёта.

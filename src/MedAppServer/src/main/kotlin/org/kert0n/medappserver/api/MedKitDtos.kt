@@ -10,7 +10,7 @@ data class MedKitDTO(
     @Schema(description = "Medkit ID")
     val id: UUID,
     @Schema(description = "Drugs in medkit")
-    val drugs: Set<DrugDTO>
+    val drugs: List<DrugDTO>
 )
 
 @Schema(description = "Medkit summary")
