@@ -59,12 +59,6 @@ class TreatmentPlanStoriesTest {
     private lateinit var treatmentPlanService: TreatmentPlanService
     @Autowired
     private lateinit var usingService: UsingService
-
-    /**
-     * Story 6: Complex workflow with treatment plans
-     * 
-     * Validates: Treatment plan creation, intake recording, planned quantity tracking
-     */
     @Test
     fun `Story 6 - User creates treatment plan and records intakes`() {
         val user = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
@@ -113,12 +107,6 @@ class TreatmentPlanStoriesTest {
 
         println("✅ Story 6 passed: Treatment plan and intakes work correctly")
     }
-
-    /**
-     * Story 7: Multiple users share a medkit and create separate treatment plans for the same drug
-     * 
-     * Validates: Multi-user treatment plans, planned quantity accounting, fair sharing
-     */
     @Test
     fun `Story 7 - Multiple users create treatment plans on shared drug`() {
         // Setup: Anna and Bob share a medkit with 100 tablets of Vitamin C
@@ -167,12 +155,6 @@ class TreatmentPlanStoriesTest {
 
         println("✅ Story 7 passed: Multiple users created treatment plans on shared drug")
     }
-
-    /**
-     * Story 8: Drug quantity reduction cascades to treatment plans
-     * 
-     * Validates: handleQuantityReduction logic, proportional reduction of plans
-     */
     @Test
     fun `Story 8 - Reducing drug quantity adjusts treatment plans proportionally`() {
         val user = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
@@ -216,12 +198,6 @@ class TreatmentPlanStoriesTest {
 
         println("✅ Story 8 passed: Drug quantity reduction cascaded to treatment plans")
     }
-
-    /**
-     * Story 9: Cannot create treatment plan exceeding available quantity
-     * 
-     * Validates: Planned quantity validation, error handling
-     */
     @Test
     fun `Story 9 - Cannot over-plan drug quantity`() {
         val user = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
@@ -271,12 +247,6 @@ class TreatmentPlanStoriesTest {
 
         println("✅ Story 9 passed: Cannot over-plan drug quantity")
     }
-
-    /**
-     * Story 10: Complete family medkit lifecycle
-     * 
-     * Validates: Full end-to-end workflow from creation to cleanup
-     */
     @Test
     fun `Story 10 - Complete family medkit lifecycle`() {
         // Mom creates a family medkit

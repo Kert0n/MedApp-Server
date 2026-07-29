@@ -29,7 +29,7 @@ fun TreatmentPlanView.toDto(): TreatmentPlanDTO =
     TreatmentPlanDTO(userId, drugId, plannedAmount)
 
 fun MedKitContentView.toDto(): MedKitDTO =
-    MedKitDTO(id = id, drugs = drugs.mapTo(linkedSetOf()) { it.toDto() })
+    MedKitDTO(id = id, drugs = drugs.map { it.toDto() })
 
 fun MedKitSummaryView.toDto(): MedKitSummaryDTO =
     MedKitSummaryDTO(id, userCount, drugCount)
@@ -48,12 +48,7 @@ fun DrugTemplateView.toTemplateDto(): DrugTemplateDTO = DrugTemplateDTO(
     description = description
 )
 
-/**
- * Запрос на создание препарата — в аргументы прикладной операции.
- *
- * `medKitId` не переносится: он маршрутный, его разбирает оркестратор, а созданию препарата
- * он не нужен.
- */
+/** Запрос на создание препарата без маршрутного `medKitId`. */
 fun DrugCreateDTO.toCommand(): DrugCreation = DrugCreation(
     name = name,
     quantity = quantity,
@@ -65,7 +60,7 @@ fun DrugCreateDTO.toCommand(): DrugCreation = DrugCreation(
     description = description
 )
 
-/** Запрос на правку препарата — в частичный патч. `null` по-прежнему значит «не трогать». */
+/** `null` в частичном патче означает «не изменять». */
 fun DrugPatchRequest.toPatch(): DrugPatch = DrugPatch(
     name = name,
     quantity = quantity,

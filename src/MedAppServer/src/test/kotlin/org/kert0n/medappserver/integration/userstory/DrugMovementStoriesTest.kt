@@ -52,12 +52,6 @@ class DrugMovementStoriesTest {
     private lateinit var treatmentPlanService: TreatmentPlanService
     @Autowired
     private lateinit var usingService: UsingService
-
-    /**
-     * Story 11: Moving drugs between medkits preserves treatment plans
-     * 
-     * Validates: Drug move, treatment plan integrity
-     */
     @Test
     fun `Story 11 - Moving drug between medkits`() {
         val user = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
@@ -104,12 +98,6 @@ class DrugMovementStoriesTest {
 
         println("✅ Story 11 passed: Drug moved between medkits with treatment plan intact")
     }
-
-    /**
-     * Story 12: Update treatment plan correctly checks available quantity
-     * 
-     * Validates: updateTreatmentPlan bug fix (was double-counting current user's plan)
-     */
     @Test
     fun `Story 12 - Updating treatment plan correctly checks available quantity`() {
         val anna = User(id = UUID.randomUUID(), hashedKey = "anna_${UUID.randomUUID()}")
@@ -152,12 +140,6 @@ class DrugMovementStoriesTest {
 
         println("✅ Story 12 passed: Treatment plan update correctly checks available quantity")
     }
-
-    /**
-     * Story 13: Deleting a drug cascades to remove associated treatment plans
-     * 
-     * Validates: Cascade delete behavior, orphan removal
-     */
     @Test
     fun `Story 13 - Deleting drug removes its treatment plans`() {
         val user = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
@@ -197,11 +179,6 @@ class DrugMovementStoriesTest {
 
         println("✅ Story 13 passed: Deleting drug removed its treatment plans")
     }
-
-    /**
-     * Story 14: Migrating a drug to a private medkit strips access from former shared users
-     * * Validates: Migration Security Audit (The "Void Pointer" fix)
-     */
     @Test
     fun `Story 14 - Moving shared drug to private medkit removes other users treatment plans`() {
         // Setup: Anna, Bob, and Charlie share an Old MedKit
@@ -253,11 +230,6 @@ class DrugMovementStoriesTest {
 
         println("✅ Story 14 passed: Migration security successfully audited treatment plans")
     }
-
-    /**
-     * Story 15: Heavy consumption scales down shared treatment plans proportionally
-     * * Validates: handleQuantityReduction logic precision
-     */
     @Test
     fun `Story 15 - Consuming below reserved threshold scales plans proportionally`() {
         val anna = userRepository.save(User(id = UUID.randomUUID(), hashedKey = "anna_${UUID.randomUUID()}"))
@@ -302,11 +274,6 @@ class DrugMovementStoriesTest {
 
         println("✅ Story 15 passed: Treatment plans scaled proportionally after heavy consumption")
     }
-
-    /**
-     * Story 16: Partial migration prevents orphan removal
-     * * Validates: Explicit `targetMedKit.drugs.add(drug)` fix
-     */
     @Test
     fun `Story 16 - Moving single drug preserves it from orphan removal`() {
         val user = userRepository.save(User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}"))

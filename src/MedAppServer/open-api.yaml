@@ -697,7 +697,6 @@ components:
           description: Drugs in medkit
           items:
             $ref: "#/components/schemas/DrugDTO"
-          uniqueItems: true
     DrugConsumptionRequest:
       type: object
       description: Request to consume stock

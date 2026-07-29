@@ -66,18 +66,6 @@ class ComplexWorkflowStoriesTest {
     private lateinit var treatmentPlanService: TreatmentPlanService
     @Autowired
     private lateinit var usingService: UsingService
-
-    /**
-     * Story 17: The Roommate Saga (The Ultimate Stress Test)
-     * * Validates:
-     * - Multi-user sharing and permissions
-     * - Proportional quantity reduction of Usings during heavy consumption
-     * - Security stripping of Usings during single-drug moves
-     * - Security stripping of Usings during full kit migrations
-     * - Orphan removal prevention during migrations
-     * - Auto-deletion of MedKits when empty
-     * - JPA L1 Cache integrity across complex interwoven workflows
-     */
     @Test
     fun `Story 17 - The Roommate Saga complex interwoven workflow`() {
         // ==========================================

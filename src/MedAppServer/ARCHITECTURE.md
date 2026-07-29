@@ -80,15 +80,16 @@ PostgreSQL отвечает за каскадное удаление:
 - `user_drugs.med_kit_id -> med_kits.id ON DELETE CASCADE`;
 - `user_med_kits.med_kit_id -> med_kits.id ON DELETE CASCADE`.
 
-[db/schema.sql](db/schema.sql) создаёт новую базу. Существующая база обновляется
-идемпотентным скриптом [db/migrate-drug-using-cascades.sql](db/migrate-drug-using-cascades.sql):
+[db/schema.sql](db/schema.sql) — единственное описание структуры базы. Изменение схемы
+применяется пересозданием тома PostgreSQL:
 
 ```bash
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
-  -f db/migrate-drug-using-cascades.sql
+docker compose -f compose.yaml down -v
+docker compose -f compose.yaml up -d --build
 ```
 
-После обновления приложение должно пройти `ddl-auto=validate`.
+После создания схемы приложение проверяет её через `ddl-auto=validate`. Отдельные
+SQL-миграции до появления сохраняемых пользовательских данных не поддерживаются.
 
 ## Слои
 
@@ -128,10 +129,20 @@ PATCH использует `null` как «поле не передано». У�
 ./gradlew queryPlanTest --no-daemon
 ```
 
-`RecordingDataSource` сохраняет SQL fingerprints, тип оператора и параметры. Масштабные
-сценарии выполняются после warm-up с очищенным persistence context и сравнивают точную форму
-SQL на нескольких размерах результата. `queryPlanTest` поднимает PostgreSQL fixture с
-10 000 препаратов, примерно 30 000 планов и 18 000 записей каталога и проверяет новые
-SELECT/UPDATE/DELETE через `EXPLAIN (FORMAT JSON)` без `ANALYZE`.
+`RecordingDataSource` сохраняет SQL fingerprints, тип оператора, batch-выполнения и
+упорядоченные параметры. Масштабные сценарии выполняются после warm-up с очищенным
+persistence context и сравнивают точную форму SQL на нескольких размерах результата.
+`queryPlanTest` поднимает PostgreSQL fixture с 10 000 препаратов, примерно 30 000 планов и
+18 000 записей каталога. Каждый уникальный SQL проверяется через natural и forced-index
+`EXPLAIN (FORMAT JSON)` без `ANALYZE`.
+
+После прогона формируются фактические отчёты:
+
+- `build/reports/query-plans/database-query-report.md`;
+- `build/reports/query-plans/database-query-report.json`.
+
+Асимптотика вычисляется из измеренных точек. Постоянная форма помечается `Θ(1)`, чистые
+операции — `0 SQL`; линейный рост допускается только для UPDATE действительно изменённых
+Using при reconciliation. Необъяснённое изменение формы проваливает набор.
 
 CI запускает `test` и `queryPlanTest` независимыми jobs и публикует оба отчёта.
