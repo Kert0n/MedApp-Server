@@ -591,7 +591,7 @@ class QueryPlanTest {
         }
         lastLeave.values.map { it.queryShape() }.forEach { shape ->
             assertEquals(3, shape.count(SqlKind.SELECT))
-            assertEquals(2, shape.count(SqlKind.DELETE))
+            assertEquals(1, shape.count(SqlKind.DELETE))
         }
         lastLeave.forEach { (size, statements) ->
             record(

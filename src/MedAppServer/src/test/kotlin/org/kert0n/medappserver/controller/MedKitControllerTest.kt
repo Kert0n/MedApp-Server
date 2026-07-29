@@ -102,7 +102,7 @@ class MedKitControllerTest {
 
     @Test
     fun `GET all medkits - returns summary list`() {
-        val summaries = setOf(
+        val summaries = listOf(
             MedKitSummaryView(medKitId, 2, 5),
             MedKitSummaryView(UUID.randomUUID(), 1, 3)
         )

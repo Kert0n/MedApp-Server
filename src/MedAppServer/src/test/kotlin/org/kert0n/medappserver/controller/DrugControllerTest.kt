@@ -7,8 +7,8 @@ import org.kert0n.medappserver.api.DrugCreateDTO
 import org.kert0n.medappserver.api.DrugPatchRequest
 import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.MedKit
-import org.kert0n.medappserver.db.model.parsed.VidalDrug
 import org.kert0n.medappserver.services.models.DrugService
+import org.kert0n.medappserver.services.models.DrugTemplateView
 import org.kert0n.medappserver.services.models.VidalDrugService
 import org.kert0n.medappserver.services.models.toView
 import org.kert0n.medappserver.services.orchestrators.DrugCommandService
@@ -115,11 +115,17 @@ class DrugControllerTest {
     @Test
     fun `catalog uses query parameter and resource path`() {
         val templateId = UUID.randomUUID()
-        val template = VidalDrug(
+        val template = DrugTemplateView(
             id = templateId,
             name = "Aspirin",
+            nameLat = null,
+            activeSubstance = null,
+            formType = null,
+            category = null,
+            quantityUnit = null,
             manufacturer = "Bayer",
-            otc = true
+            country = null,
+            description = null
         )
         whenever(catalog.fuzzySearch("asp", 10)).thenReturn(listOf(template))
         whenever(catalog.findById(templateId)).thenReturn(template)

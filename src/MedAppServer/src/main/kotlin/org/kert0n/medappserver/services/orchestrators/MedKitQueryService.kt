@@ -19,8 +19,8 @@ class MedKitQueryService(
 ) {
 
     @Transactional(readOnly = true)
-    fun listForUser(userId: UUID): Set<MedKitSummaryView> =
-        medKits.findMedKitSummariesByUserId(userId).mapTo(linkedSetOf()) { it.toView() }
+    fun listForUser(userId: UUID): List<MedKitSummaryView> =
+        medKits.findMedKitSummariesByUserId(userId).map { it.toView() }
 
     @Transactional(readOnly = true)
     fun getContent(userId: UUID, medKitId: UUID): MedKitContentView {
