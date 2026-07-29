@@ -5,6 +5,7 @@ import java.lang.reflect.Method
 import java.lang.reflect.Proxy
 import java.sql.Connection
 import java.sql.PreparedStatement
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.sql.DataSource
 
 /** Оператор вместе со значениями, с которыми он реально ушёл в базу. */
@@ -24,8 +25,11 @@ data class ExecutedStatement(val sql: String, val parameters: List<Any?>) {
         get() = sql.trim()
             .replace(Regex("\\s+"), " ")
             .replace(Regex("\\?(?:\\s*,\\s*\\?)+"), "?*")
-            .replace(Regex("(?i)in\\s*\\(\\?\\*?\\)"), "in (?*)")
+            .replace(Regex("(?i)in\\s*\\(\\s*\\?\\*?\\s*\\)"), "in (?*)")
             .lowercase()
+
+    fun diagnostic(): String =
+        "${kind.name.padEnd(6)} ${fingerprint.take(240)} parameters=$parameters"
 }
 
 enum class SqlKind { SELECT, INSERT, UPDATE, DELETE, OTHER }
@@ -40,6 +44,12 @@ data class QueryShape(
     }
 
     fun count(kind: SqlKind): Int = byKind[kind] ?: 0
+
+    override fun toString(): String = buildString {
+        append("total=").append(total).append(", byKind=").append(byKind)
+        val repeated = fingerprints.filterValues { it > 1 }
+        if (repeated.isNotEmpty()) append(", repeated=").append(repeated)
+    }
 }
 
 fun List<ExecutedStatement>.queryShape(): QueryShape = QueryShape(
@@ -109,23 +119,31 @@ class RecordingDataSource(private val delegate: DataSource) : DataSource by dele
     /** Собранные операторы. Статика, потому что DataSource создаётся контейнером Spring. */
     companion object Recorded {
         private val executed = mutableListOf<ExecutedStatement>()
-
-        @Volatile
-        private var recording = false
+        private val recording = AtomicBoolean(false)
 
         fun add(statement: ExecutedStatement) {
-            if (recording) synchronized(executed) { executed += statement }
+            if (recording.get()) synchronized(executed) { executed += statement }
         }
 
         fun capture(scenario: () -> Unit): List<ExecutedStatement> {
+            check(recording.compareAndSet(false, true)) {
+                "RecordingDataSource не поддерживает вложенные или параллельные измерения"
+            }
             synchronized(executed) { executed.clear() }
-            recording = true
             try {
                 scenario()
             } finally {
-                recording = false
+                recording.set(false)
             }
             return synchronized(executed) { executed.toList() }
         }
     }
+}
+
+fun List<ExecutedStatement>.diagnostic(): String = buildString {
+    appendLine("SQL operators: ${this@diagnostic.size}")
+    this@diagnostic.groupingBy(ExecutedStatement::fingerprint).eachCount()
+        .filterValues { it > 1 }
+        .forEach { (fingerprint, count) -> appendLine("  repeated x$count: $fingerprint") }
+    this@diagnostic.forEach { appendLine("  ${it.diagnostic()}") }
 }

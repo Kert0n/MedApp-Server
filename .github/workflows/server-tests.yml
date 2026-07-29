@@ -78,4 +78,5 @@ jobs:
           path: |
             src/MedAppServer/build/reports/tests/queryPlanTest
             src/MedAppServer/build/test-results/queryPlanTest
+            src/MedAppServer/build/reports/query-plans
           retention-days: 7
