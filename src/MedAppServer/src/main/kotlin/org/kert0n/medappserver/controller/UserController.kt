@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController
 import java.util.*
 
 @RestController
-@RequestMapping("/v1/user")
+@RequestMapping("/v1/users")
 @Tag(name = "User Data", description = "Endpoints for user profile and synchronization data")
 class UserController(
     private val queries: MedKitQueryService
@@ -25,7 +25,7 @@ class UserController(
 
     private val logger = LoggerFactory.getLogger(UserController::class.java)
 
-    @GetMapping
+    @GetMapping("/me")
     @Operation(
         summary = "Get user snapshot",
         description = "Returns user identifier with all accessible medkits and drugs for sync."
@@ -41,7 +41,7 @@ class UserController(
         ]
     )
     fun getAllDataForUser(authentication: Authentication): UserDto {
-        logger.debug("GET /v1/user by user {}", authentication.userId)
+        logger.debug("GET /v1/users/me by user {}", authentication.userId)
         val snapshot = queries.getUserSnapshot(authentication.userId)
         return UserDto(
             id = authentication.userId,

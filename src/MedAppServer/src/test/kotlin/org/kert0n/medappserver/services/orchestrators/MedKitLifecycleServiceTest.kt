@@ -71,7 +71,7 @@ class MedKitLifecycleServiceTest {
         val drug = drugCommands.create(
             alice.id,
             kit.id,
-            DrugCreateDTO(name = "Aspirin", quantity = qty(100.0), quantityUnit = "mg", medKitId = kit.id).toCommand()
+            DrugCreateDTO(name = "Aspirin", quantity = qty(100.0), quantityUnit = "mg").toCommand()
         )
 
         assertNotNull(drug.id)
@@ -89,7 +89,7 @@ class MedKitLifecycleServiceTest {
             drugCommands.create(
                 eve.id,
                 kit.id,
-                DrugCreateDTO(name = "Drug", quantity = qty(10.0), quantityUnit = "mg", medKitId = kit.id).toCommand(),
+                DrugCreateDTO(name = "Drug", quantity = qty(10.0), quantityUnit = "mg").toCommand(),
             )
         }
     }
@@ -138,7 +138,7 @@ class MedKitLifecycleServiceTest {
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kitA.id, alice.id), bob.id)
 
         val drug = drugCommands.create(
-            alice.id, kitA.id, DrugCreateDTO("Shared Meds", qty(10.0), "pcs", kitA.id).toCommand()
+            alice.id, kitA.id, DrugCreateDTO("Shared Meds", qty(10.0), "pcs").toCommand()
         )
         val kitB = medKitService.createNew(bob.id)
         dbHelper.flushAndClear()
@@ -227,7 +227,7 @@ class MedKitLifecycleServiceTest {
         val drug = drugCommands.create(
             alice.id,
             kitA.id,
-            DrugCreateDTO("Migrating Drug", qty(10.0), "pcs", kitA.id).toCommand()
+            DrugCreateDTO("Migrating Drug", qty(10.0), "pcs").toCommand()
         )
         dbHelper.flushAndClear()
 
@@ -281,11 +281,11 @@ class MedKitLifecycleServiceTest {
         val kit = medKitService.createNew(alice.id)
         drugCommands.create(
             alice.id, kit.id,
-            DrugCreateDTO(name = "Drug A", quantity = qty(50.0), quantityUnit = "mg", medKitId = kit.id).toCommand()
+            DrugCreateDTO(name = "Drug A", quantity = qty(50.0), quantityUnit = "mg").toCommand()
         )
         drugCommands.create(
             alice.id, kit.id,
-            DrugCreateDTO(name = "Drug B", quantity = qty(30.0), quantityUnit = "tablets", medKitId = kit.id).toCommand()
+            DrugCreateDTO(name = "Drug B", quantity = qty(30.0), quantityUnit = "tablets").toCommand()
         )
         dbHelper.flushAndClear()
 

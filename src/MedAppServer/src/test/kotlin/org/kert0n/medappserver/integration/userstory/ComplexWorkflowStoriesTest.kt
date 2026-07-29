@@ -245,10 +245,10 @@ class ComplexWorkflowStoriesTest {
         // Alice adds 100 tablets to sourceKit
         val createDrugDto = DrugCreateDTO(
             name = "LifePill", quantity = qty(100.0), quantityUnit = "tablets",
-            medKitId = sourceKit.id, formType = null, category = null,
+            formType = null, category = null,
             manufacturer = null, country = null, description = null
         )
-        val drug = drugCommands.create(alice.id, createDrugDto.medKitId, createDrugDto.toCommand())
+        val drug = drugCommands.create(alice.id, sourceKit.id, createDrugDto.toCommand())
         dbHelper.flushAndClear()
 
         // Alice and Bob create treatment plans (40 each, total 80)
@@ -317,7 +317,7 @@ class ComplexWorkflowStoriesTest {
 
         // Alice creates a drug
         val drug = drugCommands.create(
-            alice.id, kitA.id, DrugCreateDTO("Shared Meds", qty(10.0), "pcs", kitA.id).toCommand()
+            alice.id, kitA.id, DrugCreateDTO("Shared Meds", qty(10.0), "pcs").toCommand()
         )
 
         // Bob creates a private kit
@@ -343,7 +343,7 @@ class ComplexWorkflowStoriesTest {
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kitA.id, alice.id), bob.id)
 
         val drug = drugCommands.create(
-            alice.id, kitA.id, DrugCreateDTO("Audit Meds", qty(10.0), "pcs", kitA.id).toCommand()
+            alice.id, kitA.id, DrugCreateDTO("Audit Meds", qty(10.0), "pcs").toCommand()
         )
 
         // Both have plans
@@ -377,7 +377,7 @@ class ComplexWorkflowStoriesTest {
             drugCommands.create(
                 alice.id,
                 kitA.id,
-                DrugCreateDTO("Migrating Meds", qty(10.0), "pcs", kitA.id).toCommand()
+                DrugCreateDTO("Migrating Meds", qty(10.0), "pcs").toCommand()
             )
 
         // ACT: Delete Kit A and migrate drugs to Kit B

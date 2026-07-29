@@ -62,7 +62,7 @@ class MedKitControllerTest {
         whenever(lifecycle.create(userId)).thenReturn(medKitId)
 
         mockMvc.perform(
-            post("/v1/med-kit")
+            post("/v1/med-kits")
                 .with(jwt().jwt { it.subject(userId.toString()) })
         )
             .andExpect(status().isCreated)
@@ -71,7 +71,7 @@ class MedKitControllerTest {
 
     @Test
     fun `POST create medkit - returns 401 without authentication`() {
-        mockMvc.perform(post("/v1/med-kit"))
+        mockMvc.perform(post("/v1/med-kits"))
             .andExpect(status().isUnauthorized)
     }
 
@@ -81,7 +81,7 @@ class MedKitControllerTest {
             .thenReturn(MedKitContentView(medKitId, emptyList()))
 
         mockMvc.perform(
-            get("/v1/med-kit/$medKitId")
+            get("/v1/med-kits/$medKitId")
                 .with(jwt().jwt { it.subject(userId.toString()) })
         )
             .andExpect(status().isOk)
@@ -94,7 +94,7 @@ class MedKitControllerTest {
             .thenThrow(ResponseStatusException(HttpStatus.NOT_FOUND, "Not found"))
 
         mockMvc.perform(
-            get("/v1/med-kit/$medKitId")
+            get("/v1/med-kits/$medKitId")
                 .with(jwt().jwt { it.subject(userId.toString()) })
         )
             .andExpect(status().isNotFound)
@@ -109,7 +109,7 @@ class MedKitControllerTest {
         whenever(queries.listForUser(userId)).thenReturn(summaries)
 
         mockMvc.perform(
-            get("/v1/med-kit")
+            get("/v1/med-kits")
                 .with(jwt().jwt { it.subject(userId.toString()) })
         )
             .andExpect(status().isOk)
@@ -124,11 +124,11 @@ class MedKitControllerTest {
         whenever(lifecycle.createInvitation(userId, medKitId)).thenReturn("share-key-123")
 
         mockMvc.perform(
-            post("/v1/med-kit/$medKitId/share")
+            post("/v1/med-kits/$medKitId/invitations")
                 .with(jwt().jwt { it.subject(userId.toString()) })
         )
             .andExpect(status().isOk)
-            .andExpect(content().string("share-key-123"))
+            .andExpect(jsonPath("$.key").value("share-key-123"))
     }
 
     @Test
@@ -140,7 +140,7 @@ class MedKitControllerTest {
         val joinRequest = JoinMedKitRequest(key = "share-key-123")
 
         mockMvc.perform(
-            post("/v1/med-kit/join")
+            post("/v1/med-kit-memberships")
                 .with(jwt().jwt { it.subject(userId.toString()) })
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(joinRequest))
@@ -154,7 +154,7 @@ class MedKitControllerTest {
         val joinRequest = JoinMedKitRequest(key = "")
 
         mockMvc.perform(
-            post("/v1/med-kit/join")
+            post("/v1/med-kit-memberships")
                 .with(jwt().jwt { it.subject(userId.toString()) })
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(joinRequest))
@@ -167,7 +167,7 @@ class MedKitControllerTest {
         doNothing().whenever(lifecycle).leave(userId, medKitId)
 
         mockMvc.perform(
-            delete("/v1/med-kit/$medKitId/leave")
+            delete("/v1/med-kit-memberships/$medKitId")
                 .with(jwt().jwt { it.subject(userId.toString()) })
         )
             .andExpect(status().isNoContent)
@@ -178,22 +178,16 @@ class MedKitControllerTest {
         doNothing().whenever(lifecycle).delete(userId, medKitId, null)
 
         mockMvc.perform(
-            delete("/v1/med-kit/$medKitId")
+            delete("/v1/med-kits/$medKitId")
                 .with(jwt().jwt { it.subject(userId.toString()) })
         )
             .andExpect(status().isNoContent)
     }
 
     @Test
-    fun `DELETE medkit with transfer - returns 204`() {
-        val transferId = UUID.randomUUID()
-        doNothing().whenever(lifecycle).delete(userId, medKitId, transferId)
-
+    fun `old medkit route is absent`() {
         mockMvc.perform(
-            delete("/v1/med-kit/$medKitId")
-                .with(jwt().jwt { it.subject(userId.toString()) })
-                .param("transferToMedKitId", transferId.toString())
-        )
-            .andExpect(status().isNoContent)
+            get("/v1/med-kit").with(jwt().jwt { it.subject(userId.toString()) })
+        ).andExpect(status().isNotFound)
     }
 }

@@ -1,63 +1,57 @@
 package org.kert0n.medappserver.controller
 
-import org.kert0n.medappserver.api.IntakeRequest
-import org.kert0n.medappserver.api.UsingCreateDTO
-import org.kert0n.medappserver.api.UsingDTO
-import org.kert0n.medappserver.api.UsingUpdateDTO
-import org.kert0n.medappserver.testutil.qty
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.kert0n.medappserver.db.model.*
-import org.kert0n.medappserver.services.models.UsingService
-import org.kert0n.medappserver.services.models.TreatmentPlanView
+import org.kert0n.medappserver.api.IntakeRequest
+import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
+import org.kert0n.medappserver.api.TreatmentPlanPatchRequest
+import org.kert0n.medappserver.db.model.Drug
+import org.kert0n.medappserver.db.model.MedKit
+import org.kert0n.medappserver.db.model.User
+import org.kert0n.medappserver.db.model.Using
+import org.kert0n.medappserver.db.model.UsingKey
 import org.kert0n.medappserver.services.models.PlanSnapshot
+import org.kert0n.medappserver.services.models.TreatmentPlanView
+import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.services.orchestrators.IntakeOutcome
 import org.kert0n.medappserver.services.orchestrators.IntakeService
 import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
+import org.kert0n.medappserver.testutil.qty
 import org.mockito.kotlin.any
 import org.mockito.kotlin.doNothing
-import org.mockito.kotlin.eq
 import org.mockito.kotlin.whenever
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
-import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
-import org.springframework.web.server.ResponseStatusException
 import tools.jackson.databind.ObjectMapper
-import java.util.*
-import kotlin.test.assertTrue
+import java.util.UUID
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 class UsingsControllerTest {
 
-    @Autowired
-    private lateinit var context: WebApplicationContext
-
-    @Autowired
-    private lateinit var objectMapper: ObjectMapper
+    @Autowired private lateinit var context: WebApplicationContext
+    @Autowired private lateinit var objectMapper: ObjectMapper
+    @MockitoBean private lateinit var reads: UsingService
+    @MockitoBean private lateinit var commands: TreatmentPlanService
+    @MockitoBean private lateinit var intakes: IntakeService
 
     private lateinit var mockMvc: MockMvc
-
-    @MockitoBean
-    private lateinit var treatmentPlanService: TreatmentPlanService
-    @MockitoBean
-    private lateinit var usingService: UsingService
-
-    @MockitoBean
-    private lateinit var intakeService: IntakeService
-
     private val userId = UUID.randomUUID()
     private val drugId = UUID.randomUUID()
 
@@ -68,179 +62,68 @@ class UsingsControllerTest {
             .build()
     }
 
-    private fun createTestUsing(): Using {
+    private fun plan(amount: Double = 30.0): Using {
         val user = User(id = userId, hashedKey = "key")
-        val medKit = MedKit(id = UUID.randomUUID())
         val drug = Drug(
             id = drugId, name = "Drug", quantity = qty(100.0),
             quantityUnit = "mg", formType = null, category = null,
             manufacturer = null, country = null, description = null,
-            medKit = medKit
+            medKit = MedKit()
         )
-        return Using(
-            usingKey = UsingKey(userId, drugId),
-            user = user,
-            drug = drug,
-            plannedAmount = qty(30.0)
-        )
-    }
-
-    private fun createTestUsingDTO(): UsingDTO = UsingDTO(
-        userId = userId,
-        drugId = drugId,
-        plannedAmount = qty(30.0)
-    )
-
-    @Test
-    fun `GET all usings - returns list for authenticated user`() {
-        whenever(usingService.listForUser(userId)).thenReturn(
-            listOf(TreatmentPlanView(userId, drugId, qty(30.0)))
-        )
-
-        mockMvc.perform(
-            get("/v1/using")
-                .with(jwt().jwt { it.subject(userId.toString()) })
-        )
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$").isArray)
-            .andExpect(jsonPath("$[0].drugId").value(drugId.toString()))
-            .andExpect(jsonPath("$[0].plannedAmount").value(30.0))
+        return Using(UsingKey(userId, drugId), user, drug, qty(amount))
     }
 
     @Test
-    fun `GET all usings - returns 401 without authentication`() {
-        mockMvc.perform(get("/v1/using"))
-            .andExpect(status().isUnauthorized)
-    }
-
-    @Test
-    fun `GET specific using - returns using for user and drug`() {
-        whenever(usingService.getForUser(userId, drugId))
+    fun `treatment plan resource supports CRUD`() {
+        whenever(reads.listForUser(userId))
+            .thenReturn(listOf(TreatmentPlanView(userId, drugId, qty(30.0))))
+        whenever(reads.getForUser(userId, drugId))
             .thenReturn(TreatmentPlanView(userId, drugId, qty(30.0)))
+        whenever(commands.create(userId, drugId, qty(30.0))).thenReturn(plan())
+        whenever(commands.patch(userId, drugId, qty(50.0))).thenReturn(plan(50.0))
+        doNothing().whenever(commands).delete(userId, drugId)
 
-        mockMvc.perform(
-            get("/v1/using/drug/$drugId")
-                .with(jwt().jwt { it.subject(userId.toString()) })
-        )
+        mockMvc.perform(get("/v1/treatment-plans").with(jwtForUser()))
+            .andExpect(status().isOk).andExpect(jsonPath("$[0].drugId").value(drugId.toString()))
+        mockMvc.perform(get("/v1/treatment-plans/$drugId").with(jwtForUser()))
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.drugId").value(drugId.toString()))
-            .andExpect(jsonPath("$.plannedAmount").value(30.0))
-    }
-
-    @Test
-    fun `GET specific using - returns 404 when there is no plan`() {
-        whenever(usingService.getForUser(any(), any()))
-            .thenThrow(ResponseStatusException(HttpStatus.NOT_FOUND, "Treatment plan not found"))
-
         mockMvc.perform(
-            get("/v1/using/drug/$drugId")
-                .with(jwt().jwt { it.subject(userId.toString()) })
-        )
-            .andExpect(status().isNotFound)
-    }
-
-    @Test
-    fun `POST create using - creates and returns using`() {
-        val using = createTestUsing()
-        val dto = createTestUsingDTO()
-        whenever(treatmentPlanService.create(eq(userId), any(), any())).thenReturn(using)
-
-        val createDTO = UsingCreateDTO(drugId = drugId, plannedAmount = qty(30.0))
-
-        mockMvc.perform(
-            post("/v1/using")
-                .with(jwt().jwt { it.subject(userId.toString()) })
+            post("/v1/treatment-plans").with(jwtForUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(createDTO))
-        )
-            .andExpect(status().isCreated)
-            .andExpect(jsonPath("$.plannedAmount").value(30.0))
-    }
-
-    @Test
-    fun `POST create using - returns 409 for duplicate`() {
-        whenever(treatmentPlanService.create(eq(userId), any(), any()))
-            .thenThrow(ResponseStatusException(HttpStatus.CONFLICT, "Already exists"))
-
-        val createDTO = UsingCreateDTO(drugId = drugId, plannedAmount = qty(30.0))
-
+                .content(json(TreatmentPlanCreateRequest(drugId, qty(30.0))))
+        ).andExpect(status().isCreated)
         mockMvc.perform(
-            post("/v1/using")
-                .with(jwt().jwt { it.subject(userId.toString()) })
+            patch("/v1/treatment-plans/$drugId").with(jwtForUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(createDTO))
-        )
-            .andExpect(status().isConflict)
-    }
-
-    @Test
-    fun `PUT update using - updates and returns using`() {
-        val using = createTestUsing().apply { plannedAmount = qty(50.0) }
-        val dto = createTestUsingDTO().copy(plannedAmount = qty(50.0))
-        whenever(treatmentPlanService.patch(eq(userId), eq(drugId), any())).thenReturn(using)
-
-        val updateDTO = UsingUpdateDTO(plannedAmount = qty(50.0))
-
-        mockMvc.perform(
-            put("/v1/using/drug/$drugId")
-                .with(jwt().jwt { it.subject(userId.toString()) })
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(updateDTO))
-        )
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.plannedAmount").value(50.0))
-    }
-
-    @Test
-    fun `POST record intake - records and returns using`() {
-        val using = createTestUsing().apply { plannedAmount = qty(20.0) }
-        val dto = createTestUsingDTO().copy(plannedAmount = qty(20.0))
-        whenever(intakeService.record(eq(userId), eq(drugId), eq(qty(10.0)), any()))
-            .thenReturn(
-                IntakeOutcome(
-                    drugId,
-                    qty(10.0),
-                    PlanSnapshot(userId, drugId, qty(20.0))
-                )
-            )
-
-        val intakeRequest = IntakeRequest(quantityConsumed = qty(10.0), intakeId = UUID.randomUUID())
-
-        mockMvc.perform(
-            post("/v1/using/drug/$drugId/intake")
-                .with(jwt().jwt { it.subject(userId.toString()) })
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(intakeRequest))
-        )
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.plannedAmount").value(20.0))
-    }
-
-    @Test
-    fun `POST record intake - returns 400 when exceeding planned amount`() {
-        whenever(intakeService.record(eq(userId), eq(drugId), any(), any()))
-            .thenThrow(ResponseStatusException(HttpStatus.BAD_REQUEST, "Exceeds planned amount"))
-
-        val intakeRequest = IntakeRequest(quantityConsumed = qty(100.0), intakeId = UUID.randomUUID())
-
-        mockMvc.perform(
-            post("/v1/using/drug/$drugId/intake")
-                .with(jwt().jwt { it.subject(userId.toString()) })
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(intakeRequest))
-        )
-            .andExpect(status().isBadRequest)
-    }
-
-    @Test
-    fun `DELETE treatment plan - returns 204`() {
-        doNothing().whenever(treatmentPlanService).delete(userId, drugId)
-
-        mockMvc.perform(
-            delete("/v1/using/drug/$drugId")
-                .with(jwt().jwt { it.subject(userId.toString()) })
-        )
+                .content(json(TreatmentPlanPatchRequest(qty(50.0))))
+        ).andExpect(status().isOk).andExpect(jsonPath("$.plannedAmount").value(50.0))
+        mockMvc.perform(delete("/v1/treatment-plans/$drugId").with(jwtForUser()))
             .andExpect(status().isNoContent)
     }
 
+    @Test
+    fun `intake id is in path and response represents nullable plan`() {
+        val intakeId = UUID.randomUUID()
+        whenever(intakes.record(userId, drugId, qty(10.0), intakeId))
+            .thenReturn(IntakeOutcome(drugId, qty(10.0), null))
+
+        mockMvc.perform(
+            put("/v1/intakes/$intakeId").with(jwtForUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json(IntakeRequest(drugId, qty(10.0))))
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.drugId").value(drugId.toString()))
+            .andExpect(jsonPath("$.treatmentPlan").doesNotExist())
+    }
+
+    @Test
+    fun `old using routes are absent`() {
+        mockMvc.perform(get("/v1/using").with(jwtForUser())).andExpect(status().isNotFound)
+        mockMvc.perform(get("/v1/using/drug/$drugId").with(jwtForUser()))
+            .andExpect(status().isNotFound)
+    }
+
+    private fun jwtForUser() = jwt().jwt { it.subject(userId.toString()) }
+    private fun json(value: Any) = objectMapper.writeValueAsString(value)
 }
