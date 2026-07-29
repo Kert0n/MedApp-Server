@@ -9,6 +9,10 @@ import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.services.models.VidalDrugService
 import org.kert0n.medappserver.db.repository.DrugRepository
+import org.kert0n.medappserver.db.repository.MedKitRepository
+import org.kert0n.medappserver.db.repository.UsingRepository
+import org.kert0n.medappserver.services.orchestrators.DrugCommandService
+import org.kert0n.medappserver.services.orchestrators.MedKitLifecycleService
 import org.kert0n.medappserver.services.orchestrators.MedKitQueryService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -18,6 +22,7 @@ import org.springframework.transaction.support.TransactionTemplate
 import org.testcontainers.postgresql.PostgreSQLContainer
 import tools.jackson.databind.ObjectMapper
 import java.sql.Connection
+import java.math.BigDecimal
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -45,8 +50,12 @@ class QueryPlanTest {
     @Autowired private lateinit var fixture: QueryPlanFixture
     @Autowired private lateinit var drugService: DrugService
     @Autowired private lateinit var drugRepository: DrugRepository
+    @Autowired private lateinit var usingRepository: UsingRepository
+    @Autowired private lateinit var medKitRepository: MedKitRepository
     @Autowired private lateinit var usingService: UsingService
     @Autowired private lateinit var medKitQueries: MedKitQueryService
+    @Autowired private lateinit var drugCommands: DrugCommandService
+    @Autowired private lateinit var medKitLifecycle: MedKitLifecycleService
     @Autowired private lateinit var vidalDrugService: VidalDrugService
     @Autowired private lateinit var entityManager: EntityManager
 
@@ -109,6 +118,35 @@ class QueryPlanTest {
             }
         }.also { it.queryShape() }
     }
+
+    private fun captureWrite(scenario: () -> Unit): List<ExecutedStatement> =
+        RecordingDataSource.capture {
+            tx.executeWithoutResult {
+                entityManager.clear()
+                scenario()
+                entityManager.flush()
+                entityManager.clear()
+            }
+        }.also { it.queryShape() }
+
+    private fun explainStatements(
+        statements: List<ExecutedStatement>,
+        forceIndexes: Boolean = false
+    ): List<Pair<String, QueryPlan>> =
+        statements.distinctBy { it.fingerprint }.mapNotNull { statement ->
+            explain(explainConnection, objectMapper, statement, forceIndexes)
+                ?.let { statement.sql to it }
+        }
+
+    private fun scalarLong(sql: String): Long =
+        tx.execute {
+            entityManager.createNativeQuery(sql).singleResult.toString().toLong()
+        }!!
+
+    private fun scalarDecimal(sql: String): BigDecimal =
+        tx.execute {
+            BigDecimal(entityManager.createNativeQuery(sql).singleResult.toString())
+        }!!
 
     private fun assertConstantQueryShape(
         name: String,
@@ -175,9 +213,15 @@ class QueryPlanTest {
     @Test
     fun `выдача пользователю не делает запрос на каждую аптечку`() {
         assertConstantQueryShape(
-            name = "GET /v1/user",
+            name = "GET /v1/users/me",
             scenarios = fixture.snapshotUsers.mapValues { (_, userId) ->
-                { medKitQueries.getUserSnapshot(userId) }
+                {
+                    val result = medKitQueries.getUserSnapshot(userId)
+                    assertEquals(
+                        fixture.snapshotUsers.entries.single { it.value == userId }.key,
+                        result.medKits.size
+                    )
+                }
             },
             expected = mapOf(SqlKind.SELECT to 2)
         )
@@ -190,7 +234,7 @@ class QueryPlanTest {
      */
     @Test
     fun `выдача пользователю умеет читать препараты и планы по индексам`() {
-        val plans = plansOf("GET /v1/user", forceIndexes = true) {
+        val plans = plansOf("GET /v1/users/me", forceIndexes = true) {
             medKitQueries.getUserSnapshot(fixture.ownerId)
         }
 
@@ -211,7 +255,7 @@ class QueryPlanTest {
     @Test
     fun `список планов пользователя не делает запрос на каждый план`() {
         assertConstantQueryShape(
-            name = "GET /v1/using",
+            name = "GET /v1/treatment-plans",
             scenarios = fixture.planUsers.mapValues { (plans, userId) ->
                 {
                     val result = usingService.listForUser(userId)
@@ -224,13 +268,60 @@ class QueryPlanTest {
 
     @Test
     fun `список планов пользователя идёт по индексу`() {
-        val plans = plansOf("GET /v1/using") { usingService.listForUser(fixture.ownerId) }
+        val plans = plansOf("GET /v1/treatment-plans", forceIndexes = true) {
+            usingService.listForUser(fixture.ownerId)
+        }
         assertNoSeqScanOn("usings", plans)
     }
 
     @Test
+    fun `адресный план читается одним SELECT`() {
+        val userId = fixture.planUsers.getValue(1)
+        val drugId = fixture.planDrugs.getValue(1)
+        val executed = capture {
+            val result = usingService.getForUser(userId, drugId)
+            assertEquals(drugId, result.drugId)
+        }
+        assertEquals(mapOf(SqlKind.SELECT to 1), executed.queryShape().byKind)
+        val plans = explainStatements(executed, forceIndexes = true)
+        assertNoSeqScanOn("usings", plans)
+    }
+
+    @Test
+    fun `содержимое аптечки имеет два SELECT при любом размере`() {
+        assertConstantQueryShape(
+            name = "GET /v1/med-kits/{id}",
+            scenarios = fixture.contentMedKits.mapValues { (size, ids) ->
+                {
+                    val result = medKitQueries.getContent(ids.first, ids.second)
+                    assertEquals(size, result.drugs.size)
+                }
+            },
+            expected = mapOf(SqlKind.SELECT to 2)
+        )
+        val ids = fixture.contentMedKits.getValue(100)
+        val plans = plansOf("GET /v1/med-kits/{id}", forceIndexes = true) {
+            medKitQueries.getContent(ids.first, ids.second)
+        }
+        assertNoSeqScanOn("user_drugs", plans)
+        assertNoSeqScanOn("user_med_kits", plans)
+    }
+
+    @Test
+    fun `доступный препарат читается одним SELECT`() {
+        val executed = capture {
+            val result = drugService.getAccessible(fixture.ownerId, fixture.drugId)
+            assertEquals(fixture.drugId, result.id)
+        }
+        assertEquals(mapOf(SqlKind.SELECT to 1), executed.queryShape().byKind)
+        val plans = explainStatements(executed, forceIndexes = true)
+        assertNoSeqScanOn("user_drugs", plans)
+        assertNoSeqScanOn("user_med_kits", plans)
+    }
+
+    @Test
     fun `выборка препарата под блокировку берёт индекс и запирает строку`() {
-        val plans = plansOf("lock + load") {
+        val plans = plansOf("lock + load", forceIndexes = true) {
             drugRepository.findAccessibleForUpdate(fixture.drugId, fixture.ownerId)
         }
 
@@ -244,10 +335,215 @@ class QueryPlanTest {
 
     @Test
     fun `препарат с планами берётся по индексу`() {
-        val plans = plansOf("drug with plans") {
+        val plans = plansOf("drug with plans", forceIndexes = true) {
             drugService.getAccessible(fixture.ownerId, fixture.drugId)
         }
         assertNoSeqScanOn("user_drugs", plans)
         assertNoSeqScanOn("usings", plans)
+    }
+
+    @Test
+    fun `перенос препарата имеет постоянную форму и bulk удаление планов`() {
+        val measured = listOf(1, 100).associateWith { plans ->
+            val command = fixture.createDrugFixture(plans)
+            val executed = captureWrite {
+                drugCommands.move(command.ownerId, command.drugId, command.targetMedKitId)
+            }
+            assertEquals(
+                command.targetMedKitId.toString(),
+                tx.execute {
+                    entityManager.createNativeQuery(
+                        "SELECT med_kit_id FROM user_drugs WHERE id = '${command.drugId}'"
+                    ).singleResult.toString()
+                }
+            )
+            assertEquals(0, scalarLong("SELECT count(*) FROM usings WHERE drug_id = '${command.drugId}'"))
+            executed
+        }
+
+        measured.forEach { (size, statements) ->
+            val shape = statements.queryShape()
+            assertEquals(3, shape.count(SqlKind.SELECT), "move, $size plans")
+            assertEquals(1, shape.count(SqlKind.DELETE), "move, $size plans")
+            assertEquals(1, shape.count(SqlKind.UPDATE), "move, $size plans")
+        }
+        assertEquals(
+            measured.getValue(1).map { it.fingerprint }.toSet(),
+            measured.getValue(100).map { it.fingerprint }.toSet()
+        )
+
+        val plans = explainStatements(measured.getValue(100), forceIndexes = true)
+        assertNoSeqScanOn("user_drugs", plans)
+        assertNoSeqScanOn("usings", plans)
+        assertNoSeqScanOn("user_med_kits", plans)
+    }
+
+    @Test
+    fun `удаление препарата не зависит от числа планов`() {
+        listOf(1, 100).forEach { planCount ->
+            val command = fixture.createDrugFixture(planCount)
+            val shape = captureWrite {
+                drugCommands.delete(command.ownerId, command.drugId)
+            }.queryShape()
+            assertEquals(1, shape.count(SqlKind.SELECT), "delete, $planCount plans")
+            assertEquals(1, shape.count(SqlKind.DELETE), "delete, $planCount plans")
+            assertEquals(0, scalarLong("SELECT count(*) FROM user_drugs WHERE id = '${command.drugId}'"))
+            assertEquals(0, scalarLong("SELECT count(*) FROM usings WHERE drug_id = '${command.drugId}'"))
+        }
+    }
+
+    @Test
+    fun `согласование добавляет только UPDATE изменившихся планов`() {
+        val measured = listOf(2, 20).associateWith { planCount ->
+            val command = fixture.createDrugFixture(planCount)
+            val statements = captureWrite {
+                drugCommands.consume(
+                    command.ownerId,
+                    command.drugId,
+                    BigDecimal.valueOf(planCount * 5L)
+                )
+            }
+            assertEquals(
+                0,
+                scalarDecimal(
+                    "SELECT quantity - COALESCE((SELECT sum(planned_amount) FROM usings " +
+                        "WHERE drug_id = '${command.drugId}'), 0) " +
+                        "FROM user_drugs WHERE id = '${command.drugId}'"
+                ).compareTo(BigDecimal.ZERO)
+            )
+            statements
+        }
+
+        measured.forEach { (plans, statements) ->
+            val shape = statements.queryShape()
+            assertEquals(2, shape.count(SqlKind.SELECT), "reconcile, $plans plans")
+            assertEquals(plans + 1, shape.count(SqlKind.UPDATE), "reconcile, $plans plans")
+        }
+        assertEquals(
+            18,
+            measured.getValue(20).queryShape().count(SqlKind.UPDATE) -
+                measured.getValue(2).queryShape().count(SqlKind.UPDATE)
+        )
+        assertEquals(
+            measured.getValue(2).filter { it.kind == SqlKind.SELECT }.map { it.fingerprint }.toSet(),
+            measured.getValue(20).filter { it.kind == SqlKind.SELECT }.map { it.fingerprint }.toSet()
+        )
+        val plans = explainStatements(measured.getValue(20), forceIndexes = true)
+        assertNoSeqScanOn("user_drugs", plans)
+        assertNoSeqScanOn("usings", plans)
+    }
+
+    @Test
+    fun `исчерпанный препарат удаляется каскадом без SQL на каждый план`() {
+        val shapes = listOf(1, 100).associateWith { planCount ->
+            val command = fixture.createDrugFixture(planCount)
+            val stock = BigDecimal.valueOf(maxOf(planCount, 1) * 10L)
+            val shape = captureWrite {
+                drugCommands.consume(command.ownerId, command.drugId, stock)
+            }.queryShape()
+            assertEquals(0, scalarLong("SELECT count(*) FROM usings WHERE drug_id = '${command.drugId}'"))
+            shape
+        }
+        shapes.values.forEach { shape ->
+            assertEquals(1, shape.count(SqlKind.SELECT))
+            assertEquals(1, shape.count(SqlKind.DELETE))
+            assertEquals(0, shape.count(SqlKind.UPDATE))
+        }
+    }
+
+    @Test
+    fun `lifecycle аптечки использует постоянные bulk команды`() {
+        val lastLeave = listOf(1, 100).associateWith { size ->
+            val command = fixture.createMedKitFixture(size, size, additionalMember = false)
+            val statements = captureWrite {
+                medKitLifecycle.leave(command.ownerId, command.medKitId)
+            }
+            assertEquals(0, scalarLong("SELECT count(*) FROM med_kits WHERE id = '${command.medKitId}'"))
+            assertEquals(0, scalarLong("SELECT count(*) FROM usings WHERE user_id = '${command.ownerId}'"))
+            statements
+        }
+        lastLeave.values.map { it.queryShape() }.forEach { shape ->
+            assertEquals(3, shape.count(SqlKind.SELECT))
+            assertEquals(2, shape.count(SqlKind.DELETE))
+        }
+
+        val explicitDelete = listOf(1, 100).associateWith { size ->
+            val command = fixture.createMedKitFixture(size, size, additionalMember = false)
+            val statements = captureWrite {
+                medKitLifecycle.delete(command.ownerId, command.medKitId)
+            }
+            assertEquals(0, scalarLong("SELECT count(*) FROM med_kits WHERE id = '${command.medKitId}'"))
+            statements
+        }
+        explicitDelete.values.map { it.queryShape() }.forEach { shape ->
+            assertEquals(2, shape.count(SqlKind.SELECT))
+            assertEquals(1, shape.count(SqlKind.DELETE))
+        }
+
+        val nonLast = fixture.createMedKitFixture(100, 100, additionalMember = true)
+        val nonLastStatements = captureWrite {
+            medKitLifecycle.leave(nonLast.ownerId, nonLast.medKitId)
+        }
+        val nonLastShape = nonLastStatements.queryShape()
+        assertEquals(2, nonLastShape.count(SqlKind.SELECT))
+        assertEquals(2, nonLastShape.count(SqlKind.DELETE))
+        assertEquals(1, scalarLong("SELECT count(*) FROM med_kits WHERE id = '${nonLast.medKitId}'"))
+        assertEquals(0, scalarLong("SELECT count(*) FROM usings WHERE user_id = '${nonLast.ownerId}'"))
+
+        val plans = explainStatements(
+            lastLeave.getValue(100) + explicitDelete.getValue(100) + nonLastStatements,
+            forceIndexes = true
+        )
+        assertNoSeqScanOn("med_kits", plans)
+        assertNoSeqScanOn("user_drugs", plans)
+        assertNoSeqScanOn("usings", plans)
+        assertNoSeqScanOn("user_med_kits", plans)
+    }
+
+    @Test
+    fun `удаление аптечки с переносом использует bulk UPDATE и bulk DELETE`() {
+        val command = fixture.createMedKitFixture(
+            100,
+            100,
+            additionalMember = false,
+            ownerPlans = false
+        )
+        val targetMedKitId = fixture.createTransferTarget(command)
+        val statements = captureWrite {
+            medKitLifecycle.delete(command.ownerId, command.medKitId, targetMedKitId)
+        }
+        val shape = statements.queryShape()
+        assertEquals(3, shape.count(SqlKind.SELECT))
+        assertEquals(2, shape.count(SqlKind.DELETE))
+        assertEquals(1, shape.count(SqlKind.UPDATE))
+        assertEquals(0, scalarLong("SELECT count(*) FROM med_kits WHERE id = '${command.medKitId}'"))
+        assertEquals(
+            100,
+            scalarLong("SELECT count(*) FROM user_drugs WHERE med_kit_id = '$targetMedKitId'")
+        )
+        assertEquals(
+            0,
+            scalarLong(
+                "SELECT count(*) FROM usings u JOIN user_drugs d ON d.id = u.drug_id " +
+                    "WHERE d.med_kit_id = '$targetMedKitId'"
+            )
+        )
+
+        val plans = explainStatements(statements, forceIndexes = true)
+        assertNoSeqScanOn("med_kits", plans)
+        assertNoSeqScanOn("user_drugs", plans)
+        assertNoSeqScanOn("usings", plans)
+        assertNoSeqScanOn("user_med_kits", plans)
+    }
+
+    @Test
+    fun `summary аптечек использует индексы memberships и drugs`() {
+        val plans = plansOf("GET /v1/med-kits", forceIndexes = true) {
+            val result = medKitQueries.listForUser(fixture.ownerId)
+            assertTrue(result.isNotEmpty())
+        }
+        assertNoSeqScanOn("med_kits", plans)
+        assertNoSeqScanOn("user_drugs", plans)
+        assertNoSeqScanOn("user_med_kits", plans)
     }
 }

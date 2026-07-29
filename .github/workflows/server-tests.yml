@@ -1,7 +1,5 @@
 name: MedAppServer tests
 
-# Минимум: тесты на каждый PR и на push в main. Линтеров и сканеров здесь пока нет
-# сознательно — сначала пусть будет то, что просто работает.
 on:
   pull_request:
     paths:
@@ -13,7 +11,6 @@ on:
       - 'src/MedAppServer/**'
       - '.github/workflows/server-tests.yml'
 
-# Новый push в ту же ветку отменяет предыдущий прогон.
 concurrency:
   group: server-tests-${{ github.ref }}
   cancel-in-progress: true
@@ -35,30 +32,13 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
 
-      # Ключи подписи не в репозитории. Тот же скрипт, что вызывает сборка образа: он
-      # идемпотентен, поэтому просто создаёт пару там, где её нет.
       - name: Создать ключи подписи JWT
         run: sh src/main/resources/certs/gen.sh
 
-      # Тесты используют Testcontainers (VidalDrugFuzzySearchTest), Docker на
-      # ubuntu-latest доступен из коробки.
       - name: Тесты
         run: ./gradlew test --no-daemon
 
-      # Планы запросов: сеет синтетику (10 000 препаратов, 30 000 планов, 18 000 записей
-      # каталога) и разбирает EXPLAIN каждого выполненного запроса.
-      #
-      # Отдельным шагом, а не одной командой с тестами: у набора своя цена — около минуты
-      # вместе с контейнером, — и по логу должно быть сразу видно, что упало, поведение или
-      # планы.
-      #
-      # Нужен потому, что обычные тесты этот класс дефектов не видят: все три N+1, найденные
-      # при рефакторинге, проходили на зелёном наборе из 237 тестов. Без этого шага
-      # регрессия по числу запросов пройдёт мимо ревью так же незаметно.
-      - name: Планы запросов
-        run: ./gradlew queryPlanTest --no-daemon
-
-      - name: Отчёты тестов
+      - name: Отчёт тестов
         if: always()
         uses: actions/upload-artifact@v7
         with:
@@ -66,6 +46,36 @@ jobs:
           path: |
             src/MedAppServer/build/reports/tests/test
             src/MedAppServer/build/test-results/test
+          retention-days: 7
+
+  query-plan-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/MedAppServer
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Создать ключи подписи JWT
+        run: sh src/main/resources/certs/gen.sh
+
+      - name: Планы запросов
+        run: ./gradlew queryPlanTest --no-daemon
+
+      - name: Отчёт планов запросов
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: query-plan-test-results
+          path: |
             src/MedAppServer/build/reports/tests/queryPlanTest
             src/MedAppServer/build/test-results/queryPlanTest
           retention-days: 7

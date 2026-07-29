@@ -36,7 +36,16 @@ interface UsingRepository : JpaRepository<Using, UsingKey> {
      * которых вызывающий правит следующей строкой.
      */
     @Modifying(flushAutomatically = true)
-    @Query("DELETE FROM Using u WHERE u.user.id = :userId AND u.drug.medKit.id = :medKitId")
+    @Query(
+        value = """
+            DELETE FROM usings
+            WHERE user_id = :userId
+              AND drug_id IN (
+                  SELECT id FROM user_drugs WHERE med_kit_id = :medKitId
+              )
+        """,
+        nativeQuery = true
+    )
     fun deleteByUserIdAndMedKitId(userId: UUID, medKitId: UUID)
 
     /**
@@ -51,11 +60,27 @@ interface UsingRepository : JpaRepository<Using, UsingKey> {
      * транзакции, после bulk врёт.
      */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query("DELETE FROM Using u WHERE u.drug.medKit.id = :medKitId AND u.user.id NOT IN :userIds")
+    @Query(
+        value = """
+            DELETE FROM usings
+            WHERE drug_id IN (
+                SELECT id FROM user_drugs WHERE med_kit_id = :medKitId
+            )
+              AND user_id NOT IN (:userIds)
+        """,
+        nativeQuery = true
+    )
     fun deleteByMedKitIdAndUserIdNotIn(medKitId: UUID, userIds: Collection<UUID>)
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query("DELETE FROM Using u WHERE u.drug.id = :drugId AND u.user.id NOT IN :userIds")
+    @Query(
+        value = """
+            DELETE FROM usings
+            WHERE drug_id = :drugId
+              AND user_id NOT IN (:userIds)
+        """,
+        nativeQuery = true
+    )
     fun deleteByDrugIdAndUserIdNotIn(drugId: UUID, userIds: Collection<UUID>): Int
 
 

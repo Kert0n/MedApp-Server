@@ -1,7 +1,6 @@
 package org.kert0n.medappserver.services.orchestrators
 
 import org.kert0n.medappserver.db.model.Drug
-import org.kert0n.medappserver.db.model.isZero
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.UsingRepository
@@ -68,12 +67,12 @@ class DrugCommandService(
         val drug = lockAccessible(userId, drugId)
         if (amount > drug.quantity) badRequest("Insufficient quantity available")
 
-        drug.consumeUnplanned(amount)
-        if (drug.quantity.isZero()) {
+        if (amount.compareTo(drug.quantity) == 0) {
             drugs.deleteLockedById(drugId)
             return null
         }
 
+        drug.consumeUnplanned(amount)
         if (drug.totalPlannedAmount > drug.quantity) {
             val affectedPlans = plans.findAllByDrugId(drugId)
             val amounts = PlanReconciler.reconcile(
