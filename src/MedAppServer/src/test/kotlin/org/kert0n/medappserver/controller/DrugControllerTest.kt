@@ -14,7 +14,7 @@ import org.kert0n.medappserver.db.model.parsed.VidalDrug
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.services.models.VidalDrugService
-import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
+import org.kert0n.medappserver.services.orchestrators.DrugCommandService
 import org.mockito.kotlin.any
 import org.mockito.kotlin.doNothing
 import org.mockito.kotlin.eq
@@ -54,7 +54,7 @@ class DrugControllerTest {
     private lateinit var drugService: DrugService
 
     @MockitoBean
-    private lateinit var medKitDrugServices: MedKitDrugServices
+    private lateinit var drugCommands: DrugCommandService
 
     @MockitoBean
     private lateinit var usingService: UsingService
@@ -145,7 +145,7 @@ class DrugControllerTest {
     fun `POST create drug - creates and returns drug`() {
         val drug = createTestDrug()
         val dto = createTestDrugDTO()
-        whenever(medKitDrugServices.createDrugInMedkit(any(), any(), eq(userId))).thenReturn(drug)
+        whenever(drugCommands.create(eq(userId), any(), any())).thenReturn(drug)
 
         val createDTO = DrugCreateDTO(
             name = "Aspirin",
@@ -168,7 +168,7 @@ class DrugControllerTest {
     fun `PUT update drug - updates and returns drug`() {
         val drug = createTestDrug()
         val dto = createTestDrugDTO()
-        whenever(drugService.update(eq(drugId), any(), eq(userId))).thenReturn(drug)
+        whenever(drugCommands.patch(eq(userId), eq(drugId), any())).thenReturn(drug)
 
         val updateDTO = DrugUpdateDTO(name = "Updated Aspirin")
 
@@ -184,7 +184,7 @@ class DrugControllerTest {
 
     @Test
     fun `DELETE drug - returns 204`() {
-        doNothing().whenever(drugService).delete(drugId, userId)
+        doNothing().whenever(drugCommands).delete(userId, drugId)
 
         mockMvc.perform(
             delete("/v1/drug/$drugId")
@@ -213,7 +213,7 @@ class DrugControllerTest {
     fun `PUT consume drug - reduces quantity and returns drug`() {
         val drug = createTestDrug().apply { quantity = qty(90.0) }
         val dto = createTestDrugDTO().copy(quantity = qty(90.0))
-        whenever(drugService.consume(eq(drugId), eq(qty(10.0)), eq(userId))).thenReturn(drug)
+        whenever(drugCommands.consume(eq(userId), eq(drugId), eq(qty(10.0)))).thenReturn(drug)
 
         val consumeRequest = ConsumeRequest(quantity = qty(10.0))
 
@@ -232,7 +232,7 @@ class DrugControllerTest {
         val targetMedKitId = UUID.randomUUID()
         val drug = createTestDrug()
         val dto = createTestDrugDTO()
-        whenever(medKitDrugServices.moveDrug(eq(drugId), eq(targetMedKitId), eq(userId))).thenReturn(drug)
+        whenever(drugCommands.move(eq(userId), eq(drugId), eq(targetMedKitId))).thenReturn(drug)
 
         val moveRequest = MoveDrugRequest(targetMedKitId = targetMedKitId)
 

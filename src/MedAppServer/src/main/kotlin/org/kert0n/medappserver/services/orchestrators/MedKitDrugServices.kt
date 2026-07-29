@@ -15,6 +15,7 @@ import java.util.*
 @Service
 class MedKitDrugServices(
     private val drugService: DrugService,
+    private val drugCommands: DrugCommandService,
     private val medKitService: MedKitService,
     private val userService: UserService,
     private val usingService: UsingService
@@ -25,24 +26,13 @@ class MedKitDrugServices(
     @Transactional
     fun createDrugInMedkit(medKitId: UUID, command: DrugCreation, userId: UUID): Drug {
         logger.debug("Creating drug: {} for user: {}", command.name, userId)
-        val medKit = medKitService.findByIdForUser(medKitId, userId)
-        return drugService.create(command, medKit, userId)
+        return drugCommands.create(userId, medKitId, command)
     }
 
     @Transactional
     fun moveDrug(drugId: UUID, targetMedKitId: UUID, userId: UUID): Drug {
         logger.debug("Moving drug {} to medkit {}", drugId, targetMedKitId)
-        val targetMedKit = medKitService.findByIdForUserWithUsers(targetMedKitId, userId)
-        val drug = drugService.findByIdForUserWithPlans(drugId, userId)
-
-        val targetUserIds = targetMedKit.users.map { it.id }.toSet()
-        val usingsToRemove = drug.usings.filter { it.user.id !in targetUserIds }.toSet()
-        if (usingsToRemove.isNotEmpty()) {
-            drug.usings.removeAll(usingsToRemove)
-        }
-
-        drug.medKit = targetMedKit
-        return drugService.save(drug)
+        return drugCommands.move(userId, drugId, targetMedKitId)
     }
 
     @Transactional
