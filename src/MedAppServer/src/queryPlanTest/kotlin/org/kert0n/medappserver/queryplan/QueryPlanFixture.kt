@@ -24,7 +24,9 @@ class QueryPlanFixture(private val entityManager: EntityManager) {
     lateinit var drugId: UUID
     lateinit var catalogueName: String
 
-    /** Сколько аптечек у [ownerId]: от этого числа не должно зависеть число запросов. */
+    lateinit var snapshotUsers: Map<Int, UUID>
+    lateinit var planUsers: Map<Int, UUID>
+
     var ownerMedKitCount: Int = 0
 
     @Transactional
@@ -102,8 +104,9 @@ class QueryPlanFixture(private val entityManager: EntityManager) {
             """
         ).executeUpdate()
 
-        // Без ANALYZE планировщик работает по умолчаниям и выбирает план, которого в проде
-        // не будет: статистика после массовой вставки ещё не собрана.
+        snapshotUsers = listOf(1, 5, 25).associateWith(::seedSnapshotUser)
+        planUsers = listOf(1, 250).associateWith(::seedPlanUser)
+
         listOf("users", "med_kits", "user_med_kits", "user_drugs", "usings", "parsed_drugs",
             "form_types", "quantity_units")
             .forEach { entityManager.createNativeQuery("ANALYZE $it").executeUpdate() }
@@ -130,6 +133,43 @@ class QueryPlanFixture(private val entityManager: EntityManager) {
             .singleResult.toString().toInt()
         medKitId = single("SELECT med_kit_id FROM user_med_kits WHERE user_id = '$ownerId' LIMIT 1")
         drugId = single("SELECT id FROM user_drugs WHERE med_kit_id = '$medKitId' LIMIT 1")
+    }
+
+    private fun seedSnapshotUser(medKits: Int): UUID {
+        val userId = UUID.randomUUID()
+        insertUser(userId, "snapshot-$medKits")
+        entityManager.createNativeQuery(
+            """
+            INSERT INTO user_med_kits (user_id, med_kit_id)
+            SELECT '$userId'::uuid, id FROM med_kits ORDER BY id LIMIT $medKits
+            """
+        ).executeUpdate()
+        return userId
+    }
+
+    private fun seedPlanUser(plans: Int): UUID {
+        val userId = UUID.randomUUID()
+        insertUser(userId, "plans-$plans")
+        entityManager.createNativeQuery(
+            """
+            INSERT INTO user_med_kits (user_id, med_kit_id)
+            SELECT DISTINCT '$userId'::uuid, med_kit_id
+            FROM (SELECT med_kit_id FROM user_drugs ORDER BY id LIMIT $plans) selected
+            """
+        ).executeUpdate()
+        entityManager.createNativeQuery(
+            """
+            INSERT INTO usings (user_id, drug_id, planned_amount)
+            SELECT '$userId'::uuid, id, 1 FROM user_drugs ORDER BY id LIMIT $plans
+            """
+        ).executeUpdate()
+        return userId
+    }
+
+    private fun insertUser(userId: UUID, suffix: String) {
+        entityManager.createNativeQuery(
+            "INSERT INTO users (id, hashed_key) VALUES ('$userId', '{noop}scale-$suffix')"
+        ).executeUpdate()
     }
 
     private fun single(sql: String): UUID =
