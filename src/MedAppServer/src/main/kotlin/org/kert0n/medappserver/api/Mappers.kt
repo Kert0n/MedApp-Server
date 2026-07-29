@@ -37,6 +37,7 @@ fun Drug.toDto(): DrugDTO = DrugDTO(
     name = name,
     quantity = quantity,
     plannedQuantity = totalPlannedAmount,
+    availableQuantity = availableQuantity,
     quantityUnit = quantityUnit,
     formType = formType,
     category = category,
@@ -51,6 +52,7 @@ fun DrugView.toDto(): DrugDTO = DrugDTO(
     name = name,
     quantity = quantity,
     plannedQuantity = plannedQuantity,
+    availableQuantity = availableQuantity,
     quantityUnit = quantityUnit,
     formType = formType,
     category = category,
@@ -60,8 +62,8 @@ fun DrugView.toDto(): DrugDTO = DrugDTO(
     medKitId = medKitId
 )
 
-fun TreatmentPlanView.toDto(): UsingDTO =
-    UsingDTO(userId, drugId, plannedAmount)
+fun TreatmentPlanView.toDto(): TreatmentPlanDTO =
+    TreatmentPlanDTO(userId, drugId, plannedAmount)
 
 fun MedKitContentView.toDto(): MedKitDTO =
     MedKitDTO(id = id, drugs = drugs.mapTo(linkedSetOf()) { it.toDto() })
@@ -70,7 +72,7 @@ fun MedKitSummaryView.toDto(): MedKitSummaryDTO =
     MedKitSummaryDTO(id, userCount, drugCount)
 
 /** План лечения в ответ. Для LAZY-ссылок читаются только известные Hibernate идентификаторы. */
-fun Using.toDto(): UsingDTO = UsingDTO(
+fun Using.toDto(): TreatmentPlanDTO = TreatmentPlanDTO(
     userId = user.id,
     drugId = drug.id,
     plannedAmount = plannedAmount
@@ -118,16 +120,6 @@ fun MedKitSummary.toDto(): MedKitSummaryDTO = MedKitSummaryDTO(
     drugCount = drugCount
 )
 
-/** Остаток, резерв и свободное количество препарата. */
-fun Drug.toQuantityInfo(): QuantityInfo = QuantityInfo(
-    actualQuantity = quantity,
-    plannedQuantity = totalPlannedAmount,
-    availableQuantity = availableQuantity
-)
-
-fun DrugView.toQuantityInfo(): QuantityInfo =
-    QuantityInfo(quantity, plannedQuantity, availableQuantity)
-
 /**
  * Запрос на создание препарата — в аргументы прикладной операции.
  *
@@ -146,7 +138,7 @@ fun DrugCreateDTO.toCommand(): DrugCreation = DrugCreation(
 )
 
 /** Запрос на правку препарата — в частичный патч. `null` по-прежнему значит «не трогать». */
-fun DrugUpdateDTO.toPatch(): DrugPatch = DrugPatch(
+fun DrugPatchRequest.toPatch(): DrugPatch = DrugPatch(
     name = name,
     quantity = quantity,
     quantityUnit = quantityUnit,
@@ -158,7 +150,7 @@ fun DrugUpdateDTO.toPatch(): DrugPatch = DrugPatch(
 )
 
 /** Снимок плана после приёма — наружу. */
-fun PlanSnapshot.toDto(): UsingDTO = UsingDTO(
+fun PlanSnapshot.toDto(): TreatmentPlanDTO = TreatmentPlanDTO(
     userId = userId,
     drugId = drugId,
     plannedAmount = plannedAmount

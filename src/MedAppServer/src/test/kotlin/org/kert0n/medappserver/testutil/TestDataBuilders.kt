@@ -118,7 +118,6 @@ class DrugCreateDTOBuilder {
             name = name,
             quantity = qty(quantity),
             quantityUnit = quantityUnit,
-            medKitId = medKitId,
             formType = formType,
             category = category,
             manufacturer = manufacturer,

@@ -79,7 +79,7 @@ class PublicEndpointScopeTest {
 
         // Valid credentials, but Basic is not an accepted scheme outside token issuance.
         mockMvc.perform(
-            get("/v1/user").with(httpBasic(userId.toString(), "password"))
+            get("/v1/users/me").with(httpBasic(userId.toString(), "password"))
         ).andExpect(status().isUnauthorized)
     }
 
@@ -96,6 +96,6 @@ class PublicEndpointScopeTest {
 
     @Test
     fun `business endpoints reject anonymous requests`() {
-        mockMvc.perform(get("/v1/user")).andExpect(status().isUnauthorized)
+        mockMvc.perform(get("/v1/users/me")).andExpect(status().isUnauthorized)
     }
 }

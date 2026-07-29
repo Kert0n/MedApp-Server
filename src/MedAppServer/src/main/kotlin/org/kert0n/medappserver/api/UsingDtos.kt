@@ -6,48 +6,43 @@ import jakarta.validation.constraints.NotNull
 import java.math.BigDecimal
 import java.util.UUID
 
-@Schema(description = "Intake request")
+@Schema(description = "Register an intake using the idempotency key from the path")
 data class IntakeRequest(
-    @NotNull
-    @DecimalMin(value = "0.0", inclusive = false)
-    @Schema(description = "Amount consumed", example = "1.0", minimum = "0")
-    val quantityConsumed: BigDecimal,
+    @field:NotNull
+    val drugId: UUID,
 
-    @NotNull
-    @Schema(
-        description = "Client-generated identifier of this intake event. Retrying with the same " +
-            "value returns the first result instead of applying the intake twice.",
-        required = true
-    )
-    val intakeId: UUID
+    @field:NotNull
+    @field:DecimalMin(value = "0.0", inclusive = false)
+    val quantityConsumed: BigDecimal
 )
 
-@Schema(description = "Treatment plan information")
-data class UsingDTO(
-    @Schema(description = "User identifier")
+@Schema(description = "Treatment plan owned by the authenticated user")
+data class TreatmentPlanDTO(
     val userId: UUID,
-    @Schema(description = "Drug identifier")
     val drugId: UUID,
-    @Schema(description = "Planned total amount for the course")
     val plannedAmount: BigDecimal
 )
 
 @Schema(description = "Create treatment plan request")
-data class UsingCreateDTO(
-    @NotNull
-    @Schema(description = "Drug identifier")
+data class TreatmentPlanCreateRequest(
+    @field:NotNull
     val drugId: UUID,
 
-    @NotNull
-    @DecimalMin("0.0")
-    @Schema(description = "Planned amount", example = "20.0", minimum = "0")
+    @field:NotNull
+    @field:DecimalMin(value = "0.0", inclusive = false)
     val plannedAmount: BigDecimal
 )
 
-@Schema(description = "Update treatment plan request")
-data class UsingUpdateDTO(
-    @NotNull
-    @DecimalMin("0.0")
-    @Schema(description = "Planned amount", example = "20.0", minimum = "0")
+@Schema(description = "Patch treatment plan request")
+data class TreatmentPlanPatchRequest(
+    @field:NotNull
+    @field:DecimalMin(value = "0.0", inclusive = false)
     val plannedAmount: BigDecimal
+)
+
+@Schema(description = "Idempotently recorded intake")
+data class IntakeResultDTO(
+    val drugId: UUID,
+    val quantityConsumed: BigDecimal,
+    val treatmentPlan: TreatmentPlanDTO?
 )

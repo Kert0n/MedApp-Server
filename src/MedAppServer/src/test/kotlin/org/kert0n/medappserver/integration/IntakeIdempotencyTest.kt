@@ -23,7 +23,7 @@ import org.springframework.http.MediaType
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers
 import org.springframework.test.web.servlet.MockMvc
-import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
@@ -98,10 +98,10 @@ class IntakeIdempotencyTest {
 
     private fun intake(user: User, drug: Drug, amount: Double, intakeId: UUID) =
         mockMvc.perform(
-            post("/v1/using/drug/${drug.id}/intake")
+            put("/v1/intakes/$intakeId")
                 .with(jwt().jwt { it.subject(user.id.toString()) })
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"quantityConsumed":$amount,"intakeId":"$intakeId"}""")
+                .content("""{"drugId":"${drug.id}","quantityConsumed":$amount}""")
         )
 
     @Test
@@ -160,7 +160,10 @@ class IntakeIdempotencyTest {
         val second = intake(user, drug, 3.0, intakeId).andExpect(status().isOk)
             .andReturn().response.contentAsString
 
-        assertTrue(first.isBlank(), "план исчез, поэтому тело первого ответа пустое: '$first'")
+        assertTrue(
+            first.contains("\"treatmentPlan\":null"),
+            "удалённый план должен быть представлен nullable-полем результата: '$first'"
+        )
         assertEquals(first, second, "повтор обязан вернуть тот же результат, а не 404")
         assertQty(7.0, drugRepository.findById(drug.id).orElseThrow().quantity,
             "списание должно быть однократным")
