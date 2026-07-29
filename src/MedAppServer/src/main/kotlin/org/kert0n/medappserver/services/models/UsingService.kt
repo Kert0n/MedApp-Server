@@ -1,6 +1,5 @@
 package org.kert0n.medappserver.services.models
 
-import org.kert0n.medappserver.db.model.Using
 import org.kert0n.medappserver.db.repository.UsingRepository
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
@@ -19,7 +18,4 @@ class UsingService(private val plans: UsingRepository) {
     fun getForUser(userId: UUID, drugId: UUID): TreatmentPlanView =
         plans.findByUserIdAndDrugId(userId, drugId)?.toView()
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Treatment plan not found")
-
-    private fun Using.toView() =
-        TreatmentPlanView(usingKey.userId, usingKey.drugId, plannedAmount)
 }

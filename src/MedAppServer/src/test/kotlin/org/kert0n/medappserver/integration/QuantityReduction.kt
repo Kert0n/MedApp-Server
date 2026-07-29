@@ -13,7 +13,7 @@ import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.db.repository.UsingRepository
 import org.kert0n.medappserver.services.orchestrators.DrugCommandService
 import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
-import org.kert0n.medappserver.services.models.MedKitService
+import org.kert0n.medappserver.testutil.MedKitFixture
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.springframework.beans.factory.annotation.Autowired
@@ -54,7 +54,7 @@ class QuantityReductionTests {
     private lateinit var drugCommands: DrugCommandService
 
     @Autowired
-    private lateinit var medKitService: MedKitService
+    private lateinit var medKitFixture: MedKitFixture
 
     @Autowired
     private lateinit var treatmentPlanService: TreatmentPlanService
@@ -78,8 +78,8 @@ class QuantityReductionTests {
     fun `Consuming within slack leaves all plans untouched`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
+        val kit = medKitFixture.createNew(alice.id)
+        medKitFixture.joinMedKitByKey(medKitFixture.generateMedKitShareKey(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
@@ -111,9 +111,9 @@ class QuantityReductionTests {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
         val charlie = dbHelper.freshUser("charlie")
-        val kit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), charlie.id)
+        val kit = medKitFixture.createNew(alice.id)
+        medKitFixture.joinMedKitByKey(medKitFixture.generateMedKitShareKey(kit.id, alice.id), bob.id)
+        medKitFixture.joinMedKitByKey(medKitFixture.generateMedKitShareKey(kit.id, alice.id), charlie.id)
         val drug = dbHelper.freshDrug(kit, 90.0)
         dbHelper.flushAndClear()
 
@@ -149,8 +149,8 @@ class QuantityReductionTests {
     fun `Asymmetric plans preserve their ratio after scaling`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
+        val kit = medKitFixture.createNew(alice.id)
+        medKitFixture.joinMedKitByKey(medKitFixture.generateMedKitShareKey(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
@@ -192,8 +192,8 @@ class QuantityReductionTests {
     fun `Sequential unplanned consumptions compound scaling correctly`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
+        val kit = medKitFixture.createNew(alice.id)
+        medKitFixture.joinMedKitByKey(medKitFixture.generateMedKitShareKey(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit, 80.0)
         dbHelper.flushAndClear()
 
@@ -237,8 +237,8 @@ class QuantityReductionTests {
     fun `Partial consumption deep into reserved zone scales correctly`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
+        val kit = medKitFixture.createNew(alice.id)
+        medKitFixture.joinMedKitByKey(medKitFixture.generateMedKitShareKey(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
@@ -276,9 +276,9 @@ class QuantityReductionTests {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
         val charlie = dbHelper.freshUser("charlie")
-        val kit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), charlie.id)
+        val kit = medKitFixture.createNew(alice.id)
+        medKitFixture.joinMedKitByKey(medKitFixture.generateMedKitShareKey(kit.id, alice.id), bob.id)
+        medKitFixture.joinMedKitByKey(medKitFixture.generateMedKitShareKey(kit.id, alice.id), charlie.id)
         val drug = dbHelper.freshDrug(kit, 60.0)
         dbHelper.flushAndClear()
 
@@ -319,7 +319,7 @@ class QuantityReductionTests {
     @Test
     fun `Consuming entire stock with single plan deletes drug and plan`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitFixture.createNew(alice.id)
         val drug = dbHelper.freshDrug(kit, 50.0)
         dbHelper.flushAndClear()
 
@@ -361,8 +361,8 @@ class QuantityReductionTests {
     fun `Two-step reduction to zero cleans up all plans on final step`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
+        val kit = medKitFixture.createNew(alice.id)
+        medKitFixture.joinMedKitByKey(medKitFixture.generateMedKitShareKey(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit, 10.0)
         dbHelper.flushAndClear()
 
@@ -403,21 +403,13 @@ class QuantityReductionTests {
     /**
      * Приём не должен пытаться сохранить план, чей препарат только что удалён.
      *
-     * `handleQuantityReduction` возвращает `Drug?`, где `null` значит «препарат кончился и
-     * удалён вместе со всеми планами». Раньше это значение отбрасывалось, и `recordIntake`
-     * шёл дальше: план не обнулился, значит `usingRepository.save(using)` — то есть вставка
-     * строки с внешним ключом на удалённый препарат.
-     *
      * Через сервисы такое состояние не собрать: `createTreatmentPlan` не даёт запланировать
-     * больше остатка, а `handleQuantityReduction` держит инвариант «сумма планов не больше
-     * остатка». Поэтому план создаётся напрямую репозиторием — тест проверяет само условие в
-     * `recordIntake`, а не достижимость состояния. Корректность, которая держится на цепочке
-     * проверок в трёх других методах, ломается от первой правки любого из них.
+     * больше остатка. Прямой fixture проверяет защиту от сироты при нарушенном предусловии.
      */
     @Test
     fun `Intake that empties the drug returns null instead of saving an orphan plan`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitFixture.createNew(alice.id)
         val drug = dbHelper.freshDrug(kit, 2.0)
         dbHelper.flushAndClear()
 
@@ -436,7 +428,6 @@ class QuantityReductionTests {
         val result = treatmentPlanService.applyIntake(alice.id, drug.id, qty(2.0))
 
         assertNull(result, "препарат удалён, поэтому возвращать план нечего")
-        // Без guard'а здесь падал бы flush: план сохранялся бы со ссылкой на удалённую строку.
         dbHelper.flushAndClear()
 
         assertNull(drugRepository.findByIdOrNull(drug.id), "препарат с нулевым остатком удаляется")

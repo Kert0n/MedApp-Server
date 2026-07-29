@@ -2,6 +2,7 @@ package org.kert0n.medappserver.services.models
 
 import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
+import org.kert0n.medappserver.testutil.MedKitFixture
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
 import org.junit.jupiter.api.Test
@@ -25,7 +26,7 @@ class UsingServiceTest {
     private lateinit var treatmentPlans: TreatmentPlanService
 
     @Autowired
-    private lateinit var medKitService: MedKitService
+    private lateinit var medKitFixture: MedKitFixture
 
     @Autowired
     private lateinit var dbHelper: DatabaseTestHelper
@@ -33,7 +34,7 @@ class UsingServiceTest {
     @Test
     fun `listForUser returns only immutable plan views of that user`() {
         val alice = dbHelper.freshUser("plan-reader")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitFixture.createNew(alice.id)
         val drug = dbHelper.freshDrug(kit, 100.0)
         treatmentPlans.create(alice.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()

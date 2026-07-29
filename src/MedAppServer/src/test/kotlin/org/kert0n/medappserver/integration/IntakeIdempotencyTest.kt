@@ -13,7 +13,7 @@ import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.UserRepository
-import org.kert0n.medappserver.services.models.MedKitService
+import org.kert0n.medappserver.testutil.MedKitFixture
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -52,7 +52,7 @@ class IntakeIdempotencyTest {
     @Autowired private lateinit var drugRepository: DrugRepository
     @Autowired private lateinit var treatmentPlanService: TreatmentPlanService
     @Autowired private lateinit var usingService: UsingService
-    @Autowired private lateinit var medKitService: MedKitService
+    @Autowired private lateinit var medKitFixture: MedKitFixture
 
     @Autowired
     @Qualifier("intakeResultsCache")
@@ -196,7 +196,7 @@ class IntakeIdempotencyTest {
         // Через сервис, а не правкой коллекций руками: он транзакционный и синхронизирует обе
         // стороны связи. Обращение к drug.medKit.users вне сессии давало
         // LazyInitializationException — Drug.medKit ленивый, а класс не @Transactional.
-        medKitService.addUserToMedKit(medKit.id, bob.id)
+        medKitFixture.addUserToMedKit(medKit.id, bob.id)
         treatmentPlanService.create(bob.id, drug.id, qty(4.0))
 
         // Клиент генерирует intakeId сам, поэтому совпадение возможно; ключ кеша включает

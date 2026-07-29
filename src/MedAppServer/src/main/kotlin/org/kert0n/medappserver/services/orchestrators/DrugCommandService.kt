@@ -6,6 +6,8 @@ import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.UsingRepository
 import org.kert0n.medappserver.services.models.DrugCreation
 import org.kert0n.medappserver.services.models.DrugPatch
+import org.kert0n.medappserver.services.models.DrugView
+import org.kert0n.medappserver.services.models.toView
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
@@ -24,7 +26,7 @@ class DrugCommandService(
     private val logger = LoggerFactory.getLogger(DrugCommandService::class.java)
 
     @Transactional
-    fun create(userId: UUID, medKitId: UUID, command: DrugCreation): Drug {
+    fun create(userId: UUID, medKitId: UUID, command: DrugCreation): DrugView {
         if (command.quantity <= BigDecimal.ZERO) badRequest("Drug quantity must be positive")
         val medKit = medKits.findAccessible(medKitId, userId) ?: notFound()
         return drugs.save(
@@ -39,11 +41,11 @@ class DrugCommandService(
                 description = command.description,
                 medKit = medKit
             )
-        )
+        ).toView()
     }
 
     @Transactional
-    fun patch(userId: UUID, drugId: UUID, patch: DrugPatch): Drug {
+    fun patch(userId: UUID, drugId: UUID, patch: DrugPatch): DrugView {
         val drug = lockAccessible(userId, drugId)
         patch.quantity?.let { newQuantity ->
             if (newQuantity <= drug.quantity) {
@@ -58,11 +60,11 @@ class DrugCommandService(
         patch.manufacturer?.let { drug.manufacturer = it }
         patch.country?.let { drug.country = it }
         patch.description?.let { drug.description = it }
-        return drug
+        return drug.toView()
     }
 
     @Transactional
-    fun consume(userId: UUID, drugId: UUID, amount: BigDecimal): Drug? {
+    fun consume(userId: UUID, drugId: UUID, amount: BigDecimal): DrugView? {
         if (amount <= BigDecimal.ZERO) badRequest("Consumed quantity must be positive")
         val drug = lockAccessible(userId, drugId)
         if (amount > drug.quantity) badRequest("Insufficient quantity available")
@@ -85,19 +87,19 @@ class DrugCommandService(
             drug.totalPlannedAmount = amounts.fold(BigDecimal.ZERO, BigDecimal::add)
             logger.warn("Planned quantity exceeded current stock; treatment plans were reduced")
         }
-        return drug
+        return drug.toView()
     }
 
     @Transactional
-    fun move(userId: UUID, drugId: UUID, targetMedKitId: UUID): Drug {
+    fun move(userId: UUID, drugId: UUID, targetMedKitId: UUID): DrugView {
         val drug = lockAccessible(userId, drugId)
-        if (drug.medKit.id == targetMedKitId) return drug
+        if (drug.medKit.id == targetMedKitId) return drug.toView()
 
         val target = medKits.findAccessibleWithUsers(targetMedKitId, userId) ?: notFound()
         val targetUserIds = target.users.mapTo(mutableSetOf()) { it.id }
         plans.deleteByDrugIdAndUserIdNotIn(drugId, targetUserIds)
         drugs.moveToMedKit(drugId, targetMedKitId)
-        return drugs.findAccessible(drugId, userId) ?: notFound()
+        return (drugs.findAccessible(drugId, userId) ?: notFound()).toView()
     }
 
     @Transactional

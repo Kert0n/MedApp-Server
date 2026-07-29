@@ -77,10 +77,10 @@ class DrugControllerTest {
     @Test
     fun `resource routes expose drug commands and derived quantities`() {
         whenever(reads.getAccessible(userId, drugId)).thenReturn(drug().toView())
-        whenever(commands.create(eq(userId), eq(medKitId), any())).thenReturn(drug())
-        whenever(commands.patch(eq(userId), eq(drugId), any())).thenReturn(drug())
-        whenever(commands.consume(userId, drugId, qty(10.0))).thenReturn(drug(90.0))
-        whenever(commands.move(userId, drugId, medKitId)).thenReturn(drug())
+        whenever(commands.create(eq(userId), eq(medKitId), any())).thenReturn(drug().toView())
+        whenever(commands.patch(eq(userId), eq(drugId), any())).thenReturn(drug().toView())
+        whenever(commands.consume(userId, drugId, qty(10.0))).thenReturn(drug(90.0).toView())
+        whenever(commands.move(userId, drugId, medKitId)).thenReturn(drug().toView())
         doNothing().whenever(commands).delete(userId, drugId)
 
         mockMvc.perform(get("/v1/drugs/$drugId").with(jwtForUser()))

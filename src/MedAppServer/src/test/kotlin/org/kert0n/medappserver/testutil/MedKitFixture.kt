@@ -1,4 +1,4 @@
-package org.kert0n.medappserver.services.models
+package org.kert0n.medappserver.testutil
 
 import org.kert0n.medappserver.db.model.MedKit
 import org.kert0n.medappserver.db.model.User
@@ -14,14 +14,13 @@ import org.springframework.web.server.ResponseStatusException
 import java.util.UUID
 
 /**
- * Test fixture adapter for legacy story setup.
+ * Fixture API for integration and story setup.
  *
- * Production code has no generic MedKit model service: reads and lifecycle commands go
- * through their dedicated services. Older stories keep this adapter only to avoid obscuring
- * their business assertions with fixture construction.
+ * Production reads and lifecycle commands use dedicated services; this adapter may access
+ * repositories directly only while arranging test data.
  */
 @Component
-class MedKitService(
+class MedKitFixture(
     private val lifecycle: MedKitLifecycleService,
     private val medKits: MedKitRepository,
     private val users: UserRepository

@@ -7,6 +7,10 @@ import java.math.RoundingMode
 
 object PlanReconciler {
 
+    /**
+     * Пропорционально уменьшает планы: коэффициент считается с запасом точности,
+     * каждый результат округляется вниз, поэтому итоговая сумма не превышает остаток.
+     */
     fun reconcile(stock: BigDecimal, plannedAmounts: List<BigDecimal>): List<BigDecimal> {
         val total = plannedAmounts.fold(BigDecimal.ZERO, BigDecimal::add)
         if (plannedAmounts.isEmpty() || total <= stock) return plannedAmounts

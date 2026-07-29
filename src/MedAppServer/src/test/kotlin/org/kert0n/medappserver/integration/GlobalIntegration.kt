@@ -11,7 +11,7 @@ import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.db.repository.UsingRepository
 import org.kert0n.medappserver.services.orchestrators.DrugCommandService
 import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
-import org.kert0n.medappserver.services.models.MedKitService
+import org.kert0n.medappserver.testutil.MedKitFixture
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.springframework.beans.factory.annotation.Autowired
@@ -57,7 +57,7 @@ class PlannedQuantityTrackingTests {
     private lateinit var drugCommands: DrugCommandService
 
     @Autowired
-    private lateinit var medKitService: MedKitService
+    private lateinit var medKitFixture: MedKitFixture
 
     @Autowired
     private lateinit var treatmentPlanService: TreatmentPlanService
@@ -85,8 +85,8 @@ class PlannedQuantityTrackingTests {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
 
-        val kit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
+        val kit = medKitFixture.createNew(alice.id)
+        medKitFixture.joinMedKitByKey(medKitFixture.generateMedKitShareKey(kit.id, alice.id), bob.id)
 
         val drug = dbHelper.freshDrug(kit, 120.0)
         dbHelper.flushAndClear()
@@ -147,9 +147,9 @@ class PlannedQuantityTrackingTests {
         val bob = dbHelper.freshUser("bob")
         val charlie = dbHelper.freshUser("charlie")
 
-        val kit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), charlie.id)
+        val kit = medKitFixture.createNew(alice.id)
+        medKitFixture.joinMedKitByKey(medKitFixture.generateMedKitShareKey(kit.id, alice.id), bob.id)
+        medKitFixture.joinMedKitByKey(medKitFixture.generateMedKitShareKey(kit.id, alice.id), charlie.id)
 
         val drug = dbHelper.freshDrug(kit, 90.0)
         dbHelper.flushAndClear()
@@ -228,9 +228,9 @@ class PlannedQuantityTrackingTests {
         val bob = dbHelper.freshUser("bob")
         val charlie = dbHelper.freshUser("charlie")
 
-        val kit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), charlie.id)
+        val kit = medKitFixture.createNew(alice.id)
+        medKitFixture.joinMedKitByKey(medKitFixture.generateMedKitShareKey(kit.id, alice.id), bob.id)
+        medKitFixture.joinMedKitByKey(medKitFixture.generateMedKitShareKey(kit.id, alice.id), charlie.id)
 
         val drug = dbHelper.freshDrug(kit, 90.0)
         dbHelper.flushAndClear()
@@ -290,8 +290,8 @@ class PlannedQuantityTrackingTests {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
 
-        val kit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
+        val kit = medKitFixture.createNew(alice.id)
+        medKitFixture.joinMedKitByKey(medKitFixture.generateMedKitShareKey(kit.id, alice.id), bob.id)
 
         val drug = dbHelper.freshDrug(kit, 120.0)
         dbHelper.flushAndClear()

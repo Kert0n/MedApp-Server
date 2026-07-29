@@ -1,6 +1,7 @@
 package org.kert0n.medappserver.services.models
 
 import org.kert0n.medappserver.db.model.Drug
+import org.kert0n.medappserver.db.model.Using
 import org.kert0n.medappserver.db.repository.MedKitSummary
 import java.math.BigDecimal
 import java.util.UUID
@@ -53,6 +54,9 @@ fun Drug.toView(): DrugView = DrugView(
     description = description,
     medKitId = medKit.id
 )
+
+fun Using.toView(): TreatmentPlanView =
+    TreatmentPlanView(usingKey.userId, usingKey.drugId, plannedAmount)
 
 fun MedKitSummary.toView(): MedKitSummaryView =
     MedKitSummaryView(id, userCount, drugCount)
