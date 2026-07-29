@@ -1,3 +1,6 @@
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+
 plugins {
     kotlin("jvm") version "2.2.21"
     kotlin("plugin.spring") version "2.2.21"
@@ -143,17 +146,38 @@ tasks.named<Test>("queryPlanTest") {
             val table = buildString {
                 appendLine("## Test tasks")
                 appendLine()
-                appendLine("| Набор | Всего | Успешно | Пропущено | Ошибки | Время, с |")
-                appendLine("|---|---:|---:|---:|---:|---:|")
+                appendLine("| Набор | Команда | Всего | Успешно | Пропущено | Ошибки | Время, с | Отчёт |")
+                appendLine("|---|---|---:|---:|---:|---:|---:|---|")
                 summaries.forEach { row ->
                     appendLine(
-                        "| ${row.name} | ${row.total} | " +
+                        "| ${row.name} | `./gradlew ${row.name} --no-daemon` | ${row.total} | " +
                             "${row.total - row.skipped - row.failed} | ${row.skipped} | " +
-                            "${row.failed} | ${"%.3f".format(row.seconds)} |"
+                            "${row.failed} | ${"%.3f".format(row.seconds)} | " +
+                            "`build/reports/tests/${row.name}` |"
                     )
                 }
             }
             report.writeText(report.readText().substringBefore("## Test tasks") + table)
+        }
+        val jsonReport = layout.buildDirectory.file(
+            "reports/query-plans/database-query-report.json"
+        ).get().asFile
+        if (jsonReport.isFile) {
+            @Suppress("UNCHECKED_CAST")
+            val root = JsonSlurper().parse(jsonReport) as MutableMap<String, Any?>
+            root["testTasks"] = summaries.map { row ->
+                linkedMapOf(
+                    "name" to row.name,
+                    "command" to "./gradlew ${row.name} --no-daemon",
+                    "total" to row.total,
+                    "successful" to row.total - row.skipped - row.failed,
+                    "skipped" to row.skipped,
+                    "errors" to row.failed,
+                    "seconds" to row.seconds,
+                    "report" to "build/reports/tests/${row.name}"
+                )
+            }
+            jsonReport.writeText(JsonOutput.prettyPrint(JsonOutput.toJson(root)))
         }
     }
 }

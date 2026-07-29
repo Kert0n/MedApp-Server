@@ -105,9 +105,8 @@ class QueryPlanTest {
         val executed = capture(scenario)
         val plans = executed.filter { it.isSelect }
             .distinctBy { it.fingerprint }
-            .mapNotNull { statement ->
-                explain(explainConnection, objectMapper, statement, forceIndexes)
-                    ?.let { statement.sql to it }
+            .map { statement ->
+                statement.sql to explain(explainConnection, objectMapper, statement, forceIndexes)
             }
         println("\n=== $name: операторов ${executed.size}, разобрано планов ${plans.size} ===")
         executed.groupingBy { it.sql }.eachCount()
@@ -196,11 +195,12 @@ class QueryPlanTest {
     private fun assertNoSql(name: String, scenario: () -> Unit) {
         val statements = RecordingDataSource.capture(scenario)
         assertTrue(statements.isEmpty(), "$name должен выполняться без SQL:\n${statements.diagnostic()}")
+        val qualifiedName = name.substringBefore(' ')
         report.record(
             QueryMeasurement(
-                owner = name.substringBefore('.'),
-                method = name.substringAfter('.', name),
-                branch = "zero-sql",
+                owner = qualifiedName.substringBefore('.'),
+                method = qualifiedName.substringAfter('.', qualifiedName),
+                branch = name.substringAfter(' ', "zero-sql"),
                 size = null,
                 result = "0 SQL подтверждено",
                 statements = emptyList(),
@@ -227,7 +227,13 @@ class QueryPlanTest {
                 size = size,
                 result = result,
                 statements = statements,
-                plans = explainStatements(statements, forceIndexes).map { it.second },
+                naturalPlans = explainStatements(statements).map { it.second },
+                forcedPlans = if (forceIndexes) {
+                    explainStatements(statements.filter(ExecutedStatement::isSelect), true)
+                        .map { it.second }
+                } else {
+                    emptyList()
+                },
                 complexity = complexity
             )
         )
@@ -237,9 +243,8 @@ class QueryPlanTest {
         statements: List<ExecutedStatement>,
         forceIndexes: Boolean = false
     ): List<Pair<String, QueryPlan>> =
-        statements.distinctBy { it.fingerprint }.mapNotNull { statement ->
-            explain(explainConnection, objectMapper, statement, forceIndexes)
-                ?.let { statement.sql to it }
+        statements.distinctBy { it.fingerprint }.map { statement ->
+            statement.sql to explain(explainConnection, objectMapper, statement, forceIndexes)
         }
 
     private fun scalarLong(sql: String): Long =
@@ -689,14 +694,16 @@ class QueryPlanTest {
             assertTrue(vidalDrugService.fuzzySearch("   ", 10).isEmpty())
         }
 
-        listOf(1, 50).forEach { limit ->
+        listOf(1, 10, 50).forEach { limit ->
             val statements = capture {
                 val result = vidalDrugService.fuzzySearch("таблетки", limit)
                 assertEquals(limit, result.size)
             }
             assertEquals(3, statements.size, "catalogue limit=$limit")
             record(
-                "VidalDrugService", "fuzzySearch", "непустой поиск", limit,
+                "VidalDrugService", "fuzzySearch",
+                if (limit == 1) "один результат" else "непустой поиск",
+                limit,
                 "$limit результатов", statements
             )
         }

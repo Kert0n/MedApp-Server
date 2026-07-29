@@ -86,12 +86,14 @@ fun explain(
     objectMapper: ObjectMapper,
     statement: ExecutedStatement,
     forceIndexes: Boolean = false
-): QueryPlan? {
+): QueryPlan {
     var filled = statement.sql
     statement.parameters.forEach { value ->
         filled = filled.replaceFirst("?", literal(value))
     }
-    if ("?" in filled) return null
+    check("?" !in filled) {
+        "Не все параметры подставлены для EXPLAIN: ${statement.diagnostic()}"
+    }
 
     val json = connection.createStatement().use { jdbc ->
         try {
@@ -112,7 +114,8 @@ fun explain(
     }
 
     val parsed = objectMapper.readValue(json, List::class.java)
-    val plan = (parsed.firstOrNull() as? Map<*, *>)?.get("Plan") as? Map<*, *> ?: return null
+    val plan = (parsed.firstOrNull() as? Map<*, *>)?.get("Plan") as? Map<*, *>
+        ?: error("EXPLAIN вернул JSON без Plan для ${statement.fingerprint}")
     return QueryPlan(plan)
 }
 
