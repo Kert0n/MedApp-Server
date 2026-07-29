@@ -771,6 +771,84 @@ class QueryPlanTest {
     }
 
     @Test
+    fun `read сервисы сохраняют форму на дополнительных размерах и ветках`() {
+        listOf(0, 10, 100).forEach { planCount ->
+            val command = fixture.createDrugFixture(planCount)
+            val statements = capture {
+                assertEquals(
+                    command.drugId,
+                    drugService.getAccessible(command.ownerId, command.drugId).id
+                )
+            }
+            assertEquals(1, statements.size)
+            record(
+                "DrugService", "getAccessible", "масштаб планов", planCount,
+                "один DrugView", statements
+            )
+        }
+
+        fixture.snapshotUsers.forEach { (kitCount, userId) ->
+            val statements = capture {
+                assertEquals(kitCount, medKitQueries.listForUser(userId).size)
+            }
+            assertEquals(1, statements.size)
+            record(
+                "MedKitQueryService", "listForUser", "масштаб summary", kitCount,
+                "$kitCount summary", statements
+            )
+        }
+
+        val noMatches = capture {
+            assertTrue(
+                vidalDrugService.fuzzySearch("no-match-${UUID.randomUUID()}", 50).isEmpty()
+            )
+        }
+        assertEquals(1, noMatches.size)
+        record(
+            "VidalDrugService", "fuzzySearch", "совпадений нет", 0,
+            "только основной SELECT", noMatches
+        )
+
+        val nullableFound = capture {
+            assertEquals(
+                fixture.catalogueId,
+                vidalDrugService.findByIdOrNull(fixture.catalogueId)?.id
+            )
+        }
+        record(
+            "VidalDrugService", "findByIdOrNull", "существующий шаблон", 1,
+            "шаблон найден", nullableFound
+        )
+
+        val (missingRequired, _) = captureFailure(ResponseStatusException::class.java) {
+            vidalDrugService.findById(UUID.randomUUID())
+        }
+        record(
+            "VidalDrugService", "findById", "шаблон отсутствует", 0,
+            "404 после PK SELECT", missingRequired
+        )
+
+        val foundUser = capture {
+            assertEquals(fixture.ownerId, userService.findById(fixture.ownerId).id)
+        }
+        record(
+            "UserService", "findById", "пользователь найден", 1,
+            "User", foundUser
+        )
+
+        val missingLogin = UUID.randomUUID()
+        val statements = RecordingDataSource.capture {
+            assertFailsWith<org.springframework.security.core.userdetails.UsernameNotFoundException> {
+                userService.loadUserByUsername(missingLogin.toString())
+            }
+        }
+        record(
+            "UserService", "loadUserByUsername", "UUID отсутствует", 0,
+            "UsernameNotFound после PK SELECT", statements
+        )
+    }
+
+    @Test
     fun `UserService имеет явные SQL и zero SQL ветки`() {
         val loaded = capture {
             assertEquals(fixture.ownerId, userService.loadUserByUsername(fixture.ownerId.toString()).username.let(UUID::fromString))
@@ -906,6 +984,60 @@ class QueryPlanTest {
     }
 
     @Test
+    fun `Drug команды записывают SQL веток доступа и отказа`() {
+        val inaccessibleKit = fixture.createMedKitFixture(0, 0, additionalMember = false)
+        val (createDenied, _) = captureFailure(ResponseStatusException::class.java) {
+            drugCommands.create(
+                fixture.emptyUserId,
+                inaccessibleKit.medKitId,
+                DrugCreation("denied", BigDecimal.TEN, "таб")
+            )
+        }
+        record(
+            "DrugCommandService", "create", "аптечка недоступна", 0,
+            "404, INSERT отсутствует", createDenied
+        )
+
+        val (patchMissing, _) = captureFailure(ResponseStatusException::class.java) {
+            drugCommands.patch(fixture.emptyUserId, UUID.randomUUID(), DrugPatch(name = "x"))
+        }
+        record(
+            "DrugCommandService", "patch", "Drug отсутствует", 0,
+            "404 после lock SELECT", patchMissing
+        )
+
+        val consumeFixture = fixture.createDrugFixture(0)
+        val (overStock, _) = captureFailure(ResponseStatusException::class.java) {
+            drugCommands.consume(
+                consumeFixture.ownerId,
+                consumeFixture.drugId,
+                BigDecimal.valueOf(11)
+            )
+        }
+        record(
+            "DrugCommandService", "consume", "превышение остатка", 0,
+            "rollback после lock SELECT", overStock
+        )
+
+        val moveFixture = fixture.createDrugFixture(0)
+        val (targetMissing, _) = captureFailure(ResponseStatusException::class.java) {
+            drugCommands.move(moveFixture.ownerId, moveFixture.drugId, UUID.randomUUID())
+        }
+        record(
+            "DrugCommandService", "move", "цель недоступна", 0,
+            "2 SELECT, DML отсутствует", targetMissing
+        )
+
+        val (deleteMissing, _) = captureFailure(ResponseStatusException::class.java) {
+            drugCommands.delete(fixture.emptyUserId, UUID.randomUUID())
+        }
+        record(
+            "DrugCommandService", "delete", "Drug отсутствует", 0,
+            "404 после lock SELECT", deleteMissing
+        )
+    }
+
+    @Test
     fun `TreatmentPlan команды покрывают жизненный цикл плана`() {
         captureNoSqlFailure("TreatmentPlanService.create non-positive") {
             treatmentPlans.create(fixture.emptyUserId, UUID.randomUUID(), BigDecimal.ZERO)
@@ -1018,6 +1150,88 @@ class QueryPlanTest {
     }
 
     @Test
+    fun `TreatmentPlan команды записывают SQL отказов`() {
+        val inaccessible = fixture.createDrugFixture(0)
+        val (accessDenied, _) = captureFailure(ResponseStatusException::class.java) {
+            treatmentPlans.create(fixture.emptyUserId, inaccessible.drugId, BigDecimal.ONE)
+        }
+        record(
+            "TreatmentPlanService", "create", "Drug недоступен", 0,
+            "404 после lock SELECT", accessDenied
+        )
+
+        val insufficientFixture = fixture.createDrugFixture(0)
+        val (insufficientCreate, _) = captureFailure(ResponseStatusException::class.java) {
+            treatmentPlans.create(
+                insufficientFixture.ownerId,
+                insufficientFixture.drugId,
+                BigDecimal.valueOf(11)
+            )
+        }
+        record(
+            "TreatmentPlanService", "create", "недостаточно остатка", 0,
+            "2 SELECT, INSERT отсутствует", insufficientCreate
+        )
+
+        val missingPlanFixture = fixture.createDrugFixture(0)
+        val (missingPatch, _) = captureFailure(ResponseStatusException::class.java) {
+            treatmentPlans.patch(
+                missingPlanFixture.ownerId,
+                missingPlanFixture.drugId,
+                BigDecimal.ONE
+            )
+        }
+        record(
+            "TreatmentPlanService", "patch", "план отсутствует", 0,
+            "2 SELECT, UPDATE отсутствует", missingPatch
+        )
+
+        val insufficientPatchFixture = fixture.createDrugFixture(0)
+        tx.executeWithoutResult {
+            treatmentPlans.create(
+                insufficientPatchFixture.ownerId,
+                insufficientPatchFixture.drugId,
+                BigDecimal.valueOf(5)
+            )
+        }
+        val (insufficientPatch, _) = captureFailure(ResponseStatusException::class.java) {
+            treatmentPlans.patch(
+                insufficientPatchFixture.ownerId,
+                insufficientPatchFixture.drugId,
+                BigDecimal.valueOf(11)
+            )
+        }
+        record(
+            "TreatmentPlanService", "patch", "недостаточно остатка", 1,
+            "2 SELECT, UPDATE отсутствует", insufficientPatch
+        )
+
+        val (deleteMissing, _) = captureFailure(ResponseStatusException::class.java) {
+            treatmentPlans.delete(fixture.emptyUserId, UUID.randomUUID())
+        }
+        record(
+            "TreatmentPlanService", "delete", "план отсутствует", 0,
+            "404 после адресного SELECT", deleteMissing
+        )
+
+        val intakeFixture = fixture.createDrugFixture(0)
+        tx.executeWithoutResult {
+            treatmentPlans.create(intakeFixture.ownerId, intakeFixture.drugId, BigDecimal.valueOf(5))
+        }
+        val (overPlan, _) = captureFailure(ResponseStatusException::class.java) {
+            treatmentPlans.applyIntake(
+                intakeFixture.ownerId,
+                intakeFixture.drugId,
+                BigDecimal.valueOf(6)
+            )
+        }
+        record(
+            "TreatmentPlanService", "applyIntake", "превышение плана", 1,
+            "2 SELECT, DML отсутствует", overPlan
+        )
+    }
+
+    @Test
     fun `IntakeService различает cache miss hit и conflict`() {
         intakeResultsCache.invalidateAll()
         val command = fixture.createDrugFixture(0)
@@ -1057,6 +1271,56 @@ class QueryPlanTest {
     }
 
     @Test
+    fun `IntakeService отражает удаление плана и Drug`() {
+        intakeResultsCache.invalidateAll()
+        val zeroPlanFixture = fixture.createDrugFixture(0)
+        tx.executeWithoutResult {
+            treatmentPlans.create(
+                zeroPlanFixture.ownerId,
+                zeroPlanFixture.drugId,
+                BigDecimal.ONE
+            )
+        }
+        val zeroPlan = captureWrite {
+            assertNull(
+                intakeService.record(
+                    zeroPlanFixture.ownerId,
+                    zeroPlanFixture.drugId,
+                    BigDecimal.ONE,
+                    UUID.randomUUID()
+                ).plan
+            )
+        }
+        record(
+            "IntakeService", "record", "план обнулён", 1,
+            "Using удалён, Drug обновлён", zeroPlan
+        )
+
+        val exhaustFixture = fixture.createDrugFixture(0)
+        tx.executeWithoutResult {
+            treatmentPlans.create(
+                exhaustFixture.ownerId,
+                exhaustFixture.drugId,
+                BigDecimal.TEN
+            )
+        }
+        val exhausted = captureWrite {
+            assertNull(
+                intakeService.record(
+                    exhaustFixture.ownerId,
+                    exhaustFixture.drugId,
+                    BigDecimal.TEN,
+                    UUID.randomUUID()
+                ).plan
+            )
+        }
+        record(
+            "IntakeService", "record", "Drug исчерпан", 1,
+            "Drug и Using удалены каскадом", exhausted
+        )
+    }
+
+    @Test
     fun `MedKit lifecycle покрывает создание приглашение и join`() {
         val userId = fixture.createUser("lifecycle-create")
         val created = captureWrite {
@@ -1089,6 +1353,78 @@ class QueryPlanTest {
         captureNoSqlFailure("MedKitLifecycleService.join expired-key") {
             medKitLifecycle.join(joiningUser, "missing-${UUID.randomUUID()}")
         }
+    }
+
+    @Test
+    fun `MedKit lifecycle записывает SQL отказов`() {
+        val (createMissing, _) = captureFailure(ResponseStatusException::class.java) {
+            medKitLifecycle.create(UUID.randomUUID())
+        }
+        record(
+            "MedKitLifecycleService", "create", "пользователь отсутствует", 0,
+            "1 SELECT, INSERT отсутствует", createMissing
+        )
+
+        val command = fixture.createMedKitFixture(1, 0, additionalMember = false)
+        val (invitationDenied, _) = captureFailure(ResponseStatusException::class.java) {
+            medKitLifecycle.createInvitation(fixture.emptyUserId, command.medKitId)
+        }
+        record(
+            "MedKitLifecycleService", "createInvitation", "нет доступа", 0,
+            "404 после access SELECT", invitationDenied
+        )
+
+        val ownerKey = medKitLifecycle.createInvitation(command.ownerId, command.medKitId)
+        val (alreadyMember, _) = captureFailure(ResponseStatusException::class.java) {
+            medKitLifecycle.join(command.ownerId, ownerKey)
+        }
+        record(
+            "MedKitLifecycleService", "join", "уже участник", 1,
+            "409 после access SELECT", alreadyMember
+        )
+
+        val missingUserKey = medKitLifecycle.createInvitation(command.ownerId, command.medKitId)
+        val (missingUser, _) = captureFailure(ResponseStatusException::class.java) {
+            medKitLifecycle.join(UUID.randomUUID(), missingUserKey)
+        }
+        record(
+            "MedKitLifecycleService", "join", "пользователь отсутствует", 0,
+            "lookup аптечки и пользователя", missingUser
+        )
+
+        val (leaveDenied, _) = captureFailure(ResponseStatusException::class.java) {
+            medKitLifecycle.leave(fixture.emptyUserId, command.medKitId)
+        }
+        record(
+            "MedKitLifecycleService", "leave", "нет доступа", 0,
+            "404 после lock SELECT", leaveDenied
+        )
+
+        val sameTarget = fixture.createMedKitFixture(1, 0, additionalMember = false)
+        val (sameDelete, _) = captureFailure(ResponseStatusException::class.java) {
+            medKitLifecycle.delete(
+                sameTarget.ownerId,
+                sameTarget.medKitId,
+                sameTarget.medKitId
+            )
+        }
+        record(
+            "MedKitLifecycleService", "delete", "цель совпадает", 1,
+            "аптечка и Drug заблокированы, DML отсутствует", sameDelete
+        )
+
+        val missingTarget = fixture.createMedKitFixture(1, 0, additionalMember = false)
+        val (targetDenied, _) = captureFailure(ResponseStatusException::class.java) {
+            medKitLifecycle.delete(
+                missingTarget.ownerId,
+                missingTarget.medKitId,
+                UUID.randomUUID()
+            )
+        }
+        record(
+            "MedKitLifecycleService", "delete", "цель недоступна", 1,
+            "3 SELECT, DML отсутствует", targetDenied
+        )
     }
 
     @Test
