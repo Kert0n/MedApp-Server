@@ -1,30 +1,48 @@
 package org.kert0n.medappserver.queryplan
 
+import com.sksamuel.aedile.core.Cache
 import jakarta.persistence.EntityManager
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
+import org.kert0n.medappserver.services.models.DrugCreation
+import org.kert0n.medappserver.services.models.DrugPatch
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.UsingService
+import org.kert0n.medappserver.services.models.UserService
 import org.kert0n.medappserver.services.models.VidalDrugService
+import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.UsingRepository
 import org.kert0n.medappserver.services.orchestrators.DrugCommandService
+import org.kert0n.medappserver.services.orchestrators.IntakeOutcome
+import org.kert0n.medappserver.services.orchestrators.IntakeService
 import org.kert0n.medappserver.services.orchestrators.MedKitLifecycleService
 import org.kert0n.medappserver.services.orchestrators.MedKitQueryService
+import org.kert0n.medappserver.services.orchestrators.PlanReconciler
+import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
+import org.kert0n.medappserver.services.security.SecurityService
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
+import org.springframework.http.HttpStatus
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.support.TransactionTemplate
+import org.springframework.web.server.ResponseStatusException
 import org.testcontainers.postgresql.PostgreSQLContainer
 import tools.jackson.databind.ObjectMapper
 import java.sql.Connection
 import java.math.BigDecimal
+import java.lang.reflect.Modifier
 import java.nio.file.Path
+import java.util.UUID
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -48,8 +66,14 @@ class QueryPlanTest {
     @Autowired private lateinit var usingService: UsingService
     @Autowired private lateinit var medKitQueries: MedKitQueryService
     @Autowired private lateinit var drugCommands: DrugCommandService
+    @Autowired private lateinit var treatmentPlans: TreatmentPlanService
+    @Autowired private lateinit var intakeService: IntakeService
     @Autowired private lateinit var medKitLifecycle: MedKitLifecycleService
     @Autowired private lateinit var vidalDrugService: VidalDrugService
+    @Autowired private lateinit var userService: UserService
+    @Autowired private lateinit var securityService: SecurityService
+    @Autowired @Qualifier("intakeResultsCache")
+    private lateinit var intakeResultsCache: Cache<String, IntakeOutcome>
     @Autowired private lateinit var entityManager: EntityManager
 
     @Autowired private lateinit var container: PostgreSQLContainer
@@ -122,6 +146,53 @@ class QueryPlanTest {
             }
         }.also { it.queryShape() }
 
+    private fun <T : Throwable> captureFailure(
+        expected: Class<T>,
+        scenario: () -> Unit
+    ): Pair<List<ExecutedStatement>, T> {
+        lateinit var failure: Throwable
+        val statements = RecordingDataSource.capture {
+            try {
+                tx.executeWithoutResult {
+                    entityManager.clear()
+                    scenario()
+                    entityManager.flush()
+                }
+                error("Ожидалось ${expected.simpleName}")
+            } catch (error: Throwable) {
+                failure = error
+            } finally {
+                entityManager.clear()
+            }
+        }
+        assertTrue(
+            expected.isInstance(failure),
+            "Ожидалось ${expected.name}, получено ${failure::class.java.name}: ${failure.message}"
+        )
+        @Suppress("UNCHECKED_CAST")
+        return statements to failure as T
+    }
+
+    private fun captureNoSqlFailure(name: String, scenario: () -> Unit) {
+        var failure: Throwable? = null
+        val statements = RecordingDataSource.capture {
+            failure = runCatching(scenario).exceptionOrNull()
+        }
+        assertNotNull(failure, "$name должен завершиться ошибкой")
+        assertTrue(statements.isEmpty(), "$name должен выполняться без SQL:\n${statements.diagnostic()}")
+        report.record(
+            QueryMeasurement(
+                owner = name.substringBefore('.'),
+                method = name.substringAfter('.').substringBefore(' '),
+                branch = name.substringAfter(' ', "failure"),
+                size = null,
+                result = "ошибка до обращения к БД",
+                statements = emptyList(),
+                complexity = "0 SQL"
+            )
+        )
+    }
+
     private fun assertNoSql(name: String, scenario: () -> Unit) {
         val statements = RecordingDataSource.capture(scenario)
         assertTrue(statements.isEmpty(), "$name должен выполняться без SQL:\n${statements.diagnostic()}")
@@ -185,8 +256,9 @@ class QueryPlanTest {
         name: String,
         scenarios: Map<Int, () -> Unit>,
         expected: Map<SqlKind, Int>
-    ) {
-        val measured = scenarios.mapValues { (_, scenario) -> capture(scenario).queryShape() }
+    ): Map<Int, List<ExecutedStatement>> {
+        val statements = scenarios.mapValues { (_, scenario) -> capture(scenario) }
+        val measured = statements.mapValues { it.value.queryShape() }
         println("\n=== $name ===")
         measured.forEach { (size, shape) -> println("  размер $size: ${shape.byKind}") }
 
@@ -200,6 +272,7 @@ class QueryPlanTest {
             fingerprints.distinct().size == 1,
             "$name меняет форму SQL с размером данных:\n$measured"
         )
+        return statements
     }
 
     private fun assertNoSeqScanOn(table: String, plans: List<Pair<String, QueryPlan>>) {
@@ -224,12 +297,16 @@ class QueryPlanTest {
             used.any { it.startsWith("ix_parsed_drugs_") },
             "поиск обязан уметь задействовать индексы каталога, а использованы: $used"
         )
+        record(
+            "VidalDrugService", "fuzzySearch", "10 результатов", 10,
+            "3 оператора, индексный поиск", executed
+        )
     }
 
     /** Snapshot имеет одинаковый SQL-бюджет при любом числе аптечек. */
     @Test
     fun `выдача пользователю не делает запрос на каждую аптечку`() {
-        assertConstantQueryShape(
+        val measured = assertConstantQueryShape(
             name = "GET /v1/users/me",
             scenarios = fixture.snapshotUsers.mapValues { (_, userId) ->
                 {
@@ -242,6 +319,12 @@ class QueryPlanTest {
             },
             expected = mapOf(SqlKind.SELECT to 2)
         )
+        measured.forEach { (size, statements) ->
+            record(
+                "MedKitQueryService", "getUserSnapshot", "snapshot", size,
+                "$size аптечек", statements
+            )
+        }
     }
 
     /** Snapshot допускает индексный доступ к препаратам и планам. */
@@ -261,7 +344,7 @@ class QueryPlanTest {
     /** Список планов читается одним оператором независимо от размера результата. */
     @Test
     fun `список планов пользователя не делает запрос на каждый план`() {
-        assertConstantQueryShape(
+        val measured = assertConstantQueryShape(
             name = "GET /v1/treatment-plans",
             scenarios = fixture.planUsers.mapValues { (plans, userId) ->
                 {
@@ -271,6 +354,12 @@ class QueryPlanTest {
             },
             expected = mapOf(SqlKind.SELECT to 1)
         )
+        measured.forEach { (size, statements) ->
+            record(
+                "UsingService", "listForUser", "список", size,
+                "$size планов", statements
+            )
+        }
     }
 
     @Test
@@ -292,11 +381,15 @@ class QueryPlanTest {
         assertEquals(mapOf(SqlKind.SELECT to 1), executed.queryShape().byKind)
         val plans = explainStatements(executed, forceIndexes = true)
         assertNoSeqScanOn("usings", plans)
+        record(
+            "UsingService", "getForUser", "существующий план", 1,
+            "план найден", executed
+        )
     }
 
     @Test
     fun `содержимое аптечки имеет два SELECT при любом размере`() {
-        assertConstantQueryShape(
+        val measured = assertConstantQueryShape(
             name = "GET /v1/med-kits/{id}",
             scenarios = fixture.contentMedKits.mapValues { (size, ids) ->
                 {
@@ -306,6 +399,12 @@ class QueryPlanTest {
             },
             expected = mapOf(SqlKind.SELECT to 2)
         )
+        measured.forEach { (size, statements) ->
+            record(
+                "MedKitQueryService", "getContent", "доступная аптечка", size,
+                "$size препаратов", statements
+            )
+        }
         val ids = fixture.contentMedKits.getValue(100)
         val plans = plansOf("GET /v1/med-kits/{id}", forceIndexes = true) {
             medKitQueries.getContent(ids.first, ids.second)
@@ -324,6 +423,10 @@ class QueryPlanTest {
         val plans = explainStatements(executed, forceIndexes = true)
         assertNoSeqScanOn("user_drugs", plans)
         assertNoSeqScanOn("user_med_kits", plans)
+        record(
+            "DrugService", "getAccessible", "доступный препарат", 1,
+            "DrugView", executed
+        )
     }
 
     @Test
@@ -373,6 +476,10 @@ class QueryPlanTest {
             assertEquals(3, shape.count(SqlKind.SELECT), "move, $size plans")
             assertEquals(1, shape.count(SqlKind.DELETE), "move, $size plans")
             assertEquals(1, shape.count(SqlKind.UPDATE), "move, $size plans")
+            record(
+                "DrugCommandService", "move", "bulk перенос", size,
+                "перенесён, лишние планы удалены", statements
+            )
         }
         assertEquals(
             measured.getValue(1).map { it.fingerprint }.toSet(),
@@ -389,13 +496,18 @@ class QueryPlanTest {
     fun `удаление препарата не зависит от числа планов`() {
         listOf(1, 100).forEach { planCount ->
             val command = fixture.createDrugFixture(planCount)
-            val shape = captureWrite {
+            val statements = captureWrite {
                 drugCommands.delete(command.ownerId, command.drugId)
-            }.queryShape()
+            }
+            val shape = statements.queryShape()
             assertEquals(1, shape.count(SqlKind.SELECT), "delete, $planCount plans")
             assertEquals(1, shape.count(SqlKind.DELETE), "delete, $planCount plans")
             assertEquals(0, scalarLong("SELECT count(*) FROM user_drugs WHERE id = '${command.drugId}'"))
             assertEquals(0, scalarLong("SELECT count(*) FROM usings WHERE drug_id = '${command.drugId}'"))
+            record(
+                "DrugCommandService", "delete", "каскадное удаление", planCount,
+                "Drug и планы удалены", statements
+            )
         }
     }
 
@@ -425,6 +537,10 @@ class QueryPlanTest {
             val shape = statements.queryShape()
             assertEquals(2, shape.count(SqlKind.SELECT), "reconcile, $plans plans")
             assertEquals(plans + 1, shape.count(SqlKind.UPDATE), "reconcile, $plans plans")
+            record(
+                "DrugCommandService", "consume", "reconciliation", plans,
+                "$plans планов согласовано", statements, complexity = "Θ(n) Using UPDATE"
+            )
         }
         assertEquals(
             18,
@@ -445,11 +561,15 @@ class QueryPlanTest {
         val shapes = listOf(1, 100).associateWith { planCount ->
             val command = fixture.createDrugFixture(planCount)
             val stock = BigDecimal.valueOf(maxOf(planCount, 1) * 10L)
-            val shape = captureWrite {
+            val statements = captureWrite {
                 drugCommands.consume(command.ownerId, command.drugId, stock)
-            }.queryShape()
+            }
             assertEquals(0, scalarLong("SELECT count(*) FROM usings WHERE drug_id = '${command.drugId}'"))
-            shape
+            record(
+                "DrugCommandService", "consume", "исчерпание", planCount,
+                "Drug удалён каскадом", statements
+            )
+            statements.queryShape()
         }
         shapes.values.forEach { shape ->
             assertEquals(1, shape.count(SqlKind.SELECT))
@@ -473,6 +593,12 @@ class QueryPlanTest {
             assertEquals(3, shape.count(SqlKind.SELECT))
             assertEquals(2, shape.count(SqlKind.DELETE))
         }
+        lastLeave.forEach { (size, statements) ->
+            record(
+                "MedKitLifecycleService", "leave", "последний участник", size,
+                "аптечка удалена каскадом", statements
+            )
+        }
 
         val explicitDelete = listOf(1, 100).associateWith { size ->
             val command = fixture.createMedKitFixture(size, size, additionalMember = false)
@@ -486,6 +612,12 @@ class QueryPlanTest {
             assertEquals(2, shape.count(SqlKind.SELECT))
             assertEquals(1, shape.count(SqlKind.DELETE))
         }
+        explicitDelete.forEach { (size, statements) ->
+            record(
+                "MedKitLifecycleService", "delete", "без переноса", size,
+                "аптечка удалена каскадом", statements
+            )
+        }
 
         val nonLast = fixture.createMedKitFixture(100, 100, additionalMember = true)
         val nonLastStatements = captureWrite {
@@ -496,6 +628,10 @@ class QueryPlanTest {
         assertEquals(2, nonLastShape.count(SqlKind.DELETE))
         assertEquals(1, scalarLong("SELECT count(*) FROM med_kits WHERE id = '${nonLast.medKitId}'"))
         assertEquals(0, scalarLong("SELECT count(*) FROM usings WHERE user_id = '${nonLast.ownerId}'"))
+        record(
+            "MedKitLifecycleService", "leave", "не последний участник", 100,
+            "планы и membership удалены bulk", nonLastStatements
+        )
 
         val plans = explainStatements(
             lastLeave.getValue(100) + explicitDelete.getValue(100) + nonLastStatements,
@@ -535,6 +671,10 @@ class QueryPlanTest {
                     "WHERE d.med_kit_id = '$targetMedKitId'"
             )
         )
+        record(
+            "MedKitLifecycleService", "delete", "с переносом", 100,
+            "100 препаратов перенесено bulk", statements
+        )
 
         val plans = explainStatements(statements, forceIndexes = true)
         assertNoSeqScanOn("med_kits", plans)
@@ -544,13 +684,536 @@ class QueryPlanTest {
     }
 
     @Test
+    fun `read сервисы покрывают пустые и отсутствующие результаты`() {
+        assertNoSql("VidalDrugService.fuzzySearch blank") {
+            assertTrue(vidalDrugService.fuzzySearch("   ", 10).isEmpty())
+        }
+
+        listOf(1, 50).forEach { limit ->
+            val statements = capture {
+                val result = vidalDrugService.fuzzySearch("таблетки", limit)
+                assertEquals(limit, result.size)
+            }
+            assertEquals(3, statements.size, "catalogue limit=$limit")
+            record(
+                "VidalDrugService", "fuzzySearch", "непустой поиск", limit,
+                "$limit результатов", statements
+            )
+        }
+
+        val foundTemplate = capture {
+            assertEquals(fixture.catalogueId, vidalDrugService.findById(fixture.catalogueId).id)
+        }
+        assertEquals(1, foundTemplate.size, "адресная карточка должна загружаться одним JOIN SELECT")
+        record(
+            "VidalDrugService", "findById", "существующий шаблон", 1,
+            "шаблон найден", foundTemplate
+        )
+
+        val missingId = UUID.randomUUID()
+        val missingTemplate = capture {
+            assertNull(vidalDrugService.findByIdOrNull(missingId))
+        }
+        assertEquals(1, missingTemplate.size)
+        record(
+            "VidalDrugService", "findByIdOrNull", "отсутствующий шаблон", 0,
+            "null", missingTemplate
+        )
+
+        val emptyPlans = capture {
+            assertTrue(usingService.listForUser(fixture.emptyUserId).isEmpty())
+        }
+        record(
+            "UsingService", "listForUser", "пустой список", 0,
+            "0 планов", emptyPlans
+        )
+
+        val emptySnapshot = capture {
+            assertTrue(medKitQueries.getUserSnapshot(fixture.emptyUserId).medKits.isEmpty())
+        }
+        assertEquals(1, emptySnapshot.queryShape().count(SqlKind.SELECT))
+        record(
+            "MedKitQueryService", "getUserSnapshot", "нет аптечек", 0,
+            "ранний выход после 1 SELECT", emptySnapshot
+        )
+
+        val emptySummary = capture {
+            assertTrue(medKitQueries.listForUser(fixture.emptyUserId).isEmpty())
+        }
+        record(
+            "MedKitQueryService", "listForUser", "нет аптечек", 0,
+            "0 summary", emptySummary
+        )
+
+        val (missingPlan, _) = captureFailure(ResponseStatusException::class.java) {
+            usingService.getForUser(fixture.emptyUserId, UUID.randomUUID())
+        }
+        record(
+            "UsingService", "getForUser", "план отсутствует", 0,
+            "404 после адресного SELECT", missingPlan
+        )
+
+        val (missingDrug, _) = captureFailure(ResponseStatusException::class.java) {
+            drugService.getAccessible(fixture.emptyUserId, UUID.randomUUID())
+        }
+        record(
+            "DrugService", "getAccessible", "Drug отсутствует", 0,
+            "404 после access SELECT", missingDrug
+        )
+
+        val (missingKit, _) = captureFailure(ResponseStatusException::class.java) {
+            medKitQueries.getContent(fixture.emptyUserId, UUID.randomUUID())
+        }
+        record(
+            "MedKitQueryService", "getContent", "аптечка недоступна", 0,
+            "404 без загрузки Drug", missingKit
+        )
+    }
+
+    @Test
+    fun `UserService имеет явные SQL и zero SQL ветки`() {
+        val loaded = capture {
+            assertEquals(fixture.ownerId, userService.loadUserByUsername(fixture.ownerId.toString()).username.let(UUID::fromString))
+        }
+        record(
+            "UserService", "loadUserByUsername", "существующий UUID", 1,
+            "UserDetails", loaded
+        )
+
+        captureNoSqlFailure("UserService.loadUserByUsername malformed") {
+            userService.loadUserByUsername("not-a-uuid")
+        }
+
+        val missingId = UUID.randomUUID()
+        val (missing, _) = captureFailure(ResponseStatusException::class.java) {
+            userService.findById(missingId)
+        }
+        record(
+            "UserService", "findById", "пользователь отсутствует", 0,
+            "404 после PK SELECT", missing
+        )
+
+        val ip = "query-plan-${UUID.randomUUID()}"
+        val registered = captureWrite {
+            assertNotNull(userService.registerNewUser(ip).login)
+        }
+        assertEquals(1, registered.queryShape().count(SqlKind.INSERT))
+        record(
+            "UserService", "registerNewUser", "успешная регистрация", 1,
+            "User INSERT", registered
+        )
+        captureNoSqlFailure("UserService.registerNewUser rate-limit") {
+            userService.registerNewUser(ip)
+        }
+    }
+
+    @Test
+    fun `Drug команды покрывают no-op ошибки и обычные записи`() {
+        captureNoSqlFailure("DrugCommandService.create non-positive") {
+            drugCommands.create(
+                fixture.emptyUserId,
+                UUID.randomUUID(),
+                DrugCreation("invalid", BigDecimal.ZERO, "таб")
+            )
+        }
+        captureNoSqlFailure("DrugCommandService.consume non-positive") {
+            drugCommands.consume(fixture.emptyUserId, UUID.randomUUID(), BigDecimal.ZERO)
+        }
+
+        val kit = fixture.createMedKitFixture(0, 0, additionalMember = false)
+        val created = captureWrite {
+            drugCommands.create(
+                kit.ownerId,
+                kit.medKitId,
+                DrugCreation("Measured", BigDecimal.TEN, "таб")
+            )
+        }
+        record(
+            "DrugCommandService", "create", "успех", 1,
+            "Drug создан", created
+        )
+
+        val noOpFixture = fixture.createDrugFixture(0)
+        val noOp = captureWrite {
+            drugCommands.patch(noOpFixture.ownerId, noOpFixture.drugId, DrugPatch())
+        }
+        assertEquals(0, noOp.queryShape().count(SqlKind.UPDATE))
+        record(
+            "DrugCommandService", "patch", "пустой PATCH", 0,
+            "только lock SELECT", noOp
+        )
+
+        val patchFixture = fixture.createDrugFixture(0)
+        val patched = captureWrite {
+            drugCommands.patch(
+                patchFixture.ownerId,
+                patchFixture.drugId,
+                DrugPatch(name = "Renamed", quantity = BigDecimal.valueOf(20))
+            )
+        }
+        assertEquals(1, patched.queryShape().count(SqlKind.UPDATE))
+        record(
+            "DrugCommandService", "patch", "изменение и увеличение", 1,
+            "один dirty-check UPDATE", patched
+        )
+
+        val invalidPatchFixture = fixture.createDrugFixture(0)
+        val (invalidPatch, error) = captureFailure(ResponseStatusException::class.java) {
+            drugCommands.patch(
+                invalidPatchFixture.ownerId,
+                invalidPatchFixture.drugId,
+                DrugPatch(quantity = BigDecimal.TEN)
+            )
+        }
+        assertEquals(HttpStatus.BAD_REQUEST, error.statusCode)
+        record(
+            "DrugCommandService", "patch", "quantity не увеличен", 0,
+            "rollback после lock", invalidPatch
+        )
+
+        val consumeFixture = fixture.createDrugFixture(0)
+        val consumed = captureWrite {
+            drugCommands.consume(consumeFixture.ownerId, consumeFixture.drugId, BigDecimal.ONE)
+        }
+        assertEquals(1, consumed.queryShape().count(SqlKind.UPDATE))
+        record(
+            "DrugCommandService", "consume", "обычное списание", 0,
+            "остаток обновлён без загрузки планов", consumed
+        )
+
+        val sameTarget = fixture.createDrugFixture(0)
+        val sameMove = captureWrite {
+            drugCommands.move(sameTarget.ownerId, sameTarget.drugId, sameTarget.sourceMedKitId)
+        }
+        assertEquals(mapOf(SqlKind.SELECT to 1), sameMove.queryShape().byKind)
+        record(
+            "DrugCommandService", "move", "та же аптечка", 0,
+            "идемпотентный ранний выход", sameMove
+        )
+
+        val mixed = fixture.createDrugFixture(100, targetMemberCount = 50)
+        val mixedMove = captureWrite {
+            drugCommands.move(mixed.ownerId, mixed.drugId, mixed.targetMedKitId)
+        }
+        assertEquals(
+            50,
+            scalarLong("SELECT count(*) FROM usings WHERE drug_id = '${mixed.drugId}'")
+        )
+        record(
+            "DrugCommandService", "move", "сохранение доступных планов", 100,
+            "50 сохранено, 50 удалено одним DELETE", mixedMove
+        )
+    }
+
+    @Test
+    fun `TreatmentPlan команды покрывают жизненный цикл плана`() {
+        captureNoSqlFailure("TreatmentPlanService.create non-positive") {
+            treatmentPlans.create(fixture.emptyUserId, UUID.randomUUID(), BigDecimal.ZERO)
+        }
+        captureNoSqlFailure("TreatmentPlanService.patch non-positive") {
+            treatmentPlans.patch(fixture.emptyUserId, UUID.randomUUID(), BigDecimal.ZERO)
+        }
+        captureNoSqlFailure("TreatmentPlanService.applyIntake non-positive") {
+            treatmentPlans.applyIntake(fixture.emptyUserId, UUID.randomUUID(), BigDecimal.ZERO)
+        }
+
+        val createFixture = fixture.createDrugFixture(0)
+        val createStatements = captureWrite {
+            treatmentPlans.create(createFixture.ownerId, createFixture.drugId, BigDecimal.valueOf(5))
+        }
+        record(
+            "TreatmentPlanService", "create", "успех", 1,
+            "Using создан", createStatements
+        )
+
+        val (duplicate, duplicateError) = captureFailure(ResponseStatusException::class.java) {
+            treatmentPlans.create(createFixture.ownerId, createFixture.drugId, BigDecimal.ONE)
+        }
+        assertEquals(HttpStatus.CONFLICT, duplicateError.statusCode)
+        record(
+            "TreatmentPlanService", "create", "дубликат", 1,
+            "409, INSERT отсутствует", duplicate
+        )
+
+        val patchFixture = fixture.createDrugFixture(0)
+        tx.executeWithoutResult {
+            treatmentPlans.create(patchFixture.ownerId, patchFixture.drugId, BigDecimal.valueOf(4))
+        }
+        val patchStatements = captureWrite {
+            treatmentPlans.patch(patchFixture.ownerId, patchFixture.drugId, BigDecimal.valueOf(6))
+        }
+        record(
+            "TreatmentPlanService", "patch", "увеличение", 1,
+            "один Using UPDATE", patchStatements
+        )
+
+        val deleteFixture = fixture.createDrugFixture(0)
+        tx.executeWithoutResult {
+            treatmentPlans.create(deleteFixture.ownerId, deleteFixture.drugId, BigDecimal.valueOf(4))
+        }
+        val deleteStatements = captureWrite {
+            treatmentPlans.delete(deleteFixture.ownerId, deleteFixture.drugId)
+        }
+        assertEquals(0, scalarLong("SELECT count(*) FROM usings WHERE drug_id = '${deleteFixture.drugId}'"))
+        record(
+            "TreatmentPlanService", "delete", "успех", 1,
+            "Using удалён", deleteStatements
+        )
+
+        val intakeFixture = fixture.createDrugFixture(0)
+        tx.executeWithoutResult {
+            treatmentPlans.create(intakeFixture.ownerId, intakeFixture.drugId, BigDecimal.valueOf(5))
+        }
+        val remaining = captureWrite {
+            assertEquals(
+                0,
+                treatmentPlans.applyIntake(
+                    intakeFixture.ownerId,
+                    intakeFixture.drugId,
+                    BigDecimal.valueOf(2)
+                )!!.plannedAmount.compareTo(BigDecimal.valueOf(3))
+            )
+        }
+        record(
+            "TreatmentPlanService", "applyIntake", "план остаётся", 1,
+            "Drug и Using обновлены", remaining
+        )
+
+        val zeroPlanFixture = fixture.createDrugFixture(0)
+        tx.executeWithoutResult {
+            treatmentPlans.create(zeroPlanFixture.ownerId, zeroPlanFixture.drugId, BigDecimal.valueOf(5))
+        }
+        val zeroPlan = captureWrite {
+            assertNull(
+                treatmentPlans.applyIntake(
+                    zeroPlanFixture.ownerId,
+                    zeroPlanFixture.drugId,
+                    BigDecimal.valueOf(5)
+                )
+            )
+        }
+        record(
+            "TreatmentPlanService", "applyIntake", "план обнулён", 1,
+            "Using удалён, Drug обновлён", zeroPlan
+        )
+
+        val exhaustFixture = fixture.createDrugFixture(0)
+        tx.executeWithoutResult {
+            treatmentPlans.create(exhaustFixture.ownerId, exhaustFixture.drugId, BigDecimal.TEN)
+        }
+        val exhaust = captureWrite {
+            assertNull(
+                treatmentPlans.applyIntake(
+                    exhaustFixture.ownerId,
+                    exhaustFixture.drugId,
+                    BigDecimal.TEN
+                )
+            )
+        }
+        assertEquals(0, scalarLong("SELECT count(*) FROM user_drugs WHERE id = '${exhaustFixture.drugId}'"))
+        record(
+            "TreatmentPlanService", "applyIntake", "Drug исчерпан", 1,
+            "Drug и план удалены каскадом", exhaust
+        )
+    }
+
+    @Test
+    fun `IntakeService различает cache miss hit и conflict`() {
+        intakeResultsCache.invalidateAll()
+        val command = fixture.createDrugFixture(0)
+        tx.executeWithoutResult {
+            treatmentPlans.create(command.ownerId, command.drugId, BigDecimal.valueOf(5))
+        }
+        val intakeId = UUID.randomUUID()
+        val miss = captureWrite {
+            intakeService.record(command.ownerId, command.drugId, BigDecimal.ONE, intakeId)
+        }
+        record(
+            "IntakeService", "record", "cache miss", 1,
+            "приём применён и закеширован", miss
+        )
+        assertNoSql("IntakeService.record cache-hit") {
+            intakeService.record(command.ownerId, command.drugId, BigDecimal.ONE, intakeId)
+        }
+        captureNoSqlFailure("IntakeService.record conflict") {
+            intakeService.record(command.ownerId, command.drugId, BigDecimal.valueOf(2), intakeId)
+        }
+
+        val failedId = UUID.randomUUID()
+        val (failed, _) = captureFailure(ResponseStatusException::class.java) {
+            intakeService.record(command.ownerId, command.drugId, BigDecimal.TEN, failedId)
+        }
+        record(
+            "IntakeService", "record", "неуспешный miss", 1,
+            "результат не закеширован", failed
+        )
+        val retry = captureWrite {
+            intakeService.record(command.ownerId, command.drugId, BigDecimal.ONE, failedId)
+        }
+        record(
+            "IntakeService", "record", "retry после отказа", 1,
+            "SQL выполнен повторно и успешно", retry
+        )
+    }
+
+    @Test
+    fun `MedKit lifecycle покрывает создание приглашение и join`() {
+        val userId = fixture.createUser("lifecycle-create")
+        val created = captureWrite {
+            medKitLifecycle.create(userId)
+        }
+        record(
+            "MedKitLifecycleService", "create", "успех", 1,
+            "аптечка и membership созданы", created
+        )
+
+        val command = fixture.createMedKitFixture(0, 0, additionalMember = false)
+        lateinit var key: String
+        val invitation = capture {
+            key = medKitLifecycle.createInvitation(command.ownerId, command.medKitId)
+        }
+        record(
+            "MedKitLifecycleService", "createInvitation", "успех", 1,
+            "ключ записан только в cache", invitation
+        )
+
+        val joiningUser = fixture.createUser("joining")
+        val joined = captureWrite {
+            assertEquals(command.medKitId, medKitLifecycle.join(joiningUser, key))
+        }
+        record(
+            "MedKitLifecycleService", "join", "успех", 1,
+            "membership создан", joined
+        )
+
+        captureNoSqlFailure("MedKitLifecycleService.join expired-key") {
+            medKitLifecycle.join(joiningUser, "missing-${UUID.randomUUID()}")
+        }
+    }
+
+    @Test
+    fun `чистые сервисы имеют подтверждённый zero SQL контракт`() {
+        assertNoSql("SecurityService.generateKey") {
+            assertTrue(securityService.generateKey(16).isNotBlank())
+        }
+        assertNoSql("SecurityService.hashPassword") {
+            assertTrue(securityService.hashPassword("secret").isNotBlank())
+        }
+        val hash = securityService.hashPassword("secret")
+        assertNoSql("SecurityService.check") {
+            assertTrue(securityService.check("secret", hash))
+        }
+        assertNoSql("SecurityService.secretsMatch") {
+            assertTrue(securityService.secretsMatch("same", "same"))
+        }
+        assertNoSql("SecurityService.generateToken") {
+            assertTrue(
+                securityService.generateToken(
+                    User(fixture.ownerId, "{noop}query-plan"),
+                    termInMinutes = 1
+                ).isNotBlank()
+            )
+        }
+        val address = "zero-sql-${UUID.randomUUID()}"
+        assertNoSql("SecurityService.isLoginAllowed") {
+            assertTrue(securityService.isLoginAllowed(address))
+        }
+        assertNoSql("SecurityService.isRegistrationAllowed") {
+            assertTrue(securityService.isRegistrationAllowed(address))
+        }
+        assertNoSql("SecurityService.recordLoginAttempt") {
+            securityService.recordLoginAttempt(address)
+        }
+        assertNoSql("SecurityService.recordRegisterAttempt") {
+            securityService.recordRegisterAttempt(address)
+        }
+        assertNoSql("PlanReconciler.reconcile") {
+            val result = PlanReconciler.reconcile(
+                BigDecimal.TEN,
+                listOf(BigDecimal.TEN, BigDecimal.TEN)
+            )
+            assertEquals(0, result.fold(BigDecimal.ZERO, BigDecimal::add).compareTo(BigDecimal.TEN))
+        }
+    }
+
+    @Test
+    fun `реестр SQL сценариев перечисляет каждый публичный метод DB поверхности`() {
+        val classes = listOf(
+            DrugService::class.java,
+            UsingService::class.java,
+            VidalDrugService::class.java,
+            UserService::class.java,
+            DrugCommandService::class.java,
+            TreatmentPlanService::class.java,
+            IntakeService::class.java,
+            MedKitQueryService::class.java,
+            MedKitLifecycleService::class.java,
+            SecurityService::class.java,
+            PlanReconciler::class.java
+        )
+        val actual = classes.flatMapTo(sortedSetOf()) { type ->
+            type.declaredMethods
+                .filter { Modifier.isPublic(it.modifiers) && !it.isSynthetic && '$' !in it.name }
+                .map { "${type.simpleName}.${it.name}" }
+        }
+        assertEquals(COVERED_PUBLIC_METHODS, actual)
+    }
+
+    @Test
     fun `summary аптечек использует индексы memberships и drugs`() {
-        val plans = plansOf("GET /v1/med-kits", forceIndexes = true) {
+        val executed = capture {
             val result = medKitQueries.listForUser(fixture.ownerId)
             assertTrue(result.isNotEmpty())
         }
+        val plans = explainStatements(executed, forceIndexes = true)
         assertNoSeqScanOn("med_kits", plans)
         assertNoSeqScanOn("user_drugs", plans)
         assertNoSeqScanOn("user_med_kits", plans)
+        record(
+            "MedKitQueryService", "listForUser", "summary", fixture.ownerMedKitCount,
+            "${fixture.ownerMedKitCount} аптечек", executed
+        )
+    }
+
+    private companion object {
+        val COVERED_PUBLIC_METHODS = sortedSetOf(
+            "DrugService.getAccessible",
+            "UsingService.listForUser",
+            "UsingService.getForUser",
+            "VidalDrugService.fuzzySearch",
+            "VidalDrugService.findByIdOrNull",
+            "VidalDrugService.findById",
+            "UserService.registerNewUser",
+            "UserService.loadUserByUsername",
+            "UserService.findById",
+            "DrugCommandService.create",
+            "DrugCommandService.patch",
+            "DrugCommandService.consume",
+            "DrugCommandService.move",
+            "DrugCommandService.delete",
+            "TreatmentPlanService.create",
+            "TreatmentPlanService.patch",
+            "TreatmentPlanService.delete",
+            "TreatmentPlanService.applyIntake",
+            "IntakeService.record",
+            "MedKitQueryService.listForUser",
+            "MedKitQueryService.getContent",
+            "MedKitQueryService.getUserSnapshot",
+            "MedKitLifecycleService.create",
+            "MedKitLifecycleService.createInvitation",
+            "MedKitLifecycleService.join",
+            "MedKitLifecycleService.leave",
+            "MedKitLifecycleService.delete",
+            "SecurityService.generateKey",
+            "SecurityService.check",
+            "SecurityService.hashPassword",
+            "SecurityService.secretsMatch",
+            "SecurityService.generateToken",
+            "SecurityService.isRegistrationAllowed",
+            "SecurityService.isLoginAllowed",
+            "SecurityService.recordLoginAttempt",
+            "SecurityService.recordRegisterAttempt",
+            "PlanReconciler.reconcile"
+        )
     }
 }
