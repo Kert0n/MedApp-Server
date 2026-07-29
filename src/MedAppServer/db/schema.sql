@@ -39,7 +39,8 @@ CREATE TABLE user_med_kits
     user_id    uuid NOT NULL,
 
     CONSTRAINT user_med_kits_pkey PRIMARY KEY (med_kit_id, user_id),
-    CONSTRAINT user_med_kits_med_kit_fkey FOREIGN KEY (med_kit_id) REFERENCES med_kits (id),
+    CONSTRAINT user_med_kits_med_kit_fkey
+        FOREIGN KEY (med_kit_id) REFERENCES med_kits (id) ON DELETE CASCADE,
     CONSTRAINT user_med_kits_user_fkey FOREIGN KEY (user_id) REFERENCES users (id)
 );
 
@@ -59,7 +60,8 @@ CREATE TABLE user_drugs
     med_kit_id    uuid             NOT NULL,
 
     CONSTRAINT user_drugs_pkey PRIMARY KEY (id),
-    CONSTRAINT user_drugs_med_kit_fkey FOREIGN KEY (med_kit_id) REFERENCES med_kits (id)
+    CONSTRAINT user_drugs_med_kit_fkey
+        FOREIGN KEY (med_kit_id) REFERENCES med_kits (id) ON DELETE CASCADE
 );
 
 CREATE INDEX ix_user_drugs_name ON user_drugs (name);
@@ -75,7 +77,8 @@ CREATE TABLE usings
 
     CONSTRAINT usings_pkey PRIMARY KEY (drug_id, user_id),
     CONSTRAINT usings_user_fkey FOREIGN KEY (user_id) REFERENCES users (id),
-    CONSTRAINT usings_drug_fkey FOREIGN KEY (drug_id) REFERENCES user_drugs (id)
+    CONSTRAINT usings_drug_fkey
+        FOREIGN KEY (drug_id) REFERENCES user_drugs (id) ON DELETE CASCADE
 );
 
 CREATE INDEX ix_usings_user_id ON usings (user_id);
