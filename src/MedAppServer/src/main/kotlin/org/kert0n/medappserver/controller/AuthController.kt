@@ -6,9 +6,11 @@ import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
+import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.servlet.http.HttpServletRequest
 import org.kert0n.medappserver.api.RegisterResponse
+import org.kert0n.medappserver.config.OpenApiConfiguration
 import org.kert0n.medappserver.config.RegistrationProperties
 import org.kert0n.medappserver.services.models.UserService
 import org.kert0n.medappserver.services.security.SecurityService
@@ -73,7 +75,11 @@ class AuthController(
     @Operation(
         summary = "Issue JWT token",
         description = "Uses HTTP Basic authentication and returns a JWT access token.",
-        security = []
+        // Basic, а не пустой список. security = [] снимало глобальное требование Bearer —
+        // верно, токена здесь ещё нет, — но не ставило ничего взамен, и Swagger не показывал
+        // поля для учётных данных: описание про Basic оставалось текстом, а токен
+        // приходилось добывать в обход UI.
+        security = [SecurityRequirement(name = OpenApiConfiguration.BASIC_SCHEME)]
     )
     @ApiResponses(
         value = [
