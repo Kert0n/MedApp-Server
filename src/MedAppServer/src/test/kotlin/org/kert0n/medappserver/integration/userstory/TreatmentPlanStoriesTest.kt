@@ -16,7 +16,7 @@ import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.UsingService
-import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
+import org.kert0n.medappserver.services.orchestrators.MedKitLifecycleService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.transaction.annotation.Transactional
@@ -53,7 +53,7 @@ class TreatmentPlanStoriesTest {
     private lateinit var medKitService: MedKitService
 
     @Autowired
-    private lateinit var medKitDrugServices: MedKitDrugServices
+    private lateinit var medKitLifecycle: MedKitLifecycleService
 
     @Autowired
     private lateinit var treatmentPlanService: TreatmentPlanService
@@ -341,7 +341,7 @@ class TreatmentPlanStoriesTest {
         assertEquals(3, medkit.users.size)
 
         // Child leaves the medkit
-        medKitDrugServices.removeUserFromMedKit(familyKit.id, child.id)
+        medKitLifecycle.leave(child.id, familyKit.id)
         entityManager.flush()
         entityManager.clear()
 

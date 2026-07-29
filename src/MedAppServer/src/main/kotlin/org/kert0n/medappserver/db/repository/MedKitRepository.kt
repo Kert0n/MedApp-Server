@@ -1,8 +1,10 @@
 package org.kert0n.medappserver.db.repository
 
+import jakarta.persistence.LockModeType
 import org.kert0n.medappserver.db.model.MedKit
 import org.springframework.data.jpa.repository.EntityGraph
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Lock
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
@@ -41,6 +43,27 @@ interface MedKitRepository : JpaRepository<MedKit, UUID> {
         nativeQuery = true
     )
     fun deleteMembership(medKitId: UUID, userId: UUID): Int
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query(
+        """
+        SELECT mk FROM MedKit mk
+        WHERE mk.id = :medKitId
+          AND EXISTS (
+            SELECT member.id FROM User member
+            JOIN member.medKits memberKit
+            WHERE member.id = :userId AND memberKit.id = mk.id
+          )
+        """
+    )
+    fun findAccessibleForUpdate(medKitId: UUID, userId: UUID): MedKit?
+
+    @Query("SELECT mk.id FROM MedKit mk JOIN mk.users u WHERE u.id = :userId ORDER BY mk.id")
+    fun findIdsByUserId(userId: UUID): List<UUID>
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("DELETE FROM MedKit mk WHERE mk.id = :medKitId")
+    fun deleteLockedById(medKitId: UUID): Int
 
     @EntityGraph(attributePaths = ["drugs"])
     @Query(

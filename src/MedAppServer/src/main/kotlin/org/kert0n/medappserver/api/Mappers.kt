@@ -7,6 +7,9 @@ import org.kert0n.medappserver.db.model.parsed.VidalDrug
 import org.kert0n.medappserver.db.repository.MedKitSummary
 import org.kert0n.medappserver.services.models.DrugCreation
 import org.kert0n.medappserver.services.models.DrugPatch
+import org.kert0n.medappserver.services.models.DrugView
+import org.kert0n.medappserver.services.models.MedKitContentView
+import org.kert0n.medappserver.services.models.MedKitSummaryView
 import org.kert0n.medappserver.services.models.PlanSnapshot
 
 /**
@@ -41,6 +44,26 @@ fun Drug.toDto(): DrugDTO = DrugDTO(
     description = description,
     medKitId = medKit.id
 )
+
+fun DrugView.toDto(): DrugDTO = DrugDTO(
+    id = id,
+    name = name,
+    quantity = quantity,
+    plannedQuantity = plannedQuantity,
+    quantityUnit = quantityUnit,
+    formType = formType,
+    category = category,
+    manufacturer = manufacturer,
+    country = country,
+    description = description,
+    medKitId = medKitId
+)
+
+fun MedKitContentView.toDto(): MedKitDTO =
+    MedKitDTO(id = id, drugs = drugs.mapTo(linkedSetOf()) { it.toDto() })
+
+fun MedKitSummaryView.toDto(): MedKitSummaryDTO =
+    MedKitSummaryDTO(id, userCount, drugCount)
 
 /** План лечения в ответ. `user` и `drug` объявлены EAGER, поэтому доступны без догрузки. */
 fun Using.toDto(): UsingDTO = UsingDTO(
