@@ -22,11 +22,12 @@ data class ExecutedStatement(val sql: String, val parameters: List<Any?>) {
     val isSelect: Boolean get() = kind == SqlKind.SELECT
 
     val fingerprint: String
-        get() = sql.trim()
-            .replace(Regex("\\s+"), " ")
-            .replace(Regex("\\?(?:\\s*,\\s*\\?)+"), "?*")
-            .replace(Regex("(?i)in\\s*\\(\\s*\\?\\*?\\s*\\)"), "in (?*)")
-            .lowercase()
+        get() {
+            val compact = sql.trim().replace(Regex("\\s+"), " ")
+            return Regex("(?i)\\bin\\s*\\((?:\\s*\\?\\s*,)*\\s*\\?\\s*\\)")
+                .replace(compact, "in (?*)")
+                .lowercase()
+        }
 
     fun diagnostic(): String =
         "${kind.name.padEnd(6)} ${fingerprint.take(240)} parameters=$parameters"

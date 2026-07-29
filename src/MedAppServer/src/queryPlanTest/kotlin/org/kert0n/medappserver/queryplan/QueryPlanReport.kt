@@ -12,13 +12,19 @@ data class QueryMeasurement(
     val size: Int?,
     val result: String,
     val statements: List<ExecutedStatement>,
-    val plans: List<QueryPlan> = emptyList(),
+    val naturalPlans: List<QueryPlan> = emptyList(),
+    val forcedPlans: List<QueryPlan> = emptyList(),
     val complexity: String = "Θ(1)"
 ) {
     val shape: QueryShape? get() = statements.takeIf { it.isNotEmpty() }?.queryShape()
-    val indexes: Set<String> get() = plans.flatMapTo(sortedSetOf()) { it.indexes }
-    val sequentialScans: Set<String>
-        get() = plans.flatMapTo(sortedSetOf()) { it.sequentiallyScanned }
+    val naturalIndexes: Set<String>
+        get() = naturalPlans.flatMapTo(sortedSetOf()) { it.indexes }
+    val forcedIndexes: Set<String>
+        get() = forcedPlans.flatMapTo(sortedSetOf()) { it.indexes }
+    val naturalSequentialScans: Set<String>
+        get() = naturalPlans.flatMapTo(sortedSetOf()) { it.sequentiallyScanned }
+    val forcedSequentialScans: Set<String>
+        get() = forcedPlans.flatMapTo(sortedSetOf()) { it.sequentiallyScanned }
 }
 
 /**
@@ -39,69 +45,151 @@ class QueryPlanReport(private val objectMapper: ObjectMapper) {
             compareBy(QueryMeasurement::owner, QueryMeasurement::method, QueryMeasurement::branch)
                 .thenBy { it.size ?: -1 }
         )
-        Files.writeString(outputDirectory.resolve("database-query-report.md"), markdown(sorted))
-        objectMapper.writerWithDefaultPrettyPrinter()
-            .writeValue(
-                outputDirectory.resolve("database-query-report.json").toFile(),
-                sorted.map(::serializable)
+        val groups = sorted.groupBy { MeasurementKey(it.owner, it.method, it.branch) }
+            .map { (key, rows) -> MeasurementGroup(key, rows, inferComplexity(rows)) }
+        Files.writeString(outputDirectory.resolve("database-query-report.md"), markdown(groups))
+        objectMapper.writerWithDefaultPrettyPrinter().writeValue(
+            outputDirectory.resolve("database-query-report.json").toFile(),
+            mapOf(
+                "measurements" to groups.map(::serializable),
+                "testTasks" to testSuites().map(::serializable)
             )
+        )
     }
 
-    private fun serializable(row: QueryMeasurement): Map<String, Any?> = linkedMapOf(
-        "owner" to row.owner,
-        "method" to row.method,
-        "branch" to row.branch,
-        "size" to row.size,
-        "result" to row.result,
-        "complexity" to row.complexity,
-        "counts" to SqlKind.entries.associate { it.name to (row.shape?.count(it) ?: 0) },
-        "statements" to row.statements.map {
-            mapOf(
-                "kind" to it.kind.name,
-                "fingerprint" to it.fingerprint,
-                "parameters" to it.parameters.map { value -> value?.toString() }
-            )
-        },
-        "plans" to row.plans.map {
-            mapOf(
-                "nodes" to it.nodeTypes,
-                "indexes" to it.indexes,
-                "sequentialScans" to it.sequentiallyScanned
+    private fun serializable(group: MeasurementGroup): Map<String, Any?> = linkedMapOf(
+        "owner" to group.key.owner,
+        "method" to group.key.method,
+        "branch" to group.key.branch,
+        "complexity" to group.complexity,
+        "points" to group.rows.map { row ->
+            linkedMapOf(
+                "size" to row.size,
+                "result" to row.result,
+                "counts" to SqlKind.entries.associate { it.name to (row.shape?.count(it) ?: 0) },
+                "statements" to row.statements.map {
+                    mapOf(
+                        "kind" to it.kind.name,
+                        "fingerprint" to it.fingerprint,
+                        "parameters" to it.parameters.map { value -> value?.toString() }
+                    )
+                },
+                "naturalPlans" to row.naturalPlans.map {
+                    mapOf(
+                        "nodes" to it.nodeTypes,
+                        "indexes" to it.indexes,
+                        "sequentialScans" to it.sequentiallyScanned
+                    )
+                },
+                "forcedPlans" to row.forcedPlans.map {
+                    mapOf(
+                        "nodes" to it.nodeTypes,
+                        "indexes" to it.indexes,
+                        "sequentialScans" to it.sequentiallyScanned
+                    )
+                }
             )
         }
     )
 
-    private fun markdown(rows: List<QueryMeasurement>): String = buildString {
+    private fun serializable(row: SuiteResult): Map<String, Any> = linkedMapOf(
+        "name" to row.name,
+        "command" to "./gradlew ${row.name} --no-daemon",
+        "total" to row.total,
+        "successful" to row.total - row.skipped - row.failures - row.errors,
+        "skipped" to row.skipped,
+        "errors" to row.failures + row.errors,
+        "seconds" to row.time
+    )
+
+    private fun markdown(groups: List<MeasurementGroup>): String = buildString {
         appendLine("# Database query report")
         appendLine()
         appendLine("Сформирован автоматически из JDBC recording и `EXPLAIN (FORMAT JSON)`.")
         appendLine()
-        appendLine("| Сервис.метод | Ветка | Размер | SELECT | INSERT | UPDATE | DELETE | Асимптотика SQL | Индексы | Результат |")
+        appendLine("| Сервис.метод | Ветка | Размеры | SELECT | INSERT | UPDATE | DELETE | Асимптотика SQL | Natural / forced индексы | Результат |")
         appendLine("|---|---|---:|---:|---:|---:|---:|---|---|---|")
-        rows.forEach { row ->
-            val shape = row.shape
-            val scanNote = row.sequentialScans.takeIf { it.isNotEmpty() }
-                ?.joinToString(prefix = "Seq Scan: ")
-            val indexCell = (row.indexes.joinToString().ifBlank { "—" } +
-                (scanNote?.let { "; $it" } ?: "")).escape()
+        groups.forEach { group ->
+            val rows = group.rows
+            val naturalIndexes = rows.flatMapTo(sortedSetOf()) { it.naturalIndexes }
+            val forcedIndexes = rows.flatMapTo(sortedSetOf()) { it.forcedIndexes }
+            val naturalScan = rows.flatMapTo(sortedSetOf()) { it.naturalSequentialScans }
+                .takeIf { it.isNotEmpty() }
+                ?.joinToString(prefix = " Seq: ")
+            val forcedScan = rows.flatMapTo(sortedSetOf()) { it.forcedSequentialScans }
+                .takeIf { it.isNotEmpty() }
+                ?.joinToString(prefix = " Seq: ")
+            val indexCell = (
+                "natural=${naturalIndexes.joinToString().ifBlank { "—" }}${naturalScan.orEmpty()}; " +
+                    "forced=${forcedIndexes.joinToString().ifBlank { "—" }}${forcedScan.orEmpty()}"
+                ).escape()
             appendLine(
-                "| `${row.owner}.${row.method}` | ${row.branch.escape()} | ${row.size ?: "—"} | " +
-                    "${shape?.count(SqlKind.SELECT) ?: 0} | ${shape?.count(SqlKind.INSERT) ?: 0} | " +
-                    "${shape?.count(SqlKind.UPDATE) ?: 0} | ${shape?.count(SqlKind.DELETE) ?: 0} | " +
-                    "${row.complexity} | $indexCell | ${row.result.escape()} |"
+                "| `${group.key.owner}.${group.key.method}` | ${group.key.branch.escape()} | " +
+                    "${rows.joinToString { it.size?.toString() ?: "—" }} | " +
+                    "${counts(rows, SqlKind.SELECT)} | ${counts(rows, SqlKind.INSERT)} | " +
+                    "${counts(rows, SqlKind.UPDATE)} | ${counts(rows, SqlKind.DELETE)} | " +
+                    "${group.complexity} | $indexCell | " +
+                    "${rows.map { it.result }.distinct().joinToString("; ").escape()} |"
             )
         }
         appendLine()
         appendLine("## Test tasks")
         appendLine()
-        appendLine("| Набор | Всего | Успешно | Пропущено | Ошибки | Время, с |")
-        appendLine("|---|---:|---:|---:|---:|---:|")
+        appendLine("| Набор | Команда | Всего | Успешно | Пропущено | Ошибки | Время, с | Отчёт |")
+        appendLine("|---|---|---:|---:|---:|---:|---:|---|")
         testSuites().forEach { suite ->
             appendLine(
-                "| ${suite.name} | ${suite.total} | ${suite.total - suite.skipped - suite.failures - suite.errors} | " +
-                    "${suite.skipped} | ${suite.failures + suite.errors} | ${"%.3f".format(suite.time)} |"
+                "| ${suite.name} | `./gradlew ${suite.name} --no-daemon` | ${suite.total} | " +
+                    "${suite.total - suite.skipped - suite.failures - suite.errors} | " +
+                    "${suite.skipped} | ${suite.failures + suite.errors} | " +
+                    "${"%.3f".format(suite.time)} | `build/reports/tests/${suite.name}` |"
             )
         }
+    }
+
+    private fun counts(rows: List<QueryMeasurement>, kind: SqlKind): String =
+        if (rows.size == 1) {
+            (rows.single().shape?.count(kind) ?: 0).toString()
+        } else {
+            rows.joinToString { row ->
+                "${row.size ?: "—"}→${row.shape?.count(kind) ?: 0}"
+            }
+        }
+
+    /**
+     * Классификация выводится из точек измерения. Единственная допустимая меняющаяся форма —
+     * один UPDATE плана на изменённую строку при reconciliation.
+     */
+    private fun inferComplexity(rows: List<QueryMeasurement>): String {
+        if (rows.all { it.statements.isEmpty() }) return "0 SQL"
+        check(rows.none { it.statements.isEmpty() }) {
+            "Смешаны SQL и zero-SQL точки для ${rows.first().owner}.${rows.first().method}"
+        }
+        if (rows.size == 1) return rows.single().complexity
+
+        val fingerprints = rows.map { row ->
+            row.statements.groupingBy(ExecutedStatement::fingerprint).eachCount()
+        }
+        if (fingerprints.distinct().size == 1) return "Θ(1)"
+
+        if (rows.all { it.complexity == "Θ(n) Using UPDATE" }) {
+            val fixedKinds = listOf(SqlKind.SELECT, SqlKind.INSERT, SqlKind.DELETE)
+            check(fixedKinds.all { kind ->
+                rows.map { it.shape?.count(kind) ?: 0 }.distinct().size == 1
+            }) { "Reconciliation добавил не-UPDATE SQL при росте fixture" }
+            val points = rows.map { row ->
+                requireNotNull(row.size) to (row.shape?.count(SqlKind.UPDATE) ?: 0)
+            }
+            check(points.zipWithNext().all { (left, right) ->
+                right.second - left.second == right.first - left.first
+            }) { "Число UPDATE reconciliation не соответствует числу изменённых планов: $points" }
+            return "Θ(n) Using UPDATE"
+        }
+
+        error(
+            "Необъяснённый рост SQL для ${rows.first().owner}.${rows.first().method} " +
+                "[${rows.first().branch}]: $fingerprints"
+        )
     }
 
     private fun testSuites(): List<SuiteResult> {
@@ -137,4 +225,16 @@ private data class SuiteResult(
     val failures: Int,
     val errors: Int,
     val time: Double
+)
+
+private data class MeasurementKey(
+    val owner: String,
+    val method: String,
+    val branch: String
+)
+
+private data class MeasurementGroup(
+    val key: MeasurementKey,
+    val rows: List<QueryMeasurement>,
+    val complexity: String
 )
