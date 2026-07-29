@@ -21,19 +21,8 @@ class UserService(
 
     private val logger = LoggerFactory.getLogger(UserService::class.java)
 
-    /**
-     * Заводит пользователя и возвращает его учётные данные.
-     *
-     * Идентификатор и ключ генерируются здесь, а не вызывающим. Раньше их делал контроллер и
-     * передавал сюда готовыми — то есть решение «чем является учётная запись» принималось на
-     * HTTP-границе, а сервис только сохранял чужой результат. Заодно ключ существовал в
-     * контроллере до того, как стало известно, что регистрация вообще состоится.
-     *
-     * Лимит по адресу проверяется до создания, а счётчик увеличивается после: иначе
-     * неудачная попытка тратила бы квоту.
-     */
     fun registerNewUser(ip: String): NewCredentials {
-        if (!securityService.validateRequest(ip)) {
+        if (!securityService.isRegistrationAllowed(ip)) {
             throw ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "Too many registration request")
         }
 
@@ -41,24 +30,11 @@ class UserService(
         val key = securityService.generateKey(32)
         logger.debug("Register new user $login")
         userRepository.save(User(login, securityService.hashPassword(key)))
-        securityService.registerIncrease(ip)
+        securityService.recordRegisterAttempt(ip)
         return NewCredentials(login, key)
     }
 
-    /**
-     * Логин у нас — это UUID, но приходит он строкой из заголовка Basic, то есть от кого
-     * угодно и в любом виде.
-     *
-     * `UUID.fromString` на мусоре бросает `IllegalArgumentException`, и Spring Security
-     * заворачивает его в `InternalAuthenticationServiceException`. Статус наружу при этом
-     * оставался верным — 401, потому что это всё-таки `AuthenticationException`, — но
-     * каждый такой запрос печатал в лог полный стектрейс как внутреннюю ошибку. То есть
-     * любой неаутентифицированный клиент мог одной строкой в заголовке заставить сервер
-     * писать стектрейсы, а дежурного — искать несуществующий сбой.
-     *
-     * Неразобранный логин — это «такого пользователя нет», а не сбой: тот же
-     * [UsernameNotFoundException], что и для несуществующего UUID.
-     */
+
     override fun loadUserByUsername(username: String): UserDetails {
         logger.debug("Load user $username")
         val id = runCatching { UUID.fromString(username) }.getOrNull()

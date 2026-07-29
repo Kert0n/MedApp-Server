@@ -60,13 +60,6 @@ class AuthController(
         if (!securityService.secretsMatch(token, registrationProperties.secret)) {
             throw ResponseStatusException(HttpStatus.FORBIDDEN, "Invalid secret")
         }
-        // Лимит по адресу и выпуск учётных данных — внутри сервиса. Здесь остаётся только
-        // проверка секрета: она аутентифицирует сам запрос, то есть относится к границе.
-        //
-        // Порядок сохранён: секрет проверяется раньше лимита, чтобы состояние счётчика не
-        // утекало тем, кто секрета не знает. Отказ по лимиту — 429, а не 504: за Caddy
-        // пятисотый класс читается как «бэкенд не ответил», и отказ клиенту попадал в
-        // алерты как авария инфраструктуры.
         val credentials = userService.registerNewUser(request.remoteAddr)
         return RegisterResponse(credentials.login, credentials.key)
     }
@@ -75,10 +68,6 @@ class AuthController(
     @Operation(
         summary = "Issue JWT token",
         description = "Uses HTTP Basic authentication and returns a JWT access token.",
-        // Basic, а не пустой список. security = [] снимало глобальное требование Bearer —
-        // верно, токена здесь ещё нет, — но не ставило ничего взамен, и Swagger не показывал
-        // поля для учётных данных: описание про Basic оставалось текстом, а токен
-        // приходилось добывать в обход UI.
         security = [SecurityRequirement(name = OpenApiConfiguration.BASIC_SCHEME)]
     )
     @ApiResponses(
