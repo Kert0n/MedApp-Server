@@ -25,7 +25,7 @@ import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.Size
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.VidalDrugService
-import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
+import org.kert0n.medappserver.services.orchestrators.DrugCommandService
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
@@ -39,7 +39,7 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBod
 class DrugController(
     private val drugService: DrugService,
     private val vidalDrugService: VidalDrugService,
-    private val medKitDrugServices: MedKitDrugServices
+    private val drugCommands: DrugCommandService
 ) {
 
     private val logger = LoggerFactory.getLogger(DrugController::class.java)
@@ -81,7 +81,7 @@ class DrugController(
         @Valid @RequestBody drugDTO: DrugCreateDTO
     ): DrugDTO {
         logger.debug("POST /v1/drug by user {}: {}", authentication.userId, drugDTO.name)
-        val drug = medKitDrugServices.createDrugInMedkit(drugDTO.medKitId, drugDTO.toCommand(), authentication.userId)
+        val drug = drugCommands.create(authentication.userId, drugDTO.medKitId, drugDTO.toCommand())
         return drug.toDto()
     }
 
@@ -101,7 +101,7 @@ class DrugController(
         @Valid @RequestBody updateDTO: DrugUpdateDTO
     ): DrugDTO {
         logger.debug("PUT /v1/drug/{} by user {}", id, authentication.userId)
-        val drug = drugService.update(id, updateDTO.toPatch(), authentication.userId)
+        val drug = drugCommands.patch(authentication.userId, id, updateDTO.toPatch())
         return drug.toDto()
     }
 
@@ -119,7 +119,7 @@ class DrugController(
         @Parameter(description = "Drug ID") @PathVariable id: UUID
     ) {
         logger.debug("DELETE /v1/drug/{} by user {}", id, authentication.userId)
-        drugService.delete(id, authentication.userId)
+        drugCommands.delete(authentication.userId, id)
     }
 
     @GetMapping("/quantity/{id}")
@@ -168,7 +168,7 @@ class DrugController(
             authentication.userId,
             consumeRequest.quantity
         )
-        val drug = drugService.consume(id, consumeRequest.quantity, authentication.userId)
+        val drug = drugCommands.consume(authentication.userId, id, consumeRequest.quantity)
         return if (drug != null) drug.toDto() else null
     }
 
@@ -192,7 +192,7 @@ class DrugController(
         @Valid @RequestBody moveRequest: MoveDrugRequest
     ): DrugDTO {
         logger.debug("PUT /v1/drug/move/{} to medkit {} by user {}", id, moveRequest.targetMedKitId, authentication.userId)
-        val drug = medKitDrugServices.moveDrug(id, moveRequest.targetMedKitId, authentication.userId)
+        val drug = drugCommands.move(authentication.userId, id, moveRequest.targetMedKitId)
         return drug.toDto()
     }
 

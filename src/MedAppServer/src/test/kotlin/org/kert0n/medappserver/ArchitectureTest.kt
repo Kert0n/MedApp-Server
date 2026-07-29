@@ -45,7 +45,12 @@ class ArchitectureTest {
         "db.repository" to setOf("db.model"),
         "services.security" to setOf("db.model"),
         "services.models" to setOf("db.model", "db.repository", "services.security", "services.models"),
-        "services.orchestrators" to setOf("db.model", "services.models", "services.security"),
+        "services.orchestrators" to setOf(
+            "db.model",
+            "db.repository",
+            "services.models",
+            "services.security"
+        ),
         "api" to setOf("db.model", "db.repository", "services.models"),
         "controller" to setOf("api", "config", "db.repository", "services.models", "services.orchestrators", "services.security"),
         "config" to setOf("api", "db.model", "db.repository", "services.models", "services.orchestrators", "services.security")
