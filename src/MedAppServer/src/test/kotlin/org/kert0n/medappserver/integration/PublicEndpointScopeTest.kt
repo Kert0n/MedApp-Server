@@ -52,6 +52,18 @@ class PublicEndpointScopeTest {
     }
 
     @Test
+    fun `swagger entry point is public`() {
+        // Обе строки, а не одна: /swagger-ui/** — Ant-шаблон по содержимому каталога, и
+        // соседний /swagger-ui.html под него не подходит. Springdoc считает точкой входа
+        // именно .html, поэтому Swagger отвечал 401, хотя index.html открывался.
+        // 3xx, а не 200: springdoc перенаправляет точку входа на index.html. Важно, что это
+        // перенаправление, а не 401, — до правки список публичных путей отдавал здесь отказ.
+        mockMvc.perform(get("/swagger-ui.html")).andExpect(status().is3xxRedirection)
+        mockMvc.perform(get("/swagger-ui/index.html")).andExpect(status().isOk)
+        mockMvc.perform(get("/v3/api-docs")).andExpect(status().isOk)
+    }
+
+    @Test
     fun `other actuator endpoints require authentication`() {
         // Not exposed over HTTP by default either, so 401 rather than 404 is what we
         // want: the guard must not depend on the exposure setting.

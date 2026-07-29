@@ -94,7 +94,13 @@ class SecurityConfiguration(
                         "/v1/auth/register",
                         // Docs, health and the UI stay unversioned on purpose: they are
                         // infrastructure, not part of the contract handed to clients.
-                        "/swagger",
+                        //
+                        // /swagger-ui.html — отдельной строкой, и это не дубль /swagger-ui/**:
+                        // Ant-шаблон с /** сопоставляется только с тем, что лежит внутри
+                        // каталога, а .html — соседний ресурс. Именно этот адрес springdoc
+                        // считает точкой входа по умолчанию и именно его набирают руками,
+                        // поэтому Swagger отвечал 401, хотя /swagger-ui/index.html открывался.
+                        "/swagger-ui.html",
                         "/swagger-ui/**",
                         "/v3/api-docs/**",
                         "/v3/api-docs.yaml",
