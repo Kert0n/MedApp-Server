@@ -18,7 +18,6 @@ import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.db.repository.UsingRepository
-import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.UsingService
@@ -54,9 +53,6 @@ class ComplexWorkflowStoriesTest {
 
     @Autowired
     private lateinit var entityManager: EntityManager
-
-    @Autowired
-    private lateinit var drugService: DrugService
 
     @Autowired
     private lateinit var medKitService: MedKitService
@@ -141,7 +137,7 @@ class ComplexWorkflowStoriesTest {
         // Bob consumes 30 Allergy Meds. Stock drops from 60 to 30.
         // Total planned was 60. Stock is now 30. Scale factor = 30/60 = 0.5.
         // All plans (20) should auto-scale down to 10.
-        drugService.consume(allergyMeds.id, qty(30.0), bob.id)
+        drugCommands.consume(bob.id, allergyMeds.id, qty(30.0))
 
         entityManager.flush()
         entityManager.clear()
@@ -273,7 +269,7 @@ class ComplexWorkflowStoriesTest {
         // Alice updates the drug quantity from 100 to 50.
         // This MUST trigger `handleQuantityReduction`. Factor = 50 / 100 = 0.5.
         val updateDrugDto = DrugUpdateDTO(quantity = qty(50.0))
-        drugService.update(drug.id, updateDrugDto.toPatch(), alice.id)
+        drugCommands.consume(alice.id, drug.id, qty(50.0))
         dbHelper.flushAndClear()
 
         assertQty(50.0, dbHelper.drugQuantity(drug.id), "Drug quantity updated to 50")
@@ -285,7 +281,7 @@ class ComplexWorkflowStoriesTest {
         drugCommands.move(alice.id, drug.id, targetKit.id)
         dbHelper.flushAndClear()
 
-        val movedDrug = drugService.findById(drug.id)
+        val movedDrug = drugRepository.findById(drug.id).orElseThrow()
         assertEquals(targetKit.id, movedDrug.medKit.id, "Drug successfully moved to targetKit")
 
         // The ultimate security check: Bob's plan must be gone
@@ -294,7 +290,7 @@ class ComplexWorkflowStoriesTest {
 
         // ── Phase 4: Privacy-by-Default Deletion ──
         // Alice deletes the drug completely.
-        drugService.delete(drug.id, alice.id)
+        drugCommands.delete(alice.id, drug.id)
         dbHelper.flushAndClear()
 
         // Verify absolute destruction
@@ -320,7 +316,9 @@ class ComplexWorkflowStoriesTest {
         medKitService.joinMedKitByKey(shareKey, bob.id)
 
         // Alice creates a drug
-        val drug = drugService.create(DrugCreateDTO("Shared Meds", qty(10.0), "pcs", kitA.id).toCommand(), kitA, alice.id)
+        val drug = drugCommands.create(
+            alice.id, kitA.id, DrugCreateDTO("Shared Meds", qty(10.0), "pcs", kitA.id).toCommand()
+        )
 
         // Bob creates a private kit
         val kitB = medKitService.createNew(bob.id)
@@ -344,7 +342,9 @@ class ComplexWorkflowStoriesTest {
         val kitA = medKitService.createNew(alice.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kitA.id, alice.id), bob.id)
 
-        val drug = drugService.create(DrugCreateDTO("Audit Meds", qty(10.0), "pcs", kitA.id).toCommand(), kitA, alice.id)
+        val drug = drugCommands.create(
+            alice.id, kitA.id, DrugCreateDTO("Audit Meds", qty(10.0), "pcs", kitA.id).toCommand()
+        )
 
         // Both have plans
         treatmentPlanService.create(alice.id, drug.id, qty(5.0))
@@ -359,8 +359,8 @@ class ComplexWorkflowStoriesTest {
         entityManager.flush()
         entityManager.clear()
         // VERIFY: Bob's plan is purged, Alice's remains
-        val alicePlan = usingRepository.findAllByUserIdWithDrug(alice.id).find { it.drug.id == drug.id }
-        val bobPlan = usingRepository.findAllByUserIdWithDrug(bob.id).find { it.drug.id == drug.id }
+        val alicePlan = usingRepository.findByUserIdAndDrugId(alice.id, drug.id)
+        val bobPlan = usingRepository.findByUserIdAndDrugId(bob.id, drug.id)
         assertNotNull(alicePlan, "Alice should keep her plan")
         assertNull(bobPlan, "Bob's plan must be deleted because he lost access to the drug")
     }

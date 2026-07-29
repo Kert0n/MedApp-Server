@@ -48,8 +48,7 @@ class UsingsController(
     )
     fun getUsings(authentication: Authentication): List<UsingDTO> {
         logger.debug("GET /v1/using by user {}", authentication.userId)
-        val usings = usingService.findAllByUser(authentication.userId)
-        return usings.map { it.toDto() }
+        return usingService.listForUser(authentication.userId).map { it.toDto() }
     }
 
     @GetMapping("/drug/{drugId}")
@@ -67,13 +66,9 @@ class UsingsController(
     fun getSpecificUsing(
         authentication: Authentication,
         @Parameter(description = "Drug ID") @PathVariable drugId: UUID
-    ): UsingDTO? {
+    ): UsingDTO {
         logger.debug("GET /v1/using/drug/{} by user {}", drugId, authentication.userId)
-        // Нетбросающая выборка: отсутствие плана — пустой ответ, а не 404. Проект не ведёт
-        // tombstone'ов, поэтому старый клиент законно приходит за уже удалённым планом, и
-        // по 404 он не отличит «плана нет» от «эндпоинт сломался».
-        val using = usingService.findByUserAndDrugOrNull(authentication.userId, drugId)
-        return using?.toDto()
+        return usingService.getForUser(authentication.userId, drugId).toDto()
     }
 
     @PostMapping

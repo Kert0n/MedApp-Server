@@ -5,7 +5,6 @@ import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
 import org.hibernate.annotations.Formula
 import java.math.BigDecimal
-import java.math.RoundingMode
 import java.util.*
 
 @Entity
@@ -65,10 +64,7 @@ class Drug(
                 "FOREIGN KEY (med_kit_id) REFERENCES med_kits (id) ON DELETE CASCADE"
         )
     )
-    var medKit: MedKit,
-
-    @OneToMany(mappedBy = "drug", fetch = FetchType.LAZY, cascade = [CascadeType.ALL], orphanRemoval = true)
-    var usings: MutableSet<Using> = mutableSetOf()
+    var medKit: MedKit
 
 ) {
 
@@ -139,43 +135,6 @@ class Drug(
     fun consumePlanned(amount: BigDecimal) {
         quantity = quantity - amount
         totalPlannedAmount = totalPlannedAmount - amount
-    }
-
-    /**
-     * Сжимает все планы пропорционально, пока их сумма не уложится в остаток.
-     *
-     * Вызывающий обязан передать препарат с загруженной коллекцией [usings]: по
-     * неинициализированной операция тихо не сделает ничего.
-     *
-     * Инвариант, который нужен коду, — «сумма планов **не больше** остатка», а не точное
-     * равенство. Округление вниз даёт его по построению: каждый план не превышает свою точную
-     * долю, а доли в сумме дают остаток. Прежняя версия округляла HALF_UP и потому могла
-     * получить сумму больше остатка, а следом компенсировала разницу, отдавая её самому
-     * большому плану, — то есть третий шаг чинил то, что натворил первый.
-     *
-     * Коэффициент, наоборот, округляется к ближайшему и с запасом в десять знаков. Вниз
-     * округлять и его нельзя: 30 планов при сжатии до двух третей давали 19.999999 вместо 20.
-     * Погрешность коэффициента здесь порядка 1e-16, на десять порядков меньше младшего
-     * разряда количества, и перекрыть потерю от округления произведений она не может.
-     *
-     * [totalPlannedAmount] получает настоящую сумму, а не остаток. Поле производное — формула
-     * считает `SUM(planned_amount)`, — и приписывать ему `quantity` значит врать себе же: до
-     * ближайшей перезагрузки клиент видел бы в `plannedQuantity` завышенное число.
-     */
-    fun shrinkPlansToStock() {
-        if (usings.isEmpty()) {
-            totalPlannedAmount = BigDecimal.ZERO
-            return
-        }
-        // Частное обычно бесконечная периодическая дробь, и BigDecimal без явного scale
-        // бросил бы ArithmeticException.
-        val factor = quantity.divide(totalPlannedAmount, QUANTITY_SCALE + 10, QUANTITY_ROUNDING)
-        // setScale здесь явный: сеттер plannedAmount округляет HALF_UP, и без этого
-        // произведение приехало бы к нему уже вверх.
-        usings.forEach {
-            it.plannedAmount = (it.plannedAmount * factor).setScale(QUANTITY_SCALE, RoundingMode.DOWN)
-        }
-        totalPlannedAmount = usings.fold(BigDecimal.ZERO) { sum, using -> sum + using.plannedAmount }
     }
 
     override fun equals(other: Any?): Boolean {

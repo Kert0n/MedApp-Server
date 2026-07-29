@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.api.UsingCreateDTO
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.UsingRepository
-import org.kert0n.medappserver.services.models.DrugService
+import org.kert0n.medappserver.services.orchestrators.DrugCommandService
 import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.UsingService
@@ -25,7 +25,7 @@ import kotlin.test.assertNull
 class QuantityReconciliationTest {
 
     @Autowired
-    private lateinit var drugService: DrugService
+    private lateinit var drugCommands: DrugCommandService
     @Autowired
     private lateinit var medKitService: MedKitService
     @Autowired
@@ -51,11 +51,11 @@ class QuantityReconciliationTest {
         treatmentPlanService.create(alice.id, drug.id, qty(50.0))
         dbHelper.flushAndClear()
 
-        drugService.consume(drug.id, qty(50.0), alice.id)
+        drugCommands.consume(alice.id, drug.id, qty(50.0))
         dbHelper.flushAndClear()
 
         assertNull(drugRepository.findByIdOrNull(drug.id))
-        assertEquals(0, usingRepository.findAllByUsingKeyDrugId(drug.id).size)
+        assertEquals(0, usingRepository.findAllByDrugId(drug.id).size)
     }
 
     // ── handleQuantityReduction: totalPlanned <= quantity → no scaling ──
@@ -73,7 +73,7 @@ class QuantityReconciliationTest {
         treatmentPlanService.create(bob.id, drug.id, qty(20.0))
         dbHelper.flushAndClear()
 
-        drugService.consume(drug.id, qty(50.0), alice.id)
+        drugCommands.consume(alice.id, drug.id, qty(50.0))
         dbHelper.flushAndClear()
 
         assertQty(50.0, dbHelper.drugQuantity(drug.id))
@@ -97,7 +97,7 @@ class QuantityReconciliationTest {
         dbHelper.flushAndClear()
 
         // Consume 50 → quantity=50, factor=50/100=0.5
-        drugService.consume(drug.id, qty(50.0), alice.id)
+        drugCommands.consume(alice.id, drug.id, qty(50.0))
         dbHelper.flushAndClear()
 
         assertQty(50.0, dbHelper.drugQuantity(drug.id))
@@ -121,7 +121,7 @@ class QuantityReconciliationTest {
         treatmentPlanService.create(bob.id, drug.id, qty(40.0))
         dbHelper.flushAndClear()
 
-        drugService.consume(drug.id, qty(50.0), alice.id)
+        drugCommands.consume(alice.id, drug.id, qty(50.0))
         dbHelper.flushAndClear()
 
         val alicePlan = dbHelper.userPlan(alice.id, drug.id)!!

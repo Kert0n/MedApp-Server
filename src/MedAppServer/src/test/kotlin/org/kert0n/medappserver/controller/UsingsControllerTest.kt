@@ -9,6 +9,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.db.model.*
 import org.kert0n.medappserver.services.models.UsingService
+import org.kert0n.medappserver.services.models.TreatmentPlanView
 import org.kert0n.medappserver.services.models.PlanSnapshot
 import org.kert0n.medappserver.services.orchestrators.IntakeOutcome
 import org.kert0n.medappserver.services.orchestrators.IntakeService
@@ -92,9 +93,9 @@ class UsingsControllerTest {
 
     @Test
     fun `GET all usings - returns list for authenticated user`() {
-        val using = createTestUsing()
-        val dto = createTestUsingDTO()
-        whenever(usingService.findAllByUser(userId)).thenReturn(listOf(using))
+        whenever(usingService.listForUser(userId)).thenReturn(
+            listOf(TreatmentPlanView(userId, drugId, qty(30.0)))
+        )
 
         mockMvc.perform(
             get("/v1/using")
@@ -114,9 +115,8 @@ class UsingsControllerTest {
 
     @Test
     fun `GET specific using - returns using for user and drug`() {
-        val using = createTestUsing()
-        val dto = createTestUsingDTO()
-        whenever(usingService.findByUserAndDrugOrNull(userId, drugId)).thenReturn(using)
+        whenever(usingService.getForUser(userId, drugId))
+            .thenReturn(TreatmentPlanView(userId, drugId, qty(30.0)))
 
         mockMvc.perform(
             get("/v1/using/drug/$drugId")
@@ -127,28 +127,16 @@ class UsingsControllerTest {
             .andExpect(jsonPath("$.plannedAmount").value(30.0))
     }
 
-    /**
-     * Отсутствие плана — пустой ответ, а не 404.
-     *
-     * Тест заменил прежний, ждавший 404: тот закреплял поведение, разошедшееся с замыслом.
-     * Tombstone'ов проект не ведёт, план исчезает сам — например когда приём забрал остаток
-     * целиком, — и старый клиент законно приходит за уже удалённым. По 404 он не отличит
-     * «плана нет» от «эндпоинт сломался» и будет повторять запрос. Тип `UsingDTO?` у метода
-     * контроллера был рассчитан ровно на это, но `findByUserAndDrug` бросал, и ветка с null
-     * стала недостижимой.
-     */
     @Test
-    fun `GET specific using - returns empty body when there is no plan`() {
-        whenever(usingService.findByUserAndDrugOrNull(any(), any())).thenReturn(null)
+    fun `GET specific using - returns 404 when there is no plan`() {
+        whenever(usingService.getForUser(any(), any()))
+            .thenThrow(ResponseStatusException(HttpStatus.NOT_FOUND, "Treatment plan not found"))
 
-        val body = mockMvc.perform(
+        mockMvc.perform(
             get("/v1/using/drug/$drugId")
                 .with(jwt().jwt { it.subject(userId.toString()) })
         )
-            .andExpect(status().isOk)
-            .andReturn().response.contentAsString
-
-        assertTrue(body.isBlank(), "тело должно быть пустым, получено: '$body'")
+            .andExpect(status().isNotFound)
     }
 
     @Test

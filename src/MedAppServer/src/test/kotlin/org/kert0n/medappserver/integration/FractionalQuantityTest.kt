@@ -90,7 +90,7 @@ class FractionalQuantityTest {
             "препарат с нулевым остатком должен быть удалён; на Double остаток был ~1e-16 и удаление не срабатывало"
         )
         assertTrue(
-            usingRepository.findAllByUsingKeyDrugId(drug.id).isEmpty(),
+            usingRepository.findAllByDrugId(drug.id).isEmpty(),
             "планов не должно остаться"
         )
     }
@@ -116,7 +116,7 @@ class FractionalQuantityTest {
         treatmentPlanService.applyIntake(alice.id, drug.id, consumed)
 
         val remaining = drugRepository.findById(drug.id).orElseThrow().quantity
-        val plansTotal = usingRepository.findAllByUsingKeyDrugId(drug.id)
+        val plansTotal = usingRepository.findAllByDrugId(drug.id)
             .fold(BigDecimal.ZERO) { sum, using -> sum + using.plannedAmount }
 
         // Инвариант — «не больше», а не «ровно». Точное равенство раньше держалось

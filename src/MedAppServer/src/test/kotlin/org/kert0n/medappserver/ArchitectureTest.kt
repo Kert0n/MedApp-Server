@@ -52,7 +52,7 @@ class ArchitectureTest {
             "services.security"
         ),
         "api" to setOf("db.model", "db.repository", "services.models"),
-        "controller" to setOf("api", "config", "db.repository", "services.models", "services.orchestrators", "services.security"),
+        "controller" to setOf("api", "config", "services.models", "services.orchestrators", "services.security"),
         "config" to setOf("api", "db.model", "db.repository", "services.models", "services.orchestrators", "services.security")
     )
 
@@ -141,6 +141,23 @@ class ArchitectureTest {
             offenders.isEmpty(),
             "модельный сервис принимает другой модельный сервис — координация нескольких " +
                 "агрегатов принадлежит оркестратору: $offenders"
+        )
+    }
+
+    @Test
+    fun `модельный сервис использует репозиторий только своего агрегата`() {
+        val services = filesOf("services.models").flatMap { it.classes() }
+            .filter { it.name.endsWith("Service") }
+        val offenders = services.flatMap { service ->
+            val aggregate = service.name.removeSuffix("Service")
+            service.primaryConstructor?.parameters.orEmpty()
+                .filter { it.type.name.endsWith("Repository") }
+                .filter { !it.type.name.startsWith(aggregate) }
+                .map { "${service.name}(${it.name}: ${it.type.name})" }
+        }
+        assertTrue(
+            offenders.isEmpty(),
+            "read/model-сервис не координирует чужой агрегат через его репозиторий: $offenders"
         )
     }
 
