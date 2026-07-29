@@ -60,6 +60,22 @@ class MedKitLifecycleServiceTest {
         assertNotNull(medKitFixture.findByIdForUser(medKitId, bob.id))
     }
 
+    @Test
+    fun `invitation and join enforce membership access`() {
+        val alice = dbHelper.freshUser("alice")
+        val outsider = dbHelper.freshUser("outsider")
+        val medKitId = lifecycle.create(alice.id)
+
+        assertThrows<ResponseStatusException> {
+            lifecycle.createInvitation(outsider.id, medKitId)
+        }
+        val key = lifecycle.createInvitation(alice.id, medKitId)
+        assertThrows<ResponseStatusException> {
+            lifecycle.join(alice.id, key)
+        }
+        assertNotNull(medKitFixture.findByIdForUser(medKitId, alice.id))
+    }
+
     // ── createDrugInMedkit ──
 
     @Test
@@ -261,6 +277,22 @@ class MedKitLifecycleServiceTest {
 
         assertNotNull(dbHelper.userPlan(alice.id, drug.id))
         assertNull(dbHelper.userPlan(charlie.id, drug.id))
+    }
+
+    @Test
+    fun `delete cannot transfer medkit into itself`() {
+        val alice = dbHelper.freshUser("alice")
+        val kit = medKitFixture.createNew(alice.id)
+        val drug = dbHelper.freshDrug(kit, 10.0)
+        dbHelper.flushAndClear()
+
+        assertThrows<ResponseStatusException> {
+            lifecycle.delete(alice.id, kit.id, kit.id)
+        }
+        dbHelper.flushAndClear()
+
+        assertNotNull(medKitRepository.findById(kit.id).orElse(null))
+        assertEquals(kit.id, drugRepository.findById(drug.id).orElseThrow().medKit.id)
     }
 
     @Test
