@@ -16,7 +16,9 @@ class QueryPlanFixture(private val entityManager: EntityManager) {
     lateinit var ownerId: UUID
     lateinit var medKitId: UUID
     lateinit var drugId: UUID
+    lateinit var catalogueId: UUID
     lateinit var catalogueName: String
+    lateinit var emptyUserId: UUID
 
     lateinit var snapshotUsers: Map<Int, UUID>
     lateinit var planUsers: Map<Int, UUID>
@@ -112,6 +114,8 @@ class QueryPlanFixture(private val entityManager: EntityManager) {
         catalogueName = entityManager
             .createNativeQuery("SELECT name FROM parsed_drugs OFFSET 500 LIMIT 1")
             .singleResult.toString()
+        catalogueId = single("SELECT id FROM parsed_drugs OFFSET 500 LIMIT 1")
+        emptyUserId = createUser("empty")
 
         // Пользователь с максимальным числом аптечек делает N+1 заметным.
         ownerId = single(
@@ -181,7 +185,8 @@ class QueryPlanFixture(private val entityManager: EntityManager) {
     }
 
     @Transactional
-    fun createDrugFixture(planCount: Int): DrugCommandFixture {
+    fun createDrugFixture(planCount: Int, targetMemberCount: Int = 0): DrugCommandFixture {
+        require(targetMemberCount in 0..planCount)
         val ownerId = UUID.randomUUID()
         val sourceMedKitId = UUID.randomUUID()
         val targetMedKitId = UUID.randomUUID()
@@ -203,19 +208,26 @@ class QueryPlanFixture(private val entityManager: EntityManager) {
             """
         ).executeUpdate()
 
-        repeat(planCount) {
+        val planUserIds = List(planCount) { index ->
             val planUserId = UUID.randomUUID()
             insertUser(planUserId, "drug-plan-${UUID.randomUUID()}")
             entityManager.createNativeQuery(
                 "INSERT INTO user_med_kits (user_id, med_kit_id) " +
                     "VALUES ('$planUserId', '$sourceMedKitId')"
             ).executeUpdate()
+            if (index < targetMemberCount) {
+                entityManager.createNativeQuery(
+                    "INSERT INTO user_med_kits (user_id, med_kit_id) " +
+                        "VALUES ('$planUserId', '$targetMedKitId')"
+                ).executeUpdate()
+            }
             entityManager.createNativeQuery(
                 "INSERT INTO usings (user_id, drug_id, planned_amount) " +
                     "VALUES ('$planUserId', '$drugId', 10)"
             ).executeUpdate()
+            planUserId
         }
-        return DrugCommandFixture(ownerId, sourceMedKitId, targetMedKitId, drugId)
+        return DrugCommandFixture(ownerId, sourceMedKitId, targetMedKitId, drugId, planUserIds)
     }
 
     @Transactional
@@ -281,6 +293,17 @@ class QueryPlanFixture(private val entityManager: EntityManager) {
         return targetMedKitId
     }
 
+    @Transactional
+    fun createUser(suffix: String = UUID.randomUUID().toString()): UUID =
+        UUID.randomUUID().also { insertUser(it, suffix) }
+
+    @Transactional
+    fun setDrugQuantity(drugId: UUID, quantity: Int) {
+        entityManager.createNativeQuery(
+            "UPDATE user_drugs SET quantity = $quantity WHERE id = '$drugId'"
+        ).executeUpdate()
+    }
+
     private fun insertUser(userId: UUID, suffix: String) {
         entityManager.createNativeQuery(
             "INSERT INTO users (id, hashed_key) VALUES ('$userId', '{noop}scale-$suffix')"
@@ -304,7 +327,8 @@ data class DrugCommandFixture(
     val ownerId: UUID,
     val sourceMedKitId: UUID,
     val targetMedKitId: UUID,
-    val drugId: UUID
+    val drugId: UUID,
+    val planUserIds: List<UUID>
 )
 
 data class MedKitCommandFixture(

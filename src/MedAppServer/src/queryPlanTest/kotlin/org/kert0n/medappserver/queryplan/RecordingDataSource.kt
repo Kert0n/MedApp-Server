@@ -98,7 +98,9 @@ class RecordingDataSource(private val delegate: DataSource) : DataSource by dele
 
         override fun invoke(proxy: Any, method: Method, args: Array<out Any?>?): Any? {
             if (method.name.startsWith("set") && (args?.size ?: 0) >= 2) {
-                (args!![0] as? Int)?.let { position -> parameters[position] = args[1] }
+                (args!![0] as? Int)?.let { position ->
+                    parameters[position] = if (method.name == "setNull") null else args[1]
+                }
             }
             if (method.name == "clearParameters") parameters.clear()
             if (method.name == "addBatch") {

@@ -41,8 +41,35 @@ class QueryPlanReport(private val objectMapper: ObjectMapper) {
         )
         Files.writeString(outputDirectory.resolve("database-query-report.md"), markdown(sorted))
         objectMapper.writerWithDefaultPrettyPrinter()
-            .writeValue(outputDirectory.resolve("database-query-report.json").toFile(), sorted)
+            .writeValue(
+                outputDirectory.resolve("database-query-report.json").toFile(),
+                sorted.map(::serializable)
+            )
     }
+
+    private fun serializable(row: QueryMeasurement): Map<String, Any?> = linkedMapOf(
+        "owner" to row.owner,
+        "method" to row.method,
+        "branch" to row.branch,
+        "size" to row.size,
+        "result" to row.result,
+        "complexity" to row.complexity,
+        "counts" to SqlKind.entries.associate { it.name to (row.shape?.count(it) ?: 0) },
+        "statements" to row.statements.map {
+            mapOf(
+                "kind" to it.kind.name,
+                "fingerprint" to it.fingerprint,
+                "parameters" to it.parameters.map { value -> value?.toString() }
+            )
+        },
+        "plans" to row.plans.map {
+            mapOf(
+                "nodes" to it.nodeTypes,
+                "indexes" to it.indexes,
+                "sequentialScans" to it.sequentiallyScanned
+            )
+        }
+    )
 
     private fun markdown(rows: List<QueryMeasurement>): String = buildString {
         appendLine("# Database query report")
