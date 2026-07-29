@@ -87,7 +87,7 @@ class TreatmentPlanServiceTest {
         treatmentPlanService.create(alice.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
-        val updated = treatmentPlanService.update(alice.id, drug.id, qty(50.0))
+        val updated = treatmentPlanService.patch(alice.id, drug.id, qty(50.0))
         assertQty(50.0, updated.plannedAmount)
     }
 
@@ -106,7 +106,40 @@ class TreatmentPlanServiceTest {
 
         // Bob tries to increase to 60 but only 100 - 50 = 50 available for him
         assertFailsWith<ResponseStatusException> {
-            treatmentPlanService.update(bob.id, drug.id, qty(60.0))
+            treatmentPlanService.patch(bob.id, drug.id, qty(60.0))
+        }
+    }
+
+    @Test
+    fun `zero amount is not an alias for deletion`() {
+        val alice = dbHelper.freshUser("alice")
+        val kit = medKitService.createNew(alice.id)
+        val drug = dbHelper.freshDrug(kit, 100.0)
+        dbHelper.flushAndClear()
+
+        assertFailsWith<ResponseStatusException> {
+            treatmentPlanService.create(alice.id, drug.id, qty(0.0))
+        }
+        treatmentPlanService.create(alice.id, drug.id, qty(10.0))
+        assertFailsWith<ResponseStatusException> {
+            treatmentPlanService.patch(alice.id, drug.id, qty(0.0))
+        }
+    }
+
+    @Test
+    fun `delete and intake return explicit plan lifecycle`() {
+        val alice = dbHelper.freshUser("alice")
+        val kit = medKitService.createNew(alice.id)
+        val drug = dbHelper.freshDrug(kit, 20.0)
+        dbHelper.flushAndClear()
+
+        treatmentPlanService.create(alice.id, drug.id, qty(10.0))
+        val remaining = treatmentPlanService.applyIntake(alice.id, drug.id, qty(4.0))
+        assertQty(6.0, remaining?.plannedAmount)
+
+        treatmentPlanService.delete(alice.id, drug.id)
+        assertFailsWith<ResponseStatusException> {
+            treatmentPlanService.delete(alice.id, drug.id)
         }
     }
 }

@@ -120,7 +120,7 @@ class UsingsController(
         @Valid @RequestBody updateDTO: UsingUpdateDTO
     ): UsingDTO {
         logger.debug("PUT /v1/using/drug/{} by user {}", drugId, authentication.userId)
-        val using = treatmentPlanService.update(authentication.userId, drugId, updateDTO.plannedAmount)
+        val using = treatmentPlanService.patch(authentication.userId, drugId, updateDTO.plannedAmount)
         return using.toDto()
     }
 
@@ -169,6 +169,6 @@ class UsingsController(
         @Parameter(description = "Drug ID") @PathVariable drugId: UUID
     ) {
         logger.debug("DELETE /v1/using/drug/{} by user {}", drugId, authentication.userId)
-        usingService.deleteTreatmentPlan(authentication.userId, drugId)
+        treatmentPlanService.delete(authentication.userId, drugId)
     }
 }
