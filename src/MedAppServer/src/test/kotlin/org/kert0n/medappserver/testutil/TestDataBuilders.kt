@@ -2,7 +2,7 @@ package org.kert0n.medappserver.testutil
 
 import org.kert0n.medappserver.testutil.qty
 import org.kert0n.medappserver.api.DrugCreateDTO
-import org.kert0n.medappserver.api.DrugUpdateDTO
+import org.kert0n.medappserver.api.DrugPatchRequest
 import org.kert0n.medappserver.db.model.*
 import java.util.*
 
@@ -127,7 +127,7 @@ class DrugCreateDTOBuilder {
     }
 }
 
-class DrugUpdateDTOBuilder {
+class DrugPatchRequestBuilder {
     private var name: String? = null
     private var quantity: Double? = null
     private var quantityUnit: String? = null
@@ -146,8 +146,8 @@ class DrugUpdateDTOBuilder {
     fun withCountry(country: String) = apply { this.country = country }
     fun withDescription(description: String) = apply { this.description = description }
 
-    fun build(): DrugUpdateDTO {
-        return DrugUpdateDTO(
+    fun build(): DrugPatchRequest {
+        return DrugPatchRequest(
             name = name,
             quantity = quantity?.let { qty(it) },
             quantityUnit = quantityUnit,
@@ -166,4 +166,4 @@ fun medKitBuilder() = MedKitBuilder()
 fun drugBuilder(medKit: MedKit) = DrugBuilder(medKit)
 fun usingBuilder(user: User, drug: Drug) = UsingBuilder(user, drug)
 fun drugCreateDTOBuilder() = DrugCreateDTOBuilder()
-fun drugUpdateDTOBuilder() = DrugUpdateDTOBuilder()
+fun drugPatchRequestBuilder() = DrugPatchRequestBuilder()

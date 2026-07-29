@@ -31,8 +31,8 @@ class MedKitController(
 ) {
 
     @GetMapping("/med-kits")
-    fun list(authentication: Authentication): Set<MedKitSummaryDTO> =
-        queries.listForUser(authentication.userId).mapTo(linkedSetOf()) { it.toDto() }
+    fun list(authentication: Authentication): List<MedKitSummaryDTO> =
+        queries.listForUser(authentication.userId).map { it.toDto() }
 
     @PostMapping("/med-kits")
     @ResponseStatus(HttpStatus.CREATED)

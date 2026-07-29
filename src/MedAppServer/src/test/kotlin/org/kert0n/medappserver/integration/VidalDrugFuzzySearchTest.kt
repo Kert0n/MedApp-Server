@@ -178,7 +178,7 @@ class VidalDrugFuzzySearchTest {
         val results = vidalDrugService.fuzzySearch("аспир", 10)
         assertTrue(results.isNotEmpty())
         val drugWithForm = results.first { it.formType != null }
-        assertNotNull(drugWithForm.formType?.name, "FormType should be accessible via service results")
+        assertNotNull(drugWithForm.formType, "FormType should be accessible via service results")
     }
 
     @Test

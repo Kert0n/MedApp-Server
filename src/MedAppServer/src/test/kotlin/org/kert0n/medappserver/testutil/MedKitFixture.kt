@@ -43,7 +43,7 @@ class MedKitFixture(
         medKits.findAllById(medKits.findIdsByUserId(userId))
 
     @Transactional(readOnly = true)
-    fun findMedKitSummaries(userId: UUID): Set<MedKitSummary> =
+    fun findMedKitSummaries(userId: UUID): List<MedKitSummary> =
         medKits.findMedKitSummariesByUserId(userId)
 
     fun generateMedKitShareKey(medKitId: UUID, userId: UUID): String =

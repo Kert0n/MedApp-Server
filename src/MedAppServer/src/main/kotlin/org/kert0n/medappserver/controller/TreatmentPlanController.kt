@@ -28,7 +28,7 @@ import java.util.UUID
 @RestController
 @RequestMapping("/v1")
 @Tag(name = "Treatment plans and intakes")
-class UsingsController(
+class TreatmentPlanController(
     private val reads: UsingService,
     private val intakes: IntakeService,
     private val commands: TreatmentPlanService

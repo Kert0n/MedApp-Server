@@ -3,7 +3,7 @@ package org.kert0n.medappserver.services.models
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
 import org.junit.jupiter.api.Test
-import org.kert0n.medappserver.api.UsingCreateDTO
+import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.UsingRepository
 import org.kert0n.medappserver.services.orchestrators.DrugCommandService

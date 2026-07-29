@@ -31,9 +31,6 @@ interface MedKitRepository : JpaRepository<MedKit, UUID> {
     )
     fun findAccessibleWithUsers(medKitId: UUID, userId: UUID): MedKit?
 
-    @Query("SELECT u.id FROM MedKit mk JOIN mk.users u WHERE mk.id = :medKitId")
-    fun findMemberIds(medKitId: UUID): Set<UUID>
-
     @Query("SELECT COUNT(u) FROM MedKit mk JOIN mk.users u WHERE mk.id = :medKitId")
     fun countMembers(medKitId: UUID): Long
 
@@ -76,8 +73,9 @@ interface MedKitRepository : JpaRepository<MedKit, UUID> {
     LEFT JOIN mk.users u
     WHERE mk.id IN (SELECT m.id FROM MedKit m JOIN m.users us WHERE us.id = :userId)
     GROUP BY mk.id
+    ORDER BY mk.id
     """
     )
-    fun findMedKitSummariesByUserId(@Param("userId") userId: UUID): Set<MedKitSummary>
+    fun findMedKitSummariesByUserId(@Param("userId") userId: UUID): List<MedKitSummary>
 
 }

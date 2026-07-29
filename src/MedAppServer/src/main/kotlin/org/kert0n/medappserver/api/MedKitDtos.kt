@@ -13,6 +13,7 @@ data class MedKitDTO(
     val drugs: Set<DrugDTO>
 )
 
+@Schema(description = "Medkit summary")
 data class MedKitSummaryDTO(
     @NotNull
     @Schema(description = "Medkit ID")
@@ -25,6 +26,7 @@ data class MedKitSummaryDTO(
     val drugCount: Long
 )
 
+@Schema(description = "Created medkit")
 data class MedKitCreatedResponse(
     @NotNull
     @Schema(description = "Created medkit ID")
@@ -32,7 +34,10 @@ data class MedKitCreatedResponse(
 )
 
 @Schema(description = "Short-lived invitation to a medkit")
-data class MedKitInvitationDTO(val key: String)
+data class MedKitInvitationDTO(
+    @field:Schema(description = "Share key used to join the medkit", example = "share-key-123")
+    val key: String
+)
 
 @Schema(description = "Join medkit request")
 data class JoinMedKitRequest(

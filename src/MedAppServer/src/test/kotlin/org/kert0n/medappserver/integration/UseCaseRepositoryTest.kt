@@ -43,7 +43,6 @@ class UseCaseRepositoryTest {
         assertNull(drugs.findAccessible(drug.id, outsider.id))
         assertNotNull(medKits.findAccessible(medKit.id, owner.id))
         assertNull(medKits.findAccessible(medKit.id, outsider.id))
-        assertEquals(setOf(owner.id), medKits.findMemberIds(medKit.id))
         assertEquals(1, medKits.countMembers(medKit.id))
     }
 

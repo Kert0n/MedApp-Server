@@ -3,7 +3,7 @@ package org.kert0n.medappserver.integration
 import org.kert0n.medappserver.testutil.qty
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.kert0n.medappserver.api.UsingCreateDTO
+import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
 import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.MedKit
 import org.kert0n.medappserver.db.model.User
@@ -102,7 +102,7 @@ class ErrorResponseShapeTest {
             post("/v1/treatment-plans")
                 .with(jwt().jwt { it.subject(user.id.toString()) })
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(UsingCreateDTO(drug.id, qty(500.0))))
+                .content(objectMapper.writeValueAsString(TreatmentPlanCreateRequest(drug.id, qty(500.0))))
         )
             .andExpect(status().isBadRequest)
             .andReturn().response.contentAsString

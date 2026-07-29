@@ -1,8 +1,8 @@
 package org.kert0n.medappserver.api
 
-import org.kert0n.medappserver.db.model.parsed.VidalDrug
 import org.kert0n.medappserver.services.models.DrugCreation
 import org.kert0n.medappserver.services.models.DrugPatch
+import org.kert0n.medappserver.services.models.DrugTemplateView
 import org.kert0n.medappserver.services.models.DrugView
 import org.kert0n.medappserver.services.models.MedKitContentView
 import org.kert0n.medappserver.services.models.MedKitSummaryView
@@ -35,14 +35,14 @@ fun MedKitSummaryView.toDto(): MedKitSummaryDTO =
     MedKitSummaryDTO(id, userCount, drugCount)
 
 /** Запись справочника в публичный шаблон препарата. */
-fun VidalDrug.toTemplateDto(): DrugTemplateDTO = DrugTemplateDTO(
+fun DrugTemplateView.toTemplateDto(): DrugTemplateDTO = DrugTemplateDTO(
     id = id,
     name = name,
     nameLat = nameLat,
     activeSubstance = activeSubstance,
-    formType = formType?.name,
+    formType = formType,
     category = category,
-    quantityUnit = quantityUnit?.name,
+    quantityUnit = quantityUnit,
     manufacturer = manufacturer,
     country = country,
     description = description
