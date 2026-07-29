@@ -23,6 +23,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer
 import tools.jackson.databind.ObjectMapper
 import java.sql.Connection
 import java.math.BigDecimal
+import java.nio.file.Path
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -55,16 +56,21 @@ class QueryPlanTest {
 
     private lateinit var tx: TransactionTemplate
     private lateinit var explainConnection: Connection
+    private lateinit var report: QueryPlanReport
 
     @BeforeAll
     fun prepare() {
         tx = TransactionTemplate(transactionManager)
         fixture.seed()
         explainConnection = openExplainConnection(container)
+        report = QueryPlanReport(objectMapper)
     }
 
     @AfterAll
-    fun tearDown() = explainConnection.close()
+    fun tearDown() {
+        report.write(Path.of("build/reports/query-plans"))
+        explainConnection.close()
+    }
 
     /** Собирает планы уникальных SELECT измеряемого сценария. */
     private fun plansOf(
@@ -115,6 +121,46 @@ class QueryPlanTest {
                 entityManager.clear()
             }
         }.also { it.queryShape() }
+
+    private fun assertNoSql(name: String, scenario: () -> Unit) {
+        val statements = RecordingDataSource.capture(scenario)
+        assertTrue(statements.isEmpty(), "$name должен выполняться без SQL:\n${statements.diagnostic()}")
+        report.record(
+            QueryMeasurement(
+                owner = name.substringBefore('.'),
+                method = name.substringAfter('.', name),
+                branch = "zero-sql",
+                size = null,
+                result = "0 SQL подтверждено",
+                statements = emptyList(),
+                complexity = "0 SQL"
+            )
+        )
+    }
+
+    private fun record(
+        owner: String,
+        method: String,
+        branch: String,
+        size: Int? = null,
+        result: String,
+        statements: List<ExecutedStatement>,
+        complexity: String = "Θ(1)",
+        forceIndexes: Boolean = true
+    ) {
+        report.record(
+            QueryMeasurement(
+                owner = owner,
+                method = method,
+                branch = branch,
+                size = size,
+                result = result,
+                statements = statements,
+                plans = explainStatements(statements, forceIndexes).map { it.second },
+                complexity = complexity
+            )
+        )
+    }
 
     private fun explainStatements(
         statements: List<ExecutedStatement>,
