@@ -94,18 +94,22 @@ fun explain(
     if ("?" in filled) return null
 
     val json = connection.createStatement().use { jdbc ->
-        runCatching {
+        try {
             // Режим проверяет доступность индексного плана, а не выбор планировщика по цене.
             if (forceIndexes) jdbc.execute("SET enable_seqscan = off")
-            jdbc.executeQuery("EXPLAIN (FORMAT JSON, COSTS OFF) $filled")
-                .use { rows -> if (rows.next()) rows.getString(1) else null }
-        }.getOrElse { error ->
-            // Ошибка остаётся видимой в отчёте даже для неподдерживаемой формы EXPLAIN.
-            println("  ! EXPLAIN не удался: ${error.message?.take(160)}")
-            null
+            jdbc.executeQuery("EXPLAIN (FORMAT JSON, COSTS OFF) $filled").use { rows ->
+                check(rows.next()) { "EXPLAIN не вернул JSON для ${statement.fingerprint}" }
+                rows.getString(1)
+            }
+        } catch (error: Exception) {
+            throw AssertionError(
+                "EXPLAIN не удался для ${statement.diagnostic()}: ${error.message}",
+                error
+            )
+        } finally {
+            if (forceIndexes) jdbc.execute("RESET enable_seqscan")
         }
-    } ?: return null
-    if (forceIndexes) connection.createStatement().use { it.execute("RESET enable_seqscan") }
+    }
 
     val parsed = objectMapper.readValue(json, List::class.java)
     val plan = (parsed.firstOrNull() as? Map<*, *>)?.get("Plan") as? Map<*, *> ?: return null

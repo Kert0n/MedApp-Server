@@ -2,6 +2,7 @@ package org.kert0n.medappserver.queryplan
 
 import jakarta.persistence.EntityManager
 import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import org.kert0n.medappserver.services.models.DrugService
@@ -16,6 +17,8 @@ import org.springframework.context.annotation.Import
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.support.TransactionTemplate
 import java.math.BigDecimal
+import java.nio.file.Path
+import tools.jackson.databind.ObjectMapper
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -35,14 +38,20 @@ class NPlusOneTest {
     @Autowired private lateinit var medKitLifecycle: MedKitLifecycleService
     @Autowired private lateinit var transactionManager: PlatformTransactionManager
     @Autowired private lateinit var entityManager: EntityManager
+    @Autowired private lateinit var objectMapper: ObjectMapper
 
     private lateinit var tx: TransactionTemplate
+    private lateinit var report: NPlusOneReport
 
     @BeforeAll
     fun prepare() {
         tx = TransactionTemplate(transactionManager)
         fixture.seed()
+        report = NPlusOneReport(objectMapper)
     }
+
+    @AfterAll
+    fun writeReport() = report.write(Path.of("build/reports/query-plans"))
 
     private fun assertConstantSql(
         name: String,
@@ -68,6 +77,11 @@ class NPlusOneTest {
             }.distinct().size,
             "$name меняет Hibernate fetch/query-метрики при росте данных: $measured"
         )
+        val owner = name.substringBefore('.')
+        val method = name.substringAfter('.', name)
+        measured.forEach { (size, value) ->
+            report.record(NPlusOneMeasurement(owner, method, size, value, "Θ(1)"))
+        }
         return measured
     }
 
@@ -108,6 +122,15 @@ class NPlusOneTest {
         }
         assertTrue(empty.result.medKits.isEmpty())
         assertEquals(1, empty.statistics.preparedStatements)
+        report.record(
+            NPlusOneMeasurement(
+                "MedKitQueryService",
+                "getUserSnapshot empty",
+                0,
+                empty.statistics,
+                "Θ(1)"
+            )
+        )
 
         assertConstantSql(
             "MedKitQueryService.getContent",
@@ -222,6 +245,17 @@ class NPlusOneTest {
             measured.getValue(20).queryExecutions,
             "число query executions должно оставаться постоянным"
         )
+        measured.forEach { (size, value) ->
+            report.record(
+                NPlusOneMeasurement(
+                    "DrugCommandService",
+                    "consume reconciliation",
+                    size,
+                    value,
+                    "Θ(n) DML; Θ(1) query/fetch"
+                )
+            )
+        }
     }
 
     @Test

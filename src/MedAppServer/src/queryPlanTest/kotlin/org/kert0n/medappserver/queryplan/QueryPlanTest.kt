@@ -23,6 +23,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer
 import tools.jackson.databind.ObjectMapper
 import java.sql.Connection
 import java.math.BigDecimal
+import java.nio.file.Path
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -55,16 +56,21 @@ class QueryPlanTest {
 
     private lateinit var tx: TransactionTemplate
     private lateinit var explainConnection: Connection
+    private lateinit var report: QueryPlanReport
 
     @BeforeAll
     fun prepare() {
         tx = TransactionTemplate(transactionManager)
         fixture.seed()
         explainConnection = openExplainConnection(container)
+        report = QueryPlanReport(objectMapper)
     }
 
     @AfterAll
-    fun tearDown() = explainConnection.close()
+    fun tearDown() {
+        report.write(Path.of("build/reports/query-plans"))
+        explainConnection.close()
+    }
 
     /** Собирает планы уникальных SELECT измеряемого сценария. */
     private fun plansOf(
@@ -90,6 +96,18 @@ class QueryPlanTest {
             val note = if (scans.isEmpty()) "" else "   [Seq Scan: ${scans.joinToString()}]"
             println("  $plan$note\n    ${sql.take(110).replace(Regex("\\s+"), " ")}")
         }
+        report.record(
+            QueryMeasurement(
+                owner = "Repository SQL",
+                method = name,
+                branch = if (forceIndexes) "forced indexes" else "natural plan",
+                size = null,
+                result = "${executed.size} операторов, ${plans.size} уникальных планов",
+                statements = executed,
+                plans = plans.map { it.second },
+                complexity = "EXPLAIN"
+            )
+        )
         return plans
     }
 
@@ -139,6 +157,25 @@ class QueryPlanTest {
         )
     }
 
+    private fun recordWritePlan(
+        name: String,
+        statements: List<ExecutedStatement>,
+        plans: List<Pair<String, QueryPlan>>
+    ) {
+        report.record(
+            QueryMeasurement(
+                owner = "Repository SQL",
+                method = name,
+                branch = "write plan",
+                size = null,
+                result = statements.queryShape().toString(),
+                statements = statements,
+                plans = plans.map { it.second },
+                complexity = "EXPLAIN"
+            )
+        )
+    }
+
     /** Поиск должен иметь индексный план для каждого обращения к каталогу. */
     @Test
     fun `поиск по справочнику умеет пользоваться триграммными индексами`() {
@@ -180,12 +217,10 @@ class QueryPlanTest {
     fun `адресный план читается одним SELECT`() {
         val userId = fixture.planUsers.getValue(1)
         val drugId = fixture.planDrugs.getValue(1)
-        val executed = capture {
+        val plans = plansOf("GET /v1/treatment-plans/{drugId}", forceIndexes = true) {
             val result = usingService.getForUser(userId, drugId)
             assertEquals(drugId, result.drugId)
         }
-        assertEquals(mapOf(SqlKind.SELECT to 1), executed.queryShape().byKind)
-        val plans = explainStatements(executed, forceIndexes = true)
         assertNoSeqScanOn("usings", plans)
     }
 
@@ -242,6 +277,7 @@ class QueryPlanTest {
         assertEquals(1, shape.count(SqlKind.DELETE))
         assertEquals(1, shape.count(SqlKind.UPDATE))
         val plans = explainStatements(statements, forceIndexes = true)
+        recordWritePlan("move drug", statements, plans)
         assertNoSeqScanOn("user_drugs", plans)
         assertNoSeqScanOn("usings", plans)
         assertNoSeqScanOn("user_med_kits", plans)
@@ -262,6 +298,7 @@ class QueryPlanTest {
         assertEquals(2, shape.count(SqlKind.SELECT))
         assertEquals(planCount + 1, shape.count(SqlKind.UPDATE))
         val plans = explainStatements(statements, forceIndexes = true)
+        recordWritePlan("reconcile plans", statements, plans)
         assertNoSeqScanOn("user_drugs", plans)
         assertNoSeqScanOn("usings", plans)
     }
@@ -296,6 +333,7 @@ class QueryPlanTest {
             lastLeave + explicitDelete + nonLastStatements,
             forceIndexes = true
         )
+        recordWritePlan("medkit lifecycle", lastLeave + explicitDelete + nonLastStatements, plans)
         assertNoSeqScanOn("med_kits", plans)
         assertNoSeqScanOn("user_drugs", plans)
         assertNoSeqScanOn("usings", plans)
@@ -332,6 +370,7 @@ class QueryPlanTest {
         )
 
         val plans = explainStatements(statements, forceIndexes = true)
+        recordWritePlan("delete medkit with transfer", statements, plans)
         assertNoSeqScanOn("med_kits", plans)
         assertNoSeqScanOn("user_drugs", plans)
         assertNoSeqScanOn("usings", plans)

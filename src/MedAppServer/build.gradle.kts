@@ -63,6 +63,14 @@ allOpen {
     annotation("jakarta.persistence.Embeddable")
 }
 
+data class JunitSummary(
+    val name: String,
+    val total: Int,
+    val skipped: Int,
+    val failed: Int,
+    val seconds: Double
+)
+
 /**
  * Отдельный набор для проверки планов запросов: src/queryPlanTest/kotlin.
  *
@@ -82,7 +90,10 @@ testing {
                 implementation(project())
                 implementation("org.springframework.boot:spring-boot-starter-test")
                 implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+                implementation("org.springframework.boot:spring-boot-starter-security")
+                implementation("org.springframework.boot:spring-boot-starter-webmvc")
                 implementation("org.springframework.boot:spring-boot-testcontainers")
+                implementation("com.sksamuel.aedile:aedile-core:3.0.2")
                 implementation("org.jetbrains.kotlin:kotlin-test-junit5")
                 implementation("org.testcontainers:testcontainers-junit-jupiter")
                 implementation("org.testcontainers:testcontainers-postgresql")
@@ -102,4 +113,47 @@ tasks.withType<Test> {
     // asserts, so it has no place in a normal run:
     //     ./gradlew test --tests "*QuantityArithmeticBenchmarkTest*" -DrunBenchmark=true
     systemProperty("runBenchmark", System.getProperty("runBenchmark") ?: "false")
+}
+
+tasks.named<Test>("queryPlanTest") {
+    doLast {
+        val summaries = listOf("test", "queryPlanTest").mapNotNull { taskName ->
+            val directory = layout.buildDirectory.dir("test-results/$taskName").get().asFile
+            val files = directory.listFiles { file ->
+                file.name.startsWith("TEST-") && file.extension == "xml"
+            }.orEmpty()
+            if (files.isEmpty()) return@mapNotNull null
+            val factory = javax.xml.parsers.DocumentBuilderFactory.newInstance()
+            val roots = files.map { factory.newDocumentBuilder().parse(it).documentElement }
+            JunitSummary(
+                name = taskName,
+                total = roots.sumOf { it.getAttribute("tests").toInt() },
+                skipped = roots.sumOf { it.getAttribute("skipped").ifBlank { "0" }.toInt() },
+                failed = roots.sumOf {
+                    it.getAttribute("failures").ifBlank { "0" }.toInt() +
+                        it.getAttribute("errors").ifBlank { "0" }.toInt()
+                },
+                seconds = roots.sumOf { it.getAttribute("time").ifBlank { "0" }.toDouble() }
+            )
+        }
+        val report = layout.buildDirectory.file(
+            "reports/query-plans/database-query-report.md"
+        ).get().asFile
+        if (report.isFile) {
+            val table = buildString {
+                appendLine("## Test tasks")
+                appendLine()
+                appendLine("| Набор | Всего | Успешно | Пропущено | Ошибки | Время, с |")
+                appendLine("|---|---:|---:|---:|---:|---:|")
+                summaries.forEach { row ->
+                    appendLine(
+                        "| ${row.name} | ${row.total} | " +
+                            "${row.total - row.skipped - row.failed} | ${row.skipped} | " +
+                            "${row.failed} | ${"%.3f".format(row.seconds)} |"
+                    )
+                }
+            }
+            report.writeText(report.readText().substringBefore("## Test tasks") + table)
+        }
+    }
 }
