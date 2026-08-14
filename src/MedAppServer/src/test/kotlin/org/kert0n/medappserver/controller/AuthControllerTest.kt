@@ -79,14 +79,14 @@ class AuthControllerTest {
     }
 
     @Test
-    fun `POST register - returns 504 when rate limited`() {
+    fun `POST register - returns 429 when rate limited`() {
         whenever(securityService.validateRequest(any())).thenReturn(false)
 
         mockMvc.perform(
             post("/auth/register")
                 .header("X-Registration-Token", "test-secret")
         )
-            .andExpect(status().isGatewayTimeout)
+            .andExpect(status().isTooManyRequests)
     }
 
     @Test

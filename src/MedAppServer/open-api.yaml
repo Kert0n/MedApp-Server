@@ -439,7 +439,7 @@ paths:
                 $ref: "#/components/schemas/RegisterResponse"
         "403":
           description: Invalid registration secret
-        "504":
+        "429":
           description: Too many registration attempts
   /user:
     get:

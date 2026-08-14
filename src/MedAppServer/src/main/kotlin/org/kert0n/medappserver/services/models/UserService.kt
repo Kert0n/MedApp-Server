@@ -31,9 +31,25 @@ class UserService(
         return user
     }
 
+    /**
+     * Логин у нас — это UUID, но приходит он строкой из заголовка Basic, то есть от кого
+     * угодно и в любом виде.
+     *
+     * `UUID.fromString` на мусоре бросает `IllegalArgumentException`, и Spring Security
+     * заворачивает его в `InternalAuthenticationServiceException`. Статус наружу при этом
+     * оставался верным — 401, потому что это всё-таки `AuthenticationException`, — но
+     * каждый такой запрос печатал в лог полный стектрейс как внутреннюю ошибку. То есть
+     * любой неаутентифицированный клиент мог одной строкой в заголовке заставить сервер
+     * писать стектрейсы, а дежурного — искать несуществующий сбой.
+     *
+     * Неразобранный логин — это «такого пользователя нет», а не сбой: тот же
+     * [UsernameNotFoundException], что и для несуществующего UUID.
+     */
     override fun loadUserByUsername(username: String): UserDetails {
         logger.debug("Load user $username")
-        return userRepository.findByIdOrNull(UUID.fromString(username)) ?: throw UsernameNotFoundException(username)
+        val id = runCatching { UUID.fromString(username) }.getOrNull()
+            ?: throw UsernameNotFoundException(username)
+        return userRepository.findByIdOrNull(id) ?: throw UsernameNotFoundException(username)
     }
 
     fun findById(id: UUID): User {
