@@ -1,5 +1,6 @@
 package org.kert0n.medappserver.integration
 
+import org.kert0n.medappserver.PostgresIntegrationTest
 import jakarta.persistence.EntityManager
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.controller.UsingCreateDTO
@@ -11,8 +12,6 @@ import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.test.context.ActiveProfiles
 import org.springframework.transaction.annotation.Transactional
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -35,8 +34,7 @@ import kotlin.test.assertTrue
  *   - If dbHelper.totalPlannedAmount now exceeds quantity, ALL plans scale down proportionally
  *   - dbHelper.totalPlannedAmount == drug.quantity after scaling
  */
-@SpringBootTest
-@ActiveProfiles("test")
+@PostgresIntegrationTest
 @Transactional
 class PlannedQuantityTrackingTests {
 

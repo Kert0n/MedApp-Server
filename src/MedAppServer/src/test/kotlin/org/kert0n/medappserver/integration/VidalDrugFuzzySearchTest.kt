@@ -1,17 +1,14 @@
 package org.kert0n.medappserver.integration
 
+import org.kert0n.medappserver.PostgresIntegrationTest
 import jakarta.persistence.EntityManager
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.kert0n.medappserver.TestcontainersConfiguration
 import org.kert0n.medappserver.db.model.parsed.FormType
 import org.kert0n.medappserver.db.model.parsed.VidalDrug
 import org.kert0n.medappserver.db.repository.VidalDrugRepository
 import org.kert0n.medappserver.services.models.VidalDrugService
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.context.annotation.Import
-import org.springframework.test.context.TestPropertySource
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.support.TransactionTemplate
 import kotlin.test.assertEquals
@@ -27,14 +24,7 @@ import kotlin.test.assertTrue
  * Using @Transactional on tests keeps the Hibernate session open for the entire test,
  * hiding lazy loading bugs that only manifest at runtime.
  */
-@SpringBootTest
-@Import(TestcontainersConfiguration::class)
-@TestPropertySource(
-    properties = [
-        "spring.jpa.hibernate.ddl-auto=create-drop",
-        "spring.jpa.database-platform=org.hibernate.dialect.PostgreSQLDialect"
-    ]
-)
+@PostgresIntegrationTest
 class VidalDrugFuzzySearchTest {
 
     @Autowired
