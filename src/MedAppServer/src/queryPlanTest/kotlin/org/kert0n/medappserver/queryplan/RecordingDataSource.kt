@@ -9,21 +9,46 @@ import javax.sql.DataSource
 
 /** Оператор вместе со значениями, с которыми он реально ушёл в базу. */
 data class ExecutedStatement(val sql: String, val parameters: List<Any?>) {
-    val isSelect: Boolean get() = sql.trimStart().startsWith("select", ignoreCase = true)
+    val kind: SqlKind
+        get() = when (sql.trimStart().substringBefore(' ').uppercase()) {
+            "SELECT" -> SqlKind.SELECT
+            "INSERT" -> SqlKind.INSERT
+            "UPDATE" -> SqlKind.UPDATE
+            "DELETE" -> SqlKind.DELETE
+            else -> SqlKind.OTHER
+        }
+
+    val isSelect: Boolean get() = kind == SqlKind.SELECT
+
+    val fingerprint: String
+        get() = sql.trim()
+            .replace(Regex("\\s+"), " ")
+            .replace(Regex("\\?(?:\\s*,\\s*\\?)+"), "?*")
+            .replace(Regex("(?i)in\\s*\\(\\?\\*?\\)"), "in (?*)")
+            .lowercase()
 }
 
-/**
- * Обёртка над DataSource, запоминающая выполненные операторы **вместе с параметрами**.
- *
- * Зачем не `StatementInspector`, который для этого вроде бы и предназначен: он отдаёт SQL с
- * `?`, а значения остаются в JDBC. Объяснить такой запрос можно только через `GENERIC_PLAN`,
- * а обобщённый план строится без знания избирательности — и для триграммного поиска
- * планировщик там честно выбирает `Seq Scan`, хотя с настоящим значением берёт индекс.
- * Проверено: первая версия набора падала ровно на этом и меряла не то.
- *
- * Поэтому перехват на уровне JDBC: сохраняются и текст, и значения, и план строится
- * настоящий.
- */
+enum class SqlKind { SELECT, INSERT, UPDATE, DELETE, OTHER }
+
+data class QueryShape(
+    val total: Int,
+    val byKind: Map<SqlKind, Int>,
+    val fingerprints: Map<String, Int>
+) {
+    init {
+        require(total > 0) { "Сценарий не выполнил ни одного SQL-оператора" }
+    }
+
+    fun count(kind: SqlKind): Int = byKind[kind] ?: 0
+}
+
+fun List<ExecutedStatement>.queryShape(): QueryShape = QueryShape(
+    total = size,
+    byKind = groupingBy(ExecutedStatement::kind).eachCount(),
+    fingerprints = groupingBy(ExecutedStatement::fingerprint).eachCount()
+)
+
+/** JDBC-обёртка сохраняет фактический SQL и параметры для счётчиков и EXPLAIN. */
 class RecordingDataSource(private val delegate: DataSource) : DataSource by delegate {
 
     override fun getConnection(): Connection = wrap(delegate.connection)
@@ -59,15 +84,22 @@ class RecordingDataSource(private val delegate: DataSource) : DataSource by dele
     ) : InvocationHandler {
 
         private val parameters = sortedMapOf<Int, Any?>()
+        private val batches = mutableListOf<List<Any?>>()
 
         override fun invoke(proxy: Any, method: Method, args: Array<out Any?>?): Any? {
-            // Значения приходят через setString/setObject/setInt и десяток однотипных
-            // методов — перечислять их поимённо значит однажды забыть новый.
             if (method.name.startsWith("set") && (args?.size ?: 0) >= 2) {
                 (args!![0] as? Int)?.let { position -> parameters[position] = args[1] }
             }
             if (method.name == "clearParameters") parameters.clear()
-            if (method.name.startsWith("execute")) {
+            if (method.name == "addBatch") {
+                batches += parameters.values.toList()
+            }
+            if (method.name == "clearBatch") batches.clear()
+            if (method.name == "executeBatch" || method.name == "executeLargeBatch") {
+                (batches.ifEmpty { listOf(parameters.values.toList()) })
+                    .forEach { Recorded.add(ExecutedStatement(sql, it)) }
+                batches.clear()
+            } else if (method.name.startsWith("execute")) {
                 Recorded.add(ExecutedStatement(sql, parameters.values.toList()))
             }
             return method.invoke(target, *(args ?: emptyArray()))
@@ -85,7 +117,6 @@ class RecordingDataSource(private val delegate: DataSource) : DataSource by dele
             if (recording) synchronized(executed) { executed += statement }
         }
 
-        /** Выполняет сценарий и возвращает операторы, которые он породил. */
         fun capture(scenario: () -> Unit): List<ExecutedStatement> {
             synchronized(executed) { executed.clear() }
             recording = true

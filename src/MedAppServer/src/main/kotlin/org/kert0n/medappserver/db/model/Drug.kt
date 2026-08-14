@@ -56,7 +56,15 @@ class Drug(
 
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "med_kit_id", nullable = false)
+    @JoinColumn(
+        name = "med_kit_id",
+        nullable = false,
+        foreignKey = ForeignKey(
+            name = "user_drugs_med_kit_fkey",
+            foreignKeyDefinition =
+                "FOREIGN KEY (med_kit_id) REFERENCES med_kits (id) ON DELETE CASCADE"
+        )
+    )
     var medKit: MedKit,
 
     @OneToMany(mappedBy = "drug", fetch = FetchType.LAZY, cascade = [CascadeType.ALL], orphanRemoval = true)
@@ -183,4 +191,3 @@ class Drug(
         return id.hashCode()
     }
 }
-
