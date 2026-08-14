@@ -54,8 +54,8 @@ class InputSizeLimitsTest {
     }
 
     private fun search(limit: String) = mockMvc.perform(
-        get("/v1/drug/template/search")
-            .param("searchTerm", "aspirin")
+        get("/v1/drug-templates")
+            .param("query", "aspirin")
             .param("limit", limit)
             .with(jwt().jwt { it.subject(userId.toString()) })
     )
@@ -74,8 +74,8 @@ class InputSizeLimitsTest {
         search("50").andExpect(status().isOk)
         // Default applies when the parameter is absent.
         mockMvc.perform(
-            get("/v1/drug/template/search")
-                .param("searchTerm", "aspirin")
+            get("/v1/drug-templates")
+                .param("query", "aspirin")
                 .with(jwt().jwt { it.subject(userId.toString()) })
         ).andExpect(status().isOk)
     }
@@ -84,11 +84,11 @@ class InputSizeLimitsTest {
     fun `oversized description is rejected`() {
         val body = """
             {"name":"Aspirin","quantity":10.0,"quantityUnit":"tab",
-             "medKitId":"${UUID.randomUUID()}","description":"${"x".repeat(4001)}"}
+             "description":"${"x".repeat(4001)}"}
         """.trimIndent()
 
         mockMvc.perform(
-            post("/v1/drug")
+            post("/v1/med-kits/${UUID.randomUUID()}/drugs")
                 .with(jwt().jwt { it.subject(userId.toString()) })
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body)
@@ -98,8 +98,8 @@ class InputSizeLimitsTest {
     @Test
     fun `oversized search term is rejected`() {
         mockMvc.perform(
-            get("/v1/drug/template/search")
-                .param("searchTerm", "x".repeat(201))
+            get("/v1/drug-templates")
+                .param("query", "x".repeat(201))
                 .with(jwt().jwt { it.subject(userId.toString()) })
         ).andExpect(status().isBadRequest)
     }

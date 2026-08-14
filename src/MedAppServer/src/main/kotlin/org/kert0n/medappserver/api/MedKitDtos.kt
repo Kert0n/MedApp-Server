@@ -31,6 +31,9 @@ data class MedKitCreatedResponse(
     val id: UUID
 )
 
+@Schema(description = "Short-lived invitation to a medkit")
+data class MedKitInvitationDTO(val key: String)
+
 @Schema(description = "Join medkit request")
 data class JoinMedKitRequest(
     @NotBlank

@@ -49,7 +49,7 @@ class UserControllerTest {
             .thenReturn(UserSnapshotView(listOf(MedKitContentView(medKitId, emptyList()))))
 
         mockMvc.perform(
-            get("/v1/user")
+            get("/v1/users/me")
                 .with(jwt().jwt { it.subject(userId.toString()) })
         )
             .andExpect(status().isOk)
@@ -60,7 +60,7 @@ class UserControllerTest {
 
     @Test
     fun `GET user data - returns 401 without authentication`() {
-        mockMvc.perform(get("/v1/user"))
+        mockMvc.perform(get("/v1/users/me"))
             .andExpect(status().isUnauthorized)
     }
 
@@ -69,11 +69,18 @@ class UserControllerTest {
         whenever(queries.getUserSnapshot(userId)).thenReturn(UserSnapshotView(emptyList()))
 
         mockMvc.perform(
-            get("/v1/user")
+            get("/v1/users/me")
                 .with(jwt().jwt { it.subject(userId.toString()) })
         )
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.id").value(userId.toString()))
             .andExpect(jsonPath("$.medKits").isEmpty)
+    }
+
+    @Test
+    fun `old user route is absent`() {
+        mockMvc.perform(
+            get("/v1/user").with(jwt().jwt { it.subject(userId.toString()) })
+        ).andExpect(status().isNotFound)
     }
 }
