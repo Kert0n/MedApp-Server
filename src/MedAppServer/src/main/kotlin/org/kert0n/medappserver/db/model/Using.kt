@@ -27,7 +27,14 @@ class Using(
 
     @ManyToOne(fetch = FetchType.EAGER)
     @MapsId("drugId")
-    @JoinColumn(name = "drug_id")
+    @JoinColumn(
+        name = "drug_id",
+        foreignKey = ForeignKey(
+            name = "usings_drug_fkey",
+            foreignKeyDefinition =
+                "FOREIGN KEY (drug_id) REFERENCES user_drugs (id) ON DELETE CASCADE"
+        )
+    )
     var drug: Drug,
 
     plannedAmount: BigDecimal
@@ -90,4 +97,3 @@ class UsingKey(
         return Objects.hash(userId, drugId)
     }
 }
-
