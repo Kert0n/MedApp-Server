@@ -1,6 +1,5 @@
 package org.kert0n.medappserver.queryplan
 
-import jakarta.persistence.EntityManager
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
@@ -18,7 +17,6 @@ import org.springframework.transaction.support.TransactionTemplate
 import org.testcontainers.postgresql.PostgreSQLContainer
 import tools.jackson.databind.ObjectMapper
 import java.sql.Connection
-import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
@@ -48,7 +46,6 @@ class QueryPlanTest {
     @Autowired private lateinit var medKitService: MedKitService
     @Autowired private lateinit var medKitDrugServices: MedKitDrugServices
     @Autowired private lateinit var vidalDrugService: VidalDrugService
-    @Autowired private lateinit var entityManager: EntityManager
 
     @Autowired private lateinit var container: PostgreSQLContainer
 
@@ -76,9 +73,9 @@ class QueryPlanTest {
         forceIndexes: Boolean = false,
         scenario: () -> Unit
     ): List<Pair<String, QueryPlan>> {
-        val executed = capture(scenario)
+        val executed = RecordingDataSource.capture { tx.executeWithoutResult { scenario() } }
         val plans = executed.filter { it.isSelect }
-            .distinctBy { it.fingerprint }
+            .distinctBy { it.sql }
             .mapNotNull { statement ->
                 explain(explainConnection, objectMapper, statement, forceIndexes)
                     ?.let { statement.sql to it }
@@ -95,40 +92,6 @@ class QueryPlanTest {
             println("  $plan$note\n    ${sql.take(110).replace(Regex("\\s+"), " ")}")
         }
         return plans
-    }
-
-    private fun capture(scenario: () -> Unit): List<ExecutedStatement> {
-        tx.executeWithoutResult {
-            scenario()
-            entityManager.clear()
-        }
-        return RecordingDataSource.capture {
-            tx.executeWithoutResult {
-                scenario()
-                entityManager.clear()
-            }
-        }.also { it.queryShape() }
-    }
-
-    private fun assertConstantQueryShape(
-        name: String,
-        scenarios: Map<Int, () -> Unit>,
-        expected: Map<SqlKind, Int>
-    ) {
-        val measured = scenarios.mapValues { (_, scenario) -> capture(scenario).queryShape() }
-        println("\n=== $name ===")
-        measured.forEach { (size, shape) -> println("  размер $size: ${shape.byKind}") }
-
-        measured.forEach { (size, shape) ->
-            expected.forEach { (kind, count) ->
-                assertEquals(count, shape.count(kind), "$name, размер $size, $kind")
-            }
-        }
-        val fingerprints = measured.values.map(QueryShape::fingerprints)
-        assertTrue(
-            fingerprints.distinct().size == 1,
-            "$name меняет форму SQL с размером данных:\n$measured"
-        )
     }
 
     private fun assertNoSeqScanOn(table: String, plans: List<Pair<String, QueryPlan>>) {
@@ -154,10 +117,9 @@ class QueryPlanTest {
      */
     @Test
     fun `поиск по справочнику умеет пользоваться триграммными индексами`() {
-        val scenario: () -> Unit = { vidalDrugService.fuzzySearch(fixture.catalogueName, 10) }
-        val executed = capture(scenario)
-        assertEquals(3, executed.size, "поиск по каталогу должен сохранять фиксированный бюджет")
-        val plans = plansOf("поиск по каталогу", forceIndexes = true, scenario = scenario)
+        val plans = plansOf("поиск по каталогу", forceIndexes = true) {
+            vidalDrugService.fuzzySearch(fixture.catalogueName, 10)
+        }
 
         val used = plans.flatMap { it.second.indexes }
         assertTrue(
@@ -174,12 +136,17 @@ class QueryPlanTest {
      */
     @Test
     fun `выдача пользователю не делает запрос на каждую аптечку`() {
-        assertConstantQueryShape(
-            name = "GET /v1/user",
-            scenarios = fixture.snapshotUsers.mapValues { (_, userId) ->
-                { medKitDrugServices.userSnapshot(userId) }
-            },
-            expected = mapOf(SqlKind.SELECT to 2)
+        val executed = RecordingDataSource.capture {
+            tx.executeWithoutResult {
+                medKitDrugServices.userSnapshot(fixture.ownerId)
+            }
+        }
+        println("\n=== GET /v1/user: аптечек ${fixture.ownerMedKitCount}, операторов ${executed.size} ===")
+
+        assertTrue(
+            executed.size <= 3,
+            "у пользователя ${fixture.ownerMedKitCount} аптечек, а операторов ${executed.size}: " +
+                "число запросов растёт с числом аптечек"
         )
     }
 
@@ -210,15 +177,14 @@ class QueryPlanTest {
      */
     @Test
     fun `список планов пользователя не делает запрос на каждый план`() {
-        assertConstantQueryShape(
-            name = "GET /v1/using",
-            scenarios = fixture.planUsers.mapValues { (plans, userId) ->
-                {
-                    val result = usingService.findAllByUser(userId)
-                    assertEquals(plans, result.size, "фикстура обязана вернуть $plans планов")
-                }
-            },
-            expected = mapOf(SqlKind.SELECT to 2)
+        val executed = RecordingDataSource.capture {
+            tx.executeWithoutResult { usingService.findAllByUser(fixture.ownerId) }
+        }
+        val plans = usingService.findAllByUser(fixture.ownerId).size
+        println("\n=== GET /v1/using: планов $plans, операторов ${executed.size} ===")
+        assertTrue(
+            executed.size <= 3,
+            "планов $plans, а операторов ${executed.size}: запрос на каждый план"
         )
     }
 

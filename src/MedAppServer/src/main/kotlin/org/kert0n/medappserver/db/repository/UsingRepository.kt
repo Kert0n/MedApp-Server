@@ -15,12 +15,6 @@ interface UsingRepository : JpaRepository<Using, UsingKey> {
 
     fun findAllByUsingKeyDrugId(@Param("drugId") drugId: UUID): List<Using>
 
-    @Query("SELECT u FROM Using u WHERE u.usingKey.userId = :userId")
-    fun findAllByUserId(userId: UUID): List<Using>
-
-    @Query("SELECT u FROM Using u WHERE u.usingKey.drugId = :drugId ORDER BY u.usingKey.userId")
-    fun findAllByDrugId(drugId: UUID): List<Using>
-
     @Query(
         """
         SELECT u FROM Using u
@@ -68,10 +62,6 @@ interface UsingRepository : JpaRepository<Using, UsingKey> {
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("DELETE FROM Using u WHERE u.drug.medKit.id = :medKitId AND u.user.id NOT IN :userIds")
     fun deleteByMedKitIdAndUserIdNotIn(medKitId: UUID, userIds: Collection<UUID>)
-
-    @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query("DELETE FROM Using u WHERE u.drug.id = :drugId AND u.user.id NOT IN :userIds")
-    fun deleteByDrugIdAndUserIdNotIn(drugId: UUID, userIds: Collection<UUID>): Int
 
 
 }

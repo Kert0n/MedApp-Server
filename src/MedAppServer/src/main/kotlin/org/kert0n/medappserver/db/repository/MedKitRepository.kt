@@ -10,38 +10,6 @@ import java.util.*
 
 interface MedKitRepository : JpaRepository<MedKit, UUID> {
 
-    @Query(
-        """
-        SELECT mk FROM MedKit mk
-        JOIN mk.users u
-        WHERE mk.id = :medKitId AND u.id = :userId
-        """
-    )
-    fun findAccessible(medKitId: UUID, userId: UUID): MedKit?
-
-    @EntityGraph(attributePaths = ["users"])
-    @Query(
-        """
-        SELECT mk FROM MedKit mk
-        JOIN mk.users u
-        WHERE mk.id = :medKitId AND u.id = :userId
-        """
-    )
-    fun findAccessibleWithUsers(medKitId: UUID, userId: UUID): MedKit?
-
-    @Query("SELECT u.id FROM MedKit mk JOIN mk.users u WHERE mk.id = :medKitId")
-    fun findMemberIds(medKitId: UUID): Set<UUID>
-
-    @Query("SELECT COUNT(u) FROM MedKit mk JOIN mk.users u WHERE mk.id = :medKitId")
-    fun countMembers(medKitId: UUID): Long
-
-    @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query(
-        value = "DELETE FROM user_med_kits WHERE med_kit_id = :medKitId AND user_id = :userId",
-        nativeQuery = true
-    )
-    fun deleteMembership(medKitId: UUID, userId: UUID): Int
-
     @EntityGraph(attributePaths = ["drugs"])
     @Query(
         """
