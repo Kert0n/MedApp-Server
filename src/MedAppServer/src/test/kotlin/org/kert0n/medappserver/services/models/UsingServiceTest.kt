@@ -1,13 +1,15 @@
 package org.kert0n.medappserver.services.models
 
+import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertNotNull
-import org.kert0n.medappserver.controller.UsingCreateDTO
-import org.kert0n.medappserver.controller.UsingUpdateDTO
+import org.kert0n.medappserver.api.UsingCreateDTO
+import org.kert0n.medappserver.api.UsingUpdateDTO
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
+import org.kert0n.medappserver.services.orchestrators.QuantityReductionService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
@@ -25,6 +27,9 @@ class UsingServiceTest {
 
     @Autowired
     private lateinit var usingService: UsingService
+
+    @Autowired
+    private lateinit var quantityReductionService: QuantityReductionService
     @Autowired
     private lateinit var drugService: DrugService
     @Autowired
@@ -186,7 +191,7 @@ class UsingServiceTest {
         usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(30.0)))
         dbHelper.flushAndClear()
 
-        val updated = usingService.recordIntake(alice.id, drug.id, qty(10.0))
+        val updated = quantityReductionService.applyIntake(alice.id, drug.id, qty(10.0))
         assertNotNull(updated)
         assertQty(20.0, updated.plannedAmount)
         assertQty(90.0, drugService.findById(drug.id).quantity)
@@ -203,7 +208,7 @@ class UsingServiceTest {
         dbHelper.flushAndClear()
 
         val ex = assertFailsWith<ResponseStatusException> {
-            usingService.recordIntake(alice.id, drug.id, qty(15.0))
+            quantityReductionService.applyIntake(alice.id, drug.id, qty(15.0))
         }
         assertTrue(ex.reason!!.contains("exceeds planned amount"))
     }
@@ -224,7 +229,7 @@ class UsingServiceTest {
         drugRepository.saveAndFlush(directDrug)
 
         val ex = assertFailsWith<ResponseStatusException> {
-            usingService.recordIntake(alice.id, drug.id, qty(5.0))
+            quantityReductionService.applyIntake(alice.id, drug.id, qty(5.0))
         }
         assertTrue(ex.reason!!.contains("Insufficient drug quantity"))
     }
@@ -239,7 +244,7 @@ class UsingServiceTest {
         usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(10.0)))
         dbHelper.flushAndClear()
 
-        val result = usingService.recordIntake(alice.id, drug.id, qty(10.0))
+        val result = quantityReductionService.applyIntake(alice.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
         assertNull(result)
@@ -279,7 +284,7 @@ class UsingServiceTest {
         val using = usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(30.0)))
         dbHelper.flushAndClear()
 
-        val dto = usingService.toUsingDTO(using)
+        val dto = using.toDto()
         assertEquals(alice.id, dto.userId)
         assertEquals(drug.id, dto.drugId)
         assertQty(30.0, dto.plannedAmount)

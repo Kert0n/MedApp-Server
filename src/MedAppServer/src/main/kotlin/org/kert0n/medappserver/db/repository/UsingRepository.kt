@@ -33,9 +33,35 @@ interface UsingRepository : JpaRepository<Using, UsingKey> {
     )
     fun findAllByUserIdWithDrug(@Param("userId") userId: UUID): List<Using>
 
-    @Modifying
+    /**
+     * Все планы одного участника во всех препаратах аптечки — одним оператором.
+     *
+     * Альтернатива — загрузить препараты аптечки с планами и вычистить коллекции: это выборка
+     * всего содержимого плюс DELETE на каждый план. Здесь работу делает БД.
+     *
+     * `flushAutomatically`: bulk идёт мимо контекста персистентности, поэтому несохранённые
+     * изменения обязаны попасть в базу раньше, иначе они перезапишут результат. `clearAutomatically`
+     * намеренно **не** включён — он отцепил бы все сущности, включая аптечку и пользователя,
+     * которых вызывающий правит следующей строкой.
+     */
+    @Modifying(flushAutomatically = true)
     @Query("DELETE FROM Using u WHERE u.user.id = :userId AND u.drug.medKit.id = :medKitId")
     fun deleteByUserIdAndMedKitId(userId: UUID, medKitId: UUID)
+
+    /**
+     * Планы всех, кто не входит в переданный список, по всем препаратам аптечки.
+     *
+     * Нужен при переносе препаратов в другую аптечку: планы участников, которых в целевой
+     * аптечке нет, обязаны исчезнуть. Список не бывает пустым — в целевой аптечке всегда есть
+     * как минимум тот, кто перенос затеял.
+     *
+     * `clearAutomatically` по той же причине, что у `reassignMedKit`: дальше по этому пути
+     * идёт удаление аптечки каскадом, и любая коллекция планов, загруженная выше по
+     * транзакции, после bulk врёт.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("DELETE FROM Using u WHERE u.drug.medKit.id = :medKitId AND u.user.id NOT IN :userIds")
+    fun deleteByMedKitIdAndUserIdNotIn(medKitId: UUID, userIds: Collection<UUID>)
 
 
 }

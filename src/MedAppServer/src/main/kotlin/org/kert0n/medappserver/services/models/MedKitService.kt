@@ -1,7 +1,7 @@
 package org.kert0n.medappserver.services.models
 
 import com.sksamuel.aedile.core.Cache
-import org.kert0n.medappserver.controller.MedKitSummaryDTO
+import org.kert0n.medappserver.api.MedKitSummaryDTO
 import org.kert0n.medappserver.db.model.MedKit
 import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.db.repository.MedKitRepository
@@ -52,6 +52,48 @@ class MedKitService(
             "Medkit not found or user has insufficient privileges"
         )
 
+    }
+
+    /**
+     * Аптечка с загруженными участниками.
+     *
+     * Отдельный метод, а не флаг у [findByIdForUser]: форма выборки — часть контракта, и по
+     * имени должно быть видно, что участники уже здесь и обращение к `users` не превратится
+     * в запрос.
+     */
+    @Transactional(readOnly = true)
+    fun findByIdForUserWithUsers(medKitId: UUID, userId: UUID): MedKit =
+        medKitRepository.findByIdAndUsersIdWithUsers(medKitId, userId)
+            ?: throw ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "Medkit not found or user has insufficient privileges"
+            )
+
+    /**
+     * Аптечка со всем, что нужно для удаления: участники, препараты и их планы.
+     *
+     * Граф здесь не оптимизация, а условие корректности: удаление идёт каскадом по
+     * `medKit.drugs`, а по неинициализированной коллекции каскад проходит впустую.
+     */
+    @Transactional(readOnly = true)
+    fun findByIdForUserForDeletion(medKitId: UUID, userId: UUID): MedKit =
+        medKitRepository.findByIdAndUserIdForDeletion(medKitId, userId)
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Cant find deletion target")
+
+    /** Удалить аптечку. Каскад по drugs и users — на стороне маппинга. */
+    @Transactional
+    fun delete(medKit: MedKit) = medKitRepository.delete(medKit)
+
+    /**
+     * Перенести все препараты аптечки в другую одним оператором.
+     *
+     * Вызывать только с аптечкой, у которой коллекция препаратов не загружена: подробности
+     * и последствия — в KDoc `MedKitRepository.reassignMedKit`.
+     */
+    @Transactional
+    fun reassignAllDrugs(fromMedKitId: UUID, toMedKitId: UUID) {
+        logger.debug("Reassigning drugs from medkit {} to {}", fromMedKitId, toMedKitId)
+        medKitRepository.reassignMedKit(fromMedKitId, toMedKitId)
     }
 
     @Transactional(readOnly = true)

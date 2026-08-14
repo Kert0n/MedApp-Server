@@ -5,7 +5,7 @@ import org.kert0n.medappserver.testutil.qty
 import org.kert0n.medappserver.PostgresIntegrationTest
 import jakarta.persistence.EntityManager
 import org.junit.jupiter.api.Test
-import org.kert0n.medappserver.controller.UsingCreateDTO
+import org.kert0n.medappserver.api.UsingCreateDTO
 import org.kert0n.medappserver.db.model.Using
 import org.kert0n.medappserver.db.model.UsingKey
 import org.kert0n.medappserver.db.repository.DrugRepository
@@ -15,6 +15,7 @@ import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
+import org.kert0n.medappserver.services.orchestrators.QuantityReductionService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.transaction.annotation.Transactional
@@ -39,6 +40,9 @@ class QuantityReductionTests {
 
     @Autowired
     private lateinit var userRepository: UserRepository
+
+    @Autowired
+    private lateinit var quantityReductionService: QuantityReductionService
 
     @Autowired
     private lateinit var drugRepository: DrugRepository
@@ -84,7 +88,7 @@ class QuantityReductionTests {
         usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(20.0)))
         dbHelper.flushAndClear()
 
-        drugService.consumeDrug(drug.id, qty(50.0), alice.id)
+        quantityReductionService.consume(drug.id, qty(50.0), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(50.0, dbHelper.drugQuantity(drug.id))
@@ -119,7 +123,7 @@ class QuantityReductionTests {
         usingService.createTreatmentPlan(charlie.id, UsingCreateDTO(drug.id, qty(30.0)))
         dbHelper.flushAndClear()
 
-        drugService.consumeDrug(drug.id, qty(30.0), alice.id)
+        quantityReductionService.consume(drug.id, qty(30.0), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(60.0, dbHelper.drugQuantity(drug.id))
@@ -155,7 +159,7 @@ class QuantityReductionTests {
         usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(40.0)))
         dbHelper.flushAndClear()
 
-        drugService.consumeDrug(drug.id, qty(50.0), alice.id)
+        quantityReductionService.consume(drug.id, qty(50.0), alice.id)
         dbHelper.flushAndClear()
 
         val alicePlan = dbHelper.userPlan(alice.id, drug.id)!!
@@ -199,7 +203,7 @@ class QuantityReductionTests {
         dbHelper.flushAndClear()
 
         // First reduction
-        drugService.consumeDrug(drug.id, qty(40.0), alice.id)
+        quantityReductionService.consume(drug.id, qty(40.0), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(40.0, dbHelper.drugQuantity(drug.id))
@@ -208,7 +212,7 @@ class QuantityReductionTests {
         assertQty(40.0, dbHelper.totalPlanned(drug.id))
 
         // Second reduction
-        drugService.consumeDrug(drug.id, qty(20.0), alice.id)
+        quantityReductionService.consume(drug.id, qty(20.0), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(20.0, dbHelper.drugQuantity(drug.id))
@@ -243,7 +247,7 @@ class QuantityReductionTests {
         usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(50.0)))
         dbHelper.flushAndClear()
 
-        drugService.consumeDrug(drug.id, qty(75.0), alice.id)
+        quantityReductionService.consume(drug.id, qty(75.0), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(25.0, dbHelper.drugQuantity(drug.id))
@@ -288,7 +292,7 @@ class QuantityReductionTests {
         assertEquals(3, usingService.findAllByDrug(drug.id).size)
 
         // Action: Consume ALL 60 unplanned
-        drugService.consumeDrug(drug.id, qty(60.0), alice.id)
+        quantityReductionService.consume(drug.id, qty(60.0), alice.id)
         dbHelper.flushAndClear()
 
         // 1. Verify the Drug record is GONE (Privacy-by-Default)
@@ -326,7 +330,7 @@ class QuantityReductionTests {
         assertEquals(1, usingService.findAllByDrug(drug.id).size)
 
         // Action: Consume everything in one go
-        drugService.consumeDrug(drug.id, qty(50.0), alice.id)
+        quantityReductionService.consume(drug.id, qty(50.0), alice.id)
         dbHelper.flushAndClear()
 
         // 1. Verify Drug is PURGED
@@ -368,7 +372,7 @@ class QuantityReductionTests {
         dbHelper.flushAndClear()
 
         // --- Step 1: Halve everything ---
-        drugService.consumeDrug(drug.id, qty(5.0), alice.id)
+        quantityReductionService.consume(drug.id, qty(5.0), alice.id)
         dbHelper.flushAndClear()
 
         // Drug still exists here
@@ -378,7 +382,7 @@ class QuantityReductionTests {
         assertEquals(2, usingService.findAllByDrug(drug.id).size, "Still 2 plans after partial reduction")
 
         // --- Step 2: Wipe everything ---
-        drugService.consumeDrug(drug.id, qty(5.0), alice.id)
+        quantityReductionService.consume(drug.id, qty(5.0), alice.id)
         dbHelper.flushAndClear()
 
         // 1. Verify Drug is PURGED (Privacy-by-Default)
@@ -430,7 +434,7 @@ class QuantityReductionTests {
         dbHelper.flushAndClear()
 
         // Забирает весь остаток; план при этом остаётся ненулевым (5 - 2 = 3).
-        val result = usingService.recordIntake(alice.id, drug.id, qty(2.0))
+        val result = quantityReductionService.applyIntake(alice.id, drug.id, qty(2.0))
 
         assertNull(result, "препарат удалён, поэтому возвращать план нечего")
         // Без guard'а здесь падал бы flush: план сохранялся бы со ссылкой на удалённую строку.

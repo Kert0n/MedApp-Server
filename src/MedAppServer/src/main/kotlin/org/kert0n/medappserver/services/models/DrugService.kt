@@ -1,12 +1,11 @@
 package org.kert0n.medappserver.services.models
 
-import org.kert0n.medappserver.controller.DrugCreateDTO
-import org.kert0n.medappserver.controller.DrugDTO
-import org.kert0n.medappserver.controller.DrugUpdateDTO
+import org.kert0n.medappserver.api.DrugCreateDTO
+import org.kert0n.medappserver.api.DrugDTO
+import org.kert0n.medappserver.api.DrugUpdateDTO
 import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.MedKit
 import org.kert0n.medappserver.db.repository.DrugRepository
-import org.kert0n.medappserver.services.orchestrators.QuantityReductionService
 import org.slf4j.LoggerFactory
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.http.HttpStatus
@@ -18,8 +17,7 @@ import java.util.*
 
 @Service
 class DrugService(
-    private val drugRepository: DrugRepository,
-    private val quantityReductionService: QuantityReductionService
+    private val drugRepository: DrugRepository
 ) {
 
     private val logger = LoggerFactory.getLogger(DrugService::class.java)
@@ -89,6 +87,13 @@ class DrugService(
         return drugRepository.save(drug)
     }
 
+    /**
+     * Правка полей препарата.
+     *
+     * Согласование планов после уменьшения количества сюда не входит: это координация двух
+     * сущностей, ею занимается `QuantityReductionService.updateDrug`, который этот метод и
+     * вызывает. Здесь только свой агрегат.
+     */
     @Transactional
     fun update(drugId: UUID, updateDTO: DrugUpdateDTO, userId: UUID): Drug {
         logger.debug("Updating drug: {}", drugId)
@@ -96,14 +101,7 @@ class DrugService(
         val drug = findByIdForUserForUpdate(drugId, userId)
 
         updateDTO.name?.let { drug.name = it }
-        updateDTO.quantity?.let {
-            val oldQuantity = drug.quantity
-            drug.quantity = it
-            // Handle quantity reduction - may need to adjust treatment plans
-            if (it < oldQuantity) {
-                quantityReductionService.handleQuantityReduction(drug)
-            }
-        }
+        updateDTO.quantity?.let { drug.quantity = it }
         updateDTO.quantityUnit?.let { drug.quantityUnit = it }
         updateDTO.formType?.let { drug.formType = it }
         updateDTO.category?.let { drug.category = it }
@@ -114,6 +112,39 @@ class DrugService(
         return drugRepository.save(drug)
     }
 
+    /** Сохранить препарат. Нужен оркестраторам: репозиторий им напрямую недоступен. */
+    @Transactional
+    fun save(drug: Drug): Drug = drugRepository.save(drug)
+
+    /** Удалить препарат. Планы уходят каскадом — при условии, что коллекция загружена. */
+    @Transactional
+    fun delete(drug: Drug) = drugRepository.delete(drug)
+
+    /**
+     * Препарат с загруженными планами и проверкой доступа.
+     *
+     * Граф обязателен там, где дальше правится коллекция планов: `Drug.usings` объявлена с
+     * `orphanRemoval`, и по неинициализированной коллекции удаление проходит впустую.
+     */
+    @Transactional(readOnly = true)
+    fun findByIdForUserWithPlans(drugId: UUID, userId: UUID): Drug =
+        drugRepository.findByIdAndMedKitUsersIdWithUsings(drugId, userId)
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Drug not found or access denied")
+
+    /**
+     * Тот же препарат, но с инициализированной коллекцией планов и без проверки доступа.
+     *
+     * Для путей, где доступ уже проверен выборкой под блокировку: повторять проверку значит
+     * повторять join к аптечке и её участникам ни за чем.
+     */
+    @Transactional(readOnly = true)
+    fun findWithPlans(drugId: UUID): Drug? = drugRepository.findWithUsingsById(drugId)
+
+    /** Все препараты аптечки вместе с планами — одним запросом. */
+    @Transactional(readOnly = true)
+    fun findAllWithPlansByMedKit(medKitId: UUID): List<Drug> =
+        drugRepository.findAllWithUsingsByMedKitId(medKitId)
+
     @Transactional
     fun delete(drugId: UUID, userId: UUID) {
         logger.debug("Deleting drug: {}", drugId)
@@ -123,43 +154,12 @@ class DrugService(
     }
 
 
-    @Transactional
-    fun consumeDrug(drugId: UUID, quantity: BigDecimal, userId: UUID): Drug? {
-        logger.debug("Consuming {} of drug {}", quantity, drugId)
-
-        val drug = findByIdForUserForUpdate(drugId, userId)
-
-        if (quantity > drug.quantity) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Insufficient quantity available")
-        }
-
-        drug.quantity = drug.quantity - quantity
-        drugRepository.save(drug)
-        return quantityReductionService.handleQuantityReduction(drug)
-
-    }
 
 
     //    @Transactional(readOnly = true)
 //    fun getPlannedQuantity(drugId: UUID): Double {
 //        return drugRepository.sumPlannedAmount(drugId)
 //    }
-    @Transactional(readOnly = true)
-    fun toDrugDTO(drug: Drug): DrugDTO {
-        return DrugDTO(
-            id = drug.id,
-            name = drug.name,
-            quantity = drug.quantity,
-            plannedQuantity = drug.totalPlannedAmount,
-            quantityUnit = drug.quantityUnit,
-            formType = drug.formType,
-            category = drug.category,
-            manufacturer = drug.manufacturer,
-            country = drug.country,
-            description = drug.description,
-            medKitId = drug.medKit.id
-        )
-    }
 
 
 }

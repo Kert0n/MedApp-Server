@@ -1,5 +1,7 @@
 package org.kert0n.medappserver.controller
 
+import org.kert0n.medappserver.api.DrugDTO
+import org.kert0n.medappserver.api.MedKitDTO
 import org.kert0n.medappserver.testutil.qty
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -58,7 +60,6 @@ class UserControllerTest {
         val medKitDTO = MedKitDTO(id = medKitId, drugs = setOf(drugDTO))
         val medKits = listOf(org.kert0n.medappserver.db.model.MedKit(id = medKitId))
         whenever(medKitService.findAllByUser(userId)).thenReturn(medKits)
-        whenever(medKitDrugServices.toMedKitDTO(any())).thenReturn(medKitDTO)
 
         mockMvc.perform(
             get("/v1/user")

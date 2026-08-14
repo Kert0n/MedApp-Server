@@ -5,8 +5,8 @@ import org.kert0n.medappserver.testutil.qty
 import org.kert0n.medappserver.PostgresIntegrationTest
 import jakarta.persistence.EntityManager
 import org.junit.jupiter.api.Test
-import org.kert0n.medappserver.controller.UsingCreateDTO
-import org.kert0n.medappserver.controller.UsingUpdateDTO
+import org.kert0n.medappserver.api.UsingCreateDTO
+import org.kert0n.medappserver.api.UsingUpdateDTO
 import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.db.repository.DrugRepository
@@ -16,6 +16,7 @@ import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
+import org.kert0n.medappserver.services.orchestrators.QuantityReductionService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.transaction.annotation.Transactional
@@ -29,6 +30,9 @@ class DrugMovementStoriesTest {
 
     @Autowired
     private lateinit var userRepository: UserRepository
+
+    @Autowired
+    private lateinit var quantityReductionService: QuantityReductionService
 
     @Autowired
     private lateinit var drugRepository: DrugRepository
@@ -290,7 +294,7 @@ class DrugMovementStoriesTest {
         // Bob consumes 50 pills (ignoring his plan limit for emergency)
         // Drug quantity drops to 50.
         // Factor should be: 50 / 100 = 0.5
-        drugService.consumeDrug(drug.id, qty(50.0), bob.id)
+        quantityReductionService.consume(drug.id, qty(50.0), bob.id)
 
         entityManager.flush()
         entityManager.clear()

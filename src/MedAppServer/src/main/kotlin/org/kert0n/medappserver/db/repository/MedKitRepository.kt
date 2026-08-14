@@ -1,6 +1,6 @@
 package org.kert0n.medappserver.db.repository
 
-import org.kert0n.medappserver.controller.MedKitSummaryDTO
+import org.kert0n.medappserver.api.MedKitSummaryDTO
 import org.kert0n.medappserver.db.model.MedKit
 import org.springframework.data.jpa.repository.EntityGraph
 import org.springframework.data.jpa.repository.JpaRepository
@@ -50,7 +50,7 @@ interface MedKitRepository : JpaRepository<MedKit, UUID> {
 
     @Query(
         """
-        SELECT new org.kert0n.medappserver.controller.MedKitSummaryDTO(
+        SELECT new org.kert0n.medappserver.api.MedKitSummaryDTO(
         mk.id, 
         COUNT(DISTINCT u), 
         COUNT(DISTINCT d)
@@ -90,7 +90,23 @@ interface MedKitRepository : JpaRepository<MedKit, UUID> {
         @Param("userId") userId: UUID
     ): MedKit?
 
-    @Modifying
+    /**
+     * Переносит все препараты аптечки в другую — одним оператором.
+     *
+     * Альтернатива — пройти по `medKit.drugs` и каждому переставить ссылку: выборка всех
+     * препаратов плюс UPDATE на каждый. Здесь работу делает БД.
+     *
+     * `clearAutomatically` здесь обязателен, и это не перестраховка. Загруженная ранее
+     * `medKit.drugs` после bulk показывает препараты, которых в аптечке уже нет, а удаление
+     * аптечки идёт каскадом по этой коллекции — то есть каскад сносит только что
+     * перенесённое. Загрузить аптечку «без графа» внутри метода недостаточно: коллекцию мог
+     * инициализировать любой запрос выше по транзакции (например `findByUserId`, у которого
+     * граф с `drugs`), и Hibernate вернёт тот же управляемый экземпляр. Проверено падением
+     * теста миграции: препараты переезжали, а затем удалялись каскадом.
+     *
+     * Следствие для вызывающего: всё, что нужно после этого оператора, читать заново.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("UPDATE Drug d SET d.medKit.id = :targetMedKitId WHERE d.medKit.id = :homeMedkit")
     fun reassignMedKit(homeMedkit: UUID, targetMedKitId: UUID)
 }

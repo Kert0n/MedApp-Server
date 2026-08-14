@@ -45,6 +45,16 @@ class Using(
             field = value.toQuantityScale()
         }
 
+    /**
+     * Уменьшает план на принятое количество, не уходя ниже нуля.
+     *
+     * Отсечение по нулю — часть инварианта плана, а не деталь вызывающего: отрицательный
+     * план не значит ничего, и допускать его хотя бы на время транзакции незачем.
+     */
+    fun reduceBy(amount: BigDecimal) {
+        plannedAmount = maxOf(BigDecimal.ZERO, plannedAmount - amount)
+    }
+
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false

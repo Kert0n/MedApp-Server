@@ -3,7 +3,7 @@ package org.kert0n.medappserver.integration
 import org.kert0n.medappserver.testutil.qty
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.kert0n.medappserver.controller.UsingCreateDTO
+import org.kert0n.medappserver.api.UsingCreateDTO
 import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.MedKit
 import org.kert0n.medappserver.db.model.User

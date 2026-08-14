@@ -1,14 +1,16 @@
 package org.kert0n.medappserver.services.models
 
+import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
-import org.kert0n.medappserver.controller.DrugCreateDTO
-import org.kert0n.medappserver.controller.DrugUpdateDTO
-import org.kert0n.medappserver.controller.UsingCreateDTO
+import org.kert0n.medappserver.api.DrugCreateDTO
+import org.kert0n.medappserver.api.DrugUpdateDTO
+import org.kert0n.medappserver.api.UsingCreateDTO
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
+import org.kert0n.medappserver.services.orchestrators.QuantityReductionService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
@@ -25,6 +27,9 @@ class DrugServiceTest {
 
     @Autowired
     private lateinit var drugService: DrugService
+
+    @Autowired
+    private lateinit var quantityReductionService: QuantityReductionService
     @Autowired
     private lateinit var medKitService: MedKitService
     @Autowired
@@ -128,7 +133,7 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         val emptyUpdate = DrugUpdateDTO(null, null, null, null, null, null, null, null)
-        drugService.update(drug.id, emptyUpdate, alice.id)
+        quantityReductionService.updateDrug(drug.id, emptyUpdate, alice.id)
         dbHelper.flushAndClear()
 
         assertQty(10.0, drugService.findById(drug.id).quantity)
@@ -146,7 +151,7 @@ class DrugServiceTest {
             formType = "liquid", category = "cat", manufacturer = "man",
             country = "co", description = "desc"
         )
-        drugService.update(drug.id, fullUpdate, alice.id)
+        quantityReductionService.updateDrug(drug.id, fullUpdate, alice.id)
         dbHelper.flushAndClear()
 
         val updated = drugService.findById(drug.id)
@@ -167,7 +172,7 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit, 10.0)
         dbHelper.flushAndClear()
 
-        drugService.update(drug.id, DrugUpdateDTO(quantity = qty(20.0)), alice.id)
+        quantityReductionService.updateDrug(drug.id, DrugUpdateDTO(quantity = qty(20.0)), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(20.0, dbHelper.drugQuantity(drug.id))
@@ -183,7 +188,7 @@ class DrugServiceTest {
         usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(80.0)))
         dbHelper.flushAndClear()
 
-        drugService.update(drug.id, DrugUpdateDTO(quantity = qty(40.0)), alice.id)
+        quantityReductionService.updateDrug(drug.id, DrugUpdateDTO(quantity = qty(40.0)), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(40.0, dbHelper.drugQuantity(drug.id))
@@ -216,7 +221,7 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
-        val consumed = drugService.consumeDrug(drug.id, qty(30.0), alice.id)
+        val consumed = quantityReductionService.consume(drug.id, qty(30.0), alice.id)
         assertQty(70.0, consumed?.quantity)
     }
 
@@ -228,7 +233,7 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         assertThrows<ResponseStatusException> {
-            drugService.consumeDrug(drug.id, qty(20.0), alice.id)
+            quantityReductionService.consume(drug.id, qty(20.0), alice.id)
         }
     }
 
@@ -245,7 +250,7 @@ class DrugServiceTest {
         usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(25.0)))
         dbHelper.flushAndClear()
 
-        val dto = drugService.toDrugDTO(drugService.findById(drug.id))
+        val dto = drugService.findById(drug.id).toDto()
         assertQty(25.0, dto.plannedQuantity)
         assertQty(100.0, dto.quantity)
     }

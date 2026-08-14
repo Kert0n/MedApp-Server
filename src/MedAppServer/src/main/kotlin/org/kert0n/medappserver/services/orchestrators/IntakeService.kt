@@ -1,8 +1,8 @@
 package org.kert0n.medappserver.services.orchestrators
 
+import org.kert0n.medappserver.api.toDto
 import com.sksamuel.aedile.core.Cache
-import org.kert0n.medappserver.controller.UsingDTO
-import org.kert0n.medappserver.services.models.UsingService
+import org.kert0n.medappserver.api.UsingDTO
 import org.kert0n.medappserver.services.security.hashToken
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
@@ -13,7 +13,7 @@ import java.util.UUID
 /**
  * Приём препарата с защитой от повторного применения.
  *
- * Живёт отдельно от [UsingService] по одной причине: списание должно быть закоммичено до того,
+ * Живёт отдельно от [QuantityReductionService] по одной причине: списание должно быть закоммичено до того,
  * как результат попадёт в кеш. Если писать в кеш внутри транзакционного `recordIntake`, запись
  * останется даже при откате — и повтор получит результат операции, которой не было. Поэтому
  * метод здесь **не** транзакционный и вызывает транзакционный сервис как единицу работы.
@@ -23,7 +23,7 @@ import java.util.UUID
  */
 @Service
 class IntakeService(
-    private val usingService: UsingService,
+    private val quantityReductionService: QuantityReductionService,
     @Qualifier("intakeResultsCache") private val intakeResultsCache: Cache<String, IntakeOutcome>
 ) {
 
@@ -48,8 +48,8 @@ class IntakeService(
             return seen
         }
 
-        val plan = usingService.recordIntake(userId, drugId, quantityConsumed)
-            ?.let { usingService.toUsingDTO(it) }
+        val plan = quantityReductionService.applyIntake(userId, drugId, quantityConsumed)
+            ?.toDto()
 
         // Ошибки не кешируются сознательно: отказ выводится из состояния и при повторе
         // повторится сам, а вот закешированный отказ переживёт исправление причины.

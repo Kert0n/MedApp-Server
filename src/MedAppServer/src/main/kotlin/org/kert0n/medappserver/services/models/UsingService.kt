@@ -1,13 +1,12 @@
 package org.kert0n.medappserver.services.models
 
-import org.kert0n.medappserver.controller.UsingCreateDTO
-import org.kert0n.medappserver.controller.UsingDTO
-import org.kert0n.medappserver.controller.UsingUpdateDTO
+import org.kert0n.medappserver.api.UsingCreateDTO
+import org.kert0n.medappserver.api.UsingDTO
+import org.kert0n.medappserver.api.UsingUpdateDTO
 import org.kert0n.medappserver.db.model.Using
 import org.kert0n.medappserver.db.model.isZero
 import org.kert0n.medappserver.db.model.UsingKey
 import org.kert0n.medappserver.db.repository.UsingRepository
-import org.kert0n.medappserver.services.orchestrators.QuantityReductionService
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
@@ -22,8 +21,7 @@ class UsingService(
     private val usingRepository: UsingRepository,
     val logger: Logger = LoggerFactory.getLogger(UsingService::class.java),
     private val userService: UserService,
-    private val drugService: DrugService,
-    private val quantityReductionService: QuantityReductionService
+    private val drugService: DrugService
 ) {
 
 
@@ -37,6 +35,19 @@ class UsingService(
     fun deleteAllByUserIdInMedkit(userId: UUID, medKitId: UUID) {
         logger.debug("Deleting all usings for user: {}", userId)
         usingRepository.deleteByUserIdAndMedKitId(userId, medKitId)
+    }
+
+    /**
+     * Планы участников, которых нет в переданном списке, по всем препаратам аптечки.
+     *
+     * Для переноса препаратов: у кого нет доступа к целевой аптечке, у того не должно остаться
+     * и плана. Вызывающий обязан не звать это с пустым списком — `NOT IN ()` в SQL невыразим.
+     */
+    @Transactional
+    fun deleteAllInMedkitForUsersOtherThan(medKitId: UUID, userIds: Collection<UUID>) {
+        require(userIds.isNotEmpty()) { "userIds must not be empty: NOT IN () is not valid SQL" }
+        logger.debug("Deleting usings in medkit {} outside {} users", medKitId, userIds.size)
+        usingRepository.deleteByMedKitIdAndUserIdNotIn(medKitId, userIds)
     }
 
     @Transactional(readOnly = true)
@@ -112,12 +123,15 @@ class UsingService(
     fun updateTreatmentPlan(userId: UUID, drugId: UUID, updateDTO: UsingUpdateDTO): Using {
         logger.debug("Updating using for user {} and drug {}", userId, drugId)
 
-        // Lock the drug row to prevent concurrent plan modifications
-        drugService.findByIdForUserForUpdate(drugId, userId)
+        // Блокировка первым действием, и её результат используется дальше. Раньше он
+        // отбрасывался, а количества читались через using.drug — тот же экземпляр из
+        // контекста, но по коду этого не видно, и выглядело так, будто запрос сделан ради
+        // побочного эффекта.
+        val drug = drugService.findByIdForUserForUpdate(drugId, userId)
         val using = findByUserAndDrug(userId, drugId)
-        // Exclude the current plan when checking availability.
-        val otherPlanned = using.drug.totalPlannedAmount - using.plannedAmount
-        val availableQuantity = using.drug.quantity - otherPlanned
+        // Свой план исключается из суммы: он же и переписывается.
+        val otherPlanned = drug.totalPlannedAmount - using.plannedAmount
+        val availableQuantity = drug.quantity - otherPlanned
 
         if (updateDTO.plannedAmount > availableQuantity) {
             logger.warn("Rejected treatment plan update: requested amount exceeds availability")
@@ -129,45 +143,11 @@ class UsingService(
         return usingRepository.save(using)
     }
 
+
+
+    /** Сохранить план. Нужен оркестраторам: репозиторий им напрямую недоступен. */
     @Transactional
-    fun recordIntake(userId: UUID, drugId: UUID, quantityConsumed: BigDecimal): Using? {
-        logger.debug("Recording intake for user {} and drug {}, quantity: {}", userId, drugId, quantityConsumed)
-        val using = findByUserAndDrug(userId, drugId)
-        // Check if consumed quantity exceeds planned amount
-        if (quantityConsumed > using.plannedAmount) {
-            throw ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "Consumed quantity exceeds planned amount"
-            )
-        }
-
-        if (quantityConsumed > using.drug.quantity) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Insufficient drug quantity available")
-        }
-
-        // Update planned amount
-        // IMPORTANT! THIS MUST ALWAYS BE BEFORE QUANTITY REDUCTION, SO IT CAN PROPERLY ASSESS TOTAL PLANNED QUANTITY
-        using.plannedAmount = maxOf(BigDecimal.ZERO, using.plannedAmount - quantityConsumed)
-        // Reduce drug quantity
-        using.drug.quantity = using.drug.quantity - quantityConsumed
-        // This could be replaced with reloading drug from db, but this much quicker
-        using.drug.totalPlannedAmount = using.drug.totalPlannedAmount - quantityConsumed
-        // null означает, что препарат кончился и удалён вместе со всеми планами. Продолжать
-        // нельзя: save ниже вставил бы план на удалённый препарат, то есть нарушил бы внешний
-        // ключ. Раньше это значение отбрасывалось, и корректность держалась на том, что
-        // комбинация «остаток нулевой, план ненулевой» недостижима из-за проверок в других
-        // методах — то есть на совпадении, а не на явном условии.
-        if (quantityReductionService.handleQuantityReduction(using.drug) == null) return null
-
-        if (using.plannedAmount.isZero()) {
-            // Через коллекцию: orphanRemoval удалит строку сам, а Drug.usings остаётся
-            // правдой до конца транзакции.
-            using.drug.usings.remove(using)
-            return null
-        }
-        return usingRepository.save(using)
-    }
-
+    fun save(using: Using): Using = usingRepository.save(using)
 
     @Transactional
     fun deleteTreatmentPlan(userId: UUID, drugId: UUID) {
@@ -179,13 +159,4 @@ class UsingService(
     }
 
 
-    @Transactional(readOnly = true)
-    fun toUsingDTO(using: Using): UsingDTO {
-
-        return UsingDTO(
-            userId = using.user.id,
-            drugId = using.drug.id,
-            plannedAmount = using.plannedAmount
-        )
-    }
 }
