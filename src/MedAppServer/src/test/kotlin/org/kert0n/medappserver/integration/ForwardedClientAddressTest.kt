@@ -20,8 +20,7 @@ import kotlin.test.assertEquals
  * a MockMvc test would pass while production stayed broken.
  *
  * The test profile sets registration.timeout.BanNumber=1 and validateRequest compares
- * with <=, so two registrations per address succeed and the third is rejected. That
- * off-by-one is accepted behaviour, see SecurityService.validateRequest.
+ * strictly, so one registration per address succeeds and the next is rejected.
  */
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
@@ -49,9 +48,12 @@ class ForwardedClientAddressTest {
         val first = "203.0.113.10"
         val second = "198.51.100.7"
 
+        // Квота в тестовом профиле — одна регистрация (registration.timeout.BanNumber=1).
+        // Раньше здесь проходили две: сравнение в лимите было нестрогим, и по факту
+        // разрешалось на одну регистрацию больше объявленного. Числа сдвинулись именно
+        // поэтому, а не потому, что поменялся смысл теста.
         assertEquals(200, register(first), "first registration from $first")
-        assertEquals(200, register(first), "second registration from $first")
-        assertEquals(429, register(first), "third registration from $first must exhaust that address' quota")
+        assertEquals(429, register(first), "second registration from $first must exhaust that address' quota")
 
         // The decisive assertion: a different forwarded address still has its own
         // quota. If the header were ignored, this would share the exhausted counter.

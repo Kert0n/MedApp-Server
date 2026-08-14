@@ -28,7 +28,7 @@ class SecurityServiceAddressKeyTest {
     fun `client address is never used as a cache key`() {
         val address = "203.0.113.77"
 
-        securityService.registerIncrease(address)
+        securityService.recordRegisterAttempt(address)
 
         val keys = successfulRegistrationsCache.asDeferredMap().keys
         assertTrue(keys.isNotEmpty(), "the registration must have been recorded")
@@ -47,8 +47,8 @@ class SecurityServiceAddressKeyTest {
         val address = "198.51.100.42"
 
         val before = successfulRegistrationsCache.asDeferredMap().keys.toSet()
-        securityService.registerIncrease(address)
-        securityService.registerIncrease(address)
+        securityService.recordRegisterAttempt(address)
+        securityService.recordRegisterAttempt(address)
         val added = successfulRegistrationsCache.asDeferredMap().keys - before
 
         // Both increments must land on the same derived key. If derivation were not

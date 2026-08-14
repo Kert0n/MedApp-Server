@@ -611,6 +611,8 @@ paths:
                 type: string
         "401":
           description: Invalid credentials
+      security:
+      - Basic Authentication: []
   /v1/med-kit/{id}/leave:
     delete:
       tags:
@@ -1003,3 +1005,8 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    Basic Authentication:
+      type: http
+      description: "Логин — идентификатор из ответа на регистрацию, пароль — выдан\
+        ный ключ."
+      scheme: basic

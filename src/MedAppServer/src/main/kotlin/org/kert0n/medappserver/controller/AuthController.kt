@@ -6,9 +6,11 @@ import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
+import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.servlet.http.HttpServletRequest
 import org.kert0n.medappserver.api.RegisterResponse
+import org.kert0n.medappserver.config.OpenApiConfiguration
 import org.kert0n.medappserver.config.RegistrationProperties
 import org.kert0n.medappserver.services.models.UserService
 import org.kert0n.medappserver.services.security.SecurityService
@@ -58,13 +60,6 @@ class AuthController(
         if (!securityService.secretsMatch(token, registrationProperties.secret)) {
             throw ResponseStatusException(HttpStatus.FORBIDDEN, "Invalid secret")
         }
-        // Лимит по адресу и выпуск учётных данных — внутри сервиса. Здесь остаётся только
-        // проверка секрета: она аутентифицирует сам запрос, то есть относится к границе.
-        //
-        // Порядок сохранён: секрет проверяется раньше лимита, чтобы состояние счётчика не
-        // утекало тем, кто секрета не знает. Отказ по лимиту — 429, а не 504: за Caddy
-        // пятисотый класс читается как «бэкенд не ответил», и отказ клиенту попадал в
-        // алерты как авария инфраструктуры.
         val credentials = userService.registerNewUser(request.remoteAddr)
         return RegisterResponse(credentials.login, credentials.key)
     }
@@ -73,7 +68,7 @@ class AuthController(
     @Operation(
         summary = "Issue JWT token",
         description = "Uses HTTP Basic authentication and returns a JWT access token.",
-        security = []
+        security = [SecurityRequirement(name = OpenApiConfiguration.BASIC_SCHEME)]
     )
     @ApiResponses(
         value = [
