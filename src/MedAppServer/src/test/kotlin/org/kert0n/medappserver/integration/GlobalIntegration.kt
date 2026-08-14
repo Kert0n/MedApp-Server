@@ -9,7 +9,7 @@ import org.kert0n.medappserver.api.UsingCreateDTO
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.db.repository.UsingRepository
-import org.kert0n.medappserver.services.models.DrugService
+import org.kert0n.medappserver.services.orchestrators.DrugCommandService
 import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.UsingService
@@ -54,7 +54,7 @@ class PlannedQuantityTrackingTests {
     private lateinit var entityManager: EntityManager
 
     @Autowired
-    private lateinit var drugService: DrugService
+    private lateinit var drugCommands: DrugCommandService
 
     @Autowired
     private lateinit var medKitService: MedKitService
@@ -241,7 +241,7 @@ class PlannedQuantityTrackingTests {
         dbHelper.flushAndClear()
 
         // Bob emergency-consumes 30 (ignores the plan system)
-        drugService.consume(drug.id, qty(30.0), bob.id)
+        drugCommands.consume(bob.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
         assertQty(60.0, dbHelper.drugQuantity(drug.id), "drug: 90-30=60")
@@ -324,7 +324,7 @@ class PlannedQuantityTrackingTests {
         assertQty(60.0, dbHelper.totalPlanned(drug.id), "step2 total: 30+30=60")
 
         // ── Step 3: Emergency consume 60 ──
-        drugService.consume(drug.id, qty(60.0), alice.id)
+        drugCommands.consume(alice.id, drug.id, qty(60.0))
         dbHelper.flushAndClear()
 
         assertQty(40.0, dbHelper.drugQuantity(drug.id), "step3 drug: 100-60=40")

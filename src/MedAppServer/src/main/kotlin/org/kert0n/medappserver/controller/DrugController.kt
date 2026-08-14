@@ -57,8 +57,7 @@ class DrugController(
         @Parameter(description = "Drug ID") @PathVariable id: UUID
     ): DrugDTO {
         logger.debug("GET /v1/drug/{} by user {}", id, authentication.userId)
-        val drug = drugService.findByIdForUser(id, authentication.userId)
-        return drug.toDto()
+        return drugService.getAccessible(authentication.userId, id).toDto()
     }
 
     @PostMapping
@@ -139,8 +138,7 @@ class DrugController(
         @Parameter(description = "Drug ID") @PathVariable id: UUID
     ): QuantityInfo {
         logger.debug("GET /v1/drug/quantity/{} by user {}", id, authentication.userId)
-        val drug = drugService.findByIdForUser(id, authentication.userId)
-        return drug.toQuantityInfo()
+        return drugService.getAccessible(authentication.userId, id).toQuantityInfo()
     }
 
     @PutMapping("/consume/{id}")

@@ -1,15 +1,10 @@
 package org.kert0n.medappserver.controller
 
-import org.kert0n.medappserver.services.orchestrators.MedKitContent
-import org.kert0n.medappserver.db.model.MedKit
-import org.kert0n.medappserver.api.DrugDTO
-import org.kert0n.medappserver.api.MedKitDTO
-import org.kert0n.medappserver.testutil.qty
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
-import org.mockito.kotlin.any
+import org.kert0n.medappserver.services.models.MedKitContentView
+import org.kert0n.medappserver.services.models.UserSnapshotView
+import org.kert0n.medappserver.services.orchestrators.MedKitQueryService
 import org.mockito.kotlin.whenever
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -31,15 +26,12 @@ import java.util.*
 class UserControllerTest {
 
     @MockitoBean
-    private lateinit var medKitDrugServices: MedKitDrugServices
+    private lateinit var queries: MedKitQueryService
 
     @Autowired
     private lateinit var context: WebApplicationContext
 
     private lateinit var mockMvc: MockMvc
-
-    @MockitoBean
-    private lateinit var medKitService: MedKitService
 
     private val userId = UUID.randomUUID()
     private val medKitId = UUID.randomUUID()
@@ -53,16 +45,8 @@ class UserControllerTest {
 
     @Test
     fun `GET user data - returns user with medkits`() {
-        val drugDTO = DrugDTO(
-            id = UUID.randomUUID(), name = "Aspirin", quantity = qty(100.0),
-            plannedQuantity = qty(0.0), quantityUnit = "mg", formType = null,
-            category = null, manufacturer = null, country = null,
-            description = null, medKitId = medKitId
-        )
-        val medKitDTO = MedKitDTO(id = medKitId, drugs = setOf(drugDTO))
-        // Снимок собирает оркестратор: контроллер только раскладывает результат по DTO.
-        whenever(medKitDrugServices.userSnapshot(userId))
-            .thenReturn(listOf(MedKitContent(MedKit(id = medKitId), emptyList())))
+        whenever(queries.getUserSnapshot(userId))
+            .thenReturn(UserSnapshotView(listOf(MedKitContentView(medKitId, emptyList()))))
 
         mockMvc.perform(
             get("/v1/user")
@@ -82,7 +66,7 @@ class UserControllerTest {
 
     @Test
     fun `GET user data - returns empty medkits for new user`() {
-        whenever(medKitDrugServices.userSnapshot(userId)).thenReturn(emptyList())
+        whenever(queries.getUserSnapshot(userId)).thenReturn(UserSnapshotView(emptyList()))
 
         mockMvc.perform(
             get("/v1/user")

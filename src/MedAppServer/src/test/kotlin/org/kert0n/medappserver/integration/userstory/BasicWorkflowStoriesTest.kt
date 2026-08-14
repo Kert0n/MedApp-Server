@@ -10,9 +10,9 @@ import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.UserRepository
-import org.kert0n.medappserver.services.models.DrugService
+import org.kert0n.medappserver.services.orchestrators.DrugCommandService
 import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
+import org.kert0n.medappserver.services.orchestrators.MedKitLifecycleService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.transaction.annotation.Transactional
 import java.util.*
@@ -38,13 +38,13 @@ class BasicWorkflowStoriesTest {
     private lateinit var entityManager: EntityManager
 
     @Autowired
-    private lateinit var drugService: DrugService
+    private lateinit var drugCommands: DrugCommandService
 
     @Autowired
     private lateinit var medKitService: MedKitService
 
     @Autowired
-    private lateinit var medKitDrugServices: MedKitDrugServices
+    private lateinit var medKitLifecycle: MedKitLifecycleService
 
     /**
      * Story 1: Anna creates her first medkit and adds some drugs
@@ -96,7 +96,7 @@ class BasicWorkflowStoriesTest {
         entityManager.flush()
 
         // Anna takes 2 tablets of Aspirin
-        drugService.consume(aspirin.id, qty(2.0), anna.id)
+        drugCommands.consume(anna.id, aspirin.id, qty(2.0))
         entityManager.flush()
         entityManager.clear()
 
@@ -203,7 +203,7 @@ class BasicWorkflowStoriesTest {
         assertEquals(2, loadedMedkit.users.size)
 
         // Bob leaves (drugs stay)
-        medKitDrugServices.removeUserFromMedKit(medkit.id, bob.id)
+        medKitLifecycle.leave(bob.id, medkit.id)
         entityManager.flush()
         entityManager.clear()
 
@@ -269,7 +269,7 @@ class BasicWorkflowStoriesTest {
         assertEquals(2, medKitService.findAllByUser(user.id).size)
 
         // Delete old medkit and move drugs
-        medKitDrugServices.delete(oldMedkit.id, user.id, newMedkit.id)
+        medKitLifecycle.delete(user.id, oldMedkit.id, newMedkit.id)
         entityManager.flush()
         entityManager.clear()
 
@@ -317,9 +317,9 @@ class BasicWorkflowStoriesTest {
         entityManager.flush()
 
         // Consume all in steps
-        drugService.consume(drug.id, qty(10.0), user.id)
-        drugService.consume(drug.id, qty(10.0), user.id)
-        drugService.consume(drug.id, qty(10.0), user.id)
+        drugCommands.consume(user.id, drug.id, qty(10.0))
+        drugCommands.consume(user.id, drug.id, qty(10.0))
+        drugCommands.consume(user.id, drug.id, qty(10.0))
         entityManager.flush()
         entityManager.clear()
 

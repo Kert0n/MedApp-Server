@@ -10,11 +10,6 @@ import java.util.*
 
 interface UsingRepository : JpaRepository<Using, UsingKey> {
 
-    // JPQL for explicit queries
-    fun findAllByUsingKeyUserId(userId: UUID): List<Using>
-
-    fun findAllByUsingKeyDrugId(@Param("drugId") drugId: UUID): List<Using>
-
     @Query("SELECT u FROM Using u WHERE u.usingKey.userId = :userId")
     fun findAllByUserId(userId: UUID): List<Using>
 
@@ -28,16 +23,6 @@ interface UsingRepository : JpaRepository<Using, UsingKey> {
     """
     )
     fun findByUserIdAndDrugId(@Param("userId") userId: UUID, @Param("drugId") drugId: UUID): Using?
-
-    // JPQL with fetch for eager loading
-    @Query(
-        """
-        SELECT u FROM Using u
-        JOIN FETCH u.drug
-        WHERE u.user.id = :userId
-    """
-    )
-    fun findAllByUserIdWithDrug(@Param("userId") userId: UUID): List<Using>
 
     /**
      * Все планы одного участника во всех препаратах аптечки — одним оператором.

@@ -6,10 +6,10 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import org.kert0n.medappserver.services.models.DrugService
-import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.services.models.VidalDrugService
-import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
+import org.kert0n.medappserver.db.repository.DrugRepository
+import org.kert0n.medappserver.services.orchestrators.MedKitQueryService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
@@ -44,9 +44,9 @@ class QueryPlanTest {
     @Autowired private lateinit var transactionManager: PlatformTransactionManager
     @Autowired private lateinit var fixture: QueryPlanFixture
     @Autowired private lateinit var drugService: DrugService
+    @Autowired private lateinit var drugRepository: DrugRepository
     @Autowired private lateinit var usingService: UsingService
-    @Autowired private lateinit var medKitService: MedKitService
-    @Autowired private lateinit var medKitDrugServices: MedKitDrugServices
+    @Autowired private lateinit var medKitQueries: MedKitQueryService
     @Autowired private lateinit var vidalDrugService: VidalDrugService
     @Autowired private lateinit var entityManager: EntityManager
 
@@ -177,7 +177,7 @@ class QueryPlanTest {
         assertConstantQueryShape(
             name = "GET /v1/user",
             scenarios = fixture.snapshotUsers.mapValues { (_, userId) ->
-                { medKitDrugServices.userSnapshot(userId) }
+                { medKitQueries.getUserSnapshot(userId) }
             },
             expected = mapOf(SqlKind.SELECT to 2)
         )
@@ -191,7 +191,7 @@ class QueryPlanTest {
     @Test
     fun `выдача пользователю умеет читать препараты и планы по индексам`() {
         val plans = plansOf("GET /v1/user", forceIndexes = true) {
-            medKitDrugServices.userSnapshot(fixture.ownerId)
+            medKitQueries.getUserSnapshot(fixture.ownerId)
         }
 
         val used = plans.flatMap { it.second.indexes }
@@ -214,24 +214,24 @@ class QueryPlanTest {
             name = "GET /v1/using",
             scenarios = fixture.planUsers.mapValues { (plans, userId) ->
                 {
-                    val result = usingService.findAllByUser(userId)
+                    val result = usingService.listForUser(userId)
                     assertEquals(plans, result.size, "фикстура обязана вернуть $plans планов")
                 }
             },
-            expected = mapOf(SqlKind.SELECT to 2)
+            expected = mapOf(SqlKind.SELECT to 1)
         )
     }
 
     @Test
     fun `список планов пользователя идёт по индексу`() {
-        val plans = plansOf("GET /v1/using") { usingService.findAllByUser(fixture.ownerId) }
+        val plans = plansOf("GET /v1/using") { usingService.listForUser(fixture.ownerId) }
         assertNoSeqScanOn("usings", plans)
     }
 
     @Test
     fun `выборка препарата под блокировку берёт индекс и запирает строку`() {
         val plans = plansOf("lock + load") {
-            drugService.findByIdForUserForUpdate(fixture.drugId, fixture.ownerId)
+            drugRepository.findAccessibleForUpdate(fixture.drugId, fixture.ownerId)
         }
 
         assertNoSeqScanOn("user_drugs", plans)
@@ -244,7 +244,9 @@ class QueryPlanTest {
 
     @Test
     fun `препарат с планами берётся по индексу`() {
-        val plans = plansOf("drug with plans") { drugService.findWithPlans(fixture.drugId) }
+        val plans = plansOf("drug with plans") {
+            drugService.getAccessible(fixture.ownerId, fixture.drugId)
+        }
         assertNoSeqScanOn("user_drugs", plans)
         assertNoSeqScanOn("usings", plans)
     }

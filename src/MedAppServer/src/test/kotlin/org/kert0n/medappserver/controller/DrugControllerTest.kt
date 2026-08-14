@@ -14,6 +14,7 @@ import org.kert0n.medappserver.db.model.parsed.VidalDrug
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.services.models.VidalDrugService
+import org.kert0n.medappserver.services.models.toView
 import org.kert0n.medappserver.services.orchestrators.DrugCommandService
 import org.mockito.kotlin.any
 import org.mockito.kotlin.doNothing
@@ -109,8 +110,7 @@ class DrugControllerTest {
     @Test
     fun `GET drug by id - returns drug for authenticated user`() {
         val drug = createTestDrug()
-        val dto = createTestDrugDTO()
-        whenever(drugService.findByIdForUser(drugId, userId)).thenReturn(drug)
+        whenever(drugService.getAccessible(userId, drugId)).thenReturn(drug.toView())
 
         mockMvc.perform(
             get("/v1/drug/$drugId")
@@ -125,7 +125,7 @@ class DrugControllerTest {
 
     @Test
     fun `GET drug by id - returns 404 when not found`() {
-        whenever(drugService.findByIdForUser(any(), any()))
+        whenever(drugService.getAccessible(any(), any()))
             .thenThrow(ResponseStatusException(HttpStatus.NOT_FOUND, "Drug not found"))
 
         mockMvc.perform(
@@ -196,8 +196,8 @@ class DrugControllerTest {
     @Test
     fun `GET quantity info - returns quantity info`() {
         val drug = createTestDrug()
-        whenever(drugService.findByIdForUser(drugId, userId)).thenReturn(drug)
         drug.totalPlannedAmount = qty(30.0)
+        whenever(drugService.getAccessible(userId, drugId)).thenReturn(drug.toView())
 
         mockMvc.perform(
             get("/v1/drug/quantity/$drugId")

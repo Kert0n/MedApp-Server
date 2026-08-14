@@ -12,11 +12,11 @@ import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.db.repository.UsingRepository
-import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.UsingService
-import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
+import org.kert0n.medappserver.services.orchestrators.DrugCommandService
+import org.kert0n.medappserver.services.orchestrators.MedKitLifecycleService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.transaction.annotation.Transactional
@@ -41,13 +41,12 @@ class DrugMovementStoriesTest {
     private lateinit var entityManager: EntityManager
 
     @Autowired
-    private lateinit var drugService: DrugService
-
-    @Autowired
     private lateinit var medKitService: MedKitService
 
     @Autowired
-    private lateinit var medKitDrugServices: MedKitDrugServices
+    private lateinit var drugCommands: DrugCommandService
+    @Autowired
+    private lateinit var medKitLifecycle: MedKitLifecycleService
 
     @Autowired
     private lateinit var treatmentPlanService: TreatmentPlanService
@@ -81,7 +80,7 @@ class DrugMovementStoriesTest {
         entityManager.flush()
 
         // Move drug to travel kit
-        medKitDrugServices.moveDrug(painkiller.id, travelKit.id, user.id)
+        drugCommands.move(user.id, painkiller.id, travelKit.id)
         entityManager.flush()
         entityManager.clear()
 
@@ -184,7 +183,7 @@ class DrugMovementStoriesTest {
         assertNotNull(plan)
 
         // Delete the drug
-        drugService.delete(drug.id, user.id)
+        drugCommands.delete(user.id, drug.id)
         entityManager.flush()
         entityManager.clear()
 
@@ -239,7 +238,7 @@ class DrugMovementStoriesTest {
         entityManager.clear()
 
         // Anna deletes the old kit and migrates to the new kit
-        medKitDrugServices.delete(oldKit.id, anna.id, newKit.id)
+        medKitLifecycle.delete(anna.id, oldKit.id, newKit.id)
 
         entityManager.flush()
         entityManager.clear()
@@ -289,7 +288,7 @@ class DrugMovementStoriesTest {
         // Bob consumes 50 pills (ignoring his plan limit for emergency)
         // Drug quantity drops to 50.
         // Factor should be: 50 / 100 = 0.5
-        drugService.consume(drug.id, qty(50.0), bob.id)
+        drugCommands.consume(bob.id, drug.id, qty(50.0))
 
         entityManager.flush()
         entityManager.clear()
@@ -341,7 +340,7 @@ class DrugMovementStoriesTest {
         entityManager.clear()
 
         // Move ONLY one drug
-        medKitDrugServices.moveDrug(drugToMove.id, targetKit.id, user.id)
+        drugCommands.move(user.id, drugToMove.id, targetKit.id)
 
         entityManager.flush()
         entityManager.clear()

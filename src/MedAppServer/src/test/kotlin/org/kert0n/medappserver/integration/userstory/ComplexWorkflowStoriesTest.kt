@@ -18,11 +18,11 @@ import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.db.repository.UsingRepository
-import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.UsingService
-import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
+import org.kert0n.medappserver.services.orchestrators.DrugCommandService
+import org.kert0n.medappserver.services.orchestrators.MedKitLifecycleService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.data.repository.findByIdOrNull
@@ -55,13 +55,12 @@ class ComplexWorkflowStoriesTest {
     private lateinit var entityManager: EntityManager
 
     @Autowired
-    private lateinit var drugService: DrugService
-
-    @Autowired
     private lateinit var medKitService: MedKitService
 
     @Autowired
-    private lateinit var medKitDrugServices: MedKitDrugServices
+    private lateinit var drugCommands: DrugCommandService
+    @Autowired
+    private lateinit var medKitLifecycle: MedKitLifecycleService
 
     @Autowired
     private lateinit var treatmentPlanService: TreatmentPlanService
@@ -138,7 +137,7 @@ class ComplexWorkflowStoriesTest {
         // Bob consumes 30 Allergy Meds. Stock drops from 60 to 30.
         // Total planned was 60. Stock is now 30. Scale factor = 30/60 = 0.5.
         // All plans (20) should auto-scale down to 10.
-        drugService.consume(allergyMeds.id, qty(30.0), bob.id)
+        drugCommands.consume(bob.id, allergyMeds.id, qty(30.0))
 
         entityManager.flush()
         entityManager.clear()
@@ -158,7 +157,7 @@ class ComplexWorkflowStoriesTest {
         entityManager.flush()
         entityManager.clear()
 
-        medKitDrugServices.moveDrug(painkillers.id, travelKit.id, alice.id)
+        drugCommands.move(alice.id, painkillers.id, travelKit.id)
 
         entityManager.flush()
         entityManager.clear()
@@ -181,7 +180,7 @@ class ComplexWorkflowStoriesTest {
         entityManager.clear()
 
         // Perform the complex deletion migration
-        medKitDrugServices.delete(homeKit.id, alice.id, duoKit.id)
+        medKitLifecycle.delete(alice.id, homeKit.id, duoKit.id)
 
         entityManager.flush()
         entityManager.clear()
@@ -208,7 +207,7 @@ class ComplexWorkflowStoriesTest {
         // PHASE 6: Last User Standing Auto-Cleanup
         // ==========================================
         // Bob leaves Duo Kit
-        medKitDrugServices.removeUserFromMedKit(duoKit.id, bob.id)
+        medKitLifecycle.leave(bob.id, duoKit.id)
 
         entityManager.flush()
         entityManager.clear()
@@ -249,7 +248,7 @@ class ComplexWorkflowStoriesTest {
             medKitId = sourceKit.id, formType = null, category = null,
             manufacturer = null, country = null, description = null
         )
-        val drug = medKitDrugServices.createDrugInMedkit(createDrugDto.medKitId, createDrugDto.toCommand(), alice.id)
+        val drug = drugCommands.create(alice.id, createDrugDto.medKitId, createDrugDto.toCommand())
         dbHelper.flushAndClear()
 
         // Alice and Bob create treatment plans (40 each, total 80)
@@ -270,7 +269,7 @@ class ComplexWorkflowStoriesTest {
         // Alice updates the drug quantity from 100 to 50.
         // This MUST trigger `handleQuantityReduction`. Factor = 50 / 100 = 0.5.
         val updateDrugDto = DrugUpdateDTO(quantity = qty(50.0))
-        drugService.update(drug.id, updateDrugDto.toPatch(), alice.id)
+        drugCommands.consume(alice.id, drug.id, qty(50.0))
         dbHelper.flushAndClear()
 
         assertQty(50.0, dbHelper.drugQuantity(drug.id), "Drug quantity updated to 50")
@@ -279,10 +278,10 @@ class ComplexWorkflowStoriesTest {
 
         // ── Phase 3: Move Drug ──
         // Alice moves the drug to targetKit (where Bob has no access).
-        medKitDrugServices.moveDrug(drug.id, targetKit.id, alice.id)
+        drugCommands.move(alice.id, drug.id, targetKit.id)
         dbHelper.flushAndClear()
 
-        val movedDrug = drugService.findById(drug.id)
+        val movedDrug = drugRepository.findById(drug.id).orElseThrow()
         assertEquals(targetKit.id, movedDrug.medKit.id, "Drug successfully moved to targetKit")
 
         // The ultimate security check: Bob's plan must be gone
@@ -291,7 +290,7 @@ class ComplexWorkflowStoriesTest {
 
         // ── Phase 4: Privacy-by-Default Deletion ──
         // Alice deletes the drug completely.
-        drugService.delete(drug.id, alice.id)
+        drugCommands.delete(alice.id, drug.id)
         dbHelper.flushAndClear()
 
         // Verify absolute destruction
@@ -317,7 +316,9 @@ class ComplexWorkflowStoriesTest {
         medKitService.joinMedKitByKey(shareKey, bob.id)
 
         // Alice creates a drug
-        val drug = drugService.create(DrugCreateDTO("Shared Meds", qty(10.0), "pcs", kitA.id).toCommand(), kitA, alice.id)
+        val drug = drugCommands.create(
+            alice.id, kitA.id, DrugCreateDTO("Shared Meds", qty(10.0), "pcs", kitA.id).toCommand()
+        )
 
         // Bob creates a private kit
         val kitB = medKitService.createNew(bob.id)
@@ -325,7 +326,7 @@ class ComplexWorkflowStoriesTest {
         // ACT: Bob moves the drug to his private kit
         // This fails if the query uses an INNER JOIN on the 'usings' table
         assertDoesNotThrow {
-            medKitDrugServices.moveDrug(drug.id, kitB.id, bob.id)
+            drugCommands.move(bob.id, drug.id, kitB.id)
         }
 
         // VERIFY: Drug moved
@@ -341,7 +342,9 @@ class ComplexWorkflowStoriesTest {
         val kitA = medKitService.createNew(alice.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kitA.id, alice.id), bob.id)
 
-        val drug = drugService.create(DrugCreateDTO("Audit Meds", qty(10.0), "pcs", kitA.id).toCommand(), kitA, alice.id)
+        val drug = drugCommands.create(
+            alice.id, kitA.id, DrugCreateDTO("Audit Meds", qty(10.0), "pcs", kitA.id).toCommand()
+        )
 
         // Both have plans
         treatmentPlanService.create(alice.id, drug.id, qty(5.0))
@@ -352,12 +355,12 @@ class ComplexWorkflowStoriesTest {
         entityManager.flush()
         entityManager.clear()
         // ACT: Move drug to private kit
-        medKitDrugServices.moveDrug(drug.id, kitB.id, alice.id)
+        drugCommands.move(alice.id, drug.id, kitB.id)
         entityManager.flush()
         entityManager.clear()
         // VERIFY: Bob's plan is purged, Alice's remains
-        val alicePlan = usingRepository.findAllByUserIdWithDrug(alice.id).find { it.drug.id == drug.id }
-        val bobPlan = usingRepository.findAllByUserIdWithDrug(bob.id).find { it.drug.id == drug.id }
+        val alicePlan = usingRepository.findByUserIdAndDrugId(alice.id, drug.id)
+        val bobPlan = usingRepository.findByUserIdAndDrugId(bob.id, drug.id)
         assertNotNull(alicePlan, "Alice should keep her plan")
         assertNull(bobPlan, "Bob's plan must be deleted because he lost access to the drug")
     }
@@ -371,12 +374,16 @@ class ComplexWorkflowStoriesTest {
         entityManager.flush()
         entityManager.clear()
         val drug =
-            medKitDrugServices.createDrugInMedkit(DrugCreateDTO("Migrating Meds", qty(10.0), "pcs", kitA.id).medKitId, DrugCreateDTO("Migrating Meds", qty(10.0), "pcs", kitA.id).toCommand(), alice.id)
+            drugCommands.create(
+                alice.id,
+                kitA.id,
+                DrugCreateDTO("Migrating Meds", qty(10.0), "pcs", kitA.id).toCommand()
+            )
 
         // ACT: Delete Kit A and migrate drugs to Kit B
         entityManager.flush()
         entityManager.clear()
-        medKitDrugServices.delete(kitA.id, alice.id, kitB.id)
+        medKitLifecycle.delete(alice.id, kitA.id, kitB.id)
         entityManager.flush()
         entityManager.clear()
         // VERIFY: Kit A is gone, but the drug survives in Kit B

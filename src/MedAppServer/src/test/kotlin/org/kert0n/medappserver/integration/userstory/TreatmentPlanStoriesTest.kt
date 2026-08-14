@@ -12,11 +12,11 @@ import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.db.repository.UsingRepository
-import org.kert0n.medappserver.services.models.DrugService
+import org.kert0n.medappserver.services.orchestrators.DrugCommandService
 import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.UsingService
-import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
+import org.kert0n.medappserver.services.orchestrators.MedKitLifecycleService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.transaction.annotation.Transactional
@@ -47,13 +47,13 @@ class TreatmentPlanStoriesTest {
     private lateinit var entityManager: EntityManager
 
     @Autowired
-    private lateinit var drugService: DrugService
+    private lateinit var drugCommands: DrugCommandService
 
     @Autowired
     private lateinit var medKitService: MedKitService
 
     @Autowired
-    private lateinit var medKitDrugServices: MedKitDrugServices
+    private lateinit var medKitLifecycle: MedKitLifecycleService
 
     @Autowired
     private lateinit var treatmentPlanService: TreatmentPlanService
@@ -201,7 +201,7 @@ class TreatmentPlanStoriesTest {
 
         // Consume 50 tablets (drug goes to 50, but plan is 80 > 50)
         // handleQuantityReduction should scale the plan down
-        drugService.consume(drug.id, qty(50.0), user.id)
+        drugCommands.consume(user.id, drug.id, qty(50.0))
         entityManager.flush()
         entityManager.clear()
 
@@ -341,7 +341,7 @@ class TreatmentPlanStoriesTest {
         assertEquals(3, medkit.users.size)
 
         // Child leaves the medkit
-        medKitDrugServices.removeUserFromMedKit(familyKit.id, child.id)
+        medKitLifecycle.leave(child.id, familyKit.id)
         entityManager.flush()
         entityManager.clear()
 

@@ -20,12 +20,12 @@ class Using(
     @EmbeddedId
     var usingKey: UsingKey = UsingKey(),
 
-    @ManyToOne(fetch = FetchType.EAGER)
+    @ManyToOne(fetch = FetchType.LAZY)
     @MapsId("userId")
     @JoinColumn(name = "user_id")
     var user: User,
 
-    @ManyToOne(fetch = FetchType.EAGER)
+    @ManyToOne(fetch = FetchType.LAZY)
     @MapsId("drugId")
     @JoinColumn(
         name = "drug_id",
