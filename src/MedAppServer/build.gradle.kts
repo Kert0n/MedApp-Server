@@ -59,6 +59,35 @@ allOpen {
     annotation("jakarta.persistence.Embeddable")
 }
 
+/**
+ * Отдельный набор для проверки планов запросов: src/queryPlanTest/kotlin.
+ *
+ * Почему не в `test`. Он сеет синтетику на десятки тысяч строк и гоняет EXPLAIN — это
+ * минуты, а не секунды, и в обычном прогоне такое место занимать не должно. Запуск явный:
+ *
+ *     ./gradlew queryPlanTest
+ *
+ * В `check` намеренно не включён: пусть падение обычных тестов и падение планов
+ * различаются по команде, а не по строчке в общем логе.
+ */
+testing {
+    suites {
+        register<JvmTestSuite>("queryPlanTest") {
+            useJUnitJupiter()
+            dependencies {
+                implementation(project())
+                implementation("org.springframework.boot:spring-boot-starter-test")
+                implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+                implementation("org.springframework.boot:spring-boot-testcontainers")
+                implementation("org.jetbrains.kotlin:kotlin-test-junit5")
+                implementation("org.testcontainers:testcontainers-junit-jupiter")
+                implementation("org.testcontainers:testcontainers-postgresql")
+                implementation("tools.jackson.core:jackson-databind")
+            }
+        }
+    }
+}
+
 tasks.withType<Test> {
     useJUnitPlatform()
     jvmArgs("-XX:+EnableDynamicAgentLoading")

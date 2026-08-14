@@ -145,6 +145,17 @@ class DrugService(
     fun findAllWithPlansByMedKit(medKitId: UUID): List<Drug> =
         drugRepository.findAllWithUsingsByMedKitId(medKitId)
 
+    /**
+     * То же для нескольких аптечек сразу.
+     *
+     * Пустой список отсекается: `IN ()` в SQL невыразим, а запрос ради заведомо пустого
+     * ответа не нужен.
+     */
+    @Transactional(readOnly = true)
+    fun findAllWithPlansByMedKits(medKitIds: Collection<UUID>): List<Drug> =
+        if (medKitIds.isEmpty()) emptyList()
+        else drugRepository.findAllWithUsingsByMedKitIdIn(medKitIds)
+
     @Transactional
     fun delete(drugId: UUID, userId: UUID) {
         logger.debug("Deleting drug: {}", drugId)

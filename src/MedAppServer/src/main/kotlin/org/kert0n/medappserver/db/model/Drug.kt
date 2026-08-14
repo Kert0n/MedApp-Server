@@ -122,16 +122,6 @@ class Drug(
         totalPlannedAmount = totalPlannedAmount - amount
     }
 
-    /**
-     * Отметить, что планы сжаты ровно под остаток.
-     *
-     * Вызывается после пропорционального уменьшения планов: в базе их сумма теперь равна
-     * количеству, и производное поле обязано это отражать до конца транзакции.
-     */
-    fun markPlansMatchStock() {
-        totalPlannedAmount = quantity
-    }
-
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false

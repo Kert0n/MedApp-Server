@@ -86,12 +86,11 @@ CREATE INDEX ix_usings_drug_id ON usings (drug_id);
 -- Справочник препаратов (данные из скраппера Vidal)
 -- ============================================================
 
--- IF NOT EXISTS у этих двух таблиц не для красоты: их создаёт и наполняет дамп
--- справочника (01-load-catalogue.sh), который применяется раньше. Без IF NOT EXISTS
--- второй по порядку скрипт падал бы с "relation already exists" — проверено в обоих
--- направлениях. Определения ниже совпадают с дамповыми, поэтому файл остаётся
--- самодостаточным и когда дампа нет.
-CREATE TABLE IF NOT EXISTS form_types
+-- Эти две таблицы и parsed_drugs создаются здесь и только здесь. Дамп справочника
+-- (02-load-catalogue.sh) применяется позже и несёт одни данные: раньше он приходил
+-- первым со своей схемой, из-за чего тут стояло IF NOT EXISTS, а определения приходилось
+-- держать совпадающими с дамповыми.
+CREATE TABLE form_types
 (
     id   uuid         NOT NULL,
     name varchar(100) NOT NULL,
@@ -100,7 +99,7 @@ CREATE TABLE IF NOT EXISTS form_types
     CONSTRAINT form_types_name_key UNIQUE (name)
 );
 
-CREATE TABLE IF NOT EXISTS quantity_units
+CREATE TABLE quantity_units
 (
     id   uuid        NOT NULL,
     name varchar(30) NOT NULL,
@@ -149,8 +148,10 @@ CREATE TABLE parsed_drugs
     CONSTRAINT parsed_drugs_quantity_unit_fkey FOREIGN KEY (quantity_unit_id) REFERENCES quantity_units (id)
 );
 
--- Имена по своей таблице: ix_drugs_* сталкивались с индексами таблицы drugs из дампа
--- справочника, а имена индексов в Postgres уникальны на схему.
+-- Имена по своей таблице. Исторически они звались ix_drugs_* и сталкивались с индексами
+-- таблицы drugs из дампа — имена индексов в Postgres уникальны на схему, и init падал.
+-- Таблицы drugs больше нет, но имена оставлены: они называют ту таблицу, к которой
+-- относятся.
 CREATE INDEX ix_parsed_drugs_name ON parsed_drugs (name);
 CREATE INDEX ix_parsed_drugs_form_type_id ON parsed_drugs (form_type_id);
 CREATE INDEX ix_parsed_drugs_quantity_unit_id ON parsed_drugs (quantity_unit_id);

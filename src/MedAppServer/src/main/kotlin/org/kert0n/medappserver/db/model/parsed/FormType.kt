@@ -5,6 +5,14 @@ import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
 import java.util.*
 
+/**
+ * Справочная таблица, крошечная и почти неизменная.
+ *
+ * `@BatchSize`: поиск по каталогу — нативный запрос, и присоединить к нему EAGER-связи
+ * Hibernate не может, поэтому добирает их отдельными SELECT — по одному на каждое
+ * различающееся значение в выдаче. Пакет схлопывает их в один запрос.
+ */
+@org.hibernate.annotations.BatchSize(size = 64)
 @Entity
 @Table(
     name = "form_types", uniqueConstraints = [UniqueConstraint(

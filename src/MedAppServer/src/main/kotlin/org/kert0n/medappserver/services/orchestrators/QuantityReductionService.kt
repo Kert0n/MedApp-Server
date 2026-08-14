@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 import java.math.BigDecimal
+import java.math.RoundingMode
 import java.util.UUID
 
 /**
@@ -139,15 +140,23 @@ class QuantityReductionService(
         // Drug id and amounts left out on purpose: together they describe someone's stock.
         logger.warn("Planned quantity exceeded current stock; treatment plans were reduced")
 
-        // Делим с запасом знаков: частное обычно бесконечная периодическая дробь, и BigDecimal
-        // без явного scale бросил бы ArithmeticException.
+        // Частное обычно бесконечная периодическая дробь, и BigDecimal без явного scale
+        // бросил бы ArithmeticException.
+        //
+        // Запас в десять знаков и округление к ближайшему, а не вниз: коэффициент, укороченный
+        // вниз, портит ровные случаи — 30 планов при сжатии до двух третей давали 19.999999
+        // вместо 20. Вниз округляются произведения, и этого достаточно: погрешность
+        // коэффициента здесь порядка 1e-16, то есть на десять порядков меньше младшего разряда
+        // количества, и перекрыть её потерей от округления произведений она не может.
         val reduceFactor = drug.quantity.divide(
             drug.totalPlannedAmount,
-            QUANTITY_SCALE + 4,
+            QUANTITY_SCALE + 10,
             QUANTITY_ROUNDING
         )
-        handleUsingReduction(withUsings(drug), reduceFactor)
-        drug.markPlansMatchStock()
+        // Сумма присваивается настоящая, а не остаток. Поле производное (@Formula считает
+        // SUM(planned_amount)), и приписывать ему значение quantity значит врать себе же:
+        // до ближайшей перезагрузки клиент видел бы в plannedQuantity завышенное число.
+        drug.totalPlannedAmount = shrinkPlans(withUsings(drug), reduceFactor)
         return drugService.save(drug)
         // TODO FIREBASE NOTIFICATION
     }
@@ -164,31 +173,29 @@ class QuantityReductionService(
         drugService.findWithPlans(drug.id) ?: drug
 
     /**
-     * Уменьшает все планы пропорционально, сохраняя инвариант «сумма планов равна остатку».
+     * Сжимает планы пропорционально и возвращает их новую сумму.
      *
-     * Каждое произведение округляется до scale базы, поэтому сумма округлённых значений почти
-     * никогда не равна цели ровно. Разницу нельзя оставить: именно из таких копеек и вырастало
-     * расхождение, из-за которого инвариант переставал держаться. Остаток отдаётся одному
-     * плану — самому большому, чтобы поправка гарантированно не загнала его в минус; при равных
-     * значениях выбор детерминирован по userId, иначе результат зависел бы от порядка выборки.
+     * Инвариант, который нужен коду, — «сумма планов **не больше** остатка», а не точное
+     * равенство: так он и проверяется выше. Округление вниз даёт его по построению — каждый
+     * план не превышает свою точную долю, а доли в сумме дают остаток.
+     *
+     * Прежняя версия округляла HALF_UP и потому могла получить сумму **больше** остатка, а
+     * следом компенсировала разницу, отдавая её самому большому плану. То есть третий шаг
+     * чинил то, что натворил первый. Округление вниз убирает и причину, и лечение: цена —
+     * несколько миллионных долей таблетки, потерянных при сжатии резерва, что для операции
+     * «планов больше, чем осталось» единственно уместное направление.
+     *
+     * saveAll не нужен: планы — управляемые сущности, изменения уйдут при сбросе контекста.
      */
-    private fun handleUsingReduction(drug: Drug, factor: BigDecimal) {
+    private fun shrinkPlans(drug: Drug, factor: BigDecimal): BigDecimal {
         val usings = drug.usings
-        if (usings.isEmpty()) return
+        if (usings.isEmpty()) return BigDecimal.ZERO
 
-        // Округление до scale базы делает сеттер plannedAmount, поэтому произведение здесь
-        // записывается как есть, а сумма ниже читается уже округлённой.
-        usings.forEach { it.plannedAmount = it.plannedAmount * factor }
-
-        val rounded = usings.fold(BigDecimal.ZERO) { sum, using -> sum + using.plannedAmount }
-        val residual = drug.quantity - rounded
-        if (!residual.isZero()) {
-            val adjusted = usings.maxWith(
-                compareBy<Using>({ it.plannedAmount }, { it.usingKey.userId })
-            )
-            adjusted.plannedAmount = adjusted.plannedAmount + residual
+        // setScale здесь явный: сеттер plannedAmount округляет HALF_UP, и без этого
+        // произведение приехало бы к нему уже вверх.
+        usings.forEach {
+            it.plannedAmount = (it.plannedAmount * factor).setScale(QUANTITY_SCALE, RoundingMode.DOWN)
         }
-        // saveAll не нужен: планы — управляемые сущности, изменения уйдут при сбросе
-        // контекста. Вызов repository здесь только создавал бы вид, что без него не запишется.
+        return usings.fold(BigDecimal.ZERO) { sum, using -> sum + using.plannedAmount }
     }
 }

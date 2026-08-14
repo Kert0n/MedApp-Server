@@ -45,9 +45,13 @@ class UserController(
     )
     fun getAllDataForUser(authentication: Authentication): UserDto {
         logger.debug("GET /v1/user by user {}", authentication.userId)
-        val medKitDTOs =
-            medKitService.findAllByUser(authentication.userId)
-                .map { it.toDto(medKitDrugServices.drugsWithPlans(it)) }.toSet()
+        // Два запроса при любом числе аптечек: один за аптечками, один за препаратами всех
+        // сразу. Раньше препараты запрашивались на каждую аптечку отдельно — 1 + M
+        // операторов, — причём результат первого запроса, который тянул препараты графом,
+        // тут же выбрасывался.
+        val medKits = medKitService.findAllByUser(authentication.userId)
+        val drugsByMedKit = medKitDrugServices.drugsWithPlansByMedKit(medKits)
+        val medKitDTOs = medKits.map { it.toDto(drugsByMedKit[it.id].orEmpty()) }.toSet()
         return UserDto(
             id = authentication.userId,
             medKits = medKitDTOs

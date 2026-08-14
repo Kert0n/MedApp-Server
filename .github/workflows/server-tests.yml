@@ -45,6 +45,19 @@ jobs:
       - name: Тесты
         run: ./gradlew test --no-daemon
 
+      # Планы запросов: сеет синтетику (10 000 препаратов, 30 000 планов, 18 000 записей
+      # каталога) и разбирает EXPLAIN каждого выполненного запроса.
+      #
+      # Отдельным шагом, а не одной командой с тестами: у набора своя цена — около минуты
+      # вместе с контейнером, — и по логу должно быть сразу видно, что упало, поведение или
+      # планы.
+      #
+      # Нужен потому, что обычные тесты этот класс дефектов не видят: все три N+1, найденные
+      # при рефакторинге, проходили на зелёном наборе из 237 тестов. Без этого шага
+      # регрессия по числу запросов пройдёт мимо ревью так же незаметно.
+      - name: Планы запросов
+        run: ./gradlew queryPlanTest --no-daemon
+
       - name: Отчёты тестов
         if: always()
         uses: actions/upload-artifact@v7
@@ -53,4 +66,6 @@ jobs:
           path: |
             src/MedAppServer/build/reports/tests/test
             src/MedAppServer/build/test-results/test
+            src/MedAppServer/build/reports/tests/queryPlanTest
+            src/MedAppServer/build/test-results/queryPlanTest
           retention-days: 7
