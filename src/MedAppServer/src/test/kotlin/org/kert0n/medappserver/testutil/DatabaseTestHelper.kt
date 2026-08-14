@@ -1,5 +1,6 @@
 package org.kert0n.medappserver.testutil
 
+import java.math.BigDecimal
 
 import jakarta.persistence.EntityManager
 import org.kert0n.medappserver.db.model.Drug
@@ -41,8 +42,8 @@ class DatabaseTestHelper(
     }
 
     // Null-safe getters essential for testing Privacy-by-Default (deletion)
-    fun drugQuantity(id: UUID): Double? = drugRepository.findByIdOrNull(id)?.quantity
-    fun totalPlanned(id: UUID): Double? = drugRepository.findByIdOrNull(id)?.totalPlannedAmount
-    fun userPlan(userId: UUID, drugId: UUID): Double? =
+    fun drugQuantity(id: UUID): BigDecimal? = drugRepository.findByIdOrNull(id)?.quantity
+    fun totalPlanned(id: UUID): BigDecimal? = drugRepository.findByIdOrNull(id)?.totalPlannedAmount
+    fun userPlan(userId: UUID, drugId: UUID): BigDecimal? =
         usingRepository.findByUserIdAndDrugId(userId, drugId)?.plannedAmount
 }

@@ -3,7 +3,7 @@ package org.kert0n.medappserver.db.model
 import jakarta.persistence.*
 import jakarta.validation.constraints.NotNull
 import java.io.Serializable
-import java.time.Instant
+import java.math.BigDecimal
 import java.util.*
 
 
@@ -30,18 +30,20 @@ class Using(
     @JoinColumn(name = "drug_id")
     var drug: Drug,
 
-    @NotNull
-    @Column(name = "planned_amount", nullable = false)
-    var plannedAmount: Double,
-
-    @NotNull
-    @Column(name = "last_modified", nullable = false)
-    var lastModified: Instant = Instant.now(),
-
-    @NotNull
-    @Column(name = "created_at", nullable = false)
-    var createdAt: Instant = Instant.now()
+    plannedAmount: BigDecimal
 ) {
+
+    /**
+     * Запланированное количество. Нормализуется до [QUANTITY_SCALE] в сеттере — по тем же
+     * причинам, что и [Drug.quantity]: приведение в одном месте вместо повтора на каждой
+     * арифметической строке в сервисах.
+     */
+    @NotNull
+    @Column(name = "planned_amount", nullable = false, precision = 19, scale = QUANTITY_SCALE)
+    var plannedAmount: BigDecimal = plannedAmount.toQuantityScale()
+        set(value) {
+            field = value.toQuantityScale()
+        }
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true

@@ -4,6 +4,7 @@ import org.kert0n.medappserver.controller.UsingCreateDTO
 import org.kert0n.medappserver.controller.UsingDTO
 import org.kert0n.medappserver.controller.UsingUpdateDTO
 import org.kert0n.medappserver.db.model.Using
+import org.kert0n.medappserver.db.model.isZero
 import org.kert0n.medappserver.db.model.UsingKey
 import org.kert0n.medappserver.db.repository.UsingRepository
 import org.kert0n.medappserver.services.orchestrators.QuantityReductionService
@@ -13,7 +14,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
-import java.time.Instant
+import java.math.BigDecimal
 import java.util.*
 
 @Service
@@ -78,9 +79,7 @@ class UsingService(
             usingKey = UsingKey(userId, createDTO.drugId),
             user = user,
             drug = drug,
-            plannedAmount = createDTO.plannedAmount,
-            lastModified = Instant.now(),
-            createdAt = Instant.now()
+            plannedAmount = createDTO.plannedAmount
         )
 
         return usingRepository.save(using)
@@ -103,13 +102,12 @@ class UsingService(
         }
 
         using.plannedAmount = updateDTO.plannedAmount
-        using.lastModified = Instant.now()
 
         return usingRepository.save(using)
     }
 
     @Transactional
-    fun recordIntake(userId: UUID, drugId: UUID, quantityConsumed: Double): Using? {
+    fun recordIntake(userId: UUID, drugId: UUID, quantityConsumed: BigDecimal): Using? {
         logger.debug("Recording intake for user {} and drug {}, quantity: {}", userId, drugId, quantityConsumed)
         val using = findByUserAndDrug(userId, drugId)
         // Check if consumed quantity exceeds planned amount
@@ -126,18 +124,16 @@ class UsingService(
 
         // Update planned amount
         // IMPORTANT! THIS MUST ALWAYS BE BEFORE QUANTITY REDUCTION, SO IT CAN PROPERLY ASSESS TOTAL PLANNED QUANTITY
-        using.plannedAmount = maxOf(0.0, using.plannedAmount - quantityConsumed)
+        using.plannedAmount = maxOf(BigDecimal.ZERO, using.plannedAmount - quantityConsumed)
         // Reduce drug quantity
-        using.drug.quantity -= quantityConsumed
+        using.drug.quantity = using.drug.quantity - quantityConsumed
         // This could be replaced with reloading drug from db, but this much quicker
-        using.drug.totalPlannedAmount -= quantityConsumed
+        using.drug.totalPlannedAmount = using.drug.totalPlannedAmount - quantityConsumed
         quantityReductionService.handleQuantityReduction(using.drug)
-        if (using.plannedAmount == 0.0) {
+        if (using.plannedAmount.isZero()) {
             usingRepository.delete(using)
             return null
         }
-        using.lastModified = Instant.now()
-
         return usingRepository.save(using)
     }
 
@@ -156,9 +152,7 @@ class UsingService(
         return UsingDTO(
             userId = using.user.id,
             drugId = using.drug.id,
-            plannedAmount = using.plannedAmount,
-            createdAt = using.createdAt,
-            lastModified = using.lastModified
+            plannedAmount = using.plannedAmount
         )
     }
 }

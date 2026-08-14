@@ -4,6 +4,7 @@ import jakarta.persistence.*
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
 import org.hibernate.annotations.Formula
+import java.math.BigDecimal
 import java.util.*
 
 @Entity
@@ -24,9 +25,7 @@ class Drug(
     @Column(name = "name", nullable = false, length = 300)
     var name: String,
 
-    @NotNull
-    @Column(name = "quantity", nullable = false)
-    var quantity: Double,
+    quantity: BigDecimal,
 
     @NotNull
     @Size(max = 50)
@@ -52,8 +51,7 @@ class Drug(
     @Column(name = "description", length = Integer.MAX_VALUE)
     var description: String?,
 
-    @Formula("(SELECT COALESCE(SUM(u.planned_amount), 0) FROM usings u WHERE u.drug_id = id)")
-    var totalPlannedAmount: Double = 0.0,
+    totalPlannedAmount: BigDecimal = BigDecimal.ZERO,
 
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY)
@@ -65,6 +63,37 @@ class Drug(
 
 ) {
 
+    /**
+     * Остаток препарата. Значение всегда нормализовано до [QUANTITY_SCALE].
+     *
+     * Приведение живёт в сеттере, а не в вызывающем коде: иначе каждая арифметическая строка в
+     * сервисах обрастает `.toQuantityScale()`, и достаточно один раз забыть — как scale начинает
+     * накапливаться (умножение складывает scale операндов), значения перестают совпадать с
+     * прочитанными из базы, и сравнения через `equals` начинают врать.
+     *
+     * Hibernate работает с полями напрямую (доступ FIELD, потому что `@Id` стоит на поле),
+     * поэтому при загрузке из БД сеттер не вызывается — и это правильно: в колонке
+     * `numeric(19,6)` значение уже нужного вида.
+     */
+    @NotNull
+    @Column(name = "quantity", nullable = false, precision = 19, scale = QUANTITY_SCALE)
+    var quantity: BigDecimal = quantity.toQuantityScale()
+        set(value) {
+            field = value.toQuantityScale()
+        }
+
+    /**
+     * Сумма всех планов по препарату, считается формулой при загрузке.
+     *
+     * Нормализация здесь нужна ещё и потому, что формула возвращает разный scale: при
+     * отсутствии планов `COALESCE(SUM(...), 0)` даёт целочисленный ноль со scale 0, а при
+     * наличии — scale колонки. Сеттер убирает эту разницу для значений, которые проставляет код.
+     */
+    @Formula("(SELECT COALESCE(SUM(u.planned_amount), 0) FROM usings u WHERE u.drug_id = id)")
+    var totalPlannedAmount: BigDecimal = totalPlannedAmount.toQuantityScale()
+        set(value) {
+            field = value.toQuantityScale()
+        }
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
