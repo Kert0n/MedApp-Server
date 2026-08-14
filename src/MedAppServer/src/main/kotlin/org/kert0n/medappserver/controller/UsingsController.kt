@@ -12,12 +12,13 @@ import jakarta.validation.constraints.DecimalMin
 import jakarta.validation.constraints.NotNull
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.services.models.userId
+import org.kert0n.medappserver.services.orchestrators.IntakeService
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
-import java.time.Instant
+import java.math.BigDecimal
 import java.util.*
 import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBody
 
@@ -26,6 +27,7 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBod
 @Tag(name = "Treatment Plans", description = "Endpoints for treatment plans and intake tracking")
 class UsingsController(
     private val usingService: UsingService,
+    private val intakeService: IntakeService,
     private val logger: Logger = LoggerFactory.getLogger(UsingsController::class.java)
 ) {
 
@@ -140,10 +142,12 @@ class UsingsController(
             "POST /using/drug/{}/intake by user {}, quantity: {}",
             drugId, authentication.userId, intakeRequest.quantityConsumed
         )
-
-        return usingService.recordIntake(authentication.userId, drugId, intakeRequest.quantityConsumed)?.let { using ->
-            usingService.toUsingDTO(using)
-        }
+        return intakeService.record(
+            authentication.userId,
+            drugId,
+            intakeRequest.quantityConsumed,
+            intakeRequest.intakeId
+        ).plan
     }
 
     @DeleteMapping("/drug/{drugId}")
@@ -169,7 +173,15 @@ data class IntakeRequest(
     @NotNull
     @DecimalMin(value = "0.0", inclusive = false)
     @Schema(description = "Amount consumed", example = "1.0", minimum = "0")
-    val quantityConsumed: Double
+    val quantityConsumed: BigDecimal,
+
+    @NotNull
+    @Schema(
+        description = "Client-generated identifier of this intake event. Retrying with the same " +
+            "value returns the first result instead of applying the intake twice.",
+        required = true
+    )
+    val intakeId: UUID
 )
 
 @Schema(description = "Treatment plan information")
@@ -179,11 +191,7 @@ data class UsingDTO(
     @Schema(description = "Drug identifier")
     val drugId: UUID,
     @Schema(description = "Planned total amount for the course")
-    val plannedAmount: Double,
-    @Schema(description = "Date when the plan was created")
-    val createdAt: Instant,
-    @Schema(description = "Date of last modification")
-    val lastModified: Instant
+    val plannedAmount: BigDecimal
 )
 
 @Schema(description = "Create treatment plan request")
@@ -195,7 +203,7 @@ data class UsingCreateDTO(
     @NotNull
     @DecimalMin("0.0")
     @Schema(description = "Planned amount", example = "20.0", minimum = "0")
-    val plannedAmount: Double
+    val plannedAmount: BigDecimal
 )
 
 @Schema(description = "Update treatment plan request")
@@ -203,5 +211,5 @@ data class UsingUpdateDTO(
     @NotNull
     @DecimalMin("0.0")
     @Schema(description = "Planned amount", example = "20.0", minimum = "0")
-    val plannedAmount: Double
+    val plannedAmount: BigDecimal
 )

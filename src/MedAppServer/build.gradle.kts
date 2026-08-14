@@ -65,4 +65,8 @@ tasks.withType<Test> {
     // Lets OpenApiSnapshotTest rewrite open-api.yaml instead of asserting against it:
     //     ./gradlew test -DupdateOpenApi=true
     systemProperty("updateOpenApi", System.getProperty("updateOpenApi") ?: "false")
+    // QuantityArithmeticBenchmarkTest is skipped unless this is set. It measures rather than
+    // asserts, so it has no place in a normal run:
+    //     ./gradlew test --tests "*QuantityArithmeticBenchmarkTest*" -DrunBenchmark=true
+    systemProperty("runBenchmark", System.getProperty("runBenchmark") ?: "false")
 }
