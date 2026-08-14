@@ -137,7 +137,7 @@ class DrugMovementStoriesTest {
         entityManager.flush()
 
         // Anna should be able to increase her plan to 70 (available for her = 100 - 30 (bob) = 70)
-        val updated = treatmentPlanService.update(anna.id, drug.id, qty(70.0)
+        val updated = treatmentPlanService.patch(anna.id, drug.id, qty(70.0)
         )
         assertQty(70.0, updated.plannedAmount)
         entityManager.flush()
@@ -147,7 +147,7 @@ class DrugMovementStoriesTest {
 
         // Anna should NOT be able to increase to 71 (exceeds available)
         assertFailsWith<ResponseStatusException> {
-            treatmentPlanService.update(anna.id, drug.id, qty(71.0)
+            treatmentPlanService.patch(anna.id, drug.id, qty(71.0)
             )
         }
 

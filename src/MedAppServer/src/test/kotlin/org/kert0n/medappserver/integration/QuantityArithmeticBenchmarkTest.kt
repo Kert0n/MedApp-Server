@@ -160,10 +160,10 @@ class QuantityArithmeticBenchmarkTest {
         treatmentPlanService.create(user.id, drug.id, stock)
 
         val one = qty(1.0)
-        repeat(INTAKE_WARMUP) { drugService.applyIntake(user.id, drug.id, one) }
+        repeat(INTAKE_WARMUP) { treatmentPlanService.applyIntake(user.id, drug.id, one) }
 
         val started = System.nanoTime()
-        repeat(INTAKE_CALLS) { drugService.applyIntake(user.id, drug.id, one) }
+        repeat(INTAKE_CALLS) { treatmentPlanService.applyIntake(user.id, drug.id, one) }
         return (System.nanoTime() - started).toDouble() / INTAKE_CALLS
     }
 

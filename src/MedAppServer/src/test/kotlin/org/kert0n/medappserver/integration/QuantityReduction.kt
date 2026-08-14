@@ -433,7 +433,7 @@ class QuantityReductionTests {
         dbHelper.flushAndClear()
 
         // Забирает весь остаток; план при этом остаётся ненулевым (5 - 2 = 3).
-        val result = drugService.applyIntake(alice.id, drug.id, qty(2.0))
+        val result = treatmentPlanService.applyIntake(alice.id, drug.id, qty(2.0))
 
         assertNull(result, "препарат удалён, поэтому возвращать план нечего")
         // Без guard'а здесь падал бы flush: план сохранялся бы со ссылкой на удалённую строку.

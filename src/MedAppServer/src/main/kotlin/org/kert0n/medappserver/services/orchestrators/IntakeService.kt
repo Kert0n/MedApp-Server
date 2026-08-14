@@ -1,33 +1,25 @@
 package org.kert0n.medappserver.services.orchestrators
 
 import com.sksamuel.aedile.core.Cache
-import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.PlanSnapshot
 import org.kert0n.medappserver.services.security.hashToken
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
+import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
+import org.springframework.web.server.ResponseStatusException
 import java.math.BigDecimal
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
-/**
- * Приём препарата с защитой от повторного применения.
- *
- * Живёт отдельно от [DrugService] по одной причине: списание должно быть закоммичено до того,
- * как результат попадёт в кеш. Если писать в кеш внутри транзакционного `recordIntake`, запись
- * останется даже при откате — и повтор получит результат операции, которой не было. Поэтому
- * метод здесь **не** транзакционный и вызывает транзакционный сервис как единицу работы.
- *
- * В контроллере этого быть не должно: решение «применять или отдать прежний результат» — это
- * поведение сервера, а не деталь HTTP-слоя. Контроллер только разбирает запрос и отдаёт ответ.
- */
 @Service
 class IntakeService(
-    private val drugService: DrugService,
+    private val treatmentPlans: TreatmentPlanService,
     @Qualifier("intakeResultsCache") private val intakeResultsCache: Cache<String, IntakeOutcome>
 ) {
 
     private val logger = LoggerFactory.getLogger(IntakeService::class.java)
+    private val inFlight = ConcurrentHashMap<String, Any>()
 
     fun record(
         userId: UUID,
@@ -35,36 +27,37 @@ class IntakeService(
         quantityConsumed: BigDecimal,
         intakeId: UUID
     ): IntakeOutcome {
-        // Ключ включает пользователя: intakeId генерирует клиент, и без этого один клиент мог
-        // бы получить результат чужой операции, подобрав совпадающий идентификатор.
-        //
-        // Хеш, а не пара значений: в кеше не остаётся ни идентификатора пользователя, ни
-        // клиентского intakeId в читаемом виде — тем же приёмом закрыты ключи по адресу
-        // клиента. Пара сворачивается в один хеш, поэтому и разделитель не нужен.
         val key = hashToken("$userId$intakeId")
+        val monitor = inFlight.computeIfAbsent(key) { Any() }
+        try {
+            synchronized(monitor) {
+                intakeResultsCache.getOrNull(key)?.let { seen ->
+                    if (!seen.matches(drugId, quantityConsumed)) {
+                        throw ResponseStatusException(
+                            HttpStatus.CONFLICT,
+                            "Intake ID was already used with another payload"
+                        )
+                    }
+                    logger.debug("Returning cached intake result")
+                    return seen
+                }
 
-        intakeResultsCache.getOrNull(key)?.let { seen ->
-            logger.debug("Повторный intakeId, отдаю прежний результат без повторного списания")
-            return seen
+                val plan = treatmentPlans.applyIntake(userId, drugId, quantityConsumed)
+                val outcome = IntakeOutcome(drugId, quantityConsumed, plan)
+                intakeResultsCache.put(key, outcome)
+                return outcome
+            }
+        } finally {
+            inFlight.remove(key, monitor)
         }
-
-        val plan = drugService.applyIntake(userId, drugId, quantityConsumed)
-            ?.let { PlanSnapshot(it.usingKey.userId, it.usingKey.drugId, it.plannedAmount) }
-
-        // Ошибки не кешируются сознательно: отказ выводится из состояния и при повторе
-        // повторится сам, а вот закешированный отказ переживёт исправление причины.
-        val outcome = IntakeOutcome(plan)
-        intakeResultsCache.put(key, outcome)
-        return outcome
     }
 }
 
-/**
- * Результат приёма для кеша идемпотентности.
- *
- * Обёртка нужна потому, что приём может завершиться удалением плана, и тогда результат — его
- * отсутствие, то есть null. Caffeine null-значения не принимает, а различать «не видели такой
- * intakeId» и «видели, и план исчез» обязательно: без этого повтор вернул бы 404 вместо
- * первого ответа.
- */
-data class IntakeOutcome(val plan: PlanSnapshot?)
+data class IntakeOutcome(
+    val drugId: UUID,
+    val quantityConsumed: BigDecimal,
+    val plan: PlanSnapshot?
+) {
+    fun matches(drugId: UUID, quantityConsumed: BigDecimal): Boolean =
+        this.drugId == drugId && this.quantityConsumed.compareTo(quantityConsumed) == 0
+}
