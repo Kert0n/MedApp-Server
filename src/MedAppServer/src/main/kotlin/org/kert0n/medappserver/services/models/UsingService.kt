@@ -82,7 +82,14 @@ class UsingService(
             plannedAmount = createDTO.plannedAmount
         )
 
-        return usingRepository.save(using)
+        val saved = usingRepository.save(using)
+        // Обе стороны связи, а не только владеющая. План сохраняется репозиторием, но
+        // Drug.usings объявлена с CascadeType.ALL и orphanRemoval — если не добавить, коллекция
+        // до конца транзакции показывает состояние без нового плана, и весь код, который на неё
+        // опирается (каскадное удаление, перенос препарата между аптечками), работает по
+        // устаревшему набору.
+        drug.usings.add(saved)
+        return saved
     }
 
     @Transactional
@@ -129,9 +136,17 @@ class UsingService(
         using.drug.quantity = using.drug.quantity - quantityConsumed
         // This could be replaced with reloading drug from db, but this much quicker
         using.drug.totalPlannedAmount = using.drug.totalPlannedAmount - quantityConsumed
-        quantityReductionService.handleQuantityReduction(using.drug)
+        // null означает, что препарат кончился и удалён вместе со всеми планами. Продолжать
+        // нельзя: save ниже вставил бы план на удалённый препарат, то есть нарушил бы внешний
+        // ключ. Раньше это значение отбрасывалось, и корректность держалась на том, что
+        // комбинация «остаток нулевой, план ненулевой» недостижима из-за проверок в других
+        // методах — то есть на совпадении, а не на явном условии.
+        if (quantityReductionService.handleQuantityReduction(using.drug) == null) return null
+
         if (using.plannedAmount.isZero()) {
-            usingRepository.delete(using)
+            // Через коллекцию: orphanRemoval удалит строку сам, а Drug.usings остаётся
+            // правдой до конца транзакции.
+            using.drug.usings.remove(using)
             return null
         }
         return usingRepository.save(using)
@@ -142,7 +157,9 @@ class UsingService(
     fun deleteTreatmentPlan(userId: UUID, drugId: UUID) {
         logger.debug("Deleting using for user {} and drug {}", userId, drugId)
         val using = findByUserAndDrug(userId, drugId)
-        usingRepository.delete(using)
+        // Тоже через коллекцию: удаление плана — это исключение элемента из drug.usings,
+        // а не независимая операция над таблицей. orphanRemoval доводит её до DELETE.
+        using.drug.usings.remove(using)
     }
 
 

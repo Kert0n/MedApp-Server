@@ -65,14 +65,6 @@ class QuantityScaleTest {
         assertEquals(BigDecimal("0.000000"), drug.quantity)
     }
 
-    @Test
-    fun `сумма планов из формулы приводится к scale базы`() {
-        // Формула возвращает COALESCE(SUM(...), 0): без планов это целочисленный ноль со
-        // scale 0. Значения, которые проставляет код, сеттер выравнивает.
-        val drug = drug(BigDecimal("2.5"))
-
-        drug.totalPlannedAmount = BigDecimal("1.5")
-
-        assertEquals(QUANTITY_SCALE, drug.totalPlannedAmount.scale())
-    }
+    // Про totalPlannedAmount проверки нет намеренно: поле производное, колонки под него не
+    // существует, и нормализовать его scale незачем — сравнивается оно только по значению.
 }

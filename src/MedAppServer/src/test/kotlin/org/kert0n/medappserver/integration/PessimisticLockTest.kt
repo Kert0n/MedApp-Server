@@ -41,7 +41,10 @@ class PessimisticLockTest {
     @Autowired private lateinit var dataSource: DataSource
     @Autowired private lateinit var transactionManager: PlatformTransactionManager
 
-    private fun createCommittedDrug(): Pair<UUID, UUID> {
+    /** Именованные поля вместо `Pair`: два UUID под именами `first` и `second` не различить. */
+    private class Fixture(val drugId: UUID, val userId: UUID)
+
+    private fun createCommittedDrug(): Fixture {
         val user = userRepository.save(User(hashedKey = "{noop}lock-${UUID.randomUUID()}"))
         val medKit = medKitRepository.save(MedKit())
         medKit.users.add(user)
@@ -54,7 +57,7 @@ class PessimisticLockTest {
                 country = null, description = null, medKit = medKit
             )
         )
-        return drug.id to user.id
+        return Fixture(drugId = drug.id, userId = user.id)
     }
 
     /**
@@ -85,7 +88,9 @@ class PessimisticLockTest {
 
     @Test
     fun `строка препарата заблокирована, пока держится транзакция`() {
-        val (drugId, userId) = createCommittedDrug()
+        val fixture = createCommittedDrug()
+        val drugId = fixture.drugId
+        val userId = fixture.userId
 
         TransactionTemplate(transactionManager).execute {
             val locked = drugRepository.findByIdAndMedKitUsersIdForUpdate(drugId, userId)
@@ -110,7 +115,9 @@ class PessimisticLockTest {
         // Запрос джойнит med_kits и user_med_kits. Если бы FOR UPDATE распространялся на все
         // таблицы джойна, участники одной аптечки блокировали бы друг друга на несвязанных
         // операциях. Hibernate ограничивает область через `of d1_0` — это здесь и проверяется.
-        val (drugId, userId) = createCommittedDrug()
+        val fixture = createCommittedDrug()
+        val drugId = fixture.drugId
+        val userId = fixture.userId
 
         TransactionTemplate(transactionManager).execute {
             drugRepository.findByIdAndMedKitUsersIdForUpdate(drugId, userId)
