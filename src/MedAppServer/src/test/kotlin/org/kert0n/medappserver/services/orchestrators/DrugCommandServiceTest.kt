@@ -5,7 +5,7 @@ import org.junit.jupiter.api.assertThrows
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.services.models.DrugCreation
 import org.kert0n.medappserver.services.models.DrugPatch
-import org.kert0n.medappserver.services.models.MedKitService
+import org.kert0n.medappserver.testutil.MedKitFixture
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -24,7 +24,7 @@ import kotlin.test.assertNull
 class DrugCommandServiceTest {
 
     @Autowired private lateinit var commands: DrugCommandService
-    @Autowired private lateinit var medKits: MedKitService
+    @Autowired private lateinit var medKits: MedKitFixture
     @Autowired private lateinit var treatmentPlans: TreatmentPlanService
     @Autowired private lateinit var drugs: DrugRepository
     @Autowired private lateinit var db: DatabaseTestHelper
@@ -43,7 +43,7 @@ class DrugCommandServiceTest {
         }
 
         val created = commands.create(owner.id, medKit.id, creation(qty(10.0)))
-        assertEquals(medKit.id, created.medKit.id)
+        assertEquals(medKit.id, created.medKitId)
         assertQty(10.0, created.quantity)
     }
 
@@ -104,7 +104,7 @@ class DrugCommandServiceTest {
         db.flushAndClear()
 
         val moved = commands.move(alice.id, drug.id, target.id)
-        assertEquals(target.id, moved.medKit.id)
+        assertEquals(target.id, moved.medKitId)
         assertQty(20.0, db.userPlan(alice.id, drug.id))
         assertNull(db.userPlan(bob.id, drug.id))
     }

@@ -1,6 +1,7 @@
 package org.kert0n.medappserver.services.models
 
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
+import org.kert0n.medappserver.testutil.MedKitFixture
 import org.kert0n.medappserver.testutil.assertQty
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -20,7 +21,7 @@ class DrugServiceTest {
     private lateinit var drugService: DrugService
 
     @Autowired
-    private lateinit var medKitService: MedKitService
+    private lateinit var medKitFixture: MedKitFixture
 
     @Autowired
     private lateinit var dbHelper: DatabaseTestHelper
@@ -28,7 +29,7 @@ class DrugServiceTest {
     @Test
     fun `getAccessible returns immutable view for a member`() {
         val user = dbHelper.freshUser("drug-reader")
-        val kit = medKitService.createNew(user.id)
+        val kit = medKitFixture.createNew(user.id)
         val drug = dbHelper.freshDrug(kit, 12.5)
         dbHelper.flushAndClear()
 
@@ -44,7 +45,7 @@ class DrugServiceTest {
     fun `getAccessible conceals a drug from a non-member`() {
         val owner = dbHelper.freshUser("drug-owner")
         val outsider = dbHelper.freshUser("drug-outsider")
-        val kit = medKitService.createNew(owner.id)
+        val kit = medKitFixture.createNew(owner.id)
         val drug = dbHelper.freshDrug(kit, 10.0)
         dbHelper.flushAndClear()
 

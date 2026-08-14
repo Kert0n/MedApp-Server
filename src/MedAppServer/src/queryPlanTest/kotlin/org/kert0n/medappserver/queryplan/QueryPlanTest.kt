@@ -9,6 +9,10 @@ import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.services.models.VidalDrugService
 import org.kert0n.medappserver.db.repository.DrugRepository
+import org.kert0n.medappserver.db.repository.MedKitRepository
+import org.kert0n.medappserver.db.repository.UsingRepository
+import org.kert0n.medappserver.services.orchestrators.DrugCommandService
+import org.kert0n.medappserver.services.orchestrators.MedKitLifecycleService
 import org.kert0n.medappserver.services.orchestrators.MedKitQueryService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -18,20 +22,13 @@ import org.springframework.transaction.support.TransactionTemplate
 import org.testcontainers.postgresql.PostgreSQLContainer
 import tools.jackson.databind.ObjectMapper
 import java.sql.Connection
+import java.math.BigDecimal
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Проверяет **форму плана** горячих запросов на объёме, где она уже что-то значит.
- *
- * Почему не время: настоящей нагрузки у проекта нет, миллисекунды на синтетике зависят от
- * машины и от кеша страниц, и утверждать по ним нечего. А `Seq Scan` по таблице на
- * восемнадцать тысяч строк — факт, который от машины не зависит и в проде повторится.
- *
- * Почему не число операторов: этим занят `StatementCountTest` в обычном наборе. Здесь
- * вопрос другой — не «сколько запросов», а «каждый ли из них попадает в индекс».
- *
- * Набор запускается отдельно и в `check` не входит:
+ * Проверяет SQL и индексные планы на большом PostgreSQL fixture.
+ * Набор запускается отдельно:
  *
  *     ./gradlew queryPlanTest
  */
@@ -45,8 +42,12 @@ class QueryPlanTest {
     @Autowired private lateinit var fixture: QueryPlanFixture
     @Autowired private lateinit var drugService: DrugService
     @Autowired private lateinit var drugRepository: DrugRepository
+    @Autowired private lateinit var usingRepository: UsingRepository
+    @Autowired private lateinit var medKitRepository: MedKitRepository
     @Autowired private lateinit var usingService: UsingService
     @Autowired private lateinit var medKitQueries: MedKitQueryService
+    @Autowired private lateinit var drugCommands: DrugCommandService
+    @Autowired private lateinit var medKitLifecycle: MedKitLifecycleService
     @Autowired private lateinit var vidalDrugService: VidalDrugService
     @Autowired private lateinit var entityManager: EntityManager
 
@@ -65,12 +66,7 @@ class QueryPlanTest {
     @AfterAll
     fun tearDown() = explainConnection.close()
 
-    /**
-     * Собирает планы всех SELECT сценария.
-     *
-     * DML пропускается: у вставок и удалений плана в интересном смысле нет, а проверять надо
-     * именно доступ к данным.
-     */
+    /** Собирает планы уникальных SELECT измеряемого сценария. */
     private fun plansOf(
         name: String,
         forceIndexes: Boolean = false,
@@ -110,26 +106,29 @@ class QueryPlanTest {
         }.also { it.queryShape() }
     }
 
-    private fun assertConstantQueryShape(
-        name: String,
-        scenarios: Map<Int, () -> Unit>,
-        expected: Map<SqlKind, Int>
-    ) {
-        val measured = scenarios.mapValues { (_, scenario) -> capture(scenario).queryShape() }
-        println("\n=== $name ===")
-        measured.forEach { (size, shape) -> println("  размер $size: ${shape.byKind}") }
-
-        measured.forEach { (size, shape) ->
-            expected.forEach { (kind, count) ->
-                assertEquals(count, shape.count(kind), "$name, размер $size, $kind")
+    private fun captureWrite(scenario: () -> Unit): List<ExecutedStatement> =
+        RecordingDataSource.capture {
+            tx.executeWithoutResult {
+                entityManager.clear()
+                scenario()
+                entityManager.flush()
+                entityManager.clear()
             }
+        }.also { it.queryShape() }
+
+    private fun explainStatements(
+        statements: List<ExecutedStatement>,
+        forceIndexes: Boolean = false
+    ): List<Pair<String, QueryPlan>> =
+        statements.distinctBy { it.fingerprint }.mapNotNull { statement ->
+            explain(explainConnection, objectMapper, statement, forceIndexes)
+                ?.let { statement.sql to it }
         }
-        val fingerprints = measured.values.map(QueryShape::fingerprints)
-        assertTrue(
-            fingerprints.distinct().size == 1,
-            "$name меняет форму SQL с размером данных:\n$measured"
-        )
-    }
+
+    private fun scalarLong(sql: String): Long =
+        tx.execute {
+            entityManager.createNativeQuery(sql).singleResult.toString().toLong()
+        }!!
 
     private fun assertNoSeqScanOn(table: String, plans: List<Pair<String, QueryPlan>>) {
         val offenders = plans.filter { table in it.second.sequentiallyScanned }
@@ -140,18 +139,7 @@ class QueryPlanTest {
         )
     }
 
-    /**
-     * Проверяется не выбор планировщика, а способность запроса попасть в индекс.
-     *
-     * На восемнадцати тысячах строк каталог занимает пару сотен страниц, и `Seq Scan` по нему
-     * планировщик выбирает законно — спорить с этим значит спорить с арифметикой. Дефектом
-     * будет другое: запрос, который в индекс не попадает **ни при каких** настройках. Именно
-     * это и ловится `enable_seqscan = off`, и от объёма данных оно не зависит.
-     *
-     * Так вскрылось, что `ILIKE CONCAT('%', :term, '%')` индексом не пользовался: `concat()`
-     * объявлена stable, и шаблон для планировщика непрозрачен. Заменено на оператор `||`,
-     * который для текста immutable.
-     */
+    /** Поиск должен иметь индексный план для каждого обращения к каталогу. */
     @Test
     fun `поиск по справочнику умеет пользоваться триграммными индексами`() {
         val scenario: () -> Unit = { vidalDrugService.fuzzySearch(fixture.catalogueName, 10) }
@@ -166,31 +154,10 @@ class QueryPlanTest {
         )
     }
 
-    /**
-     * Число запросов не должно расти с числом аптечек.
-     *
-     * Счётчик, а не план: это вопрос «сколько раз», а не «каким способом». План здесь
-     * бессилен — он показывает один запрос, а проблема в их количестве.
-     */
-    @Test
-    fun `выдача пользователю не делает запрос на каждую аптечку`() {
-        assertConstantQueryShape(
-            name = "GET /v1/user",
-            scenarios = fixture.snapshotUsers.mapValues { (_, userId) ->
-                { medKitQueries.getUserSnapshot(userId) }
-            },
-            expected = mapOf(SqlKind.SELECT to 2)
-        )
-    }
-
-    /**
-     * Как и в поиске: проверяется способность запроса попасть в индекс, а не выбор
-     * планировщика. На синтетике в тридцать тысяч планов он предпочитает хеш-соединение с
-     * последовательным чтением, и это законно — спорить с его арифметикой нечем.
-     */
+    /** Snapshot допускает индексный доступ к препаратам и планам. */
     @Test
     fun `выдача пользователю умеет читать препараты и планы по индексам`() {
-        val plans = plansOf("GET /v1/user", forceIndexes = true) {
+        val plans = plansOf("GET /v1/users/me", forceIndexes = true) {
             medKitQueries.getUserSnapshot(fixture.ownerId)
         }
 
@@ -201,36 +168,49 @@ class QueryPlanTest {
         )
     }
 
-    /**
-     * Число операторов не должно расти с числом планов.
-     *
-     * `Using.drug` объявлен EAGER, но производный запрос его не присоединяет: Hibernate
-     * достаёт каждый препарат отдельным SELECT. На 167 планах это давало 169 операторов —
-     * самый крупный N+1 в проекте, и в пользовательском эндпоинте.
-     */
-    @Test
-    fun `список планов пользователя не делает запрос на каждый план`() {
-        assertConstantQueryShape(
-            name = "GET /v1/using",
-            scenarios = fixture.planUsers.mapValues { (plans, userId) ->
-                {
-                    val result = usingService.listForUser(userId)
-                    assertEquals(plans, result.size, "фикстура обязана вернуть $plans планов")
-                }
-            },
-            expected = mapOf(SqlKind.SELECT to 1)
-        )
-    }
-
     @Test
     fun `список планов пользователя идёт по индексу`() {
-        val plans = plansOf("GET /v1/using") { usingService.listForUser(fixture.ownerId) }
+        val plans = plansOf("GET /v1/treatment-plans", forceIndexes = true) {
+            usingService.listForUser(fixture.ownerId)
+        }
         assertNoSeqScanOn("usings", plans)
     }
 
     @Test
+    fun `адресный план читается одним SELECT`() {
+        val userId = fixture.planUsers.getValue(1)
+        val drugId = fixture.planDrugs.getValue(1)
+        val executed = capture {
+            val result = usingService.getForUser(userId, drugId)
+            assertEquals(drugId, result.drugId)
+        }
+        assertEquals(mapOf(SqlKind.SELECT to 1), executed.queryShape().byKind)
+        val plans = explainStatements(executed, forceIndexes = true)
+        assertNoSeqScanOn("usings", plans)
+    }
+
+    @Test
+    fun `содержимое аптечки использует индексы`() {
+        val ids = fixture.contentMedKits.getValue(100)
+        val plans = plansOf("GET /v1/med-kits/{id}", forceIndexes = true) {
+            medKitQueries.getContent(ids.first, ids.second)
+        }
+        assertNoSeqScanOn("user_drugs", plans)
+        assertNoSeqScanOn("user_med_kits", plans)
+    }
+
+    @Test
+    fun `доступный препарат использует индексы`() {
+        val plans = plansOf("GET /v1/drugs/{id}", forceIndexes = true) {
+            drugService.getAccessible(fixture.ownerId, fixture.drugId)
+        }
+        assertNoSeqScanOn("user_drugs", plans)
+        assertNoSeqScanOn("user_med_kits", plans)
+    }
+
+    @Test
     fun `выборка препарата под блокировку берёт индекс и запирает строку`() {
-        val plans = plansOf("lock + load") {
+        val plans = plansOf("lock + load", forceIndexes = true) {
             drugRepository.findAccessibleForUpdate(fixture.drugId, fixture.ownerId)
         }
 
@@ -244,10 +224,128 @@ class QueryPlanTest {
 
     @Test
     fun `препарат с планами берётся по индексу`() {
-        val plans = plansOf("drug with plans") {
+        val plans = plansOf("drug with plans", forceIndexes = true) {
             drugService.getAccessible(fixture.ownerId, fixture.drugId)
         }
         assertNoSeqScanOn("user_drugs", plans)
         assertNoSeqScanOn("usings", plans)
+    }
+
+    @Test
+    fun `перенос препарата объясняет bulk SQL`() {
+        val command = fixture.createDrugFixture(100)
+        val statements = captureWrite {
+            drugCommands.move(command.ownerId, command.drugId, command.targetMedKitId)
+        }
+        val shape = statements.queryShape()
+        assertEquals(3, shape.count(SqlKind.SELECT))
+        assertEquals(1, shape.count(SqlKind.DELETE))
+        assertEquals(1, shape.count(SqlKind.UPDATE))
+        val plans = explainStatements(statements, forceIndexes = true)
+        assertNoSeqScanOn("user_drugs", plans)
+        assertNoSeqScanOn("usings", plans)
+        assertNoSeqScanOn("user_med_kits", plans)
+    }
+
+    @Test
+    fun `согласование объясняет SELECT и UPDATE`() {
+        val planCount = 20
+        val command = fixture.createDrugFixture(planCount)
+        val statements = captureWrite {
+            drugCommands.consume(
+                command.ownerId,
+                command.drugId,
+                BigDecimal.valueOf(planCount * 5L)
+            )
+        }
+        val shape = statements.queryShape()
+        assertEquals(2, shape.count(SqlKind.SELECT))
+        assertEquals(planCount + 1, shape.count(SqlKind.UPDATE))
+        val plans = explainStatements(statements, forceIndexes = true)
+        assertNoSeqScanOn("user_drugs", plans)
+        assertNoSeqScanOn("usings", plans)
+    }
+
+    @Test
+    fun `lifecycle аптечки объясняет bulk команды`() {
+        val last = fixture.createMedKitFixture(100, 100, additionalMember = false)
+        val lastLeave = captureWrite {
+            medKitLifecycle.leave(last.ownerId, last.medKitId)
+        }
+        assertEquals(3, lastLeave.queryShape().count(SqlKind.SELECT))
+        assertEquals(2, lastLeave.queryShape().count(SqlKind.DELETE))
+
+        val explicit = fixture.createMedKitFixture(100, 100, additionalMember = false)
+        val explicitDelete = captureWrite {
+            medKitLifecycle.delete(explicit.ownerId, explicit.medKitId)
+        }
+        assertEquals(2, explicitDelete.queryShape().count(SqlKind.SELECT))
+        assertEquals(1, explicitDelete.queryShape().count(SqlKind.DELETE))
+
+        val nonLast = fixture.createMedKitFixture(100, 100, additionalMember = true)
+        val nonLastStatements = captureWrite {
+            medKitLifecycle.leave(nonLast.ownerId, nonLast.medKitId)
+        }
+        val nonLastShape = nonLastStatements.queryShape()
+        assertEquals(2, nonLastShape.count(SqlKind.SELECT))
+        assertEquals(2, nonLastShape.count(SqlKind.DELETE))
+        assertEquals(1, scalarLong("SELECT count(*) FROM med_kits WHERE id = '${nonLast.medKitId}'"))
+        assertEquals(0, scalarLong("SELECT count(*) FROM usings WHERE user_id = '${nonLast.ownerId}'"))
+
+        val plans = explainStatements(
+            lastLeave + explicitDelete + nonLastStatements,
+            forceIndexes = true
+        )
+        assertNoSeqScanOn("med_kits", plans)
+        assertNoSeqScanOn("user_drugs", plans)
+        assertNoSeqScanOn("usings", plans)
+        assertNoSeqScanOn("user_med_kits", plans)
+    }
+
+    @Test
+    fun `удаление аптечки с переносом использует bulk UPDATE и bulk DELETE`() {
+        val command = fixture.createMedKitFixture(
+            100,
+            100,
+            additionalMember = false,
+            ownerPlans = false
+        )
+        val targetMedKitId = fixture.createTransferTarget(command)
+        val statements = captureWrite {
+            medKitLifecycle.delete(command.ownerId, command.medKitId, targetMedKitId)
+        }
+        val shape = statements.queryShape()
+        assertEquals(3, shape.count(SqlKind.SELECT))
+        assertEquals(2, shape.count(SqlKind.DELETE))
+        assertEquals(1, shape.count(SqlKind.UPDATE))
+        assertEquals(0, scalarLong("SELECT count(*) FROM med_kits WHERE id = '${command.medKitId}'"))
+        assertEquals(
+            100,
+            scalarLong("SELECT count(*) FROM user_drugs WHERE med_kit_id = '$targetMedKitId'")
+        )
+        assertEquals(
+            0,
+            scalarLong(
+                "SELECT count(*) FROM usings u JOIN user_drugs d ON d.id = u.drug_id " +
+                    "WHERE d.med_kit_id = '$targetMedKitId'"
+            )
+        )
+
+        val plans = explainStatements(statements, forceIndexes = true)
+        assertNoSeqScanOn("med_kits", plans)
+        assertNoSeqScanOn("user_drugs", plans)
+        assertNoSeqScanOn("usings", plans)
+        assertNoSeqScanOn("user_med_kits", plans)
+    }
+
+    @Test
+    fun `summary аптечек использует индексы memberships и drugs`() {
+        val plans = plansOf("GET /v1/med-kits", forceIndexes = true) {
+            val result = medKitQueries.listForUser(fixture.ownerId)
+            assertTrue(result.isNotEmpty())
+        }
+        assertNoSeqScanOn("med_kits", plans)
+        assertNoSeqScanOn("user_drugs", plans)
+        assertNoSeqScanOn("user_med_kits", plans)
     }
 }

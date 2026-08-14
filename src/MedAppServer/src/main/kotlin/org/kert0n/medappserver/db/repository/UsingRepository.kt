@@ -25,38 +25,47 @@ interface UsingRepository : JpaRepository<Using, UsingKey> {
     fun findByUserIdAndDrugId(@Param("userId") userId: UUID, @Param("drugId") drugId: UUID): Using?
 
     /**
-     * Все планы одного участника во всех препаратах аптечки — одним оператором.
-     *
-     * Альтернатива — загрузить препараты аптечки с планами и вычистить коллекции: это выборка
-     * всего содержимого плюс DELETE на каждый план. Здесь работу делает БД.
-     *
-     * `flushAutomatically`: bulk идёт мимо контекста персистентности, поэтому несохранённые
-     * изменения обязаны попасть в базу раньше, иначе они перезапишут результат. `clearAutomatically`
-     * намеренно **не** включён — он отцепил бы все сущности, включая аптечку и пользователя,
-     * которых вызывающий правит следующей строкой.
+     * Удаляет планы участника в аптечке одним оператором.
+     * Контекст не очищается: вызывающая команда продолжает менять membership.
      */
     @Modifying(flushAutomatically = true)
-    @Query("DELETE FROM Using u WHERE u.user.id = :userId AND u.drug.medKit.id = :medKitId")
+    @Query(
+        value = """
+            DELETE FROM usings
+            WHERE user_id = :userId
+              AND drug_id IN (
+                  SELECT id FROM user_drugs WHERE med_kit_id = :medKitId
+              )
+        """,
+        nativeQuery = true
+    )
     fun deleteByUserIdAndMedKitId(userId: UUID, medKitId: UUID)
 
     /**
-     * Планы всех, кто не входит в переданный список, по всем препаратам аптечки.
-     *
-     * Нужен при переносе препаратов в другую аптечку: планы участников, которых в целевой
-     * аптечке нет, обязаны исчезнуть. Список не бывает пустым — в целевой аптечке всегда есть
-     * как минимум тот, кто перенос затеял.
-     *
-     * `clearAutomatically` по той же причине, что у `reassignMedKit`: дальше по этому пути
-     * идёт удаление аптечки каскадом, и любая коллекция планов, загруженная выше по
-     * транзакции, после bulk врёт.
+     * При переносе удаляет планы пользователей без доступа к цели.
+     * Список целевых участников непуст; очистка исключает устаревшие managed Using после bulk.
      */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query("DELETE FROM Using u WHERE u.drug.medKit.id = :medKitId AND u.user.id NOT IN :userIds")
+    @Query(
+        value = """
+            DELETE FROM usings
+            WHERE drug_id IN (
+                SELECT id FROM user_drugs WHERE med_kit_id = :medKitId
+            )
+              AND user_id NOT IN (:userIds)
+        """,
+        nativeQuery = true
+    )
     fun deleteByMedKitIdAndUserIdNotIn(medKitId: UUID, userIds: Collection<UUID>)
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query("DELETE FROM Using u WHERE u.drug.id = :drugId AND u.user.id NOT IN :userIds")
+    @Query(
+        value = """
+            DELETE FROM usings
+            WHERE drug_id = :drugId
+              AND user_id NOT IN (:userIds)
+        """,
+        nativeQuery = true
+    )
     fun deleteByDrugIdAndUserIdNotIn(drugId: UUID, userIds: Collection<UUID>): Int
-
-
 }

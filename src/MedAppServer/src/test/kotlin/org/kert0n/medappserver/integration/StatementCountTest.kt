@@ -13,7 +13,7 @@ import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.services.orchestrators.DrugCommandService
 import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
-import org.kert0n.medappserver.services.models.MedKitService
+import org.kert0n.medappserver.testutil.MedKitFixture
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
@@ -21,19 +21,7 @@ import java.util.UUID
 import kotlin.test.assertEquals
 
 /**
- * Считает SQL-операторы вместо того, чтобы про них рассуждать.
- *
- * Появился из подозрения на N+1 по пользователям планов: `Using.user` объявлен
- * `FetchType.EAGER`, и казалось, что загрузка планов препарата добирает каждого владельца
- * отдельным SELECT. **Замер это опроверг** — Hibernate 7 присоединяет EAGER-связи `to-one`
- * одним оператором и в производных запросах, и через граф. Так что переход на каскад дал
- * верную семантику удаления, но не выигрыш в числе запросов, и заявлять его было бы неправдой.
- *
- * Тест остаётся как страховка на будущее, и проверяет он **прирост**, а не абсолютное число:
- * абсолютное зависит от версии Hibernate и от всего, что делает вызов, поэтому такой тест
- * ломался бы от любой невинной правки. Три лишних плана обязаны добавить три оператора —
- * по одному UPDATE или DELETE на план. Прирост шесть означает, что per-row SELECT завёлся:
- * например кто-то снял EAGER без fetch join или разорвал загрузку коллекции.
+ * Проверяет допустимый рост DML при согласовании планов и отсутствие роста при cascade.
  */
 @PostgresIntegrationTest
 class StatementCountTest {
@@ -44,7 +32,7 @@ class StatementCountTest {
     @Autowired private lateinit var treatmentPlanService: TreatmentPlanService
     @Autowired private lateinit var usingService: UsingService
     @Autowired private lateinit var drugCommands: DrugCommandService
-    @Autowired private lateinit var medKitService: MedKitService
+    @Autowired private lateinit var medKitFixture: MedKitFixture
     @Autowired private lateinit var entityManagerFactory: EntityManagerFactory
 
     private val statistics by lazy {
@@ -78,7 +66,7 @@ class StatementCountTest {
         repeat(plans) { index ->
             val user = if (index == 0) owner else {
                 userRepository.save(User(hashedKey = "{noop}stat-${UUID.randomUUID()}"))
-                    .also { medKitService.addUserToMedKit(medKit.id, it.id) }
+                    .also { medKitFixture.addUserToMedKit(medKit.id, it.id) }
             }
             treatmentPlanService.create(user.id, drug.id, qty(10.0))
         }

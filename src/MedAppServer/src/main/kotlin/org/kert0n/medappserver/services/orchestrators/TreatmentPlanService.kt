@@ -8,6 +8,8 @@ import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.db.repository.UsingRepository
 import org.kert0n.medappserver.services.models.PlanSnapshot
+import org.kert0n.medappserver.services.models.TreatmentPlanView
+import org.kert0n.medappserver.services.models.toView
 import org.slf4j.LoggerFactory
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.http.HttpStatus
@@ -27,7 +29,7 @@ class TreatmentPlanService(
     private val logger = LoggerFactory.getLogger(TreatmentPlanService::class.java)
 
     @Transactional
-    fun create(userId: UUID, drugId: UUID, plannedAmount: BigDecimal): Using {
+    fun create(userId: UUID, drugId: UUID, plannedAmount: BigDecimal): TreatmentPlanView {
         requirePositive(plannedAmount)
         val drug = lockAccessible(userId, drugId)
         if (plans.findByUserIdAndDrugId(userId, drugId) != null) {
@@ -44,11 +46,11 @@ class TreatmentPlanService(
                 drug = drug,
                 plannedAmount = plannedAmount
             )
-        )
+        ).toView()
     }
 
     @Transactional
-    fun patch(userId: UUID, drugId: UUID, plannedAmount: BigDecimal): Using {
+    fun patch(userId: UUID, drugId: UUID, plannedAmount: BigDecimal): TreatmentPlanView {
         requirePositive(plannedAmount)
         val drug = lockAccessible(userId, drugId)
         val plan = requirePlan(userId, drugId)
@@ -56,7 +58,7 @@ class TreatmentPlanService(
         if (plannedAmount > availableForPlan) insufficient()
 
         plan.plannedAmount = plannedAmount
-        return plan
+        return plan.toView()
     }
 
     @Transactional

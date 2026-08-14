@@ -62,7 +62,7 @@ interface MedKitRepository : JpaRepository<MedKit, UUID> {
     fun findIdsByUserId(userId: UUID): List<UUID>
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query("DELETE FROM MedKit mk WHERE mk.id = :medKitId")
+    @Query(value = "DELETE FROM med_kits WHERE id = :medKitId", nativeQuery = true)
     fun deleteLockedById(medKitId: UUID): Int
 
     @Query(

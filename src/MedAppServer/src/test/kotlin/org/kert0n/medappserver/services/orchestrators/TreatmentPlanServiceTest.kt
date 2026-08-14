@@ -1,6 +1,6 @@
 package org.kert0n.medappserver.services.orchestrators
 
-import org.kert0n.medappserver.services.models.MedKitService
+import org.kert0n.medappserver.testutil.MedKitFixture
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -13,13 +13,7 @@ import org.springframework.web.server.ResponseStatusException
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
-/**
- * Заведение и правка плана лечения.
- *
- * Проверки переехали сюда из UsingServiceTest вместе с самими операциями: они стоят на стыке
- * плана и препарата — читают остаток чужого агрегата под блокировкой, — и модельному сервису
- * связи не принадлежат.
- */
+/** Контракты команд TreatmentPlan на границе агрегатов Using и Drug. */
 @SpringBootTest
 @ActiveProfiles("test")
 @Transactional
@@ -28,7 +22,7 @@ class TreatmentPlanServiceTest {
     @Autowired
     private lateinit var treatmentPlanService: TreatmentPlanService
     @Autowired
-    private lateinit var medKitService: MedKitService
+    private lateinit var medKitFixture: MedKitFixture
     @Autowired
     private lateinit var dbHelper: DatabaseTestHelper
 
@@ -37,21 +31,21 @@ class TreatmentPlanServiceTest {
     @Test
     fun `create creates plan`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitFixture.createNew(alice.id)
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
         val using = treatmentPlanService.create(alice.id, drug.id, qty(30.0))
 
         assertQty(30.0, using.plannedAmount)
-        assertEquals(alice.id, using.user.id)
-        assertEquals(drug.id, using.drug.id)
+        assertEquals(alice.id, using.userId)
+        assertEquals(drug.id, using.drugId)
     }
 
     @Test
     fun `create throws CONFLICT for duplicate`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitFixture.createNew(alice.id)
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
@@ -66,7 +60,7 @@ class TreatmentPlanServiceTest {
     @Test
     fun `create throws when exceeding available quantity`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitFixture.createNew(alice.id)
         val drug = dbHelper.freshDrug(kit, 50.0)
         dbHelper.flushAndClear()
 
@@ -80,7 +74,7 @@ class TreatmentPlanServiceTest {
     @Test
     fun `update updates planned amount`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitFixture.createNew(alice.id)
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
@@ -95,8 +89,8 @@ class TreatmentPlanServiceTest {
     fun `update throws when exceeding available quantity`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
+        val kit = medKitFixture.createNew(alice.id)
+        medKitFixture.joinMedKitByKey(medKitFixture.generateMedKitShareKey(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
@@ -113,7 +107,7 @@ class TreatmentPlanServiceTest {
     @Test
     fun `zero amount is not an alias for deletion`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitFixture.createNew(alice.id)
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
@@ -129,7 +123,7 @@ class TreatmentPlanServiceTest {
     @Test
     fun `delete and intake return explicit plan lifecycle`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitFixture.createNew(alice.id)
         val drug = dbHelper.freshDrug(kit, 20.0)
         dbHelper.flushAndClear()
 
