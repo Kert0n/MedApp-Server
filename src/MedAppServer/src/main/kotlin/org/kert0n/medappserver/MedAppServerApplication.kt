@@ -8,6 +8,7 @@ import org.springframework.boot.runApplication
 
 @SpringBootApplication
 @EnableConfigurationProperties(
+    org.kert0n.medappserver.config.RegistrationProperties::class,
     org.kert0n.medappserver.services.security.RsaKeyProperties::class
 )
 

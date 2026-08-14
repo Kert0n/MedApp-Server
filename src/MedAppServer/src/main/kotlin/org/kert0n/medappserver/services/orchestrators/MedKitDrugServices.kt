@@ -7,12 +7,9 @@ import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.UserService
 import org.kert0n.medappserver.services.models.UsingService
-import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.web.server.ResponseStatusException
 import java.util.*
 
 @Service
@@ -20,9 +17,11 @@ class MedKitDrugServices(
     private val drugService: DrugService,
     private val medKitService: MedKitService,
     private val userService: UserService,
-    private val usingService: UsingService,
-    private val logger: Logger = LoggerFactory.getLogger(MedKitDrugServices::class.java)
+    private val usingService: UsingService
 ) {
+
+    private val logger = LoggerFactory.getLogger(MedKitDrugServices::class.java)
+
     @Transactional
     fun createDrugInMedkit(createDTO: DrugCreateDTO, userId: UUID): Drug {
         logger.debug("Creating drug: {} for user: {}", createDTO.name, userId)
@@ -45,8 +44,6 @@ class MedKitDrugServices(
         drug.medKit = targetMedKit
         return drugService.save(drug)
     }
-
- //   fun findAllDrugsInMedkit(medKitId: UUID): List<Drug> = drugService.findAllByMedKit(medKitId)
 
     @Transactional
     fun removeUserFromMedKit(medKitId: UUID, userId: UUID) {

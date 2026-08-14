@@ -13,17 +13,12 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
-import jakarta.validation.constraints.DecimalMin
-import jakarta.validation.constraints.NotNull
 import org.kert0n.medappserver.services.models.UsingService
-import org.kert0n.medappserver.services.models.userId
 import org.kert0n.medappserver.services.orchestrators.IntakeService
-import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
-import java.math.BigDecimal
 import java.util.*
 import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBody
 
@@ -32,10 +27,10 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBod
 @Tag(name = "Treatment Plans", description = "Endpoints for treatment plans and intake tracking")
 class UsingsController(
     private val usingService: UsingService,
-    private val intakeService: IntakeService,
-    private val logger: Logger = LoggerFactory.getLogger(UsingsController::class.java)
+    private val intakeService: IntakeService
 ) {
 
+    private val logger = LoggerFactory.getLogger(UsingsController::class.java)
 
     @GetMapping
     @Operation(summary = "Get all treatment plans", description = "Returns all planned drug usages for the user.")

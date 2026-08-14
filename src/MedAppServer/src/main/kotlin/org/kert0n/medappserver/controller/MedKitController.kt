@@ -1,6 +1,8 @@
 package org.kert0n.medappserver.controller
 
 import org.kert0n.medappserver.api.toDto
+import org.kert0n.medappserver.api.JoinMedKitRequest
+import org.kert0n.medappserver.api.MedKitCreatedResponse
 import org.kert0n.medappserver.api.MedKitDTO
 import org.kert0n.medappserver.api.MedKitSummaryDTO
 import io.swagger.v3.oas.annotations.Operation
@@ -11,12 +13,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
-import jakarta.validation.constraints.NotBlank
-import jakarta.validation.constraints.NotNull
 import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.models.userId
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
-import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
@@ -29,28 +27,10 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBod
 @Tag(name = "MedKit Management", description = "APIs for managing medicine kits")
 class MedKitController(
     private val medKitService: MedKitService,
-    private val logger: Logger = LoggerFactory.getLogger(MedKitController::class.java),
     private val medKitDrugServices: MedKitDrugServices
 ) {
-    data class MedKitCreatedResponse(
-        @NotNull
-        @Schema(description = "Created medkit ID")
-        val id: UUID
-    )
 
-    data class AddUserRequest(
-        @NotNull
-        @Schema(description = "User ID to share medkit with")
-        val userId: UUID
-    )
-
-    @Schema(description = "Join medkit request")
-    data class JoinMedKitRequest(
-        @NotBlank
-        @Schema(description = "Share key to join medkit", example = "share-key-123")
-        val key: String
-    )
-
+    private val logger = LoggerFactory.getLogger(MedKitController::class.java)
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -98,7 +78,7 @@ class MedKitController(
     )
     fun getAllMedKits(authentication: Authentication): Set<MedKitSummaryDTO> {
         logger.debug("GET /v1/med-kit by user {}", authentication.userId)
-        return medKitService.findMedKitSummaries(authentication.userId)
+        return medKitService.findMedKitSummaries(authentication.userId).mapTo(mutableSetOf()) { it.toDto() }
     }
 
     @PostMapping("/{medKitId}/share")

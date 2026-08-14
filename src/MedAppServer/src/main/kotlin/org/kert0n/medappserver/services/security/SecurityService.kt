@@ -2,6 +2,7 @@ package org.kert0n.medappserver.services.security
 
 import com.sksamuel.aedile.core.Cache
 import org.kert0n.medappserver.db.model.User
+import org.springframework.security.core.Authentication
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.security.crypto.password.PasswordEncoder
@@ -65,6 +66,17 @@ class SecurityService(
         hashToken(expected).toByteArray(StandardCharsets.UTF_8)
     )
 
+
+    /**
+     * Токен по аутентификации запроса.
+     *
+     * Каст принципала живёт здесь, а не в контроллере: тип принципала задаёт
+     * SecurityConfiguration вместе с UserDetailsService, и знать о нём — работа этого
+     * пакета. Пока каст стоял в AuthController, контроллер импортировал сущность БД ради
+     * одной строки.
+     */
+    fun generateToken(authentication: Authentication): String =
+        generateToken(authentication.principal as User)
 
     fun generateToken(user: User, termInMinutes: Long = authenticationTerm): String {
         val now = Instant.now()

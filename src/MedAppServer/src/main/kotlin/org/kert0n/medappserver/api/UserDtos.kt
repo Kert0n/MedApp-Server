@@ -10,3 +10,11 @@ data class UserDto(
     @Schema(description = "All medkits available to the user")
     val medKits: Set<MedKitDTO>
 )
+
+@Schema(description = "Registration response with generated credentials")
+data class RegisterResponse(
+    @Schema(description = "Generated login identifier")
+    val login: UUID,
+    @Schema(description = "Generated secret key for authentication")
+    val key: String
+)

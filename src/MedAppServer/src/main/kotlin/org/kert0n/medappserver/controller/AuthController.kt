@@ -8,11 +8,10 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.servlet.http.HttpServletRequest
-import org.kert0n.medappserver.db.model.User
+import org.kert0n.medappserver.api.RegisterResponse
+import org.kert0n.medappserver.config.RegistrationProperties
 import org.kert0n.medappserver.services.models.UserService
 import org.kert0n.medappserver.services.security.SecurityService
-import org.springframework.beans.factory.annotation.Value
-import org.springframework.core.env.Environment
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
@@ -23,55 +22,13 @@ import java.util.*
 @RequestMapping("/v1/auth")
 @Tag(name = "Authentication", description = "Public endpoints for registration and token issuance")
 class AuthController(
-    // Пустая строка по умолчанию, а не отсутствие значения: так секрет может прийти любым
-    // путём (переменная окружения, файл секрета через configtree, профиль), а проверка
-    // ниже одинаково поймает случай, когда он не пришёл ниоткуда.
-    @Value($$"${registration.secret:}") private val registrationSecret: String,
-    environment: Environment,
+    // Пригодность самого значения — условие старта приложения, а не поведение эндпоинта,
+    // поэтому проверки живут в RegistrationProperties и ProdSecretsGuard. Сюда секрет
+    // приходит уже непустым: без этого контекст не поднимется.
+    private val registrationProperties: RegistrationProperties,
     private val userService: UserService,
     private val securityService: SecurityService
 ) {
-
-    init {
-        // Пустой секрет — не конфигурация, а обходимый барьер. Падаем при старте, а не
-        // принимаем любую регистрацию: базовый application.properties оставляет значение
-        // пустым специально, чтобы его обязательно задали через REGISTRATION_SECRET или
-        // application-prod.properties.
-        require(registrationSecret.isNotBlank()) {
-            "registration.secret must not be blank: set the REGISTRATION_SECRET environment " +
-                "variable or provide application-prod.properties"
-        }
-
-        // Заглушка из mock-prod в проде — тот же обходимый барьер, только незаметный.
-        //
-        // Образ стартует с SPRING_PROFILES_ACTIVE=mock-prod,prod, а mock-prod лежит в git
-        // вместе со своим заведомо ненастоящим секретом. Если оператор забыл файл секрета,
-        // прежняя проверка молчала: секрет-то непустой. Прод поднимался с общеизвестным
-        // значением и никак об этом не сообщал. С паролем БД так не выйдет — без
-        // настоящего приложение просто не подключится, — а секрет регистрации выстрелит.
-        require(!(environment.activeProfiles.contains(PROD_PROFILE) && registrationSecret == MOCK_PROD_SECRET)) {
-            "registration.secret is still the mock-prod placeholder while the '$PROD_PROFILE' " +
-                "profile is active: provide the real secret via secrets/registration.secret " +
-                "or application-prod.properties"
-        }
-    }
-
-    private companion object {
-        const val PROD_PROFILE = "prod"
-
-        // Дублирует значение из application-mock-prod.properties. Совпадение проверяет
-        // тест: иначе правка properties тихо обезоружила бы проверку выше.
-        const val MOCK_PROD_SECRET = "mock-prod-secret"
-    }
-
-
-    @Schema(description = "Registration response with generated credentials")
-    data class RegisterResponse(
-        @Schema(description = "Generated login identifier")
-        val login: UUID,
-        @Schema(description = "Generated secret key for authentication")
-        val key: String
-    )
 
     @PostMapping("/register")
     @Operation(
@@ -98,7 +55,7 @@ class AuthController(
         // Validate the shared secret first to avoid exposing rate-limit status to unauthorized callers.
         // Constant-time: `!=` stops at the first differing character, so response time would
         // reveal how long a correct prefix was.
-        if (!securityService.secretsMatch(token, registrationSecret)) {
+        if (!securityService.secretsMatch(token, registrationProperties.secret)) {
             throw ResponseStatusException(HttpStatus.FORBIDDEN, "Invalid secret")
         }
         // Rate limit registration by IP address to reduce abuse without storing user PII.
@@ -134,5 +91,5 @@ class AuthController(
         ]
     )
     fun login(authentication: Authentication): String =
-        securityService.generateToken(authentication.principal as User)
+        securityService.generateToken(authentication)
 }

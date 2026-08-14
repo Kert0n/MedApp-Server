@@ -1,13 +1,12 @@
 package org.kert0n.medappserver.services.models
 
 import com.sksamuel.aedile.core.Cache
-import org.kert0n.medappserver.api.MedKitSummaryDTO
+import org.kert0n.medappserver.db.repository.MedKitSummary
 import org.kert0n.medappserver.db.model.MedKit
 import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.services.security.SecurityService
 import org.kert0n.medappserver.services.security.hashToken
-import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.http.HttpStatus
@@ -20,10 +19,12 @@ import java.util.*
 class MedKitService(
     private val medKitRepository: MedKitRepository,
     private val securityService: SecurityService,
-    private val logger: Logger = LoggerFactory.getLogger(MedKitService::class.java),
     private val medKitTokenCache: Cache<String, UUID>,
     private val userService: UserService
 ) {
+
+    private val logger = LoggerFactory.getLogger(MedKitService::class.java)
+
     @Transactional
     fun createNew(userId: UUID): MedKit {
         logger.debug("Creating new medkit for user: {}", userId)
@@ -103,7 +104,7 @@ class MedKitService(
     }
 
     @Transactional(readOnly = true)
-    fun findMedKitSummaries(userId: UUID): Set<MedKitSummaryDTO> {
+    fun findMedKitSummaries(userId: UUID): Set<MedKitSummary> {
         logger.debug("Finding medkit summaries for user: {}", userId)
         return medKitRepository.findMedKitSummariesByUserId(userId)
     }

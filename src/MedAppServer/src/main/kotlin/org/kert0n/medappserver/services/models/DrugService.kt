@@ -1,7 +1,6 @@
 package org.kert0n.medappserver.services.models
 
 import org.kert0n.medappserver.api.DrugCreateDTO
-import org.kert0n.medappserver.api.DrugDTO
 import org.kert0n.medappserver.api.DrugUpdateDTO
 import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.MedKit
@@ -12,7 +11,6 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
-import java.math.BigDecimal
 import java.util.*
 
 @Service
@@ -163,14 +161,4 @@ class DrugService(
         val drug = findByIdForUser(drugId, userId)
         drugRepository.delete(drug)
     }
-
-
-
-
-    //    @Transactional(readOnly = true)
-//    fun getPlannedQuantity(drugId: UUID): Double {
-//        return drugRepository.sumPlannedAmount(drugId)
-//    }
-
-
 }

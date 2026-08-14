@@ -1,29 +1,25 @@
 package org.kert0n.medappserver.services.models
 
 import org.kert0n.medappserver.api.UsingCreateDTO
-import org.kert0n.medappserver.api.UsingDTO
 import org.kert0n.medappserver.api.UsingUpdateDTO
 import org.kert0n.medappserver.db.model.Using
-import org.kert0n.medappserver.db.model.isZero
 import org.kert0n.medappserver.db.model.UsingKey
 import org.kert0n.medappserver.db.repository.UsingRepository
-import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
-import java.math.BigDecimal
 import java.util.*
 
 @Service
 class UsingService(
     private val usingRepository: UsingRepository,
-    val logger: Logger = LoggerFactory.getLogger(UsingService::class.java),
     private val userService: UserService,
     private val drugService: DrugService
 ) {
 
+    private val logger = LoggerFactory.getLogger(UsingService::class.java)
 
     @Transactional(readOnly = true)
     fun findAllByUser(userId: UUID): List<Using> {

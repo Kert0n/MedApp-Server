@@ -99,14 +99,4 @@ interface DrugRepository : JpaRepository<Drug, UUID> {
     @EntityGraph(attributePaths = ["usings"])
     fun findAllWithUsingsByMedKitIdIn(medKitIds: Collection<UUID>): List<Drug>
 
-//    @Lock(LockModeType.PESSIMISTIC_WRITE)
-//    @EntityGraph(attributePaths = ["usings"])
-//    @Query("SELECT d FROM Drug d LEFT JOIN FETCH d.usings WHERE d.id = :id")
-//    fun findWithUsingsByIdForUpdate(drugId: UUID): Drug?
-
-
-//    @Query("SELECT COALESCE(SUM(u.plannedAmount), 0.0) FROM Using u WHERE u.drug.id = :drugId")
-//    fun sumPlannedAmount(@Param("drugId") drugId: UUID): Double
-
-
 }
