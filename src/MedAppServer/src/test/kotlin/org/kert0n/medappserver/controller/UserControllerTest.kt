@@ -61,7 +61,7 @@ class UserControllerTest {
         whenever(medKitDrugServices.toMedKitDTO(any())).thenReturn(medKitDTO)
 
         mockMvc.perform(
-            get("/user")
+            get("/v1/user")
                 .with(jwt().jwt { it.subject(userId.toString()) })
         )
             .andExpect(status().isOk)
@@ -72,7 +72,7 @@ class UserControllerTest {
 
     @Test
     fun `GET user data - returns 401 without authentication`() {
-        mockMvc.perform(get("/user"))
+        mockMvc.perform(get("/v1/user"))
             .andExpect(status().isUnauthorized)
     }
 
@@ -81,7 +81,7 @@ class UserControllerTest {
         whenever(medKitService.findAllByUser(userId)).thenReturn(emptyList())
 
         mockMvc.perform(
-            get("/user")
+            get("/v1/user")
                 .with(jwt().jwt { it.subject(userId.toString()) })
         )
             .andExpect(status().isOk)

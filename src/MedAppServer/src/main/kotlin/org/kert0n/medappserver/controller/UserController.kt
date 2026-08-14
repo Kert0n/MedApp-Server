@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController
 import java.util.*
 
 @RestController
-@RequestMapping("/user")
+@RequestMapping("/v1/user")
 @Tag(name = "User Data", description = "Endpoints for user profile and synchronization data")
 class UserController(
     private val medKitService: MedKitService,
@@ -42,7 +42,7 @@ class UserController(
         ]
     )
     fun getAllDataForUser(authentication: Authentication): UserDto {
-        logger.debug("GET /user by user {}", authentication.userId)
+        logger.debug("GET /v1/user by user {}", authentication.userId)
         val medKitDTOs =
             medKitService.findAllByUser(authentication.userId).map { medKitDrugServices.toMedKitDTO(it) }.toSet()
         return UserDto(

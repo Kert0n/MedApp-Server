@@ -50,11 +50,11 @@ class InputSizeLimitsTest {
         mockMvc = MockMvcBuilders.webAppContextSetup(context)
             .apply<DefaultMockMvcBuilder>(SecurityMockMvcConfigurers.springSecurity())
             .build()
-        whenever(vidalDrugService.fuzzySearchByName(any(), any())).thenReturn(emptyList())
+        whenever(vidalDrugService.fuzzySearch(any(), any())).thenReturn(emptyList())
     }
 
     private fun search(limit: String) = mockMvc.perform(
-        get("/drug/template/search")
+        get("/v1/drug/template/search")
             .param("searchTerm", "aspirin")
             .param("limit", limit)
             .with(jwt().jwt { it.subject(userId.toString()) })
@@ -74,7 +74,7 @@ class InputSizeLimitsTest {
         search("50").andExpect(status().isOk)
         // Default applies when the parameter is absent.
         mockMvc.perform(
-            get("/drug/template/search")
+            get("/v1/drug/template/search")
                 .param("searchTerm", "aspirin")
                 .with(jwt().jwt { it.subject(userId.toString()) })
         ).andExpect(status().isOk)
@@ -88,7 +88,7 @@ class InputSizeLimitsTest {
         """.trimIndent()
 
         mockMvc.perform(
-            post("/drug")
+            post("/v1/drug")
                 .with(jwt().jwt { it.subject(userId.toString()) })
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body)
@@ -98,7 +98,7 @@ class InputSizeLimitsTest {
     @Test
     fun `oversized search term is rejected`() {
         mockMvc.perform(
-            get("/drug/template/search")
+            get("/v1/drug/template/search")
                 .param("searchTerm", "x".repeat(201))
                 .with(jwt().jwt { it.subject(userId.toString()) })
         ).andExpect(status().isBadRequest)

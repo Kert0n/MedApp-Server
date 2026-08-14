@@ -23,7 +23,7 @@ import java.util.*
 import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBody
 
 @RestController
-@RequestMapping("/using")
+@RequestMapping("/v1/using")
 @Tag(name = "Treatment Plans", description = "Endpoints for treatment plans and intake tracking")
 class UsingsController(
     private val usingService: UsingService,
@@ -45,7 +45,7 @@ class UsingsController(
         ]
     )
     fun getUsings(authentication: Authentication): List<UsingDTO> {
-        logger.debug("GET /using by user {}", authentication.userId)
+        logger.debug("GET /v1/using by user {}", authentication.userId)
         val usings = usingService.findAllByUser(authentication.userId)
         return usings.map { usingService.toUsingDTO(it) }
     }
@@ -66,7 +66,7 @@ class UsingsController(
         authentication: Authentication,
         @Parameter(description = "Drug ID") @PathVariable drugId: UUID
     ): UsingDTO? {
-        logger.debug("GET /using/drug/{} by user {}", drugId, authentication.userId)
+        logger.debug("GET /v1/using/drug/{} by user {}", drugId, authentication.userId)
         val using = usingService.findByUserAndDrug(authentication.userId, drugId)
         return using?.let { usingService.toUsingDTO(it) }
     }
@@ -90,7 +90,7 @@ class UsingsController(
         @SwaggerRequestBody(description = "Treatment plan details")
         @Valid @RequestBody createDTO: UsingCreateDTO
     ): UsingDTO {
-        logger.debug("POST /using by user {} for drug {}", authentication.userId, createDTO.drugId)
+        logger.debug("POST /v1/using by user {} for drug {}", authentication.userId, createDTO.drugId)
         val using = usingService.createTreatmentPlan(authentication.userId, createDTO)
         return usingService.toUsingDTO(using)
     }
@@ -114,7 +114,7 @@ class UsingsController(
         @SwaggerRequestBody(description = "Updated treatment plan")
         @Valid @RequestBody updateDTO: UsingUpdateDTO
     ): UsingDTO {
-        logger.debug("PUT /using/drug/{} by user {}", drugId, authentication.userId)
+        logger.debug("PUT /v1/using/drug/{} by user {}", drugId, authentication.userId)
         val using = usingService.updateTreatmentPlan(authentication.userId, drugId, updateDTO)
         return usingService.toUsingDTO(using)
     }
@@ -139,7 +139,7 @@ class UsingsController(
         @Valid @RequestBody intakeRequest: IntakeRequest
     ): UsingDTO? {
         logger.debug(
-            "POST /using/drug/{}/intake by user {}, quantity: {}",
+            "POST /v1/using/drug/{}/intake by user {}, quantity: {}",
             drugId, authentication.userId, intakeRequest.quantityConsumed
         )
         return intakeService.record(
@@ -163,7 +163,7 @@ class UsingsController(
         authentication: Authentication,
         @Parameter(description = "Drug ID") @PathVariable drugId: UUID
     ) {
-        logger.debug("DELETE /using/drug/{} by user {}", drugId, authentication.userId)
+        logger.debug("DELETE /v1/using/drug/{} by user {}", drugId, authentication.userId)
         usingService.deleteTreatmentPlan(authentication.userId, drugId)
     }
 }

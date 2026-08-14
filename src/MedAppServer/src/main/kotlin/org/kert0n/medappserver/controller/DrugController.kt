@@ -26,7 +26,7 @@ import java.util.*
 import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBody
 
 @RestController
-@RequestMapping("/drug")
+@RequestMapping("/v1/drug")
 @Tag(name = "Drug Management", description = "APIs for managing drugs in medicine kits")
 class DrugController(
     private val drugService: DrugService,
@@ -48,7 +48,7 @@ class DrugController(
         authentication: Authentication,
         @Parameter(description = "Drug ID") @PathVariable id: UUID
     ): DrugDTO {
-        logger.debug("GET /drug/{} by user {}", id, authentication.userId)
+        logger.debug("GET /v1/drug/{} by user {}", id, authentication.userId)
         val drug = drugService.findByIdForUser(id, authentication.userId)
         return drugService.toDrugDTO(drug)
     }
@@ -72,7 +72,7 @@ class DrugController(
         @SwaggerRequestBody(description = "Drug details to create")
         @Valid @RequestBody drugDTO: DrugCreateDTO
     ): DrugDTO {
-        logger.debug("POST /drug by user {}: {}", authentication.userId, drugDTO.name)
+        logger.debug("POST /v1/drug by user {}: {}", authentication.userId, drugDTO.name)
         val drug = medKitDrugServices.createDrugInMedkit(drugDTO, authentication.userId)
         return drugService.toDrugDTO(drug)
     }
@@ -92,7 +92,7 @@ class DrugController(
         @SwaggerRequestBody(description = "Drug update details")
         @Valid @RequestBody updateDTO: DrugUpdateDTO
     ): DrugDTO {
-        logger.debug("PUT /drug/{} by user {}", id, authentication.userId)
+        logger.debug("PUT /v1/drug/{} by user {}", id, authentication.userId)
         val drug = drugService.update(id, updateDTO, authentication.userId)
         return drugService.toDrugDTO(drug)
     }
@@ -110,7 +110,7 @@ class DrugController(
         authentication: Authentication,
         @Parameter(description = "Drug ID") @PathVariable id: UUID
     ) {
-        logger.debug("DELETE /drug/{} by user {}", id, authentication.userId)
+        logger.debug("DELETE /v1/drug/{} by user {}", id, authentication.userId)
         drugService.delete(id, authentication.userId)
     }
 
@@ -130,7 +130,7 @@ class DrugController(
         authentication: Authentication,
         @Parameter(description = "Drug ID") @PathVariable id: UUID
     ): QuantityInfo {
-        logger.debug("GET /drug/quantity/{} by user {}", id, authentication.userId)
+        logger.debug("GET /v1/drug/quantity/{} by user {}", id, authentication.userId)
         val drug = drugService.findByIdForUser(id, authentication.userId)
         return QuantityInfo(drug.quantity, drug.totalPlannedAmount, drug.quantity - drug.totalPlannedAmount)
     }
@@ -155,7 +155,7 @@ class DrugController(
         @Valid @RequestBody consumeRequest: ConsumeRequest
     ): DrugDTO? {
         logger.debug(
-            "PUT /drug/consume/{} by user {}, quantity: {}",
+            "PUT /v1/drug/consume/{} by user {}, quantity: {}",
             id,
             authentication.userId,
             consumeRequest.quantity
@@ -183,7 +183,7 @@ class DrugController(
         @SwaggerRequestBody(description = "Target medicine kit")
         @Valid @RequestBody moveRequest: MoveDrugRequest
     ): DrugDTO {
-        logger.debug("PUT /drug/move/{} to medkit {} by user {}", id, moveRequest.targetMedKitId, authentication.userId)
+        logger.debug("PUT /v1/drug/move/{} to medkit {} by user {}", id, moveRequest.targetMedKitId, authentication.userId)
         val drug = medKitDrugServices.moveDrug(id, moveRequest.targetMedKitId, authentication.userId)
         return drugService.toDrugDTO(drug)
     }
@@ -218,15 +218,17 @@ class DrugController(
         @RequestParam(defaultValue = "10") @Min(1) @Max(50) limit: Int
     ): List<DrugTemplateDTO> {
         logger.debug(
-            "GET /drug/template/search?searchTerm={}&limit={} by user {}",
+            "GET /v1/drug/template/search?searchTerm={}&limit={} by user {}",
             searchTerm,
             limit,
             authentication.userId
         )
-        return vidalDrugService.fuzzySearchByName(searchTerm, limit).map { vd ->
+        return vidalDrugService.fuzzySearch(searchTerm, limit).map { vd ->
             DrugTemplateDTO(
                 id = vd.id,
                 name = vd.name,
+                nameLat = vd.nameLat,
+                activeSubstance = vd.activeSubstance,
                 formType = vd.formType?.name,
                 category = vd.category,
                 quantityUnit = vd.quantityUnit?.name,
@@ -254,13 +256,15 @@ class DrugController(
         @Parameter(description = "Template ID")
         @PathVariable id: UUID
     ): DrugTemplateDTO {
-        logger.debug("GET /drug/template/{} by user {}", id, authentication.userId)
+        logger.debug("GET /v1/drug/template/{} by user {}", id, authentication.userId)
         val vd = vidalDrugService.findById(id) ?: throw org.springframework.web.server.ResponseStatusException(
             HttpStatus.NOT_FOUND, "Drug template not found"
         )
         return DrugTemplateDTO(
             id = vd.id,
             name = vd.name,
+            nameLat = vd.nameLat,
+            activeSubstance = vd.activeSubstance,
             formType = vd.formType?.name,
             category = vd.category,
             quantityUnit = vd.quantityUnit?.name,
@@ -302,6 +306,10 @@ data class DrugTemplateDTO(
     val id: UUID,
     @Schema(description = "Drug name")
     val name: String,
+    @Schema(description = "International name in Latin script", example = "Aspirin")
+    val nameLat: String?,
+    @Schema(description = "Active substance", example = "Acetylsalicylic acid")
+    val activeSubstance: String?,
     @Schema(description = "Form type (e.g., tablet, syrup)")
     val formType: String?,
     @Schema(description = "Category")

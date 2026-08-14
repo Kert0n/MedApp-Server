@@ -60,7 +60,7 @@ class MedKitControllerTest {
         whenever(medKitService.createNew(userId)).thenReturn(medKit)
 
         mockMvc.perform(
-            post("/med-kit")
+            post("/v1/med-kit")
                 .with(jwt().jwt { it.subject(userId.toString()) })
         )
             .andExpect(status().isCreated)
@@ -69,7 +69,7 @@ class MedKitControllerTest {
 
     @Test
     fun `POST create medkit - returns 401 without authentication`() {
-        mockMvc.perform(post("/med-kit"))
+        mockMvc.perform(post("/v1/med-kit"))
             .andExpect(status().isUnauthorized)
     }
 
@@ -81,7 +81,7 @@ class MedKitControllerTest {
         whenever(medKitDrugServices.toMedKitDTO(medKit)).thenReturn(medKitDTO)
 
         mockMvc.perform(
-            get("/med-kit/$medKitId")
+            get("/v1/med-kit/$medKitId")
                 .with(jwt().jwt { it.subject(userId.toString()) })
         )
             .andExpect(status().isOk)
@@ -94,7 +94,7 @@ class MedKitControllerTest {
             .thenThrow(ResponseStatusException(HttpStatus.NOT_FOUND, "Not found"))
 
         mockMvc.perform(
-            get("/med-kit/$medKitId")
+            get("/v1/med-kit/$medKitId")
                 .with(jwt().jwt { it.subject(userId.toString()) })
         )
             .andExpect(status().isNotFound)
@@ -109,7 +109,7 @@ class MedKitControllerTest {
         whenever(medKitService.findMedKitSummaries(userId)).thenReturn(summaries)
 
         mockMvc.perform(
-            get("/med-kit")
+            get("/v1/med-kit")
                 .with(jwt().jwt { it.subject(userId.toString()) })
         )
             .andExpect(status().isOk)
@@ -126,7 +126,7 @@ class MedKitControllerTest {
         whenever(medKitService.generateMedKitShareKey(medKitId, userId)).thenReturn("share-key-123")
 
         mockMvc.perform(
-            post("/med-kit/$medKitId/share")
+            post("/v1/med-kit/$medKitId/share")
                 .with(jwt().jwt { it.subject(userId.toString()) })
         )
             .andExpect(status().isOk)
@@ -143,7 +143,7 @@ class MedKitControllerTest {
         val joinRequest = MedKitController.JoinMedKitRequest(key = "share-key-123")
 
         mockMvc.perform(
-            post("/med-kit/join")
+            post("/v1/med-kit/join")
                 .with(jwt().jwt { it.subject(userId.toString()) })
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(joinRequest))
@@ -157,7 +157,7 @@ class MedKitControllerTest {
         val joinRequest = MedKitController.JoinMedKitRequest(key = "")
 
         mockMvc.perform(
-            post("/med-kit/join")
+            post("/v1/med-kit/join")
                 .with(jwt().jwt { it.subject(userId.toString()) })
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(joinRequest))
@@ -170,7 +170,7 @@ class MedKitControllerTest {
         doNothing().whenever(medKitDrugServices).removeUserFromMedKit(medKitId, userId)
 
         mockMvc.perform(
-            delete("/med-kit/$medKitId/leave")
+            delete("/v1/med-kit/$medKitId/leave")
                 .with(jwt().jwt { it.subject(userId.toString()) })
         )
             .andExpect(status().isNoContent)
@@ -181,7 +181,7 @@ class MedKitControllerTest {
         doNothing().whenever(medKitDrugServices).delete(medKitId, userId, null)
 
         mockMvc.perform(
-            delete("/med-kit/$medKitId")
+            delete("/v1/med-kit/$medKitId")
                 .with(jwt().jwt { it.subject(userId.toString()) })
         )
             .andExpect(status().isNoContent)
@@ -193,7 +193,7 @@ class MedKitControllerTest {
         doNothing().whenever(medKitDrugServices).delete(medKitId, userId, transferId)
 
         mockMvc.perform(
-            delete("/med-kit/$medKitId")
+            delete("/v1/med-kit/$medKitId")
                 .with(jwt().jwt { it.subject(userId.toString()) })
                 .param("transferToMedKitId", transferId.toString())
         )

@@ -70,7 +70,7 @@ class ErrorResponseShapeTest {
         val missingDrugId = UUID.randomUUID()
 
         val body = mockMvc.perform(
-            get("/drug/$missingDrugId").with(jwt().jwt { it.subject(userId.toString()) })
+            get("/v1/drug/$missingDrugId").with(jwt().jwt { it.subject(userId.toString()) })
         )
             .andExpect(status().isNotFound)
             .andExpect(jsonPath("$.detail").value("Requested resource does not exist"))
@@ -99,7 +99,7 @@ class ErrorResponseShapeTest {
         )
 
         val body = mockMvc.perform(
-            post("/using")
+            post("/v1/using")
                 .with(jwt().jwt { it.subject(user.id.toString()) })
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(UsingCreateDTO(drug.id, qty(500.0))))
@@ -119,7 +119,7 @@ class ErrorResponseShapeTest {
         val invalid = """{"drugId":"${UUID.randomUUID()}","plannedAmount":-42.5}"""
 
         val body = mockMvc.perform(
-            post("/using")
+            post("/v1/using")
                 .with(jwt().jwt { it.subject(userId.toString()) })
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(invalid)
