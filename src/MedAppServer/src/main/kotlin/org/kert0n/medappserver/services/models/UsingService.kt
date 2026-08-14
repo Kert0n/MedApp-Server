@@ -45,12 +45,28 @@ class UsingService(
         return usingRepository.findAllByUsingKeyDrugId(drugId)
     }
 
+    /**
+     * План или `null`, если его нет.
+     *
+     * Для чтения отсутствие плана — это не ошибка. Tombstone'ов проект не ведёт, поэтому
+     * старый клиент вполне законно приходит за планом, который уже удалён (например
+     * приёмом, забравшим остаток целиком), и должен получить пустоту, а не 404: по 404 он
+     * не отличит «плана нет» от «эндпоинт сломался» и будет повторять запрос.
+     *
+     * Мутирующие пути пользуются [findByUserAndDrug]: там отсутствие плана — действительно
+     * ошибка вызова.
+     */
     @Transactional(readOnly = true)
-    fun findByUserAndDrug(userId: UUID, drugId: UUID): Using {
+    fun findByUserAndDrugOrNull(userId: UUID, drugId: UUID): Using? {
         logger.debug("Finding using for user {} and drug {}", userId, drugId)
         return usingRepository.findByUserIdAndDrugId(userId, drugId)
-            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "There is no such using")
     }
+
+    /** План или 404. Для путей, где отсутствие плана делает операцию бессмысленной. */
+    @Transactional(readOnly = true)
+    fun findByUserAndDrug(userId: UUID, drugId: UUID): Using =
+        findByUserAndDrugOrNull(userId, drugId)
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "There is no such using")
 
     @Transactional
     fun createTreatmentPlan(userId: UUID, createDTO: UsingCreateDTO): Using {

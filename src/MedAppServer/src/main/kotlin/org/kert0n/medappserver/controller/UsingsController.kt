@@ -67,7 +67,10 @@ class UsingsController(
         @Parameter(description = "Drug ID") @PathVariable drugId: UUID
     ): UsingDTO? {
         logger.debug("GET /v1/using/drug/{} by user {}", drugId, authentication.userId)
-        val using = usingService.findByUserAndDrug(authentication.userId, drugId)
+        // Нетбросающая выборка: отсутствие плана — пустой ответ, а не 404. Проект не ведёт
+        // tombstone'ов, поэтому старый клиент законно приходит за уже удалённым планом, и
+        // по 404 он не отличит «плана нет» от «эндпоинт сломался».
+        val using = usingService.findByUserAndDrugOrNull(authentication.userId, drugId)
         return using?.let { usingService.toUsingDTO(it) }
     }
 
