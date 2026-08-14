@@ -4,6 +4,7 @@ import jakarta.persistence.EntityManagerFactory
 import org.hibernate.SessionFactory
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
+import org.kert0n.medappserver.api.toPatch
 import org.kert0n.medappserver.api.DrugUpdateDTO
 import org.kert0n.medappserver.api.UsingCreateDTO
 import org.kert0n.medappserver.db.model.Drug
@@ -13,10 +14,10 @@ import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.services.models.DrugService
+import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.testutil.qty
-import org.kert0n.medappserver.services.orchestrators.QuantityReductionService
 import org.springframework.beans.factory.annotation.Autowired
 import java.util.UUID
 import kotlin.test.assertEquals
@@ -40,11 +41,9 @@ import kotlin.test.assertEquals
 class StatementCountTest {
 
     @Autowired private lateinit var userRepository: UserRepository
-
-    @Autowired
-    private lateinit var quantityReductionService: QuantityReductionService
     @Autowired private lateinit var medKitRepository: MedKitRepository
     @Autowired private lateinit var drugRepository: DrugRepository
+    @Autowired private lateinit var treatmentPlanService: TreatmentPlanService
     @Autowired private lateinit var usingService: UsingService
     @Autowired private lateinit var drugService: DrugService
     @Autowired private lateinit var medKitService: MedKitService
@@ -83,7 +82,7 @@ class StatementCountTest {
                 userRepository.save(User(hashedKey = "{noop}stat-${UUID.randomUUID()}"))
                     .also { medKitService.addUserToMedKit(medKit.id, it.id) }
             }
-            usingService.createTreatmentPlan(user.id, UsingCreateDTO(drug.id, qty(10.0)))
+            treatmentPlanService.create(user.id, drug.id, qty(10.0))
         }
         return Fixture(owner, drug)
     }
@@ -98,9 +97,9 @@ class StatementCountTest {
     private fun shrinkStatements(plans: Int): Long {
         val fixture = fixture(plans)
         return statementsFor {
-            quantityReductionService.updateDrug(
+            drugService.update(
                 fixture.drug.id,
-                DrugUpdateDTO(quantity = qty(plans * 5.0)),
+                DrugUpdateDTO(quantity = qty(plans * 5.0)).toPatch(),
                 fixture.owner.id
             )
         }
@@ -110,7 +109,7 @@ class StatementCountTest {
     private fun deleteStatements(plans: Int): Long {
         val fixture = fixture(plans)
         return statementsFor {
-            quantityReductionService.consume(fixture.drug.id, fixture.drug.quantity, fixture.owner.id)
+            drugService.consume(fixture.drug.id, fixture.drug.quantity, fixture.owner.id)
         }
     }
 

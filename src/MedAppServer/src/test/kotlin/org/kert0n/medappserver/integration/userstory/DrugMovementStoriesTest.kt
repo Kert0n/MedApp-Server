@@ -13,10 +13,10 @@ import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.db.repository.UsingRepository
 import org.kert0n.medappserver.services.models.DrugService
+import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
-import org.kert0n.medappserver.services.orchestrators.QuantityReductionService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.transaction.annotation.Transactional
@@ -30,9 +30,6 @@ class DrugMovementStoriesTest {
 
     @Autowired
     private lateinit var userRepository: UserRepository
-
-    @Autowired
-    private lateinit var quantityReductionService: QuantityReductionService
 
     @Autowired
     private lateinit var drugRepository: DrugRepository
@@ -52,6 +49,8 @@ class DrugMovementStoriesTest {
     @Autowired
     private lateinit var medKitDrugServices: MedKitDrugServices
 
+    @Autowired
+    private lateinit var treatmentPlanService: TreatmentPlanService
     @Autowired
     private lateinit var usingService: UsingService
 
@@ -78,7 +77,7 @@ class DrugMovementStoriesTest {
         entityManager.flush()
 
         // Create treatment plan
-        usingService.createTreatmentPlan(user.id, UsingCreateDTO(painkiller.id, qty(20.0)))
+        treatmentPlanService.create(user.id, painkiller.id, qty(20.0))
         entityManager.flush()
 
         // Move drug to travel kit
@@ -133,14 +132,12 @@ class DrugMovementStoriesTest {
         entityManager.flush()
 
         // Anna plans 40, Bob plans 30 (total 70, available 30)
-        usingService.createTreatmentPlan(anna.id, UsingCreateDTO(drug.id, qty(40.0)))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(30.0)))
+        treatmentPlanService.create(anna.id, drug.id, qty(40.0))
+        treatmentPlanService.create(bob.id, drug.id, qty(30.0))
         entityManager.flush()
 
         // Anna should be able to increase her plan to 70 (available for her = 100 - 30 (bob) = 70)
-        val updated = usingService.updateTreatmentPlan(
-            anna.id, drug.id,
-            UsingUpdateDTO(qty(70.0))
+        val updated = treatmentPlanService.update(anna.id, drug.id, qty(70.0)
         )
         assertQty(70.0, updated.plannedAmount)
         entityManager.flush()
@@ -150,9 +147,7 @@ class DrugMovementStoriesTest {
 
         // Anna should NOT be able to increase to 71 (exceeds available)
         assertFailsWith<ResponseStatusException> {
-            usingService.updateTreatmentPlan(
-                anna.id, drug.id,
-                UsingUpdateDTO(qty(71.0))
+            treatmentPlanService.update(anna.id, drug.id, qty(71.0)
             )
         }
 
@@ -180,7 +175,7 @@ class DrugMovementStoriesTest {
         entityManager.flush()
 
         // Create treatment plan
-        usingService.createTreatmentPlan(user.id, UsingCreateDTO(drug.id, qty(25.0)))
+        treatmentPlanService.create(user.id, drug.id, qty(25.0))
         entityManager.flush()
         entityManager.clear()
 
@@ -236,9 +231,9 @@ class DrugMovementStoriesTest {
         )
 
         // Everyone creates a plan for 30 pills
-        usingService.createTreatmentPlan(anna.id, UsingCreateDTO(drug.id, qty(30.0)))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(30.0)))
-        usingService.createTreatmentPlan(charlie.id, UsingCreateDTO(drug.id, qty(30.0)))
+        treatmentPlanService.create(anna.id, drug.id, qty(30.0))
+        treatmentPlanService.create(bob.id, drug.id, qty(30.0))
+        treatmentPlanService.create(charlie.id, drug.id, qty(30.0))
 
         entityManager.flush()
         entityManager.clear()
@@ -285,8 +280,8 @@ class DrugMovementStoriesTest {
         )
 
         // Anna plans 60, Bob plans 40. Total planned = 100.
-        usingService.createTreatmentPlan(anna.id, UsingCreateDTO(drug.id, qty(60.0)))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(40.0)))
+        treatmentPlanService.create(anna.id, drug.id, qty(60.0))
+        treatmentPlanService.create(bob.id, drug.id, qty(40.0))
 
         entityManager.flush()
         entityManager.clear()
@@ -294,7 +289,7 @@ class DrugMovementStoriesTest {
         // Bob consumes 50 pills (ignoring his plan limit for emergency)
         // Drug quantity drops to 50.
         // Factor should be: 50 / 100 = 0.5
-        quantityReductionService.consume(drug.id, qty(50.0), bob.id)
+        drugService.consume(drug.id, qty(50.0), bob.id)
 
         entityManager.flush()
         entityManager.clear()

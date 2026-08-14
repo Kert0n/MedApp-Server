@@ -138,8 +138,7 @@ class QueryPlanTest {
     fun `выдача пользователю не делает запрос на каждую аптечку`() {
         val executed = RecordingDataSource.capture {
             tx.executeWithoutResult {
-                val medKits = medKitService.findAllByUser(fixture.ownerId)
-                medKitDrugServices.drugsWithPlansByMedKit(medKits)
+                medKitDrugServices.userSnapshot(fixture.ownerId)
             }
         }
         println("\n=== GET /v1/user: аптечек ${fixture.ownerMedKitCount}, операторов ${executed.size} ===")
@@ -159,8 +158,7 @@ class QueryPlanTest {
     @Test
     fun `выдача пользователю умеет читать препараты и планы по индексам`() {
         val plans = plansOf("GET /v1/user", forceIndexes = true) {
-            val medKits = medKitService.findAllByUser(fixture.ownerId)
-            medKitDrugServices.drugsWithPlansByMedKit(medKits)
+            medKitDrugServices.userSnapshot(fixture.ownerId)
         }
 
         val used = plans.flatMap { it.second.indexes }

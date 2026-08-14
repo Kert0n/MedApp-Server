@@ -4,6 +4,9 @@ import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.db.model.parsed.VidalDrug
 import org.kert0n.medappserver.db.repository.VidalDrugRepository
 import org.mockito.kotlin.*
+import org.springframework.http.HttpStatus
+import org.springframework.web.server.ResponseStatusException
+import kotlin.test.assertFailsWith
 import java.util.*
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -75,22 +78,32 @@ class VidalDrugServiceTest {
     }
 
     @Test
-    fun `findById returns drug when found`() {
+    fun `findByIdOrNull returns drug when found`() {
         val id = UUID.randomUUID()
         val drug = VidalDrug(id = id, name = "Test", manufacturer = "Pharma", otc = true)
         whenever(vidalDrugRepository.findById(id)).thenReturn(Optional.of(drug))
 
-        val result = vidalDrugService.findById(id)
+        val result = vidalDrugService.findByIdOrNull(id)
         assertNotNull(result)
         assertEquals(id, result.id)
     }
 
     @Test
-    fun `findById returns null when not found`() {
+    fun `findByIdOrNull returns null when not found`() {
         val id = UUID.randomUUID()
         whenever(vidalDrugRepository.findById(id)).thenReturn(Optional.empty())
 
-        val result = vidalDrugService.findById(id)
+        val result = vidalDrugService.findByIdOrNull(id)
         assertNull(result)
+    }
+
+    @Test
+    fun `findById throws 404 when not found`() {
+        val id = UUID.randomUUID()
+        whenever(vidalDrugRepository.findById(id)).thenReturn(Optional.empty())
+
+        // Отсутствующая карточка каталога — ошибка запроса, а не пустота: справочник статичен.
+        val error = assertFailsWith<ResponseStatusException> { vidalDrugService.findById(id) }
+        assertEquals(HttpStatus.NOT_FOUND, error.statusCode)
     }
 }

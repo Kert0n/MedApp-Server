@@ -21,13 +21,28 @@ class UserService(
 
     private val logger = LoggerFactory.getLogger(UserService::class.java)
 
-    fun registerNewUser(login: UUID, password: String, ip: String): User {
+    /**
+     * Заводит пользователя и возвращает его учётные данные.
+     *
+     * Идентификатор и ключ генерируются здесь, а не вызывающим. Раньше их делал контроллер и
+     * передавал сюда готовыми — то есть решение «чем является учётная запись» принималось на
+     * HTTP-границе, а сервис только сохранял чужой результат. Заодно ключ существовал в
+     * контроллере до того, как стало известно, что регистрация вообще состоится.
+     *
+     * Лимит по адресу проверяется до создания, а счётчик увеличивается после: иначе
+     * неудачная попытка тратила бы квоту.
+     */
+    fun registerNewUser(ip: String): NewCredentials {
+        if (!securityService.validateRequest(ip)) {
+            throw ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "Too many registration request")
+        }
+
+        val login = UUID.randomUUID()
+        val key = securityService.generateKey(32)
         logger.debug("Register new user $login")
-        val user = userRepository.save(
-            User(login, securityService.hashPassword(password))
-        )
+        userRepository.save(User(login, securityService.hashPassword(key)))
         securityService.registerIncrease(ip)
-        return user
+        return NewCredentials(login, key)
     }
 
     /**

@@ -8,7 +8,6 @@ import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
-import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
 import org.slf4j.LoggerFactory
 import org.springframework.security.core.Authentication
@@ -21,7 +20,6 @@ import java.util.*
 @RequestMapping("/v1/user")
 @Tag(name = "User Data", description = "Endpoints for user profile and synchronization data")
 class UserController(
-    private val medKitService: MedKitService,
     private val medKitDrugServices: MedKitDrugServices
 ) {
 
@@ -44,16 +42,12 @@ class UserController(
     )
     fun getAllDataForUser(authentication: Authentication): UserDto {
         logger.debug("GET /v1/user by user {}", authentication.userId)
-        // Два запроса при любом числе аптечек: один за аптечками, один за препаратами всех
-        // сразу. Раньше препараты запрашивались на каждую аптечку отдельно — 1 + M
-        // операторов, — причём результат первого запроса, который тянул препараты графом,
-        // тут же выбрасывался.
-        val medKits = medKitService.findAllByUser(authentication.userId)
-        val drugsByMedKit = medKitDrugServices.drugsWithPlansByMedKit(medKits)
-        val medKitDTOs = medKits.map { it.toDto(drugsByMedKit[it.id].orEmpty()) }.toSet()
+        // Сборкой снимка занят оркестратор: два запроса при любом числе аптечек, и оба
+        // внутри одной транзакции. Контроллер только раскладывает результат по DTO.
+        val snapshot = medKitDrugServices.userSnapshot(authentication.userId)
         return UserDto(
             id = authentication.userId,
-            medKits = medKitDTOs
+            medKits = snapshot.mapTo(mutableSetOf()) { it.medKit.toDto(it.drugs) }
         )
     }
 }

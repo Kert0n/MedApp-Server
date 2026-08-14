@@ -22,6 +22,9 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.*
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
+import org.kert0n.medappserver.services.models.NewCredentials
+import org.springframework.http.HttpStatus
+import org.springframework.web.server.ResponseStatusException
 import java.util.*
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -66,10 +69,9 @@ class AuthControllerTest {
     @Test
     fun `POST register - returns login and key with correct secret`() {
         val userId = UUID.randomUUID()
-        val user = User(id = userId, hashedKey = "hashed")
-        whenever(securityService.validateRequest(any())).thenReturn(true)
-        whenever(securityService.generateKey(32)).thenReturn("generated-key")
-        whenever(userService.registerNewUser(any(), eq("generated-key"), any())).thenReturn(user)
+        // Учётные данные выпускает сервис — контроллер их больше не генерирует, поэтому
+        // стабится сразу результат, а не generateKey с последующей сборкой.
+        whenever(userService.registerNewUser(any())).thenReturn(NewCredentials(userId, "generated-key"))
 
         mockMvc.perform(
             post("/v1/auth/register")
@@ -81,7 +83,9 @@ class AuthControllerTest {
 
     @Test
     fun `POST register - returns 429 when rate limited`() {
-        whenever(securityService.validateRequest(any())).thenReturn(false)
+        // Лимит теперь внутри registerNewUser: контроллер про счётчик не знает.
+        whenever(userService.registerNewUser(any()))
+            .thenThrow(ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "Too many registration request"))
 
         mockMvc.perform(
             post("/v1/auth/register")

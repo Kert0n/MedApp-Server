@@ -12,8 +12,9 @@ import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.services.models.UsingService
+import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
 import org.kert0n.medappserver.testutil.qty
-import org.kert0n.medappserver.services.orchestrators.QuantityReductionService
+import org.kert0n.medappserver.services.models.DrugService
 import org.springframework.beans.factory.annotation.Autowired
 import java.math.BigDecimal
 import java.util.UUID
@@ -48,9 +49,10 @@ class QuantityArithmeticBenchmarkTest {
     @Autowired private lateinit var userRepository: UserRepository
 
     @Autowired
-    private lateinit var quantityReductionService: QuantityReductionService
+    private lateinit var drugService: DrugService
     @Autowired private lateinit var medKitRepository: MedKitRepository
     @Autowired private lateinit var drugRepository: DrugRepository
+    @Autowired private lateinit var treatmentPlanService: TreatmentPlanService
     @Autowired private lateinit var usingService: UsingService
 
     @Test
@@ -155,13 +157,13 @@ class QuantityArithmeticBenchmarkTest {
                 country = null, description = null, medKit = medKit
             )
         )
-        usingService.createTreatmentPlan(user.id, UsingCreateDTO(drug.id, stock))
+        treatmentPlanService.create(user.id, drug.id, stock)
 
         val one = qty(1.0)
-        repeat(INTAKE_WARMUP) { quantityReductionService.applyIntake(user.id, drug.id, one) }
+        repeat(INTAKE_WARMUP) { drugService.applyIntake(user.id, drug.id, one) }
 
         val started = System.nanoTime()
-        repeat(INTAKE_CALLS) { quantityReductionService.applyIntake(user.id, drug.id, one) }
+        repeat(INTAKE_CALLS) { drugService.applyIntake(user.id, drug.id, one) }
         return (System.nanoTime() - started).toDouble() / INTAKE_CALLS
     }
 

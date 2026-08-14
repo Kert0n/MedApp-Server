@@ -60,8 +60,8 @@ class MedKitController(
         @Parameter(description = "Medkit ID") @PathVariable id: UUID
     ): MedKitDTO {
         logger.debug("GET /v1/med-kit/{} by user {}", id, authentication.userId)
-        val medKit = medKitService.findByIdForUser(id, authentication.userId)
-        return medKit.toDto(medKitDrugServices.drugsWithPlans(medKit))
+        val content = medKitDrugServices.medKitContent(id, authentication.userId)
+        return content.medKit.toDto(content.drugs)
     }
 
     @GetMapping
@@ -116,8 +116,8 @@ class MedKitController(
         @Valid @RequestBody request: JoinMedKitRequest
     ): MedKitDTO {
         logger.debug("POST /v1/med-kit/join by user {}", authentication.userId)
-        val medKit = medKitService.joinMedKitByKey(request.key, authentication.userId)
-        return medKit.toDto(medKitDrugServices.drugsWithPlans(medKit))
+        val content = medKitDrugServices.joinByKey(request.key, authentication.userId)
+        return content.medKit.toDto(content.drugs)
     }
 
     @DeleteMapping("/{id}/leave")

@@ -1,8 +1,8 @@
 package org.kert0n.medappserver.services.orchestrators
 
-import org.kert0n.medappserver.api.toDto
 import com.sksamuel.aedile.core.Cache
-import org.kert0n.medappserver.api.UsingDTO
+import org.kert0n.medappserver.services.models.DrugService
+import org.kert0n.medappserver.services.models.PlanSnapshot
 import org.kert0n.medappserver.services.security.hashToken
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
@@ -13,7 +13,7 @@ import java.util.UUID
 /**
  * Приём препарата с защитой от повторного применения.
  *
- * Живёт отдельно от [QuantityReductionService] по одной причине: списание должно быть закоммичено до того,
+ * Живёт отдельно от [DrugService] по одной причине: списание должно быть закоммичено до того,
  * как результат попадёт в кеш. Если писать в кеш внутри транзакционного `recordIntake`, запись
  * останется даже при откате — и повтор получит результат операции, которой не было. Поэтому
  * метод здесь **не** транзакционный и вызывает транзакционный сервис как единицу работы.
@@ -23,7 +23,7 @@ import java.util.UUID
  */
 @Service
 class IntakeService(
-    private val quantityReductionService: QuantityReductionService,
+    private val drugService: DrugService,
     @Qualifier("intakeResultsCache") private val intakeResultsCache: Cache<String, IntakeOutcome>
 ) {
 
@@ -48,8 +48,8 @@ class IntakeService(
             return seen
         }
 
-        val plan = quantityReductionService.applyIntake(userId, drugId, quantityConsumed)
-            ?.toDto()
+        val plan = drugService.applyIntake(userId, drugId, quantityConsumed)
+            ?.let { PlanSnapshot(it.usingKey.userId, it.usingKey.drugId, it.plannedAmount) }
 
         // Ошибки не кешируются сознательно: отказ выводится из состояния и при повторе
         // повторится сам, а вот закешированный отказ переживёт исправление причины.
@@ -67,4 +67,4 @@ class IntakeService(
  * intakeId» и «видели, и план исчез» обязательно: без этого повтор вернул бы 404 вместо
  * первого ответа.
  */
-data class IntakeOutcome(val plan: UsingDTO?)
+data class IntakeOutcome(val plan: PlanSnapshot?)

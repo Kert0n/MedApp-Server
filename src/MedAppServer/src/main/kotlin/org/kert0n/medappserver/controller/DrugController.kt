@@ -1,6 +1,9 @@
 package org.kert0n.medappserver.controller
 
 import org.kert0n.medappserver.api.toDto
+import org.kert0n.medappserver.api.toCommand
+import org.kert0n.medappserver.api.toPatch
+import org.kert0n.medappserver.api.toQuantityInfo
 import org.kert0n.medappserver.api.toTemplateDto
 import org.kert0n.medappserver.api.ConsumeRequest
 import org.kert0n.medappserver.api.DrugCreateDTO
@@ -23,7 +26,6 @@ import jakarta.validation.constraints.Size
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.VidalDrugService
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
-import org.kert0n.medappserver.services.orchestrators.QuantityReductionService
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
@@ -37,8 +39,7 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBod
 class DrugController(
     private val drugService: DrugService,
     private val vidalDrugService: VidalDrugService,
-    private val medKitDrugServices: MedKitDrugServices,
-    private val quantityReductionService: QuantityReductionService
+    private val medKitDrugServices: MedKitDrugServices
 ) {
 
     private val logger = LoggerFactory.getLogger(DrugController::class.java)
@@ -80,7 +81,7 @@ class DrugController(
         @Valid @RequestBody drugDTO: DrugCreateDTO
     ): DrugDTO {
         logger.debug("POST /v1/drug by user {}: {}", authentication.userId, drugDTO.name)
-        val drug = medKitDrugServices.createDrugInMedkit(drugDTO, authentication.userId)
+        val drug = medKitDrugServices.createDrugInMedkit(drugDTO.medKitId, drugDTO.toCommand(), authentication.userId)
         return drug.toDto()
     }
 
@@ -100,7 +101,7 @@ class DrugController(
         @Valid @RequestBody updateDTO: DrugUpdateDTO
     ): DrugDTO {
         logger.debug("PUT /v1/drug/{} by user {}", id, authentication.userId)
-        val drug = quantityReductionService.updateDrug(id, updateDTO, authentication.userId)
+        val drug = drugService.update(id, updateDTO.toPatch(), authentication.userId)
         return drug.toDto()
     }
 
@@ -139,7 +140,7 @@ class DrugController(
     ): QuantityInfo {
         logger.debug("GET /v1/drug/quantity/{} by user {}", id, authentication.userId)
         val drug = drugService.findByIdForUser(id, authentication.userId)
-        return QuantityInfo(drug.quantity, drug.totalPlannedAmount, drug.quantity - drug.totalPlannedAmount)
+        return drug.toQuantityInfo()
     }
 
     @PutMapping("/consume/{id}")
@@ -167,7 +168,7 @@ class DrugController(
             authentication.userId,
             consumeRequest.quantity
         )
-        val drug = quantityReductionService.consume(id, consumeRequest.quantity, authentication.userId)
+        val drug = drugService.consume(id, consumeRequest.quantity, authentication.userId)
         return if (drug != null) drug.toDto() else null
     }
 
@@ -230,20 +231,7 @@ class DrugController(
             limit,
             authentication.userId
         )
-        return vidalDrugService.fuzzySearch(searchTerm, limit).map { vd ->
-            DrugTemplateDTO(
-                id = vd.id,
-                name = vd.name,
-                nameLat = vd.nameLat,
-                activeSubstance = vd.activeSubstance,
-                formType = vd.formType?.name,
-                category = vd.category,
-                quantityUnit = vd.quantityUnit?.name,
-                manufacturer = vd.manufacturer,
-                country = vd.country,
-                description = vd.description
-            )
-        }
+        return vidalDrugService.fuzzySearch(searchTerm, limit).map { it.toTemplateDto() }
     }
 
     @GetMapping("/template/{id}")
@@ -264,20 +252,6 @@ class DrugController(
         @PathVariable id: UUID
     ): DrugTemplateDTO {
         logger.debug("GET /v1/drug/template/{} by user {}", id, authentication.userId)
-        val vd = vidalDrugService.findById(id) ?: throw org.springframework.web.server.ResponseStatusException(
-            HttpStatus.NOT_FOUND, "Drug template not found"
-        )
-        return DrugTemplateDTO(
-            id = vd.id,
-            name = vd.name,
-            nameLat = vd.nameLat,
-            activeSubstance = vd.activeSubstance,
-            formType = vd.formType?.name,
-            category = vd.category,
-            quantityUnit = vd.quantityUnit?.name,
-            manufacturer = vd.manufacturer,
-            country = vd.country,
-            description = vd.description
-        )
+        return vidalDrugService.findById(id).toTemplateDto()
     }
 }

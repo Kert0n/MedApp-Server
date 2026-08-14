@@ -1,6 +1,8 @@
 package org.kert0n.medappserver.integration.userstory
 
 import org.kert0n.medappserver.testutil.assertQty
+import org.kert0n.medappserver.api.toPatch
+import org.kert0n.medappserver.api.toCommand
 import org.kert0n.medappserver.testutil.qty
 import org.kert0n.medappserver.PostgresIntegrationTest
 import jakarta.persistence.EntityManager
@@ -17,11 +19,11 @@ import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.db.repository.UsingRepository
 import org.kert0n.medappserver.services.models.DrugService
+import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
-import org.kert0n.medappserver.services.orchestrators.QuantityReductionService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.transaction.annotation.Transactional
@@ -36,9 +38,6 @@ class ComplexWorkflowStoriesTest {
 
     @Autowired
     private lateinit var dbHelper: DatabaseTestHelper
-
-    @Autowired
-    private lateinit var quantityReductionService: QuantityReductionService
 
     @Autowired
     private lateinit var userRepository: UserRepository
@@ -64,6 +63,8 @@ class ComplexWorkflowStoriesTest {
     @Autowired
     private lateinit var medKitDrugServices: MedKitDrugServices
 
+    @Autowired
+    private lateinit var treatmentPlanService: TreatmentPlanService
     @Autowired
     private lateinit var usingService: UsingService
 
@@ -120,13 +121,13 @@ class ComplexWorkflowStoriesTest {
         // PHASE 2: Everyone makes Treatment Plans
         // ==========================================
         // Allergy Meds: 60 total. Alice (20), Bob (20), Charlie (20) = 60 planned.
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(allergyMeds.id, qty(20.0)))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(allergyMeds.id, qty(20.0)))
-        usingService.createTreatmentPlan(charlie.id, UsingCreateDTO(allergyMeds.id, qty(20.0)))
+        treatmentPlanService.create(alice.id, allergyMeds.id, qty(20.0))
+        treatmentPlanService.create(bob.id, allergyMeds.id, qty(20.0))
+        treatmentPlanService.create(charlie.id, allergyMeds.id, qty(20.0))
 
         // Painkillers: 100 total. Bob plans 30, Charlie plans 30.
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(painkillers.id, qty(30.0)))
-        usingService.createTreatmentPlan(charlie.id, UsingCreateDTO(painkillers.id, qty(30.0)))
+        treatmentPlanService.create(bob.id, painkillers.id, qty(30.0))
+        treatmentPlanService.create(charlie.id, painkillers.id, qty(30.0))
 
         entityManager.flush()
         entityManager.clear()
@@ -137,7 +138,7 @@ class ComplexWorkflowStoriesTest {
         // Bob consumes 30 Allergy Meds. Stock drops from 60 to 30.
         // Total planned was 60. Stock is now 30. Scale factor = 30/60 = 0.5.
         // All plans (20) should auto-scale down to 10.
-        quantityReductionService.consume(allergyMeds.id, qty(30.0), bob.id)
+        drugService.consume(allergyMeds.id, qty(30.0), bob.id)
 
         entityManager.flush()
         entityManager.clear()
@@ -248,18 +249,18 @@ class ComplexWorkflowStoriesTest {
             medKitId = sourceKit.id, formType = null, category = null,
             manufacturer = null, country = null, description = null
         )
-        val drug = medKitDrugServices.createDrugInMedkit(createDrugDto, alice.id)
+        val drug = medKitDrugServices.createDrugInMedkit(createDrugDto.medKitId, createDrugDto.toCommand(), alice.id)
         dbHelper.flushAndClear()
 
         // Alice and Bob create treatment plans (40 each, total 80)
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(40.0)))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(40.0)))
+        treatmentPlanService.create(alice.id, drug.id, qty(40.0))
+        treatmentPlanService.create(bob.id, drug.id, qty(40.0))
         dbHelper.flushAndClear()
 
         // ── Phase 1: Alter Using ──
         // Bob increases his plan from 40 to 60.
         // Allowed because 100 stock - 40 Alice = 60 available.
-        usingService.updateTreatmentPlan(bob.id, drug.id, UsingUpdateDTO(plannedAmount = qty(60.0)))
+        treatmentPlanService.update(bob.id, drug.id, plannedAmount = qty(60.0))
         dbHelper.flushAndClear()
 
         assertQty(60.0, dbHelper.userPlan(bob.id, drug.id), "Bob's plan updated to 60")
@@ -269,7 +270,7 @@ class ComplexWorkflowStoriesTest {
         // Alice updates the drug quantity from 100 to 50.
         // This MUST trigger `handleQuantityReduction`. Factor = 50 / 100 = 0.5.
         val updateDrugDto = DrugUpdateDTO(quantity = qty(50.0))
-        quantityReductionService.updateDrug(drug.id, updateDrugDto, alice.id)
+        drugService.update(drug.id, updateDrugDto.toPatch(), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(50.0, dbHelper.drugQuantity(drug.id), "Drug quantity updated to 50")
@@ -316,7 +317,7 @@ class ComplexWorkflowStoriesTest {
         medKitService.joinMedKitByKey(shareKey, bob.id)
 
         // Alice creates a drug
-        val drug = drugService.create(DrugCreateDTO("Shared Meds", qty(10.0), "pcs", kitA.id), kitA, alice.id)
+        val drug = drugService.create(DrugCreateDTO("Shared Meds", qty(10.0), "pcs", kitA.id).toCommand(), kitA, alice.id)
 
         // Bob creates a private kit
         val kitB = medKitService.createNew(bob.id)
@@ -340,11 +341,11 @@ class ComplexWorkflowStoriesTest {
         val kitA = medKitService.createNew(alice.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kitA.id, alice.id), bob.id)
 
-        val drug = drugService.create(DrugCreateDTO("Audit Meds", qty(10.0), "pcs", kitA.id), kitA, alice.id)
+        val drug = drugService.create(DrugCreateDTO("Audit Meds", qty(10.0), "pcs", kitA.id).toCommand(), kitA, alice.id)
 
         // Both have plans
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(5.0)))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(2.0)))
+        treatmentPlanService.create(alice.id, drug.id, qty(5.0))
+        treatmentPlanService.create(bob.id, drug.id, qty(2.0))
 
         // Alice has a private kit (Bob is NOT in this one)
         val kitB = medKitService.createNew(alice.id)
@@ -370,7 +371,7 @@ class ComplexWorkflowStoriesTest {
         entityManager.flush()
         entityManager.clear()
         val drug =
-            medKitDrugServices.createDrugInMedkit(DrugCreateDTO("Migrating Meds", qty(10.0), "pcs", kitA.id), alice.id)
+            medKitDrugServices.createDrugInMedkit(DrugCreateDTO("Migrating Meds", qty(10.0), "pcs", kitA.id).medKitId, DrugCreateDTO("Migrating Meds", qty(10.0), "pcs", kitA.id).toCommand(), alice.id)
 
         // ACT: Delete Kit A and migrate drugs to Kit B
         entityManager.flush()

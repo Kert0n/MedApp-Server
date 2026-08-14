@@ -10,8 +10,9 @@ import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.services.models.MedKitService
+import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
 import org.kert0n.medappserver.services.models.UsingService
-import org.kert0n.medappserver.services.orchestrators.QuantityReductionService
+import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
@@ -39,9 +40,10 @@ class ConcurrentIntakeTest {
     @Autowired private lateinit var userRepository: UserRepository
     @Autowired private lateinit var medKitRepository: MedKitRepository
     @Autowired private lateinit var drugRepository: DrugRepository
+    @Autowired private lateinit var treatmentPlanService: TreatmentPlanService
     @Autowired private lateinit var usingService: UsingService
     @Autowired private lateinit var medKitService: MedKitService
-    @Autowired private lateinit var quantityReductionService: QuantityReductionService
+    @Autowired private lateinit var drugService: DrugService
 
     @Test
     fun `одновременные приёмы двух участников списывают оба`() {
@@ -61,8 +63,8 @@ class ConcurrentIntakeTest {
                 country = null, description = null, medKit = medKit
             )
         )
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(40.0)))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(40.0)))
+        treatmentPlanService.create(alice.id, drug.id, qty(40.0))
+        treatmentPlanService.create(bob.id, drug.id, qty(40.0))
 
         // Оба потока стартуют по одному сигналу: без этого второй успевал бы отработать
         // после первого, и гонки, которую мы ловим, просто не возникало бы.
@@ -73,7 +75,7 @@ class ConcurrentIntakeTest {
         val tasks = listOf(alice.id, bob.id).map { userId ->
             pool.submit {
                 start.await()
-                runCatching { quantityReductionService.applyIntake(userId, drug.id, qty(10.0)) }
+                runCatching { drugService.applyIntake(userId, drug.id, qty(10.0)) }
                     .onFailure { synchronized(errors) { errors += it } }
             }
         }

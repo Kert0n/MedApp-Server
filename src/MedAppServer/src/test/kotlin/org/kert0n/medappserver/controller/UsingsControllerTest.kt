@@ -9,7 +9,8 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.db.model.*
 import org.kert0n.medappserver.services.models.UsingService
-import org.kert0n.medappserver.services.orchestrators.QuantityReductionService
+import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
+import org.kert0n.medappserver.services.models.DrugService
 import org.mockito.kotlin.any
 import org.mockito.kotlin.doNothing
 import org.mockito.kotlin.eq
@@ -47,10 +48,12 @@ class UsingsControllerTest {
     private lateinit var mockMvc: MockMvc
 
     @MockitoBean
+    private lateinit var treatmentPlanService: TreatmentPlanService
+    @MockitoBean
     private lateinit var usingService: UsingService
 
     @MockitoBean
-    private lateinit var quantityReductionService: QuantityReductionService
+    private lateinit var drugService: DrugService
 
     private val userId = UUID.randomUUID()
     private val drugId = UUID.randomUUID()
@@ -150,7 +153,7 @@ class UsingsControllerTest {
     fun `POST create using - creates and returns using`() {
         val using = createTestUsing()
         val dto = createTestUsingDTO()
-        whenever(usingService.createTreatmentPlan(eq(userId), any())).thenReturn(using)
+        whenever(treatmentPlanService.create(eq(userId), any(), any())).thenReturn(using)
 
         val createDTO = UsingCreateDTO(drugId = drugId, plannedAmount = qty(30.0))
 
@@ -166,7 +169,7 @@ class UsingsControllerTest {
 
     @Test
     fun `POST create using - returns 409 for duplicate`() {
-        whenever(usingService.createTreatmentPlan(eq(userId), any()))
+        whenever(treatmentPlanService.create(eq(userId), any(), any()))
             .thenThrow(ResponseStatusException(HttpStatus.CONFLICT, "Already exists"))
 
         val createDTO = UsingCreateDTO(drugId = drugId, plannedAmount = qty(30.0))
@@ -184,7 +187,7 @@ class UsingsControllerTest {
     fun `PUT update using - updates and returns using`() {
         val using = createTestUsing().apply { plannedAmount = qty(50.0) }
         val dto = createTestUsingDTO().copy(plannedAmount = qty(50.0))
-        whenever(usingService.updateTreatmentPlan(eq(userId), eq(drugId), any())).thenReturn(using)
+        whenever(treatmentPlanService.update(eq(userId), eq(drugId), any())).thenReturn(using)
 
         val updateDTO = UsingUpdateDTO(plannedAmount = qty(50.0))
 
@@ -202,7 +205,7 @@ class UsingsControllerTest {
     fun `POST record intake - records and returns using`() {
         val using = createTestUsing().apply { plannedAmount = qty(20.0) }
         val dto = createTestUsingDTO().copy(plannedAmount = qty(20.0))
-        whenever(quantityReductionService.applyIntake(eq(userId), eq(drugId), eq(qty(10.0)))).thenReturn(using)
+        whenever(drugService.applyIntake(eq(userId), eq(drugId), eq(qty(10.0)))).thenReturn(using)
 
         val intakeRequest = IntakeRequest(quantityConsumed = qty(10.0), intakeId = UUID.randomUUID())
 
@@ -218,7 +221,7 @@ class UsingsControllerTest {
 
     @Test
     fun `POST record intake - returns 400 when exceeding planned amount`() {
-        whenever(quantityReductionService.applyIntake(eq(userId), eq(drugId), any()))
+        whenever(drugService.applyIntake(eq(userId), eq(drugId), any()))
             .thenThrow(ResponseStatusException(HttpStatus.BAD_REQUEST, "Exceeds planned amount"))
 
         val intakeRequest = IntakeRequest(quantityConsumed = qty(100.0), intakeId = UUID.randomUUID())

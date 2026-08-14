@@ -15,6 +15,7 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.services.orchestrators.IntakeService
+import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
@@ -27,7 +28,8 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBod
 @Tag(name = "Treatment Plans", description = "Endpoints for treatment plans and intake tracking")
 class UsingsController(
     private val usingService: UsingService,
-    private val intakeService: IntakeService
+    private val intakeService: IntakeService,
+    private val treatmentPlanService: TreatmentPlanService
 ) {
 
     private val logger = LoggerFactory.getLogger(UsingsController::class.java)
@@ -94,7 +96,7 @@ class UsingsController(
         @Valid @RequestBody createDTO: UsingCreateDTO
     ): UsingDTO {
         logger.debug("POST /v1/using by user {} for drug {}", authentication.userId, createDTO.drugId)
-        val using = usingService.createTreatmentPlan(authentication.userId, createDTO)
+        val using = treatmentPlanService.create(authentication.userId, createDTO.drugId, createDTO.plannedAmount)
         return using.toDto()
     }
 
@@ -118,7 +120,7 @@ class UsingsController(
         @Valid @RequestBody updateDTO: UsingUpdateDTO
     ): UsingDTO {
         logger.debug("PUT /v1/using/drug/{} by user {}", drugId, authentication.userId)
-        val using = usingService.updateTreatmentPlan(authentication.userId, drugId, updateDTO)
+        val using = treatmentPlanService.update(authentication.userId, drugId, updateDTO.plannedAmount)
         return using.toDto()
     }
 
@@ -150,7 +152,7 @@ class UsingsController(
             drugId,
             intakeRequest.quantityConsumed,
             intakeRequest.intakeId
-        ).plan
+        ).plan?.toDto()
     }
 
     @DeleteMapping("/drug/{drugId}")
