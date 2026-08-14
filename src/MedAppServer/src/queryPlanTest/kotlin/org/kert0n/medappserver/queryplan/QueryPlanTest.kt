@@ -79,12 +79,18 @@ class QueryPlanTest {
         scenario: () -> Unit
     ): List<Pair<String, QueryPlan>> {
         val executed = capture(scenario)
-        val plans = executed.filter { it.isSelect }
-            .distinctBy { it.fingerprint }
-            .mapNotNull { statement ->
-                explain(explainConnection, objectMapper, statement, forceIndexes)
-                    ?.let { statement.sql to it }
+        val unique = executed.filter { it.isSelect }.distinctBy { it.fingerprint }
+        val naturalPlans = unique.map { statement ->
+            statement.sql to explain(explainConnection, objectMapper, statement)
+        }
+        val forcedPlans = if (forceIndexes) {
+            unique.map { statement ->
+                statement.sql to explain(explainConnection, objectMapper, statement, true)
             }
+        } else {
+            emptyList()
+        }
+        val plans = forcedPlans.ifEmpty { naturalPlans }
         println("\n=== $name: операторов ${executed.size}, разобрано планов ${plans.size} ===")
         executed.groupingBy { it.sql }.eachCount()
             .entries.sortedByDescending { it.value }.take(3)
@@ -104,7 +110,8 @@ class QueryPlanTest {
                 size = null,
                 result = "${executed.size} операторов, ${plans.size} уникальных планов",
                 statements = executed,
-                plans = plans.map { it.second },
+                naturalPlans = naturalPlans.map { it.second },
+                forcedPlans = forcedPlans.map { it.second },
                 complexity = "EXPLAIN"
             )
         )
@@ -138,9 +145,8 @@ class QueryPlanTest {
         statements: List<ExecutedStatement>,
         forceIndexes: Boolean = false
     ): List<Pair<String, QueryPlan>> =
-        statements.distinctBy { it.fingerprint }.mapNotNull { statement ->
-            explain(explainConnection, objectMapper, statement, forceIndexes)
-                ?.let { statement.sql to it }
+        statements.distinctBy { it.fingerprint }.map { statement ->
+            statement.sql to explain(explainConnection, objectMapper, statement, forceIndexes)
         }
 
     private fun scalarLong(sql: String): Long =
@@ -162,6 +168,7 @@ class QueryPlanTest {
         statements: List<ExecutedStatement>,
         plans: List<Pair<String, QueryPlan>>
     ) {
+        val naturalPlans = explainStatements(statements)
         report.record(
             QueryMeasurement(
                 owner = "Repository SQL",
@@ -170,7 +177,8 @@ class QueryPlanTest {
                 size = null,
                 result = statements.queryShape().toString(),
                 statements = statements,
-                plans = plans.map { it.second },
+                naturalPlans = naturalPlans.map { it.second },
+                forcedPlans = plans.map { it.second },
                 complexity = "EXPLAIN"
             )
         )
@@ -310,7 +318,7 @@ class QueryPlanTest {
             medKitLifecycle.leave(last.ownerId, last.medKitId)
         }
         assertEquals(3, lastLeave.queryShape().count(SqlKind.SELECT))
-        assertEquals(2, lastLeave.queryShape().count(SqlKind.DELETE))
+        assertEquals(1, lastLeave.queryShape().count(SqlKind.DELETE))
 
         val explicit = fixture.createMedKitFixture(100, 100, additionalMember = false)
         val explicitDelete = captureWrite {

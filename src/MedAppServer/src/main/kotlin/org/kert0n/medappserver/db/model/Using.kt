@@ -40,11 +40,7 @@ class Using(
     plannedAmount: BigDecimal
 ) {
 
-    /**
-     * Запланированное количество. Нормализуется до [QUANTITY_SCALE] в сеттере — по тем же
-     * причинам, что и [Drug.quantity]: приведение в одном месте вместо повтора на каждой
-     * арифметической строке в сервисах.
-     */
+    /** Запланированное количество, нормализованное до масштаба колонки `NUMERIC(19,6)`. */
     @NotNull
     @Column(name = "planned_amount", nullable = false, precision = 19, scale = QUANTITY_SCALE)
     var plannedAmount: BigDecimal = plannedAmount.toQuantityScale()
@@ -52,12 +48,7 @@ class Using(
             field = value.toQuantityScale()
         }
 
-    /**
-     * Уменьшает план на принятое количество, не уходя ниже нуля.
-     *
-     * Отсечение по нулю — часть инварианта плана, а не деталь вызывающего: отрицательный
-     * план не значит ничего, и допускать его хотя бы на время транзакции незачем.
-     */
+    /** Уменьшает план, сохраняя инвариант `plannedAmount >= 0`. */
     fun reduceBy(amount: BigDecimal) {
         plannedAmount = maxOf(BigDecimal.ZERO, plannedAmount - amount)
     }

@@ -2,7 +2,7 @@ package org.kert0n.medappserver.integration
 
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
-import org.kert0n.medappserver.api.UsingCreateDTO
+import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
 import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.MedKit
 import org.kert0n.medappserver.db.model.User
@@ -21,17 +21,7 @@ import java.math.BigDecimal
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/**
- * То, ради чего количества переведены с `Double` на `numeric(19,6)`.
- *
- * На `Double` дробные дозы не сходились: после трёх списаний по 1/3 остаток равнялся не нулю,
- * а величине порядка 1e-16. Из этого следовали два наблюдаемых дефекта:
- *  - кончившийся препарат не удалялся, потому что проверка была `quantity == 0.0`;
- *  - план не удалялся по той же причине и оставался «висеть» с ничтожным остатком.
- *
- * Тест обязан идти на настоящем Postgres: округление `NUMERIC` в H2 отличается, и на H2 он
- * проверял бы не то поведение, что в проде.
- */
+/** Проверяет арифметические инварианты `NUMERIC(19,6)` на PostgreSQL. */
 @PostgresIntegrationTest
 @Transactional
 class FractionalQuantityTest {
@@ -67,7 +57,6 @@ class FractionalQuantityTest {
 
     @Test
     fun `потребление всего остатка дробными долями удаляет препарат и план`() {
-        // 1 таблетка, план на неё же, приём по 1/3 — на Double остаток не сходился к нулю.
         val fixture = setUp(qty(1.0))
         val user = fixture.user
         val drug = fixture.drug
@@ -87,7 +76,7 @@ class FractionalQuantityTest {
         assertNull(afterLast, "план должен исчезнуть вместе с кончившимся препаратом")
         assertTrue(
             drugRepository.findById(drug.id).isEmpty,
-            "препарат с нулевым остатком должен быть удалён; на Double остаток был ~1e-16 и удаление не срабатывало"
+            "препарат с нулевым остатком должен быть удалён"
         )
         assertTrue(
             usingRepository.findAllByDrugId(drug.id).isEmpty(),
@@ -97,9 +86,7 @@ class FractionalQuantityTest {
 
     @Test
     fun `инвариант держится после пропорционального уменьшения планов`() {
-        // Двое зарезервировали всё; владелец списывает часть мимо планов, и планы должны
-        // сжаться так, чтобы их сумма ровно равнялась остатку. Именно здесь на Double
-        // накапливалась разница: каждое умножение на коэффициент давало свой хвост.
+        // Двое зарезервировали весь остаток; дробный расход требует reconciliation.
         val fixture = setUp(qty(10.0))
         val alice = fixture.user
         val drug = fixture.drug
@@ -119,11 +106,7 @@ class FractionalQuantityTest {
         val plansTotal = usingRepository.findAllByDrugId(drug.id)
             .fold(BigDecimal.ZERO) { sum, using -> sum + using.plannedAmount }
 
-        // Инвариант — «не больше», а не «ровно». Точное равенство раньше держалось
-        // компенсацией: планы округлялись HALF_UP, сумма могла превысить остаток, и разница
-        // отдавалась самому большому плану. Округление вниз даёт инвариант по построению, а
-        // сумма оказывается меньше остатка на несколько миллионных — при сжатии резерва это
-        // единственное уместное направление.
+        // Округление вниз гарантирует «не больше»; разница ограничена младшим разрядом.
         assertTrue(
             plansTotal <= remaining,
             "сумма планов $plansTotal обязана не превышать остаток $remaining"

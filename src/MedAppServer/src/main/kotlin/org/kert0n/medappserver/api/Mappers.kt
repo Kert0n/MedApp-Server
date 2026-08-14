@@ -1,8 +1,8 @@
 package org.kert0n.medappserver.api
 
-import org.kert0n.medappserver.db.model.parsed.VidalDrug
 import org.kert0n.medappserver.services.models.DrugCreation
 import org.kert0n.medappserver.services.models.DrugPatch
+import org.kert0n.medappserver.services.models.DrugTemplateView
 import org.kert0n.medappserver.services.models.DrugView
 import org.kert0n.medappserver.services.models.MedKitContentView
 import org.kert0n.medappserver.services.models.MedKitSummaryView
@@ -29,31 +29,26 @@ fun TreatmentPlanView.toDto(): TreatmentPlanDTO =
     TreatmentPlanDTO(userId, drugId, plannedAmount)
 
 fun MedKitContentView.toDto(): MedKitDTO =
-    MedKitDTO(id = id, drugs = drugs.mapTo(linkedSetOf()) { it.toDto() })
+    MedKitDTO(id = id, drugs = drugs.map { it.toDto() })
 
 fun MedKitSummaryView.toDto(): MedKitSummaryDTO =
     MedKitSummaryDTO(id, userCount, drugCount)
 
 /** Запись справочника в публичный шаблон препарата. */
-fun VidalDrug.toTemplateDto(): DrugTemplateDTO = DrugTemplateDTO(
+fun DrugTemplateView.toTemplateDto(): DrugTemplateDTO = DrugTemplateDTO(
     id = id,
     name = name,
     nameLat = nameLat,
     activeSubstance = activeSubstance,
-    formType = formType?.name,
+    formType = formType,
     category = category,
-    quantityUnit = quantityUnit?.name,
+    quantityUnit = quantityUnit,
     manufacturer = manufacturer,
     country = country,
     description = description
 )
 
-/**
- * Запрос на создание препарата — в аргументы прикладной операции.
- *
- * `medKitId` не переносится: он маршрутный, его разбирает оркестратор, а созданию препарата
- * он не нужен.
- */
+/** Запрос на создание препарата без маршрутного `medKitId`. */
 fun DrugCreateDTO.toCommand(): DrugCreation = DrugCreation(
     name = name,
     quantity = quantity,
@@ -65,7 +60,7 @@ fun DrugCreateDTO.toCommand(): DrugCreation = DrugCreation(
     description = description
 )
 
-/** Запрос на правку препарата — в частичный патч. `null` по-прежнему значит «не трогать». */
+/** `null` в частичном патче означает «не изменять». */
 fun DrugPatchRequest.toPatch(): DrugPatch = DrugPatch(
     name = name,
     quantity = quantity,

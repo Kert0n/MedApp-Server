@@ -27,6 +27,19 @@ data class TreatmentPlanView(
     val plannedAmount: BigDecimal
 )
 
+data class DrugTemplateView(
+    val id: UUID,
+    val name: String,
+    val nameLat: String?,
+    val activeSubstance: String?,
+    val formType: String?,
+    val category: String?,
+    val quantityUnit: String?,
+    val manufacturer: String?,
+    val country: String?,
+    val description: String?
+)
+
 data class MedKitContentView(
     val id: UUID,
     val drugs: List<DrugView>

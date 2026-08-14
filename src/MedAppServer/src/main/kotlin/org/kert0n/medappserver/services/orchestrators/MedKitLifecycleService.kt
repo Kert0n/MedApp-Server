@@ -63,12 +63,12 @@ class MedKitLifecycleService(
     @Transactional
     fun leave(userId: UUID, medKitId: UUID) {
         lockAccessible(userId, medKitId)
-        plans.deleteByUserIdAndMedKitId(userId, medKitId)
 
         if (medKits.countMembers(medKitId) == 1L) {
             drugs.lockAllByMedKitIdOrderById(medKitId)
             medKits.deleteLockedById(medKitId)
         } else {
+            plans.deleteByUserIdAndMedKitId(userId, medKitId)
             medKits.deleteMembership(medKitId, userId)
         }
     }

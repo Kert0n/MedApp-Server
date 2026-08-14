@@ -269,7 +269,7 @@ class NPlusOneTest {
                 }
                 scenario
             },
-            expectedStatements = 5,
+            expectedStatements = 4,
             flush = true
         )
 

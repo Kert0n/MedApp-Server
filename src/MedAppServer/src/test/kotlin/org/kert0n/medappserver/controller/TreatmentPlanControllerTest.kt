@@ -38,7 +38,7 @@ import java.util.UUID
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
-class UsingsControllerTest {
+class TreatmentPlanControllerTest {
 
     @Autowired private lateinit var context: WebApplicationContext
     @Autowired private lateinit var objectMapper: ObjectMapper

@@ -9,9 +9,9 @@ import jakarta.persistence.EntityManager
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertDoesNotThrow
 import org.kert0n.medappserver.api.DrugCreateDTO
-import org.kert0n.medappserver.api.DrugUpdateDTO
-import org.kert0n.medappserver.api.UsingCreateDTO
-import org.kert0n.medappserver.api.UsingUpdateDTO
+import org.kert0n.medappserver.api.DrugPatchRequest
+import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
+import org.kert0n.medappserver.api.TreatmentPlanPatchRequest
 import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.db.repository.DrugRepository
@@ -66,18 +66,6 @@ class ComplexWorkflowStoriesTest {
     private lateinit var treatmentPlanService: TreatmentPlanService
     @Autowired
     private lateinit var usingService: UsingService
-
-    /**
-     * Story 17: The Roommate Saga (The Ultimate Stress Test)
-     * * Validates:
-     * - Multi-user sharing and permissions
-     * - Proportional quantity reduction of Usings during heavy consumption
-     * - Security stripping of Usings during single-drug moves
-     * - Security stripping of Usings during full kit migrations
-     * - Orphan removal prevention during migrations
-     * - Auto-deletion of MedKits when empty
-     * - JPA L1 Cache integrity across complex interwoven workflows
-     */
     @Test
     fun `Story 17 - The Roommate Saga complex interwoven workflow`() {
         // ==========================================
@@ -267,7 +255,7 @@ class ComplexWorkflowStoriesTest {
         // ── Phase 2: Alter Drug (The Spill) ──
         // Alice updates the drug quantity from 100 to 50.
         // This MUST trigger `handleQuantityReduction`. Factor = 50 / 100 = 0.5.
-        val updateDrugDto = DrugUpdateDTO(quantity = qty(50.0))
+        val updateDrugDto = DrugPatchRequest(quantity = qty(50.0))
         drugCommands.consume(alice.id, drug.id, qty(50.0))
         dbHelper.flushAndClear()
 

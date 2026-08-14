@@ -80,15 +80,16 @@ PostgreSQL отвечает за каскадное удаление:
 - `user_drugs.med_kit_id -> med_kits.id ON DELETE CASCADE`;
 - `user_med_kits.med_kit_id -> med_kits.id ON DELETE CASCADE`.
 
-[db/schema.sql](db/schema.sql) создаёт новую базу. Существующая база обновляется
-идемпотентным скриптом [db/migrate-drug-using-cascades.sql](db/migrate-drug-using-cascades.sql):
+[db/schema.sql](db/schema.sql) — единственное описание структуры базы. Изменение схемы
+применяется пересозданием тома PostgreSQL:
 
 ```bash
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
-  -f db/migrate-drug-using-cascades.sql
+docker compose -f compose.yaml down -v
+docker compose -f compose.yaml up -d --build
 ```
 
-После обновления приложение должно пройти `ddl-auto=validate`.
+После создания схемы приложение проверяет её через `ddl-auto=validate`. Отдельные
+SQL-миграции до появления сохраняемых пользовательских данных не поддерживаются.
 
 ## Слои
 
@@ -134,8 +135,19 @@ N+1-гейты используют штатную `Statistics` Hibernate. Ос�
 число обращений сравнивается на нескольких размерах данных.
 
 `RecordingDataSource` используется отдельно: он сохраняет SQL и параметры, необходимые для
-`EXPLAIN (FORMAT JSON)` без `ANALYZE`. `queryPlanTest` поднимает PostgreSQL fixture с 10 000
-препаратов, примерно 30 000 планов и 18 000 записей каталога и проверяет индексные планы
-SELECT/UPDATE/DELETE.
+natural и forced-index `EXPLAIN (FORMAT JSON)` без `ANALYZE`. `queryPlanTest` поднимает
+PostgreSQL fixture с 10 000 препаратов, примерно 30 000 планов и 18 000 записей каталога и
+проверяет индексные планы SELECT/UPDATE/DELETE.
+
+После прогона формируются фактические отчёты:
+
+- `build/reports/query-plans/database-query-report.md`;
+- `build/reports/query-plans/database-query-report.json`;
+- `build/reports/query-plans/n-plus-one-report.md`;
+- `build/reports/query-plans/n-plus-one-report.json`.
+
+Постоянное число обращений помечается `Θ(1)`. Линейный рост допускается только для UPDATE
+действительно изменённых Using при reconciliation; query/fetch-метрики при этом остаются
+постоянными.
 
 CI запускает `test` и `queryPlanTest` независимыми jobs и публикует оба отчёта.

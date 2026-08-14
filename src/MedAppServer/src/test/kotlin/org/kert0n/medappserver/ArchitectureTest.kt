@@ -3,7 +3,13 @@ package org.kert0n.medappserver
 import com.lemonappdev.konsist.api.Konsist
 import com.lemonappdev.konsist.api.declaration.KoFileDeclaration
 import org.junit.jupiter.api.Test
+import org.kert0n.medappserver.services.models.DrugService
+import org.kert0n.medappserver.services.models.UsingService
+import org.kert0n.medappserver.services.models.VidalDrugService
 import org.kert0n.medappserver.services.orchestrators.DrugCommandService
+import org.kert0n.medappserver.services.orchestrators.IntakeService
+import org.kert0n.medappserver.services.orchestrators.MedKitLifecycleService
+import org.kert0n.medappserver.services.orchestrators.MedKitQueryService
 import org.kert0n.medappserver.services.orchestrators.TreatmentPlanService
 import java.lang.reflect.Modifier
 import kotlin.test.assertTrue
@@ -28,7 +34,7 @@ class ArchitectureTest {
             "services.models",
             "services.security"
         ),
-        "api" to setOf("db.model", "db.repository", "services.models"),
+        "api" to setOf("services.models"),
         "controller" to setOf("api", "config", "services.models", "services.orchestrators", "services.security"),
         "config" to setOf("api", "db.model", "db.repository", "services.models", "services.orchestrators", "services.security")
     )
@@ -143,14 +149,23 @@ class ArchitectureTest {
     }
 
     @Test
-    fun `командные сервисы не возвращают JPA сущности`() {
-        val offenders = listOf(DrugCommandService::class.java, TreatmentPlanService::class.java)
+    fun `публичная прикладная поверхность не возвращает JPA сущности`() {
+        val offenders = listOf(
+            DrugService::class.java,
+            UsingService::class.java,
+            VidalDrugService::class.java,
+            DrugCommandService::class.java,
+            TreatmentPlanService::class.java,
+            IntakeService::class.java,
+            MedKitQueryService::class.java,
+            MedKitLifecycleService::class.java
+        )
             .flatMap { service ->
                 service.declaredMethods
-                    .filter { Modifier.isPublic(it.modifiers) }
-                    .filter { it.returnType.packageName == "$root.db.model" }
-                    .map { "${service.simpleName}.${it.name}: ${it.returnType.simpleName}" }
+                    .filter { Modifier.isPublic(it.modifiers) && !it.isSynthetic }
+                    .filter { "$root.db.model" in it.genericReturnType.typeName }
+                    .map { "${service.simpleName}.${it.name}: ${it.genericReturnType.typeName}" }
             }
-        assertTrue(offenders.isEmpty(), "JPA-сущности в публичном результате команды: $offenders")
+        assertTrue(offenders.isEmpty(), "JPA-сущности в публичном результате сервиса: $offenders")
     }
 }

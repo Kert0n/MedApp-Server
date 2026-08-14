@@ -5,7 +5,7 @@ import org.kert0n.medappserver.testutil.qty
 import org.kert0n.medappserver.PostgresIntegrationTest
 import jakarta.persistence.EntityManager
 import org.junit.jupiter.api.Test
-import org.kert0n.medappserver.api.UsingCreateDTO
+import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
 import org.kert0n.medappserver.db.model.Using
 import org.kert0n.medappserver.db.model.UsingKey
 import org.kert0n.medappserver.db.repository.DrugRepository
