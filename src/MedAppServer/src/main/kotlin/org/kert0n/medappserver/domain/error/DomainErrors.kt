@@ -8,6 +8,12 @@ class DrugNotFound(drugId: UUID) : DomainException("Drug $drugId was not found")
 
 class MedKitNotFound(medKitId: UUID) : DomainException("MedKit $medKitId was not found")
 
+class UserNotFound(userId: UUID) : DomainException("User $userId was not found")
+
+class InvitationNotFound : DomainException("Invitation was not found or has expired")
+
+class InvalidMedKitTarget : DomainException("Source and target MedKit must differ")
+
 class TreatmentPlanNotFound(userId: UUID, drugId: UUID) :
     DomainException("Treatment plan for user $userId and drug $drugId was not found")
 

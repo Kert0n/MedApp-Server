@@ -21,6 +21,16 @@ import java.util.UUID
 class DrugService(
     private val repository: DrugAggregateRepository
 ) {
+    @Transactional(propagation = Propagation.MANDATORY)
+    fun lockAllByMedKitIds(medKitIds: Collection<UUID>): List<UUID> =
+        repository.lockAllByMedKitIds(medKitIds)
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    fun moveAll(sourceMedKitId: UUID, targetMedKitId: UUID) {
+        repository.deletePlansWithoutTargetAccessByMedKit(sourceMedKitId, targetMedKitId)
+        repository.moveAll(sourceMedKitId, targetMedKitId)
+    }
+
     @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
     fun medKitId(userId: UUID, drugId: UUID): UUID =
         repository.findAccessible(userId, drugId)?.medKitId ?: throw DrugNotFound(drugId)

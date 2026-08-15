@@ -158,6 +158,31 @@ class DrugAggregateRepository(
         mapOf("drugId" to drugId, "targetMedKitId" to targetMedKitId)
     )
 
+    fun deletePlansWithoutTargetAccessByMedKit(sourceMedKitId: UUID, targetMedKitId: UUID): Int = jdbc.update(
+        """
+            DELETE FROM usings plan
+            USING user_drugs drug
+            WHERE plan.drug_id = drug.id
+              AND drug.med_kit_id = :sourceMedKitId
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM user_med_kits target_membership
+                  WHERE target_membership.med_kit_id = :targetMedKitId
+                    AND target_membership.user_id = plan.user_id
+              )
+        """.trimIndent(),
+        mapOf("sourceMedKitId" to sourceMedKitId, "targetMedKitId" to targetMedKitId)
+    )
+
+    fun moveAll(sourceMedKitId: UUID, targetMedKitId: UUID): Int = jdbc.update(
+        """
+            UPDATE user_drugs
+            SET med_kit_id = :targetMedKitId
+            WHERE med_kit_id = :sourceMedKitId
+        """.trimIndent(),
+        mapOf("sourceMedKitId" to sourceMedKitId, "targetMedKitId" to targetMedKitId)
+    )
+
     fun delete(drugId: UUID): Int = jdbc.update(
         "DELETE FROM user_drugs WHERE id = :drugId",
         mapOf("drugId" to drugId)
