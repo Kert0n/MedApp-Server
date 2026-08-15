@@ -61,13 +61,13 @@ class LoginThrottleTest {
         whenever(userService.loadUserByUsername(userId.toString())).thenReturn(user)
 
         repeat(3) {
-            mockMvc.perform(get("/auth/login").with(httpBasic(userId.toString(), "password")))
+            mockMvc.perform(get("/v1/auth/login").with(httpBasic(userId.toString(), "password")))
                 .andExpect(status().isOk)
         }
 
         // Quota exhausted: 429 rather than 401, i.e. throttling and not an authentication
         // failure.
-        mockMvc.perform(get("/auth/login").with(httpBasic(userId.toString(), "password")))
+        mockMvc.perform(get("/v1/auth/login").with(httpBasic(userId.toString(), "password")))
             .andExpect(status().isTooManyRequests)
     }
 
@@ -80,10 +80,10 @@ class LoginThrottleTest {
         // Burn the quota with requests carrying no credentials: the filter counts attempts
         // before Basic runs, so these consume the allowance too.
         repeat(3) {
-            mockMvc.perform(get("/auth/login")).andExpect(status().isUnauthorized)
+            mockMvc.perform(get("/v1/auth/login")).andExpect(status().isUnauthorized)
         }
 
-        mockMvc.perform(get("/auth/login").with(httpBasic(userId.toString(), "password")))
+        mockMvc.perform(get("/v1/auth/login").with(httpBasic(userId.toString(), "password")))
             .andExpect(status().isTooManyRequests)
 
         // The decisive assertion: the user lookup, and therefore the bcrypt comparison

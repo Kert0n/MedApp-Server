@@ -4,7 +4,7 @@ import com.sksamuel.aedile.core.Cache
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
-import org.kert0n.medappserver.services.orchestrators.IntakeOutcome
+import org.kert0n.medappserver.application.model.IntakeCacheEntry
 import org.kert0n.medappserver.controller.UsingCreateDTO
 import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.MedKit
@@ -53,8 +53,8 @@ class IntakeIdempotencyTest {
     @Autowired private lateinit var medKitService: MedKitService
 
     @Autowired
-    @Qualifier("intakeResultsCache")
-    private lateinit var intakeResultsCache: Cache<String, IntakeOutcome>
+    @Qualifier("intakeRecordsCache")
+    private lateinit var intakeRecordsCache: Cache<String, IntakeCacheEntry>
 
     private lateinit var mockMvc: MockMvc
 
@@ -64,7 +64,7 @@ class IntakeIdempotencyTest {
             .apply<DefaultMockMvcBuilder>(SecurityMockMvcConfigurers.springSecurity())
             .build()
         // Кеш — синглтон контекста, иначе тесты влияли бы друг на друга через общий intakeId.
-        intakeResultsCache.invalidateAll()
+        intakeRecordsCache.invalidateAll()
     }
 
     private fun prepare(stock: Double, plan: Double): Triple<User, Drug, MedKit> {
@@ -90,10 +90,10 @@ class IntakeIdempotencyTest {
 
     private fun intake(user: User, drug: Drug, amount: Double, intakeId: UUID) =
         mockMvc.perform(
-            post("/using/drug/${drug.id}/intake")
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/v1/intakes/$intakeId")
                 .with(jwt().jwt { it.subject(user.id.toString()) })
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"quantityConsumed":$amount,"intakeId":"$intakeId"}""")
+                .content("""{"quantity":$amount,"drugId":"${drug.id}"}""")
         )
 
     @Test
@@ -135,7 +135,7 @@ class IntakeIdempotencyTest {
         val second = intake(user, drug, 3.0, intakeId).andExpect(status().isOk)
             .andReturn().response.contentAsString
 
-        assertTrue(first.isBlank(), "план исчез, поэтому тело первого ответа пустое: '$first'")
+        assertTrue(first.contains("\"plan\":null"), "ответ должен явно показать завершённый план: '$first'")
         assertEquals(first, second, "повтор обязан вернуть тот же результат, а не 404")
         assertQty(7.0, drugRepository.findById(drug.id).orElseThrow().quantity,
             "списание должно быть однократным")
