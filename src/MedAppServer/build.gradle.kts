@@ -59,6 +59,25 @@ allOpen {
     annotation("jakarta.persistence.Embeddable")
 }
 
+// Тяжёлые PostgreSQL-проверки выполняются отдельно от быстрого unit/integration-набора.
+testing {
+    suites {
+        register<JvmTestSuite>("queryPlanTest") {
+            useJUnitJupiter()
+            dependencies {
+                implementation(project())
+                implementation("org.springframework.boot:spring-boot-starter-test")
+                implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+                implementation("org.springframework.boot:spring-boot-testcontainers")
+                implementation("org.jetbrains.kotlin:kotlin-test-junit5")
+                implementation("org.testcontainers:testcontainers-junit-jupiter")
+                implementation("org.testcontainers:testcontainers-postgresql")
+                implementation("tools.jackson.core:jackson-databind")
+            }
+        }
+    }
+}
+
 tasks.withType<Test> {
     useJUnitPlatform()
     jvmArgs("-XX:+EnableDynamicAgentLoading")
