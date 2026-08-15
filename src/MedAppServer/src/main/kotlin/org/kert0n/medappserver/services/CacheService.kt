@@ -2,6 +2,7 @@ package org.kert0n.medappserver.services
 
 import com.github.benmanes.caffeine.cache.Caffeine
 import org.kert0n.medappserver.services.orchestrators.IntakeOutcome
+import org.kert0n.medappserver.application.model.IntakeCacheEntry
 import com.sksamuel.aedile.core.Cache
 import com.sksamuel.aedile.core.asCache
 import com.sksamuel.aedile.core.expireAfterWrite
@@ -49,6 +50,12 @@ class CacheService(
     // сознательно, поэтому персистентной таблицы здесь нет.
     @Bean
     fun intakeResultsCache(): Cache<String, IntakeOutcome> = Caffeine.newBuilder()
+        .expireAfterWrite(intakeIdempotencyWindow.minutes)
+        .maximumSize(50_000)
+        .asCache()
+
+    @Bean
+    fun intakeRecordsCache(): Cache<String, IntakeCacheEntry> = Caffeine.newBuilder()
         .expireAfterWrite(intakeIdempotencyWindow.minutes)
         .maximumSize(50_000)
         .asCache()
