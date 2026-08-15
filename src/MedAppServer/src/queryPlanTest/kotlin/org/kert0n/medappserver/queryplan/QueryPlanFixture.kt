@@ -18,17 +18,26 @@ import java.util.UUID
 @Component
 class QueryPlanFixture(private val entityManager: EntityManager) {
 
+    private var seeded = false
+
     /** Идентификаторы, за которые цепляются сценарии. Заполняет [seed]. */
     lateinit var ownerId: UUID
     lateinit var medKitId: UUID
     lateinit var drugId: UUID
     lateinit var catalogueName: String
 
+    lateinit var snapshotUsers: Map<Int, UUID>
+    lateinit var planUsers: Map<Int, UUID>
+    lateinit var planDrugs: Map<Int, UUID>
+    lateinit var contentMedKits: Map<Int, Pair<UUID, UUID>>
+    lateinit var drugsByPlanCount: Map<Int, Pair<UUID, UUID>>
+
     /** Сколько аптечек у [ownerId]: от этого числа не должно зависеть число запросов. */
     var ownerMedKitCount: Int = 0
 
     @Transactional
     fun seed() {
+        if (seeded) return
         entityManager.createNativeQuery(
             """
             INSERT INTO users (id, hashed_key)
@@ -102,6 +111,13 @@ class QueryPlanFixture(private val entityManager: EntityManager) {
             """
         ).executeUpdate()
 
+        snapshotUsers = listOf(0, 1, 5, 25).associateWith(::seedSnapshotUser)
+        val seededPlans = listOf(0, 1, 250).associateWith(::seedPlanUser)
+        planUsers = seededPlans.mapValues { it.value.first }
+        planDrugs = seededPlans.mapValues { it.value.second }
+        contentMedKits = listOf(0, 10, 100).associateWith(::seedContentMedKit)
+        drugsByPlanCount = listOf(0, 10, 100).associateWith(::seedDrugWithPlans)
+
         // Без ANALYZE планировщик работает по умолчаниям и выбирает план, которого в проде
         // не будет: статистика после массовой вставки ещё не собрана.
         listOf("users", "med_kits", "user_med_kits", "user_drugs", "usings", "parsed_drugs",
@@ -130,6 +146,121 @@ class QueryPlanFixture(private val entityManager: EntityManager) {
             .singleResult.toString().toInt()
         medKitId = single("SELECT med_kit_id FROM user_med_kits WHERE user_id = '$ownerId' LIMIT 1")
         drugId = single("SELECT id FROM user_drugs WHERE med_kit_id = '$medKitId' LIMIT 1")
+        seeded = true
+    }
+
+    private fun seedSnapshotUser(medKitCount: Int): UUID {
+        val userId = UUID.randomUUID()
+        insertUser(userId, "snapshot-$medKitCount")
+        entityManager.createNativeQuery(
+            """
+            INSERT INTO user_med_kits (user_id, med_kit_id)
+            SELECT '$userId'::uuid, id FROM med_kits ORDER BY id LIMIT $medKitCount
+            """
+        ).executeUpdate()
+        return userId
+    }
+
+    private fun seedPlanUser(planCount: Int): Pair<UUID, UUID> {
+        val userId = UUID.randomUUID()
+        insertUser(userId, "plans-$planCount")
+        entityManager.createNativeQuery(
+            """
+            INSERT INTO user_med_kits (user_id, med_kit_id)
+            SELECT DISTINCT '$userId'::uuid, med_kit_id
+            FROM (SELECT med_kit_id FROM user_drugs ORDER BY id LIMIT $planCount) selected
+            """
+        ).executeUpdate()
+        entityManager.createNativeQuery(
+            """
+            INSERT INTO usings (user_id, drug_id, planned_amount)
+            SELECT '$userId'::uuid, id, 1 FROM user_drugs ORDER BY id LIMIT $planCount
+            """
+        ).executeUpdate()
+        val drug = if (planCount == 0) UUID.randomUUID() else
+            single("SELECT drug_id FROM usings WHERE user_id = '$userId' ORDER BY drug_id LIMIT 1")
+        return userId to drug
+    }
+
+    private fun seedContentMedKit(drugCount: Int): Pair<UUID, UUID> {
+        val userId = UUID.randomUUID()
+        val medKitId = UUID.randomUUID()
+        insertUser(userId, "content-$drugCount")
+        entityManager.createNativeQuery("INSERT INTO med_kits (id) VALUES ('$medKitId')").executeUpdate()
+        entityManager.createNativeQuery(
+            "INSERT INTO user_med_kits (user_id, med_kit_id) VALUES ('$userId', '$medKitId')"
+        ).executeUpdate()
+        entityManager.createNativeQuery(
+            """
+            INSERT INTO user_drugs (id, name, quantity, quantity_unit, med_kit_id)
+            SELECT gen_random_uuid(), 'Content ' || i, 100, 'таб', '$medKitId'
+            FROM generate_series(1, $drugCount) AS i
+            """
+        ).executeUpdate()
+        return userId to medKitId
+    }
+
+    private fun seedDrugWithPlans(planCount: Int): Pair<UUID, UUID> {
+        val ownerId = UUID.randomUUID()
+        val medKitId = UUID.randomUUID()
+        val drugId = UUID.randomUUID()
+        insertUser(ownerId, "drug-read-$planCount")
+        entityManager.createNativeQuery("INSERT INTO med_kits (id) VALUES ('$medKitId')").executeUpdate()
+        entityManager.createNativeQuery(
+            "INSERT INTO user_med_kits (user_id, med_kit_id) VALUES ('$ownerId', '$medKitId')"
+        ).executeUpdate()
+        entityManager.createNativeQuery(
+            """
+            INSERT INTO user_drugs (id, name, quantity, quantity_unit, med_kit_id)
+            VALUES ('$drugId', 'Read fixture', 1000, 'таб', '$medKitId')
+            """
+        ).executeUpdate()
+        repeat(planCount) {
+            val planUserId = UUID.randomUUID()
+            insertUser(planUserId, "drug-read-plan-${UUID.randomUUID()}")
+            entityManager.createNativeQuery(
+                "INSERT INTO user_med_kits (user_id, med_kit_id) VALUES ('$planUserId', '$medKitId')"
+            ).executeUpdate()
+            entityManager.createNativeQuery(
+                "INSERT INTO usings (user_id, drug_id, planned_amount) VALUES ('$planUserId', '$drugId', 1)"
+            ).executeUpdate()
+        }
+        return ownerId to drugId
+    }
+
+    @Transactional
+    fun createDrugCommandFixture(planCount: Int): DrugCommandFixture {
+        val ownerId = UUID.randomUUID()
+        val medKitId = UUID.randomUUID()
+        val drugId = UUID.randomUUID()
+        insertUser(ownerId, "drug-command-${UUID.randomUUID()}")
+        entityManager.createNativeQuery("INSERT INTO med_kits (id) VALUES ('$medKitId')").executeUpdate()
+        entityManager.createNativeQuery(
+            "INSERT INTO user_med_kits (user_id, med_kit_id) VALUES ('$ownerId', '$medKitId')"
+        ).executeUpdate()
+        entityManager.createNativeQuery(
+            """
+            INSERT INTO user_drugs (id, name, quantity, quantity_unit, med_kit_id)
+            VALUES ('$drugId', 'Command fixture', ${maxOf(planCount, 1) * 20}, 'таб', '$medKitId')
+            """
+        ).executeUpdate()
+        repeat(planCount) {
+            val planUserId = UUID.randomUUID()
+            insertUser(planUserId, "drug-command-plan-${UUID.randomUUID()}")
+            entityManager.createNativeQuery(
+                "INSERT INTO user_med_kits (user_id, med_kit_id) VALUES ('$planUserId', '$medKitId')"
+            ).executeUpdate()
+            entityManager.createNativeQuery(
+                "INSERT INTO usings (user_id, drug_id, planned_amount) VALUES ('$planUserId', '$drugId', 10)"
+            ).executeUpdate()
+        }
+        return DrugCommandFixture(ownerId, drugId, maxOf(planCount, 1) * 20)
+    }
+
+    private fun insertUser(userId: UUID, suffix: String) {
+        entityManager.createNativeQuery(
+            "INSERT INTO users (id, hashed_key) VALUES ('$userId', '{noop}scale-$suffix')"
+        ).executeUpdate()
     }
 
     private fun single(sql: String): UUID =
@@ -144,3 +275,5 @@ class QueryPlanFixture(private val entityManager: EntityManager) {
         const val QUANTITY_UNITS = 11
     }
 }
+
+data class DrugCommandFixture(val ownerId: UUID, val drugId: UUID, val stock: Int)
