@@ -21,3 +21,5 @@ class TreatmentPlanAlreadyExists(userId: UUID, drugId: UUID) :
 class PlannedAmountExceedsStock : DomainException("Planned amount exceeds stock")
 
 class IntakeConflict : DomainException("Intake id was already used with another payload")
+
+class ConcurrentAggregateChange : DomainException("Aggregate changed while locks were being acquired")
