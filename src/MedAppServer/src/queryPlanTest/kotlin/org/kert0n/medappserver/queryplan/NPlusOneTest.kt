@@ -2,6 +2,7 @@ package org.kert0n.medappserver.queryplan
 
 import jakarta.persistence.EntityManager
 import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import org.kert0n.medappserver.application.query.CatalogueQueryService
@@ -15,6 +16,8 @@ import org.springframework.context.annotation.Import
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.support.TransactionTemplate
 import java.math.BigDecimal
+import java.nio.file.Path
+import tools.jackson.databind.ObjectMapper
 import kotlin.test.assertEquals
 
 /** Scaling gates. ORM is measured by Hibernate; direct JDBC at the DataSource boundary. */
@@ -31,14 +34,20 @@ class NPlusOneTest {
     @Autowired private lateinit var medKits: MedKitQueryService
     @Autowired private lateinit var catalogue: CatalogueQueryService
     @Autowired private lateinit var drugCommands: DrugOrchestrator
+    @Autowired private lateinit var objectMapper: ObjectMapper
 
     private lateinit var transaction: TransactionTemplate
+    private lateinit var report: NPlusOneReport
 
     @BeforeAll
     fun prepare() {
         transaction = TransactionTemplate(transactionManager)
         fixture.seed()
+        report = NPlusOneReport(objectMapper)
     }
+
+    @AfterAll
+    fun writeReport() = report.write(Path.of("build/reports/query-plans"))
 
     private fun assertJdbcShape(
         name: String,
@@ -61,6 +70,16 @@ class NPlusOneTest {
             assertEquals(0, orm.statistics.entityFetches, "$name must not materialize JPA entities")
             assertEquals(0, orm.statistics.collectionFetches, "$name must not initialize collections")
             assertEquals(expectedStatements(size), orm.result, "$name, fixture size $size")
+            report.record(
+                NPlusOneMeasurement(
+                    owner = name.substringBeforeLast('.'),
+                    method = name.substringAfterLast('.'),
+                    size = size,
+                    statistics = orm.statistics,
+                    jdbcStatements = orm.result,
+                    complexity = "Θ(1)"
+                )
+            )
             orm.result
         }
         assertEquals(
@@ -114,18 +133,32 @@ class NPlusOneTest {
         measurements.forEach { (limit, statistics) ->
             assertEquals(3, statistics.preparedStatements, "catalogue limit $limit: $statistics")
             assertEquals(0, statistics.collectionFetches, "catalogue limit $limit: $statistics")
+            report.record(
+                NPlusOneMeasurement(
+                    "CatalogueQueryService", "search", limit, statistics, 0, "Θ(1)"
+                )
+            )
         }
         assertEquals(1, measurements.values.map { it.queryExecutions }.distinct().size)
         assertEquals(1, measurements.values.map { it.entityFetches }.distinct().size)
     }
 
-    private fun measureJdbcWrite(scenario: () -> Unit): Int {
+    private fun measureJdbcWrite(
+        owner: String,
+        method: String,
+        size: Int,
+        complexity: String = "Θ(1)",
+        scenario: () -> Unit
+    ): Int {
         val measurement = hibernate.measure {
             RecordingDataSource.capture(scenario).size
         }
         assertEquals(0, measurement.statistics.preparedStatements)
         assertEquals(0, measurement.statistics.entityFetches)
         assertEquals(0, measurement.statistics.collectionFetches)
+        report.record(
+            NPlusOneMeasurement(owner, method, size, measurement.statistics, measurement.result, complexity)
+        )
         return measurement.result
     }
 
@@ -133,13 +166,15 @@ class NPlusOneTest {
     fun `cascade writes do not grow with treatment plan count`() {
         val deleteCounts = listOf(0, 1, 100).associateWith { planCount ->
             val command = fixture.createDrugCommandFixture(planCount)
-            measureJdbcWrite { drugCommands.delete(command.ownerId, command.drugId) }
+            measureJdbcWrite("DrugOrchestrator", "delete", planCount) {
+                drugCommands.delete(command.ownerId, command.drugId)
+            }
         }
         assertEquals(setOf(2), deleteCounts.values.toSet(), "delete SQL grew: $deleteCounts")
 
         val exhaustedCounts = listOf(0, 1, 100).associateWith { planCount ->
             val command = fixture.createDrugCommandFixture(planCount)
-            measureJdbcWrite {
+            measureJdbcWrite("DrugOrchestrator", "consume.exhausted", planCount) {
                 drugCommands.consume(command.ownerId, command.drugId, BigDecimal(command.stock))
             }
         }
@@ -150,7 +185,7 @@ class NPlusOneTest {
     fun `reconciliation adds only one update per changed plan`() {
         val statements = listOf(2, 20).associateWith { planCount ->
             val command = fixture.createDrugCommandFixture(planCount)
-            measureJdbcWrite {
+            measureJdbcWrite("DrugOrchestrator", "consume.reconciliation", planCount, "Θ(n) plan UPDATE") {
                 val remaining = planCount * 5
                 drugCommands.consume(
                     command.ownerId,
