@@ -11,6 +11,7 @@ import org.kert0n.medappserver.services.models.VidalDrugService
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.persistence.repository.DrugAggregateRepository
+import org.kert0n.medappserver.application.query.MedKitQueryService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
@@ -37,6 +38,7 @@ class QueryPlanTest {
     @Autowired private lateinit var vidalDrugService: VidalDrugService
     @Autowired private lateinit var drugRepository: DrugRepository
     @Autowired private lateinit var drugAggregateRepository: DrugAggregateRepository
+    @Autowired private lateinit var medKitQueryService: MedKitQueryService
 
     @Autowired private lateinit var container: PostgreSQLContainer
 
@@ -166,5 +168,27 @@ class QueryPlanTest {
 
         assertNoSeqScanOn("user_drugs", plans)
         assertTrue(plans.any { "LockRows" in it.second.nodeTypes })
+    }
+
+    @Test
+    fun `содержимое аптечки читает доступ препараты и планы по индексам`() {
+        val plans = plansOf("medkit content", forceIndexes = true) {
+            medKitQueryService.getContent(fixture.ownerId, fixture.medKitId)
+        }
+
+        assertNoSeqScanOn("user_med_kits", plans)
+        assertNoSeqScanOn("user_drugs", plans)
+        assertNoSeqScanOn("usings", plans)
+    }
+
+    @Test
+    fun `snapshot читает все аптечки двумя индексируемыми формами запросов`() {
+        val plans = plansOf("user snapshot", forceIndexes = true) {
+            medKitQueryService.getUserSnapshot(fixture.ownerId)
+        }
+
+        assertNoSeqScanOn("user_med_kits", plans)
+        assertNoSeqScanOn("user_drugs", plans)
+        assertNoSeqScanOn("usings", plans)
     }
 }

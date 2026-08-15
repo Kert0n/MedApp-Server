@@ -33,7 +33,8 @@ class SecurityService(
 
     private val secureRandom = SecureRandom()
 
-    fun generateKey(size: Int) = Base64.encode(ByteArray(size).also { secureRandom.nextBytes(it) })
+    fun generateKey(size: Int): String = java.util.Base64.getUrlEncoder().withoutPadding()
+        .encodeToString(ByteArray(size).also { secureRandom.nextBytes(it) })
     fun check(raw: String, hashedPassword: String): Boolean = passwordEncoder.matches(raw, hashedPassword)
     fun hashPassword(rawPassword: String): String = passwordEncoder.encode(rawPassword)!!
     fun hashToken(token: String): String =
