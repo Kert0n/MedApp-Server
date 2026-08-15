@@ -6,6 +6,8 @@ sealed class DomainException(message: String) : RuntimeException(message)
 
 class DrugNotFound(drugId: UUID) : DomainException("Drug $drugId was not found")
 
+class DrugTemplateNotFound(templateId: UUID) : DomainException("Drug template $templateId was not found")
+
 class MedKitNotFound(medKitId: UUID) : DomainException("MedKit $medKitId was not found")
 
 class UserNotFound(userId: UUID) : DomainException("User $userId was not found")

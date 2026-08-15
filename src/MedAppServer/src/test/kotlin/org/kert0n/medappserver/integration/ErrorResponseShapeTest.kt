@@ -3,7 +3,7 @@ package org.kert0n.medappserver.integration
 import org.kert0n.medappserver.testutil.qty
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.kert0n.medappserver.controller.UsingCreateDTO
+import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
 import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.MedKit
 import org.kert0n.medappserver.db.model.User
@@ -70,7 +70,7 @@ class ErrorResponseShapeTest {
         val missingDrugId = UUID.randomUUID()
 
         val body = mockMvc.perform(
-            get("/drug/$missingDrugId").with(jwt().jwt { it.subject(userId.toString()) })
+            get("/v1/drugs/$missingDrugId").with(jwt().jwt { it.subject(userId.toString()) })
         )
             .andExpect(status().isNotFound)
             .andExpect(jsonPath("$.detail").value("Requested resource does not exist"))
@@ -99,10 +99,10 @@ class ErrorResponseShapeTest {
         )
 
         val body = mockMvc.perform(
-            post("/using")
+            post("/v1/treatment-plans")
                 .with(jwt().jwt { it.subject(user.id.toString()) })
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(UsingCreateDTO(drug.id, qty(500.0))))
+                .content(objectMapper.writeValueAsString(TreatmentPlanCreateRequest(drug.id, qty(500.0))))
         )
             .andExpect(status().isBadRequest)
             .andReturn().response.contentAsString
@@ -119,7 +119,7 @@ class ErrorResponseShapeTest {
         val invalid = """{"drugId":"${UUID.randomUUID()}","plannedAmount":-42.5}"""
 
         val body = mockMvc.perform(
-            post("/using")
+            post("/v1/treatment-plans")
                 .with(jwt().jwt { it.subject(userId.toString()) })
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(invalid)

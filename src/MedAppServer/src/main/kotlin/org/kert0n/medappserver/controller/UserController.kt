@@ -1,61 +1,23 @@
 package org.kert0n.medappserver.controller
 
 import io.swagger.v3.oas.annotations.Operation
-import io.swagger.v3.oas.annotations.media.Content
-import io.swagger.v3.oas.annotations.media.Schema
-import io.swagger.v3.oas.annotations.responses.ApiResponse
-import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
-import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.models.userId
-import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
-import org.slf4j.LoggerFactory
+import org.kert0n.medappserver.api.UserSnapshotDTO
+import org.kert0n.medappserver.api.toDto
+import org.kert0n.medappserver.application.query.MedKitQueryService
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
-import java.util.*
 
 @RestController
-@RequestMapping("/user")
-@Tag(name = "User Data", description = "Endpoints for user profile and synchronization data")
+@RequestMapping("/v1/users")
+@Tag(name = "Users", description = "Current-user synchronization data")
 class UserController(
-    private val medKitService: MedKitService,
-    private val medKitDrugServices: MedKitDrugServices
+    private val queries: MedKitQueryService
 ) {
-
-    private val logger = LoggerFactory.getLogger(UserController::class.java)
-
-    @GetMapping
-    @Operation(
-        summary = "Get user snapshot",
-        description = "Returns user identifier with all accessible medkits and drugs for sync."
-    )
-    @ApiResponses(
-        value = [
-            ApiResponse(
-                responseCode = "200",
-                description = "User snapshot retrieved",
-                content = [Content(schema = Schema(implementation = UserDto::class))]
-            ),
-            ApiResponse(responseCode = "401", description = "Unauthorized", content = [Content()])
-        ]
-    )
-    fun getAllDataForUser(authentication: Authentication): UserDto {
-        logger.debug("GET /user by user {}", authentication.userId)
-        val medKitDTOs =
-            medKitService.findAllByUser(authentication.userId).map { medKitDrugServices.toMedKitDTO(it) }.toSet()
-        return UserDto(
-            id = authentication.userId,
-            medKits = medKitDTOs
-        )
-    }
+    @GetMapping("/me")
+    @Operation(summary = "Get the current user snapshot")
+    fun me(authentication: Authentication): UserSnapshotDTO =
+        queries.getUserSnapshot(authentication.userId).toDto()
 }
-
-@Schema(description = "Full user snapshot")
-data class UserDto(
-    @Schema(description = "User identifier")
-    val id: UUID,
-    @Schema(description = "All medkits available to the user")
-    val medKits: Set<MedKitDTO>
-)

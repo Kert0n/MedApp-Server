@@ -78,7 +78,7 @@ class PublicEndpointScopeTest {
         whenever(userService.loadUserByUsername(userId.toString())).thenReturn(user)
 
         mockMvc.perform(
-            get("/auth/login").with(httpBasic(userId.toString(), "password"))
+            get("/v1/auth/login").with(httpBasic(userId.toString(), "password"))
         ).andExpect(status().isOk)
     }
 

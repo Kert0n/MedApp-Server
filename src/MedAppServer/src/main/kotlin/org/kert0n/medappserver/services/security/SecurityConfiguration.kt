@@ -64,7 +64,7 @@ class SecurityConfiguration(
         securityService: SecurityService
     ): SecurityFilterChain {
         return httpSecurity
-            .securityMatcher("/auth/login")
+            .securityMatcher("/v1/auth/login")
             .csrf { csrf -> csrf.disable() }
             .addFilterBefore(
                 LoginThrottleFilter(securityService),
@@ -89,9 +89,9 @@ class SecurityConfiguration(
             .authorizeHttpRequests { auth ->
                 auth
                     .requestMatchers(
-                        // Registration only. /auth/login is handled by the Basic chain
+                        // Registration only. /v1/auth/login is handled by the Basic chain
                         // above and must not be open here.
-                        "/auth/register",
+                        "/v1/auth/register",
                         "/swagger",
                         "/swagger-ui/**",
                         "/v3/api-docs/**",

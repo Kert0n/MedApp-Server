@@ -3,6 +3,7 @@ package org.kert0n.medappserver.controller
 import org.kert0n.medappserver.domain.error.ConcurrentAggregateChange
 import org.kert0n.medappserver.domain.error.DomainException
 import org.kert0n.medappserver.domain.error.DrugNotFound
+import org.kert0n.medappserver.domain.error.DrugTemplateNotFound
 import org.kert0n.medappserver.domain.error.InsufficientStock
 import org.kert0n.medappserver.domain.error.IntakeConflict
 import org.kert0n.medappserver.domain.error.InvitationNotFound
@@ -34,7 +35,7 @@ class ApiExceptionHandler {
     @ExceptionHandler(DomainException::class)
     fun handleDomain(exception: DomainException): ProblemDetail = problem(
         when (exception) {
-            is DrugNotFound, is MedKitNotFound, is TreatmentPlanNotFound,
+            is DrugNotFound, is DrugTemplateNotFound, is MedKitNotFound, is TreatmentPlanNotFound,
             is UserNotFound, is InvitationNotFound -> HttpStatus.NOT_FOUND
             is TreatmentPlanAlreadyExists, is IntakeConflict, is ConcurrentAggregateChange -> HttpStatus.CONFLICT
             is InvalidQuantity, is InsufficientStock, is PlannedAmountExceedsStock,
