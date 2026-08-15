@@ -89,3 +89,7 @@ tasks.withType<Test> {
     //     ./gradlew test --tests "*QuantityArithmeticBenchmarkTest*" -DrunBenchmark=true
     systemProperty("runBenchmark", System.getProperty("runBenchmark") ?: "false")
 }
+
+tasks.named("queryPlanTest") {
+    mustRunAfter(tasks.named("test"))
+}

@@ -70,7 +70,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
       - name: Создать ключи подписи JWT
         run: sh src/main/resources/certs/gen.sh
-      - name: Планы запросов
+      - name: Планы запросов и N+1
         run: ./gradlew queryPlanTest --no-daemon
       - name: Отчёты планов запросов
         if: always()
@@ -80,4 +80,8 @@ jobs:
           path: |
             src/MedAppServer/build/reports/tests/queryPlanTest
             src/MedAppServer/build/test-results/queryPlanTest
+            src/MedAppServer/build/reports/query-plans/database-query-report.md
+            src/MedAppServer/build/reports/query-plans/database-query-report.json
+            src/MedAppServer/build/reports/query-plans/n-plus-one-report.md
+            src/MedAppServer/build/reports/query-plans/n-plus-one-report.json
           retention-days: 7

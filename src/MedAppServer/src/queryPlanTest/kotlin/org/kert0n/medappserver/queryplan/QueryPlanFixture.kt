@@ -25,6 +25,7 @@ class QueryPlanFixture(private val entityManager: EntityManager) {
     lateinit var medKitId: UUID
     lateinit var drugId: UUID
     lateinit var catalogueName: String
+    lateinit var catalogueId: UUID
 
     lateinit var snapshotUsers: Map<Int, UUID>
     lateinit var planUsers: Map<Int, UUID>
@@ -131,6 +132,7 @@ class QueryPlanFixture(private val entityManager: EntityManager) {
         catalogueName = entityManager
             .createNativeQuery("SELECT name FROM parsed_drugs OFFSET 500 LIMIT 1")
             .singleResult.toString()
+        catalogueId = single("SELECT id FROM parsed_drugs ORDER BY id LIMIT 1")
 
         // Владелец — тот, кто состоит в наибольшем числе аптечек. Со случайным
         // пользователем сценарий выдачи мог бы затронуть одну аптечку, и рост числа
@@ -232,11 +234,17 @@ class QueryPlanFixture(private val entityManager: EntityManager) {
     fun createDrugCommandFixture(planCount: Int): DrugCommandFixture {
         val ownerId = UUID.randomUUID()
         val medKitId = UUID.randomUUID()
+        val targetMedKitId = UUID.randomUUID()
         val drugId = UUID.randomUUID()
         insertUser(ownerId, "drug-command-${UUID.randomUUID()}")
-        entityManager.createNativeQuery("INSERT INTO med_kits (id) VALUES ('$medKitId')").executeUpdate()
         entityManager.createNativeQuery(
-            "INSERT INTO user_med_kits (user_id, med_kit_id) VALUES ('$ownerId', '$medKitId')"
+            "INSERT INTO med_kits (id) VALUES ('$medKitId'), ('$targetMedKitId')"
+        ).executeUpdate()
+        entityManager.createNativeQuery(
+            """
+            INSERT INTO user_med_kits (user_id, med_kit_id)
+            VALUES ('$ownerId', '$medKitId'), ('$ownerId', '$targetMedKitId')
+            """
         ).executeUpdate()
         entityManager.createNativeQuery(
             """
@@ -254,7 +262,76 @@ class QueryPlanFixture(private val entityManager: EntityManager) {
                 "INSERT INTO usings (user_id, drug_id, planned_amount) VALUES ('$planUserId', '$drugId', 10)"
             ).executeUpdate()
         }
-        return DrugCommandFixture(ownerId, drugId, maxOf(planCount, 1) * 20)
+        return DrugCommandFixture(ownerId, medKitId, targetMedKitId, drugId, maxOf(planCount, 1) * 20)
+    }
+
+    @Transactional
+    fun createIntakeFixture(stock: Int = 10, planned: Int = 5): DrugCommandFixture {
+        val ownerId = UUID.randomUUID()
+        val medKitId = UUID.randomUUID()
+        val drugId = UUID.randomUUID()
+        insertUser(ownerId, "intake-${UUID.randomUUID()}")
+        entityManager.createNativeQuery("INSERT INTO med_kits (id) VALUES ('$medKitId')").executeUpdate()
+        entityManager.createNativeQuery(
+            "INSERT INTO user_med_kits (user_id, med_kit_id) VALUES ('$ownerId', '$medKitId')"
+        ).executeUpdate()
+        entityManager.createNativeQuery(
+            """
+            INSERT INTO user_drugs (id, name, quantity, quantity_unit, med_kit_id)
+            VALUES ('$drugId', 'Intake fixture', $stock, 'таб', '$medKitId')
+            """
+        ).executeUpdate()
+        entityManager.createNativeQuery(
+            "INSERT INTO usings (user_id, drug_id, planned_amount) VALUES ('$ownerId', '$drugId', $planned)"
+        ).executeUpdate()
+        return DrugCommandFixture(ownerId, medKitId, medKitId, drugId, stock)
+    }
+
+    @Transactional
+    fun createUserFixture(): UUID = UUID.randomUUID().also { insertUser(it, "user-${UUID.randomUUID()}") }
+
+    @Transactional
+    fun createMedKitCommandFixture(
+        drugCount: Int,
+        planCount: Int,
+        additionalMember: Boolean
+    ): MedKitCommandFixture {
+        require(planCount <= drugCount)
+        val ownerId = createUserFixture()
+        val medKitId = UUID.randomUUID()
+        entityManager.createNativeQuery("INSERT INTO med_kits (id) VALUES ('$medKitId')").executeUpdate()
+        entityManager.createNativeQuery(
+            "INSERT INTO user_med_kits (user_id, med_kit_id) VALUES ('$ownerId', '$medKitId')"
+        ).executeUpdate()
+        if (additionalMember) {
+            val memberId = createUserFixture()
+            entityManager.createNativeQuery(
+                "INSERT INTO user_med_kits (user_id, med_kit_id) VALUES ('$memberId', '$medKitId')"
+            ).executeUpdate()
+        }
+        repeat(drugCount) { index ->
+            val drugId = UUID.randomUUID()
+            entityManager.createNativeQuery(
+                """
+                INSERT INTO user_drugs (id, name, quantity, quantity_unit, med_kit_id)
+                VALUES ('$drugId', 'Lifecycle $index', 100, 'таб', '$medKitId')
+                """
+            ).executeUpdate()
+            if (index < planCount) {
+                entityManager.createNativeQuery(
+                    "INSERT INTO usings (user_id, drug_id, planned_amount) VALUES ('$ownerId', '$drugId', 10)"
+                ).executeUpdate()
+            }
+        }
+        return MedKitCommandFixture(ownerId, medKitId)
+    }
+
+    @Transactional
+    fun createTargetMedKit(ownerId: UUID): UUID = UUID.randomUUID().also { medKitId ->
+        entityManager.createNativeQuery("INSERT INTO med_kits (id) VALUES ('$medKitId')").executeUpdate()
+        entityManager.createNativeQuery(
+            "INSERT INTO user_med_kits (user_id, med_kit_id) VALUES ('$ownerId', '$medKitId')"
+        ).executeUpdate()
     }
 
     private fun insertUser(userId: UUID, suffix: String) {
@@ -276,4 +353,12 @@ class QueryPlanFixture(private val entityManager: EntityManager) {
     }
 }
 
-data class DrugCommandFixture(val ownerId: UUID, val drugId: UUID, val stock: Int)
+data class DrugCommandFixture(
+    val ownerId: UUID,
+    val medKitId: UUID,
+    val targetMedKitId: UUID,
+    val drugId: UUID,
+    val stock: Int
+)
+
+data class MedKitCommandFixture(val ownerId: UUID, val medKitId: UUID)
