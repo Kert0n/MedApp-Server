@@ -3,6 +3,9 @@ package org.kert0n.medappserver.db.model
 import jakarta.persistence.*
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
+import org.kert0n.medappserver.domain.quantity.QUANTITY_PRECISION
+import org.kert0n.medappserver.domain.quantity.QUANTITY_SCALE
+import org.kert0n.medappserver.domain.quantity.toQuantityScale
 import org.hibernate.annotations.Formula
 import java.math.BigDecimal
 import java.util.*
@@ -55,11 +58,19 @@ class Drug(
 
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "med_kit_id", nullable = false)
+    @JoinColumn(
+        name = "med_kit_id",
+        nullable = false,
+        foreignKey = ForeignKey(
+            name = "user_drugs_med_kit_fkey",
+            foreignKeyDefinition =
+                "FOREIGN KEY (med_kit_id) REFERENCES med_kits (id) ON DELETE CASCADE"
+        )
+    )
     var medKit: MedKit,
 
     @OneToMany(mappedBy = "drug", fetch = FetchType.LAZY, cascade = [CascadeType.ALL], orphanRemoval = true)
-    var usings: MutableSet<Using> = mutableSetOf()
+    var usings: MutableSet<TreatmentPlan> = mutableSetOf()
 
 ) {
 
@@ -76,7 +87,7 @@ class Drug(
      * `numeric(19,6)` значение уже нужного вида.
      */
     @NotNull
-    @Column(name = "quantity", nullable = false, precision = 19, scale = QUANTITY_SCALE)
+    @Column(name = "quantity", nullable = false, precision = QUANTITY_PRECISION, scale = QUANTITY_SCALE)
     var quantity: BigDecimal = quantity.toQuantityScale()
         set(value) {
             field = value.toQuantityScale()
@@ -108,4 +119,3 @@ class Drug(
         return id.hashCode()
     }
 }
-

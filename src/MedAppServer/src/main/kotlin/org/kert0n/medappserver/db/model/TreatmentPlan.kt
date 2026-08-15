@@ -2,6 +2,9 @@ package org.kert0n.medappserver.db.model
 
 import jakarta.persistence.*
 import jakarta.validation.constraints.NotNull
+import org.kert0n.medappserver.domain.quantity.QUANTITY_PRECISION
+import org.kert0n.medappserver.domain.quantity.QUANTITY_SCALE
+import org.kert0n.medappserver.domain.quantity.toQuantityScale
 import java.io.Serializable
 import java.math.BigDecimal
 import java.util.*
@@ -15,31 +18,36 @@ import java.util.*
         Index(name = "ix_usings_drug_id", columnList = "drug_id")
     ]
 )
-class Using(
+class TreatmentPlan(
 
     @EmbeddedId
-    var usingKey: UsingKey = UsingKey(),
+    var key: TreatmentPlanKey = TreatmentPlanKey(),
 
-    @ManyToOne(fetch = FetchType.EAGER)
+    @ManyToOne(fetch = FetchType.LAZY)
     @MapsId("userId")
-    @JoinColumn(name = "user_id")
+    @JoinColumn(
+        name = "user_id",
+        foreignKey = ForeignKey(name = "usings_user_fkey")
+    )
     var user: User,
 
-    @ManyToOne(fetch = FetchType.EAGER)
+    @ManyToOne(fetch = FetchType.LAZY)
     @MapsId("drugId")
-    @JoinColumn(name = "drug_id")
+    @JoinColumn(
+        name = "drug_id",
+        foreignKey = ForeignKey(
+            name = "usings_drug_fkey",
+            foreignKeyDefinition =
+                "FOREIGN KEY (drug_id) REFERENCES user_drugs (id) ON DELETE CASCADE"
+        )
+    )
     var drug: Drug,
 
     plannedAmount: BigDecimal
 ) {
 
-    /**
-     * Запланированное количество. Нормализуется до [QUANTITY_SCALE] в сеттере — по тем же
-     * причинам, что и [Drug.quantity]: приведение в одном месте вместо повтора на каждой
-     * арифметической строке в сервисах.
-     */
     @NotNull
-    @Column(name = "planned_amount", nullable = false, precision = 19, scale = QUANTITY_SCALE)
+    @Column(name = "planned_amount", nullable = false, precision = QUANTITY_PRECISION, scale = QUANTITY_SCALE)
     var plannedAmount: BigDecimal = plannedAmount.toQuantityScale()
         set(value) {
             field = value.toQuantityScale()
@@ -49,19 +57,19 @@ class Using(
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
 
-        other as Using
+        other as TreatmentPlan
 
-        return usingKey == other.usingKey
+        return key == other.key
     }
 
     override fun hashCode(): Int {
-        return usingKey.hashCode()
+        return key.hashCode()
     }
 }
 
 @Suppress("JpaDataSourceORMInspection")
 @Embeddable
-class UsingKey(
+class TreatmentPlanKey(
     @Column(name = "user_id")
     var userId: UUID = UUID(0, 0),
     @Column(name = "drug_id")
@@ -71,7 +79,7 @@ class UsingKey(
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
 
-        other as UsingKey
+        other as TreatmentPlanKey
 
         return userId == other.userId && drugId == other.drugId
     }
@@ -80,4 +88,3 @@ class UsingKey(
         return Objects.hash(userId, drugId)
     }
 }
-

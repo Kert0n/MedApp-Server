@@ -24,11 +24,20 @@ class User(
     @JoinTable(
         name = "user_med_kits",
         joinColumns = [JoinColumn(name = "user_id")],
-        inverseJoinColumns = [JoinColumn(name = "med_kit_id")]
+        inverseJoinColumns = [
+            JoinColumn(
+                name = "med_kit_id",
+                foreignKey = ForeignKey(
+                    name = "user_med_kits_med_kit_fkey",
+                    foreignKeyDefinition =
+                        "FOREIGN KEY (med_kit_id) REFERENCES med_kits (id) ON DELETE CASCADE"
+                )
+            )
+        ]
     )
     var medKits: MutableSet<MedKit> = mutableSetOf(),
     @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
-    var usings: MutableSet<Using> = mutableSetOf()
+    var usings: MutableSet<TreatmentPlan> = mutableSetOf()
 ) : UserDetails {
 
 
@@ -58,4 +67,3 @@ class User(
     }
 
 }
-

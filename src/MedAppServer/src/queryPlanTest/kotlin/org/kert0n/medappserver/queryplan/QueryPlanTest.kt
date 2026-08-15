@@ -10,6 +10,7 @@ import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.services.models.VidalDrugService
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
 import org.kert0n.medappserver.db.repository.DrugRepository
+import org.kert0n.medappserver.persistence.repository.DrugAggregateRepository
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
@@ -35,6 +36,7 @@ class QueryPlanTest {
     @Autowired private lateinit var medKitDrugServices: MedKitDrugServices
     @Autowired private lateinit var vidalDrugService: VidalDrugService
     @Autowired private lateinit var drugRepository: DrugRepository
+    @Autowired private lateinit var drugAggregateRepository: DrugAggregateRepository
 
     @Autowired private lateinit var container: PostgreSQLContainer
 
@@ -143,5 +145,26 @@ class QueryPlanTest {
         }
         assertNoSeqScanOn("user_drugs", plans)
         assertNoSeqScanOn("usings", plans)
+    }
+
+    @Test
+    fun `aggregate repository блокирует Drug и затем читает планы по индексам`() {
+        val plans = plansOf("aggregate lock and plans") {
+            drugAggregateRepository.lockAggregate(fixture.ownerId, fixture.drugId)
+        }
+
+        assertNoSeqScanOn("user_drugs", plans)
+        assertNoSeqScanOn("usings", plans)
+        assertTrue(plans.any { "LockRows" in it.second.nodeTypes })
+    }
+
+    @Test
+    fun `bulk lock препаратов имеет индексируемый предикат`() {
+        val plans = plansOf("ordered medkit drug lock") {
+            drugAggregateRepository.lockAllByMedKitIds(listOf(fixture.medKitId))
+        }
+
+        assertNoSeqScanOn("user_drugs", plans)
+        assertTrue(plans.any { "LockRows" in it.second.nodeTypes })
     }
 }

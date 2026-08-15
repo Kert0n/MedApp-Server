@@ -3,7 +3,7 @@ package org.kert0n.medappserver.services.orchestrators
 import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.QUANTITY_ROUNDING
 import org.kert0n.medappserver.db.model.QUANTITY_SCALE
-import org.kert0n.medappserver.db.model.Using
+import org.kert0n.medappserver.db.model.TreatmentPlan
 import org.kert0n.medappserver.db.model.isZero
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.UsingRepository
@@ -35,7 +35,7 @@ class QuantityReductionService(
             //
             // На Double это не проявлялось: quantity == 0.0 после дробных списаний было
             // недостижимо, поэтому ветка удаления практически не исполнялась.
-            val plans = usingRepository.findAllByUsingKeyDrugId(drug.id)
+            val plans = usingRepository.findAllByKeyDrugId(drug.id)
             if (plans.isNotEmpty()) {
                 usingRepository.deleteAll(plans)
                 // Явный flush: порядок удалений между разными сущностями иначе определяется
@@ -73,7 +73,7 @@ class QuantityReductionService(
      * значениях выбор детерминирован по userId, иначе результат зависел бы от порядка выборки.
      */
     private fun handleUsingReduction(drugId: UUID, factor: BigDecimal, targetTotal: BigDecimal) {
-        val usings = usingRepository.findAllByUsingKeyDrugId(drugId)
+        val usings = usingRepository.findAllByKeyDrugId(drugId)
         if (usings.isEmpty()) return
 
         // Округление до scale базы делает сеттер plannedAmount, поэтому произведение здесь
@@ -84,7 +84,7 @@ class QuantityReductionService(
         val residual = targetTotal - rounded
         if (!residual.isZero()) {
             val adjusted = usings.maxWith(
-                compareBy<Using>({ it.plannedAmount }, { it.usingKey.userId })
+                compareBy<TreatmentPlan>({ it.plannedAmount }, { it.key.userId })
             )
             adjusted.plannedAmount = adjusted.plannedAmount + residual
         }

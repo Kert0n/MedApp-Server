@@ -3,9 +3,9 @@ package org.kert0n.medappserver.services.models
 import org.kert0n.medappserver.controller.UsingCreateDTO
 import org.kert0n.medappserver.controller.UsingDTO
 import org.kert0n.medappserver.controller.UsingUpdateDTO
-import org.kert0n.medappserver.db.model.Using
+import org.kert0n.medappserver.db.model.TreatmentPlan
 import org.kert0n.medappserver.db.model.isZero
-import org.kert0n.medappserver.db.model.UsingKey
+import org.kert0n.medappserver.db.model.TreatmentPlanKey
 import org.kert0n.medappserver.db.repository.UsingRepository
 import org.kert0n.medappserver.services.orchestrators.QuantityReductionService
 import org.slf4j.Logger
@@ -28,9 +28,9 @@ class UsingService(
 
 
     @Transactional(readOnly = true)
-    fun findAllByUser(userId: UUID): List<Using> {
+    fun findAllByUser(userId: UUID): List<TreatmentPlan> {
         logger.debug("Finding all usings for user: {}", userId)
-        return usingRepository.findAllByUsingKeyUserId(userId)
+        return usingRepository.findAllByKeyUserId(userId)
     }
 
     @Transactional
@@ -40,20 +40,20 @@ class UsingService(
     }
 
     @Transactional(readOnly = true)
-    fun findAllByDrug(drugId: UUID): List<Using> {
+    fun findAllByDrug(drugId: UUID): List<TreatmentPlan> {
         logger.debug("Finding all usings for drug: {}", drugId)
-        return usingRepository.findAllByUsingKeyDrugId(drugId)
+        return usingRepository.findAllByKeyDrugId(drugId)
     }
 
     @Transactional(readOnly = true)
-    fun findByUserAndDrug(userId: UUID, drugId: UUID): Using {
+    fun findByUserAndDrug(userId: UUID, drugId: UUID): TreatmentPlan {
         logger.debug("Finding using for user {} and drug {}", userId, drugId)
         return usingRepository.findByUserIdAndDrugId(userId, drugId)
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "There is no such using")
     }
 
     @Transactional
-    fun createTreatmentPlan(userId: UUID, createDTO: UsingCreateDTO): Using {
+    fun createTreatmentPlan(userId: UUID, createDTO: UsingCreateDTO): TreatmentPlan {
         logger.debug("Creating treatment for user {} and drug {}", userId, createDTO.drugId)
 
 
@@ -75,8 +75,8 @@ class UsingService(
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Insufficient quantity available")
         }
 
-        val using = Using(
-            usingKey = UsingKey(userId, createDTO.drugId),
+        val using = TreatmentPlan(
+            key = TreatmentPlanKey(userId, createDTO.drugId),
             user = user,
             drug = drug,
             plannedAmount = createDTO.plannedAmount
@@ -86,7 +86,7 @@ class UsingService(
     }
 
     @Transactional
-    fun updateTreatmentPlan(userId: UUID, drugId: UUID, updateDTO: UsingUpdateDTO): Using {
+    fun updateTreatmentPlan(userId: UUID, drugId: UUID, updateDTO: UsingUpdateDTO): TreatmentPlan {
         logger.debug("Updating using for user {} and drug {}", userId, drugId)
 
         // Lock the drug row to prevent concurrent plan modifications
@@ -107,7 +107,7 @@ class UsingService(
     }
 
     @Transactional
-    fun recordIntake(userId: UUID, drugId: UUID, quantityConsumed: BigDecimal): Using? {
+    fun recordIntake(userId: UUID, drugId: UUID, quantityConsumed: BigDecimal): TreatmentPlan? {
         logger.debug("Recording intake for user {} and drug {}, quantity: {}", userId, drugId, quantityConsumed)
         val using = findByUserAndDrug(userId, drugId)
         // Check if consumed quantity exceeds planned amount
@@ -147,7 +147,7 @@ class UsingService(
 
 
     @Transactional(readOnly = true)
-    fun toUsingDTO(using: Using): UsingDTO {
+    fun toUsingDTO(using: TreatmentPlan): UsingDTO {
 
         return UsingDTO(
             userId = using.user.id,
