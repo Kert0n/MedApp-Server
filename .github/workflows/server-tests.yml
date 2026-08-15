@@ -45,6 +45,10 @@ jobs:
       - name: Тесты
         run: ./gradlew test --no-daemon
 
+      # Тяжёлые PostgreSQL fixture и EXPLAIN выполняются отдельной задачей.
+      - name: Планы запросов
+        run: ./gradlew queryPlanTest --no-daemon
+
       - name: Отчёты тестов
         if: always()
         uses: actions/upload-artifact@v7
@@ -53,4 +57,6 @@ jobs:
           path: |
             src/MedAppServer/build/reports/tests/test
             src/MedAppServer/build/test-results/test
+            src/MedAppServer/build/reports/tests/queryPlanTest
+            src/MedAppServer/build/test-results/queryPlanTest
           retention-days: 7

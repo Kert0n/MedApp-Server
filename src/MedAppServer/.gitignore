@@ -182,7 +182,9 @@ replay_pid*
 
 src/MedAppServer/src/main/resources/certs
 /init-scripts/cleaned-init.sql
+/init-scripts/cleaned-init.sql.orig
 /src/main/resources/certs/private.pem
 /src/main/resources/certs/public.pem
 /init-scripts/dump.sql
 /src/main/resources/application-prod.properties
+/htmlReport/
