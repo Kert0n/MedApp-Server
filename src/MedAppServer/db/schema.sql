@@ -86,12 +86,11 @@ CREATE INDEX ix_usings_drug_id ON usings (drug_id);
 -- Справочник препаратов (данные из скраппера Vidal)
 -- ============================================================
 
--- IF NOT EXISTS у этих двух таблиц не для красоты: их создаёт и наполняет дамп
--- справочника (01-load-catalogue.sh), который применяется раньше. Без IF NOT EXISTS
--- второй по порядку скрипт падал бы с "relation already exists" — проверено в обоих
--- направлениях. Определения ниже совпадают с дамповыми, поэтому файл остаётся
--- самодостаточным и когда дампа нет.
-CREATE TABLE IF NOT EXISTS form_types
+-- Эти две таблицы и parsed_drugs создаются здесь и только здесь. Дамп справочника
+-- (02-load-catalogue.sh) применяется позже и несёт одни данные: раньше он приходил
+-- первым со своей схемой, из-за чего тут стояло IF NOT EXISTS, а определения приходилось
+-- держать совпадающими с дамповыми.
+CREATE TABLE form_types
 (
     id   uuid         NOT NULL,
     name varchar(100) NOT NULL,
@@ -100,7 +99,7 @@ CREATE TABLE IF NOT EXISTS form_types
     CONSTRAINT form_types_name_key UNIQUE (name)
 );
 
-CREATE TABLE IF NOT EXISTS quantity_units
+CREATE TABLE quantity_units
 (
     id   uuid        NOT NULL,
     name varchar(30) NOT NULL,
@@ -113,6 +112,8 @@ CREATE TABLE parsed_drugs
 (
     id               uuid         NOT NULL,
     name             varchar(300) NOT NULL,
+    -- Международное название латиницей; в справочнике заполнено не всюду.
+    name_lat         varchar(300),
     form_type_id     uuid,
     quantity         integer,
     quantity_unit_id uuid,
@@ -123,15 +124,62 @@ CREATE TABLE parsed_drugs
     description      text,
     otc              boolean      NOT NULL,
 
+    -- Склейка искомых полей для полнотекстового поиска, считает база.
+    --
+    -- Колонка, а не выражение в индексе, по двум причинам. Первая: индекс по выражению
+    -- Hibernate при старте не может сопоставить с колонкой и пишет HHH000475. Вторая:
+    -- выражение пришлось бы повторять в запросе посимвольно, иначе планировщик не сопоставит
+    -- его с индексом, — а такое совпадение ломается при первой же правке.
+    --
+    -- В сущности VidalDrug колонки нет намеренно: приложение её не читает и не пишет.
+    -- ddl-auto=validate лишние колонки игнорирует, а метаданные таблицы Hibernate берёт у
+    -- JDBC, поэтому для индекса ей достаточно существовать в базе.
+    --
+    -- Конфигурация 'simple', а не 'russian': названия препаратов и производителей — имена
+    -- собственные, стеммить их незачем, а предсказуемость дороже.
+    search_tsv       tsvector GENERATED ALWAYS AS (
+        to_tsvector('simple',
+                    coalesce(name, '') || ' ' || coalesce(name_lat, '') || ' ' ||
+                    coalesce(active_substance, '') || ' ' || coalesce(manufacturer, ''))
+        ) STORED,
+
     CONSTRAINT parsed_drugs_pkey PRIMARY KEY (id),
     CONSTRAINT parsed_drugs_form_type_fkey FOREIGN KEY (form_type_id) REFERENCES form_types (id),
     CONSTRAINT parsed_drugs_quantity_unit_fkey FOREIGN KEY (quantity_unit_id) REFERENCES quantity_units (id)
 );
 
--- Имена по своей таблице: ix_drugs_* сталкивались с индексами таблицы drugs из дампа
--- справочника, а имена индексов в Postgres уникальны на схему.
+-- Имена по своей таблице. Исторически они звались ix_drugs_* и сталкивались с индексами
+-- таблицы drugs из дампа — имена индексов в Postgres уникальны на схему, и init падал.
+-- Таблицы drugs больше нет, но имена оставлены: они называют ту таблицу, к которой
+-- относятся.
 CREATE INDEX ix_parsed_drugs_name ON parsed_drugs (name);
-CREATE INDEX ix_parsed_drugs_active_substance ON parsed_drugs (active_substance);
-CREATE INDEX ix_parsed_drugs_manufacturer ON parsed_drugs (manufacturer);
 CREATE INDEX ix_parsed_drugs_form_type_id ON parsed_drugs (form_type_id);
 CREATE INDEX ix_parsed_drugs_quantity_unit_id ON parsed_drugs (quantity_unit_id);
+
+-- Индексы поиска.
+--
+-- Btree по active_substance и manufacturer убраны: запрос ищет подстроку и похожесть, а
+-- btree не работает ни для `LIKE '%…%'`, ни для similarity(). Они только замедляли вставку.
+-- Btree по name оставлен — им пользуются ORDER BY name и точное сравнение.
+--
+-- По самим колонкам, без lower(). pg_trgm приводит вход к нижнему регистру сам:
+-- similarity('АСПИРИН','аспирин') равна 1, show_trgm('ASP') совпадает с show_trgm('asp').
+-- Поэтому обёртка lower() ничего не давала, зато делала индекс индексом по выражению — а по
+-- такому Hibernate при старте не может сопоставить колонку и пишет HHH000475 на каждый.
+-- Не возвращать «для надёжности»: надёжности она не добавляет, а шум в логе возвращает.
+--
+-- Триграммы отдельно по каждому полю, а не по склейке: similarity() делит на общее число
+-- триграмм, поэтому на конкатенации четырёх полей сходство размывается почти до нуля и
+-- поиск с опечаткой перестаёт срабатывать. Склейка годится только для полнотекстового
+-- поиска, где длина значения не влияет на попадание.
+--
+-- Тип индекса и opclass в JPA не выражаются, поэтому эти индексы живут только здесь;
+-- в @Table(indexes = ...) у VidalDrug стоит ссылка на этот файл.
+--
+-- Полнотекстовый — по колонке search_tsv, см. её объявление выше: нужен для многословных
+-- запросов, где слова лежат в разных полях.
+CREATE INDEX ix_parsed_drugs_search_tsv ON parsed_drugs USING gin (search_tsv);
+CREATE INDEX ix_parsed_drugs_name_trgm ON parsed_drugs USING gin (name gin_trgm_ops);
+CREATE INDEX ix_parsed_drugs_name_lat_trgm ON parsed_drugs USING gin (name_lat gin_trgm_ops);
+CREATE INDEX ix_parsed_drugs_substance_trgm ON parsed_drugs USING gin (active_substance gin_trgm_ops);
+CREATE INDEX ix_parsed_drugs_manufacturer_trgm ON parsed_drugs USING gin (manufacturer gin_trgm_ops);

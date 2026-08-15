@@ -13,14 +13,19 @@ services:
   postgres:
     image: 'postgres:18.3-trixie'
     environment:
+      # Локаль задана явно, а не унаследована от образа. pg_trgm определяет «буквенность»
+      # символа через iswalpha по LC_CTYPE: в локали C кириллица буквой не считается, из
+      # русского текста не извлекается ни одной триграммы, и поиск по опечатке молча
+      # перестаёт работать. Менять это можно только пересозданием тома — initdb выполняется
+      # один раз.
+      - 'POSTGRES_INITDB_ARGS=--encoding=UTF8 --lc-ctype=en_US.utf8 --lc-collate=en_US.utf8'
       - 'POSTGRES_DB=medapp-server-db'
       - 'POSTGRES_USER=medapp'
       - 'POSTGRES_PASSWORD=mock-prod-password'
     volumes:
       - mock_prod_postgres_data:/var/lib/postgresql
-      - ./db/load-catalogue.sh:/docker-entrypoint-initdb.d/01-load-catalogue.sh:ro
-      - ./db/schema.sql:/docker-entrypoint-initdb.d/02-schema.sql:ro
-      - ./db/fill-parsed-drugs.sql:/docker-entrypoint-initdb.d/03-fill-parsed-drugs.sql:ro
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./db/load-catalogue.sh:/docker-entrypoint-initdb.d/02-load-catalogue.sh:ro
       - ./init-scripts:/catalogue:ro
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U medapp -d medapp-server-db" ]

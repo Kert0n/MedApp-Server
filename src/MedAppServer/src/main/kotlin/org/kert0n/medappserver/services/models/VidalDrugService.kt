@@ -10,16 +10,24 @@ class VidalDrugService(
     private val vidalDrugRepository: VidalDrugRepository
 ) {
 
-    fun fuzzySearchByName(searchTerm: String, limit: Int = 10): List<VidalDrug> {
-        if (searchTerm.isBlank()) {
+    /**
+     * Поиск по названию, латинскому названию, действующему веществу и производителю.
+     *
+     * Запрос получает термин в двух видах. Экранированный нужен для `LIKE`, иначе введённый
+     * пользователем `%` превращается в «совпадает с чем угодно». Сырой — для
+     * `plainto_tsquery` и `similarity()`: там подстановочных знаков нет, а добавленные
+     * обратные слэши попали бы в сравнение как обычные символы и портили бы сходство.
+     */
+    fun fuzzySearch(searchTerm: String, limit: Int = 10): List<VidalDrug> {
+        val term = searchTerm.trim()
+        if (term.isBlank()) {
             return emptyList()
         }
-        // Escape LIKE wildcards and backslashes to keep fuzzy search predictable and safe.
-        val sanitized = searchTerm.trim()
+        val likeTerm = term
             .replace("\\", "\\\\")
             .replace("%", "\\%")
             .replace("_", "\\_")
-        return vidalDrugRepository.fuzzySearchByName(sanitized, limit)
+        return vidalDrugRepository.fuzzySearch(term, likeTerm, limit)
     }
 
     fun findById(id: UUID): VidalDrug? {

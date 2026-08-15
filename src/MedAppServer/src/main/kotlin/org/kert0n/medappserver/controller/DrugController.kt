@@ -223,7 +223,7 @@ class DrugController(
             limit,
             authentication.userId
         )
-        return vidalDrugService.fuzzySearchByName(searchTerm, limit).map { vd ->
+        return vidalDrugService.fuzzySearch(searchTerm, limit).map { vd ->
             DrugTemplateDTO(
                 id = vd.id,
                 name = vd.name,
