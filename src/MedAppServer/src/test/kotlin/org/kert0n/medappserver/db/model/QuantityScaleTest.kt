@@ -43,8 +43,8 @@ class QuantityScaleTest {
     fun `умножение не раздувает scale плана`() {
         // Умножение складывает scale операндов: 6 + 6 = 12. Ровно так планы и сжимаются
         // в QuantityReductionService, где коэффициент считается с запасом знаков.
-        val using = Using(
-            usingKey = UsingKey(), user = User(hashedKey = "k"),
+        val using = TreatmentPlan(
+            key = TreatmentPlanKey(), user = User(hashedKey = "k"),
             drug = drug(BigDecimal("10")), plannedAmount = BigDecimal("7")
         )
 

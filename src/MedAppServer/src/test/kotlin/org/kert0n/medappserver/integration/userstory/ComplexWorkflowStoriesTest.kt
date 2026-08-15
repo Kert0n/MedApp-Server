@@ -212,7 +212,7 @@ class ComplexWorkflowStoriesTest {
         assertEquals(1, duoKitCheck1.users.size, "Only Alice remains")
 
         // Alice leaves Duo Kit. Because she is the last user, the kit should auto-delete.
-        // (Using medKitService directly as medKitDrugServices might check for users first)
+        // (TreatmentPlan medKitService directly as medKitDrugServices might check for users first)
         val aliceFresh = userRepository.findById(alice.id).get()
         medKitService.removeUserFromMedKit(duoKitCheck1, aliceFresh)
 
@@ -252,7 +252,7 @@ class ComplexWorkflowStoriesTest {
         usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(40.0)))
         dbHelper.flushAndClear()
 
-        // ── Phase 1: Alter Using ──
+        // ── Phase 1: Alter TreatmentPlan ──
         // Bob increases his plan from 40 to 60.
         // Allowed because 100 stock - 40 Alice = 60 available.
         usingService.updateTreatmentPlan(bob.id, drug.id, UsingUpdateDTO(plannedAmount = qty(60.0)))
@@ -297,7 +297,7 @@ class ComplexWorkflowStoriesTest {
     }
 
     private fun createTestUser(name: String): User {
-        // Using repository directly to bypass any complex auth logic in UserService if necessary
+        // TreatmentPlan repository directly to bypass any complex auth logic in UserService if necessary
         return userRepository.save(User(id = UUID.randomUUID(), hashedKey = name))
     }
 

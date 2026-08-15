@@ -128,8 +128,8 @@ class RepositoryIntegrationTests {
         entityManager.flush()
 
         // Create using for drug1 only
-        val using = Using(
-            usingKey = UsingKey(user.id, drug1.id),
+        val using = TreatmentPlan(
+            key = TreatmentPlanKey(user.id, drug1.id),
             user = user,
             drug = drug1,
             plannedAmount = qty(10.0)
@@ -153,14 +153,14 @@ class RepositoryIntegrationTests {
         val drug = createDrug(medKit)
         entityManager.flush()
 
-        val using1 = Using(
-            usingKey = UsingKey(user1.id, drug.id),
+        val using1 = TreatmentPlan(
+            key = TreatmentPlanKey(user1.id, drug.id),
             user = user1,
             drug = drug,
             plannedAmount = qty(20.0)
         )
-        val using2 = Using(
-            usingKey = UsingKey(user2.id, drug.id),
+        val using2 = TreatmentPlan(
+            key = TreatmentPlanKey(user2.id, drug.id),
             user = user2,
             drug = drug,
             plannedAmount = qty(30.0)
@@ -285,8 +285,8 @@ class RepositoryIntegrationTests {
         val drug = createDrug(medKit)
         entityManager.flush()
 
-        val using = Using(
-            usingKey = UsingKey(user1.id, drug.id),
+        val using = TreatmentPlan(
+            key = TreatmentPlanKey(user1.id, drug.id),
             user = user1,
             drug = drug,
             plannedAmount = qty(10.0)
@@ -323,12 +323,12 @@ class RepositoryIntegrationTests {
         val drug2 = createDrug(medKit, "Drug B")
         entityManager.flush()
 
-        usingRepository.save(Using(UsingKey(user.id, drug1.id), user, drug1, qty(10.0)))
-        usingRepository.save(Using(UsingKey(user.id, drug2.id), user, drug2, qty(20.0)))
+        usingRepository.save(TreatmentPlan(TreatmentPlanKey(user.id, drug1.id), user, drug1, qty(10.0)))
+        usingRepository.save(TreatmentPlan(TreatmentPlanKey(user.id, drug2.id), user, drug2, qty(20.0)))
         entityManager.flush()
         entityManager.clear()
 
-        val usings = usingRepository.findAllByUsingKeyUserId(user.id)
+        val usings = usingRepository.findAllByKeyUserId(user.id)
         assertEquals(2, usings.size)
     }
 
@@ -342,12 +342,12 @@ class RepositoryIntegrationTests {
         val drug = createDrug(medKit)
         entityManager.flush()
 
-        usingRepository.save(Using(UsingKey(user1.id, drug.id), user1, drug, qty(10.0)))
-        usingRepository.save(Using(UsingKey(user2.id, drug.id), user2, drug, qty(20.0)))
+        usingRepository.save(TreatmentPlan(TreatmentPlanKey(user1.id, drug.id), user1, drug, qty(10.0)))
+        usingRepository.save(TreatmentPlan(TreatmentPlanKey(user2.id, drug.id), user2, drug, qty(20.0)))
         entityManager.flush()
         entityManager.clear()
 
-        val usings = usingRepository.findAllByUsingKeyDrugId(drug.id)
+        val usings = usingRepository.findAllByKeyDrugId(drug.id)
         assertEquals(2, usings.size)
     }
 
@@ -358,7 +358,7 @@ class RepositoryIntegrationTests {
         val drug = createDrug(medKit)
         entityManager.flush()
 
-        usingRepository.save(Using(UsingKey(user.id, drug.id), user, drug, qty(15.0)))
+        usingRepository.save(TreatmentPlan(TreatmentPlanKey(user.id, drug.id), user, drug, qty(15.0)))
         entityManager.flush()
         entityManager.clear()
 
@@ -385,7 +385,7 @@ class RepositoryIntegrationTests {
         val drug = createDrug(medKit, "TestDrug")
         entityManager.flush()
 
-        usingRepository.save(Using(UsingKey(user.id, drug.id), user, drug, qty(10.0)))
+        usingRepository.save(TreatmentPlan(TreatmentPlanKey(user.id, drug.id), user, drug, qty(10.0)))
         entityManager.flush()
         entityManager.clear()
 

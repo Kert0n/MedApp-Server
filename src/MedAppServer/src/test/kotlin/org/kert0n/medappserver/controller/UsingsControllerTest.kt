@@ -53,7 +53,7 @@ class UsingsControllerTest {
             .build()
     }
 
-    private fun createTestUsing(): Using {
+    private fun createTestUsing(): TreatmentPlan {
         val user = User(id = userId, hashedKey = "key")
         val medKit = MedKit(id = UUID.randomUUID())
         val drug = Drug(
@@ -62,8 +62,8 @@ class UsingsControllerTest {
             manufacturer = null, country = null, description = null,
             medKit = medKit
         )
-        return Using(
-            usingKey = UsingKey(userId, drugId),
+        return TreatmentPlan(
+            key = TreatmentPlanKey(userId, drugId),
             user = user,
             drug = drug,
             plannedAmount = qty(30.0)

@@ -14,7 +14,7 @@ class UserBuilder {
     private var id: UUID = UUID.randomUUID()
     private var hashedKey: String = "hashed_test_key_123"
     private val medKits: MutableSet<MedKit> = mutableSetOf()
-    private val usings: MutableSet<Using> = mutableSetOf()
+    private val usings: MutableSet<TreatmentPlan> = mutableSetOf()
 
     fun withId(id: UUID) = apply { this.id = id }
     fun withHashedKey(key: String) = apply { this.hashedKey = key }
@@ -87,9 +87,9 @@ class UsingBuilder(private val user: User, private val drug: Drug) {
 
     fun withPlannedAmount(amount: Double) = apply { this.plannedAmount = amount }
 
-    fun build(): Using {
-        return Using(
-            usingKey = UsingKey(userId = user.id, drugId = drug.id),
+    fun build(): TreatmentPlan {
+        return TreatmentPlan(
+            key = TreatmentPlanKey(userId = user.id, drugId = drug.id),
             user = user,
             drug = drug,
             plannedAmount = qty(plannedAmount)
