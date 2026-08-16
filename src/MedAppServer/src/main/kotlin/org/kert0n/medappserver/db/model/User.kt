@@ -34,9 +34,9 @@ class User(
                 "FOREIGN KEY (med_kit_id) REFERENCES med_kits (id) ON DELETE CASCADE"
         )
     )
-    var medKits: MutableSet<MedKit> = mutableSetOf(),
-    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
-    var treatmentPlans: MutableSet<TreatmentPlan> = mutableSetOf()
+    // Коллекции планов здесь нет: план — внутренность агрегата Drug, и держать на неё
+    // ссылку из другого корня значит разрешить менять чужой агрегат мимо его правил.
+    var medKits: MutableSet<MedKit> = mutableSetOf()
 ) : UserDetails {
 
 

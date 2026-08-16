@@ -2,7 +2,6 @@ package org.kert0n.medappserver.integration
 
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
-import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.TreatmentPlanRepository
 import org.kert0n.medappserver.services.models.DrugService
@@ -43,12 +42,12 @@ class FractionalQuantityTest {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
         val drug = dbHelper.freshDrug(kit, 1.0)
-        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(1.0)))
+        drugService.createPlan(alice.id, drug.id, qty(1.0))
         dbHelper.flushAndClear()
 
         val third = third("1")   // 0.333333
-        treatmentPlanService.recordIntake(alice.id, drug.id, third)
-        treatmentPlanService.recordIntake(alice.id, drug.id, third)
+        drugService.recordIntake(alice.id, drug.id, third)
+        drugService.recordIntake(alice.id, drug.id, third)
         dbHelper.flushAndClear()
 
         // 1 - 2 * 0.333333 = 0.333334: остаток чуть больше трети, и он не потерян.
@@ -56,7 +55,7 @@ class FractionalQuantityTest {
 
         // Третий приём забирает ровно остаток — препарат кончился.
         val last = dbHelper.drugQuantity(drug.id)!!
-        val afterLast = treatmentPlanService.recordIntake(alice.id, drug.id, last)
+        val afterLast = drugService.recordIntake(alice.id, drug.id, last)
         dbHelper.flushAndClear()
 
         assertNull(afterLast, "план исчезает вместе с кончившимся препаратом")
@@ -78,12 +77,12 @@ class FractionalQuantityTest {
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
 
         val drug = dbHelper.freshDrug(kit, 10.0)
-        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(7.0)))
-        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(3.0)))
+        drugService.createPlan(alice.id, drug.id, qty(7.0))
+        drugService.createPlan(bob.id, drug.id, qty(3.0))
         dbHelper.flushAndClear()
 
         // Списываем треть остатка: коэффициент сжатия — бесконечная дробь.
-        treatmentPlanService.recordIntake(alice.id, drug.id, third("10"))
+        drugService.recordIntake(alice.id, drug.id, third("10"))
         dbHelper.flushAndClear()
 
         val remaining = dbHelper.drugQuantity(drug.id)!!
@@ -109,8 +108,8 @@ class FractionalQuantityTest {
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
 
         val drug = dbHelper.freshDrug(kit, 90.0)
-        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
-        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(60.0)))
+        drugService.createPlan(alice.id, drug.id, qty(30.0))
+        drugService.createPlan(bob.id, drug.id, qty(60.0))
         dbHelper.flushAndClear()
 
         // Незапланированный расход: остаток падает до 60 при сумме планов 90, поэтому планы

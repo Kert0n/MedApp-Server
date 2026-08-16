@@ -55,6 +55,13 @@ interface TreatmentPlanRepository : JpaRepository<TreatmentPlan, TreatmentPlanKe
     )
     fun findAllByUserIdWithDrug(@Param("userId") userId: UUID): List<TreatmentPlan>
 
+    /**
+     * Массовое удаление планов участника внутри аптечки.
+     *
+     * Через агрегат этого не сделать: выход из аптечки касается всех её препаратов сразу, и
+     * загружать каждый ради одного удаления незачем. Пока путь выхода живёт в оркестраторе и
+     * ходит по коллекциям; на этот запрос он переведётся вместе с агрегатом MedKit.
+     */
     @Modifying
     @Query("DELETE FROM TreatmentPlan u WHERE u.user.id = :userId AND u.drug.medKit.id = :medKitId")
     fun deleteByUserIdAndMedKitId(userId: UUID, medKitId: UUID)

@@ -10,7 +10,6 @@ import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.UserService
-import org.kert0n.medappserver.services.models.TreatmentPlanService
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
@@ -24,7 +23,6 @@ class MedKitDrugServices(
     private val drugService: DrugService,
     private val medKitService: MedKitService,
     private val userService: UserService,
-    private val treatmentPlanService: TreatmentPlanService,
     private val logger: Logger = LoggerFactory.getLogger(DrugService::class.java),
     private val medKitRepository: MedKitRepository,
     private val drugRepository: DrugRepository
@@ -43,15 +41,13 @@ class MedKitDrugServices(
             medKitRepository.findByIdAndUsersIdWithUsers(targetMedKitId, userId) ?: throw ResponseStatusException(
                 HttpStatus.NOT_FOUND
             )
-        val drug = drugService.requireAccessible(drugId, userId)
+        val drug = drugService.lockAccessible(drugId, userId)
 
-        // Планы удаляются отдельной операцией, а не через коллекцию препарата: коллекция
-        // здесь нужна была только чтобы выбросить часть из них, и тянуть её ради этого
-        // незачем.
+        // Переезд и судьба планов — одно решение агрегата: планы тех, кто целевую аптечку не
+        // видит, исчезают вместе с доступом.
         val targetUserIds = targetMedKit.users.map { it.id }.toSet()
-        treatmentPlanService.deletePlansExcept(drugId, targetUserIds)
+        drug.moveTo(targetMedKit, targetUserIds)
 
-        drug.medKit = targetMedKit
         return drugRepository.save(drug)
     }
 
@@ -63,9 +59,7 @@ class MedKitDrugServices(
         val medKit = medKitService.findByIdForUser(medKitId, userId)
         val user = userService.findById(userId)
         val drugs = drugRepository.findAllWithTreatmentPlansByMedKitId(medKitId)
-        drugs.forEach { drug ->
-            drug.treatmentPlans.removeIf { it.planKey.userId == userId }
-        }
+        drugs.forEach { drug -> drug.revokePlanOf(userId) }
         medKitService.removeUserFromMedKit(medKit, user)
     }
 
@@ -80,14 +74,8 @@ class MedKitDrugServices(
 
             // Get the IDs of everyone who has access to the new MedKit
             val usersWithAccess = targetMedKit.users.map { it.id }.toSet()
-            // Find which treatment plans are affected
-            val plansToRemove = medKit.drugs.flatMap { drug ->
-                drug.treatmentPlans.filter { it.user.id !in usersWithAccess }
-            }.toSet()
-            // Removing
             medKit.drugs.forEach { drug ->
-                drug.treatmentPlans.removeAll(plansToRemove)
-                drug.medKit = targetMedKit
+                drug.moveTo(targetMedKit, usersWithAccess)
                 targetMedKit.drugs.add(drug)
             }
             // Sync

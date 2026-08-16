@@ -9,9 +9,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertDoesNotThrow
 import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.api.DrugCreateRequest
-import org.kert0n.medappserver.api.DrugPatchRequest
-import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
-import org.kert0n.medappserver.api.TreatmentPlanPatchRequest
 import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.db.repository.DrugRepository
@@ -116,13 +113,13 @@ class ComplexWorkflowStoriesTest {
         // PHASE 2: Everyone makes Treatment Plans
         // ==========================================
         // Allergy Meds: 60 total. Alice (20), Bob (20), Charlie (20) = 60 planned.
-        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(allergyMeds.id, qty(20.0)))
-        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(allergyMeds.id, qty(20.0)))
-        treatmentPlanService.createTreatmentPlan(charlie.id, TreatmentPlanCreateRequest(allergyMeds.id, qty(20.0)))
+        drugService.createPlan(alice.id, allergyMeds.id, qty(20.0))
+        drugService.createPlan(bob.id, allergyMeds.id, qty(20.0))
+        drugService.createPlan(charlie.id, allergyMeds.id, qty(20.0))
 
         // Painkillers: 100 total. Bob plans 30, Charlie plans 30.
-        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(painkillers.id, qty(30.0)))
-        treatmentPlanService.createTreatmentPlan(charlie.id, TreatmentPlanCreateRequest(painkillers.id, qty(30.0)))
+        drugService.createPlan(bob.id, painkillers.id, qty(30.0))
+        drugService.createPlan(charlie.id, painkillers.id, qty(30.0))
 
         entityManager.flush()
         entityManager.clear()
@@ -247,24 +244,24 @@ class ComplexWorkflowStoriesTest {
         dbHelper.flushAndClear()
 
         // Alice and Bob create treatment plans (40 each, total 80)
-        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(40.0)))
-        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(40.0)))
+        drugService.createPlan(alice.id, drug.id, qty(40.0))
+        drugService.createPlan(bob.id, drug.id, qty(40.0))
         dbHelper.flushAndClear()
 
         // ── Phase 1: Alter treatment plan ──
         // Bob increases his plan from 40 to 60.
         // Allowed because 100 stock - 40 Alice = 60 available.
-        treatmentPlanService.updateTreatmentPlan(bob.id, drug.id, TreatmentPlanPatchRequest(plannedAmount = qty(60.0)))
+        drugService.changePlan(bob.id, drug.id, qty(60.0))
         dbHelper.flushAndClear()
 
         assertQty(60.0, dbHelper.userPlan(bob.id, drug.id)!!, "Bob's plan updated to 60")
         assertQty(40.0, dbHelper.userPlan(alice.id, drug.id)!!, "Alice's plan unchanged at 40")
 
         // ── Phase 2: Alter Drug (The Spill) ──
-        // Alice updates the drug quantity from 100 to 50.
-        // This MUST trigger `handleQuantityReduction`. Factor = 50 / 100 = 0.5.
-        val updateDrugDto = DrugPatchRequest(quantity = qty(50.0))
-        drugService.update(drug.id, updateDrugDto, alice.id)
+        // Alice spills half the bottle: 50 of the 100 are gone. A spill is consumption
+        // outside anyone's plan, so it goes through the consumption path — PATCH may only
+        // raise the stock. Plans must scale down by 50 / 100 = 0.5.
+        drugService.consumeDrug(drug.id, qty(50.0), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(50.0, dbHelper.drugQuantity(drug.id)!!, "Drug quantity updated to 50")
@@ -338,8 +335,8 @@ class ComplexWorkflowStoriesTest {
         val drug = drugService.create(DrugCreateRequest("Audit Meds", qty(10.0), "pcs"), kitA, alice.id)
 
         // Both have plans
-        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(5.0)))
-        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(2.0)))
+        drugService.createPlan(alice.id, drug.id, qty(5.0))
+        drugService.createPlan(bob.id, drug.id, qty(2.0))
 
         // Alice has a private kit (Bob is NOT in this one)
         val kitB = medKitService.createNew(alice.id)

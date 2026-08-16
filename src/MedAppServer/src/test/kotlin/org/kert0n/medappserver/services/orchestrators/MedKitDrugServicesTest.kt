@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertDoesNotThrow
 import org.junit.jupiter.api.assertThrows
 import org.kert0n.medappserver.api.DrugCreateRequest
-import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.services.models.DrugService
@@ -102,8 +101,8 @@ class MedKitDrugServicesTest {
         val drug = dbHelper.freshDrug(sourceKit, 50.0)
         dbHelper.flushAndClear()
 
-        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(10.0)))
-        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(10.0)))
+        drugService.createPlan(alice.id, drug.id, qty(10.0))
+        drugService.createPlan(bob.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
         medKitDrugServices.moveDrug(drug.id, targetKit.id, alice.id)
@@ -156,7 +155,7 @@ class MedKitDrugServicesTest {
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
-        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(10.0)))
+        drugService.createPlan(bob.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
         medKitDrugServices.removeUserFromMedKit(kit.id, bob.id)
@@ -216,8 +215,8 @@ class MedKitDrugServicesTest {
         val drug = dbHelper.freshDrug(oldKit, 90.0)
         dbHelper.flushAndClear()
 
-        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
-        treatmentPlanService.createTreatmentPlan(charlie.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
+        drugService.createPlan(alice.id, drug.id, qty(30.0))
+        drugService.createPlan(charlie.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
         medKitDrugServices.delete(oldKit.id, alice.id, newKit.id)

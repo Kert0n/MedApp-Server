@@ -2,7 +2,6 @@ package org.kert0n.medappserver.integration
 
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
-import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.TreatmentPlanService
@@ -40,8 +39,8 @@ class ReadProjectionTest {
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit, 100.0)
 
-        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
-        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(20.0)))
+        drugService.createPlan(alice.id, drug.id, qty(30.0))
+        drugService.createPlan(bob.id, drug.id, qty(20.0))
         dbHelper.flushAndClear()
 
         val view = drugService.requireView(drug.id, alice.id)
@@ -107,7 +106,7 @@ class ReadProjectionTest {
         val bob = dbHelper.freshUser("bob")
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit, 100.0)
-        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
+        drugService.createPlan(alice.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
         assertQty(30.0, treatmentPlanService.requireView(alice.id, drug.id).plannedAmount)

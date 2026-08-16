@@ -1,5 +1,8 @@
 package org.kert0n.medappserver.controller
 
+import org.kert0n.medappserver.db.model.DomainRuleViolated
+import org.kert0n.medappserver.db.model.NoSuchTreatmentPlan
+import org.kert0n.medappserver.db.model.TreatmentPlanAlreadyExists
 import org.springframework.http.HttpStatus
 import org.springframework.http.ProblemDetail
 import org.springframework.web.bind.MethodArgumentNotValidException
@@ -21,6 +24,23 @@ class ApiExceptionHandler {
     @ExceptionHandler(ResponseStatusException::class)
     fun handleResponseStatus(exception: ResponseStatusException): ProblemDetail =
         problem(HttpStatus.valueOf(exception.statusCode.value()))
+
+    /**
+     * Нарушенное правило агрегата. Здесь и только здесь оно превращается в код ответа —
+     * сама модель про HTTP не знает, иначе её нельзя было бы проверить без веб-слоя.
+     *
+     * Отсутствие плана — 404, потому что клиент обратился к ресурсу, которого нет. Второй
+     * план того же пользователя — 409: ресурс уже существует, и его надо менять, а не
+     * создавать заново. Остальное — 400: запрос сам по себе противоречив.
+     */
+    @ExceptionHandler(DomainRuleViolated::class)
+    fun handleDomainRule(exception: DomainRuleViolated): ProblemDetail = problem(
+        when (exception) {
+            is NoSuchTreatmentPlan -> HttpStatus.NOT_FOUND
+            is TreatmentPlanAlreadyExists -> HttpStatus.CONFLICT
+            else -> HttpStatus.BAD_REQUEST
+        }
+    )
 
     /**
      * Request body validation. Field names and the constraint that failed are part of the

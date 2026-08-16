@@ -15,15 +15,18 @@ interface DrugRepository : JpaRepository<Drug, UUID> {
 
     // ── Чтение: проекции ─────────────────────────────────────────────────────────
     //
-    // Сумма планов берётся как Drug.totalPlannedAmount, то есть через ту же @Formula, что и
-    // при загрузке сущности. Повторять здесь SUM нельзя: определений станет по одному на
-    // каждый запрос плюс формула, и при изменении смысла «запланировано» их пришлось бы
-    // править синхронно.
+    // Сумма планов берётся как Drug.storedPlannedTotal — тем же коррелированным подзапросом,
+    // что и при загрузке сущности, то есть без второго обращения к базе. Повторять здесь SUM
+    // нельзя: определений станет по одному на каждый запрос, и при изменении смысла
+    // «запланировано» их пришлось бы править синхронно.
+    //
+    // Чтениям годится именно это значение: они ничего не меняют, и состояние базы для них —
+    // и есть ответ. Командам оно не годится, поэтому агрегат решает по своей коллекции.
 
     @Query(
         """
         SELECT new org.kert0n.medappserver.db.repository.DrugView(
-            d.id, d.name, d.quantity, d.totalPlannedAmount,
+            d.id, d.name, d.quantity, d.storedPlannedTotal,
             d.quantityUnit, d.formType, d.category, d.manufacturer, d.country, d.description, mk.id)
         FROM Drug d
         JOIN d.medKit mk
@@ -35,7 +38,7 @@ interface DrugRepository : JpaRepository<Drug, UUID> {
     @Query(
         """
         SELECT new org.kert0n.medappserver.db.repository.DrugView(
-            d.id, d.name, d.quantity, d.totalPlannedAmount,
+            d.id, d.name, d.quantity, d.storedPlannedTotal,
             d.quantityUnit, d.formType, d.category, d.manufacturer, d.country, d.description, mk.id)
         FROM Drug d
         JOIN d.medKit mk
@@ -54,7 +57,7 @@ interface DrugRepository : JpaRepository<Drug, UUID> {
     @Query(
         """
         SELECT new org.kert0n.medappserver.db.repository.DrugView(
-            d.id, d.name, d.quantity, d.totalPlannedAmount,
+            d.id, d.name, d.quantity, d.storedPlannedTotal,
             d.quantityUnit, d.formType, d.category, d.manufacturer, d.country, d.description, mk.id)
         FROM Drug d
         JOIN d.medKit mk

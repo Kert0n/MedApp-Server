@@ -185,8 +185,8 @@ class ResourceApiContractTest {
     fun `план лечения создаётся и меняется`() {
         val user = User(id = userId, hashedKey = "k")
         val plan = TreatmentPlan(planKey = TreatmentPlanKey(userId, drugId), user = user, drug = drug, plannedAmount = qty(20.0))
-        whenever(treatmentPlanService.createTreatmentPlan(eq(userId), any())).thenReturn(plan)
-        whenever(treatmentPlanService.updateTreatmentPlan(eq(userId), eq(drugId), any())).thenReturn(plan)
+        whenever(drugService.createPlan(eq(userId), eq(drugId), any())).thenReturn(plan)
+        whenever(drugService.changePlan(eq(userId), eq(drugId), any())).thenReturn(plan)
         whenever(treatmentPlanService.requireView(userId, drugId)).thenReturn(TreatmentPlanView(drugId, qty(20.0)))
 
         mockMvc.perform(
@@ -210,7 +210,7 @@ class ResourceApiContractTest {
 
     @Test
     fun `план лечения удаляется`() {
-        doNothing().whenever(treatmentPlanService).deleteTreatmentPlan(userId, drugId)
+        doNothing().whenever(drugService).cancelPlan(userId, drugId)
 
         mockMvc.perform(delete(ApiRoutes.treatmentPlan(drugId)).with(asUser()))
             .andExpect(status().isNoContent)

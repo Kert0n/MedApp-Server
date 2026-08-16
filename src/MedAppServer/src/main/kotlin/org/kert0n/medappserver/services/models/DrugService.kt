@@ -3,10 +3,11 @@ package org.kert0n.medappserver.services.models
 import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.api.DrugPatchRequest
 import org.kert0n.medappserver.db.model.Drug
+import org.kert0n.medappserver.db.model.DrugDetails
 import org.kert0n.medappserver.db.model.MedKit
+import org.kert0n.medappserver.db.model.TreatmentPlan
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.DrugView
-import org.kert0n.medappserver.services.orchestrators.QuantityReductionService
 import org.slf4j.LoggerFactory
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.http.HttpStatus
@@ -16,10 +17,17 @@ import org.springframework.web.server.ResponseStatusException
 import java.math.BigDecimal
 import java.util.*
 
+/**
+ * Единственный вход к агрегату `Drug` — вместе с его планами лечения.
+ *
+ * Правила здесь не живут: сервис проверяет доступ, загружает агрегат, вызывает его метод и
+ * сохраняет результат. Планы обслуживаются отсюда же, потому что план не существует без
+ * препарата и все проверки на нём — это проверки против остатка.
+ */
 @Service
 class DrugService(
     private val drugRepository: DrugRepository,
-    private val quantityReductionService: QuantityReductionService
+    private val userService: UserService
 ) {
 
     private val logger = LoggerFactory.getLogger(DrugService::class.java)
@@ -89,12 +97,18 @@ class DrugService(
      */
     private fun notFound() = ResponseStatusException(HttpStatus.NOT_FOUND, "Drug not found or access denied")
 
+    // ── Команды препарата ────────────────────────────────────────────────────────
+    //
+    // Все они устроены одинаково: блокировка доступного препарата, вызов метода агрегата,
+    // сохранение. Планы загружаются вторым запросом, когда команда до них дотрагивается;
+    // одним запросом вместе с корнем их брать нельзя, пока стоит `FOR UPDATE`.
 
     @Transactional
     fun create(createDTO: DrugCreateRequest, medKit: MedKit, userId: UUID): Drug {
         logger.debug("Creating drug: {} for user: {}", createDTO.name, userId)
 
-        val drug = Drug(
+        val drug = Drug.create(
+            medKit = medKit,
             name = createDTO.name,
             quantity = createDTO.quantity,
             quantityUnit = createDTO.quantityUnit,
@@ -102,8 +116,7 @@ class DrugService(
             category = createDTO.category,
             manufacturer = createDTO.manufacturer,
             country = createDTO.country,
-            description = createDTO.description,
-            medKit = medKit
+            description = createDTO.description
         )
 
         return drugRepository.save(drug)
@@ -115,21 +128,18 @@ class DrugService(
 
         val drug = lockAccessible(drugId, userId)
 
-        updateDTO.name?.let { drug.name = it }
-        updateDTO.quantity?.let {
-            val oldQuantity = drug.quantity
-            drug.quantity = it
-            // Handle quantity reduction - may need to adjust treatment plans
-            if (it < oldQuantity) {
-                quantityReductionService.handleQuantityReduction(drug)
-            }
-        }
-        updateDTO.quantityUnit?.let { drug.quantityUnit = it }
-        updateDTO.formType?.let { drug.formType = it }
-        updateDTO.category?.let { drug.category = it }
-        updateDTO.manufacturer?.let { drug.manufacturer = it }
-        updateDTO.country?.let { drug.country = it }
-        updateDTO.description?.let { drug.description = it }
+        updateDTO.quantity?.let { drug.increaseQuantityTo(it) }
+        drug.describe(
+            DrugDetails(
+                name = updateDTO.name,
+                quantityUnit = updateDTO.quantityUnit,
+                formType = updateDTO.formType,
+                category = updateDTO.category,
+                manufacturer = updateDTO.manufacturer,
+                country = updateDTO.country,
+                description = updateDTO.description
+            )
+        )
 
         return drugRepository.save(drug)
     }
@@ -141,7 +151,6 @@ class DrugService(
         val drug = requireAccessible(drugId, userId)
         drugRepository.delete(drug)
     }
-
 
     /**
      * Списывает количество вне плана лечения.
@@ -155,17 +164,70 @@ class DrugService(
 
         val drug = lockAccessible(drugId, userId)
 
-        if (quantity > drug.quantity) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Insufficient quantity available")
+        if (drug.consume(quantity)) {
+            drugRepository.delete(drug)
+            return null
         }
-
-        drug.quantity -= quantity
-        drugRepository.save(drug)
-        return quantityReductionService.handleQuantityReduction(drug)
-
+        return drugRepository.save(drug)
     }
 
+    // ── Команды планов лечения ───────────────────────────────────────────────────
+    //
+    // План — часть агрегата, поэтому меняется через его корень: и проверка против остатка,
+    // и запрет второго плана того же пользователя формулируются только там, где известны
+    // остаток и все остальные планы разом.
 
+    @Transactional
+    fun createPlan(userId: UUID, drugId: UUID, plannedAmount: BigDecimal): TreatmentPlan {
+        logger.debug("Creating treatment plan for user {} and drug {}", userId, drugId)
 
+        val user = userService.findById(userId)
+        val drug = lockAccessible(drugId, userId)
 
+        val plan = drug.createPlan(user, plannedAmount)
+        drugRepository.save(drug)
+        return plan
+    }
+
+    @Transactional
+    fun changePlan(userId: UUID, drugId: UUID, plannedAmount: BigDecimal): TreatmentPlan {
+        logger.debug("Updating treatment plan for user {} and drug {}", userId, drugId)
+
+        val drug = lockAccessible(drugId, userId)
+
+        val plan = drug.changePlan(userId, plannedAmount)
+        drugRepository.save(drug)
+        return plan
+    }
+
+    @Transactional
+    fun cancelPlan(userId: UUID, drugId: UUID) {
+        logger.debug("Deleting treatment plan for user {} and drug {}", userId, drugId)
+
+        val drug = lockAccessible(drugId, userId)
+
+        drug.cancelPlan(userId)
+        drugRepository.save(drug)
+    }
+
+    /**
+     * Списывает приём с плана и с остатка препарата.
+     *
+     * `null` означает «план исчерпан и удалён» либо «препарат кончился», а не «план не
+     * найден»: отсутствующий план отвергается 404 ещё до списания.
+     */
+    @Transactional
+    fun recordIntake(userId: UUID, drugId: UUID, quantityConsumed: BigDecimal): TreatmentPlan? {
+        logger.debug("Recording intake for user {} and drug {}, quantity: {}", userId, drugId, quantityConsumed)
+
+        val drug = lockAccessible(drugId, userId)
+
+        val outcome = drug.applyIntake(userId, quantityConsumed)
+        if (outcome.drugExhausted) {
+            drugRepository.delete(drug)
+            return null
+        }
+        drugRepository.save(drug)
+        return outcome.plan
+    }
 }

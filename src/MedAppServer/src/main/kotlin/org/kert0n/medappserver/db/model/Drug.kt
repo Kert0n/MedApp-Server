@@ -7,6 +7,17 @@ import org.hibernate.annotations.Formula
 import java.math.BigDecimal
 import java.util.*
 
+/**
+ * Препарат вместе со своими планами лечения — корень агрегата.
+ *
+ * Правила остатка и планов живут здесь, а не в сервисах: сколько можно списать, можно ли
+ * увеличить план и что происходит с планами, когда препарата стало меньше, — вопросы к
+ * самому препарату. Сервис остаётся тем, кто загружает агрегат, сохраняет его и переводит
+ * доменные отказы в коды ответа.
+ *
+ * Свойства объявлены через `var` потому, что Hibernate заполняет их при загрузке; это
+ * требование отображения, а не разрешение менять препарат мимо методов ниже.
+ */
 @Entity
 @Table(
     name = "user_drugs",
@@ -66,6 +77,13 @@ class Drug(
     )
     var medKit: MedKit,
 
+    /**
+     * Планы лечения этого препарата — внутренность агрегата.
+     *
+     * Каскад и `orphanRemoval` означают, что план не существует отдельно от препарата:
+     * добавление в набор создаёт строку, удаление из набора её удаляет, удаление препарата
+     * уносит планы с собой.
+     */
     @OneToMany(mappedBy = "drug", fetch = FetchType.LAZY, cascade = [CascadeType.ALL], orphanRemoval = true)
     var treatmentPlans: MutableSet<TreatmentPlan> = mutableSetOf()
 
@@ -80,17 +98,195 @@ class Drug(
         }
 
     /**
-     * Сумма планов, вычисленная базой при загрузке: единственное определение этой величины.
+     * Сумма планов **в том виде, в каком она лежала в базе на момент загрузки**.
      *
-     * Собственного столбца нет — подзапрос подставляется в тот же SELECT, которым читается
-     * препарат, поэтому список приходит вместе с суммами одним запросом. Присваивание
-     * меняет только копию в памяти текущей транзакции и не сохраняется; `var` стоит потому,
-     * что поле заполняет Hibernate, а команды правят его вручную, компенсируя устаревание
-     * внутри транзакции. И присваивание, и сама формула уходят вместе с переездом планов
-     * внутрь агрегата Drug.
+     * Считается базой в том же SELECT, которым читается препарат, поэтому список приходит
+     * вместе с суммами одним запросом — этим и пользуются проекции чтения.
+     *
+     * В решениях агрегата участвовать не может: как только команда добавила, уменьшила или
+     * сжала план, значение здесь устарело — оно не пересчитывается ни при изменении
+     * коллекции, ни при flush. Именно поэтому прежний код был вынужден дописывать сюда
+     * `-= списанное` руками. Всё, что решает агрегат, он решает по [plannedTotal].
+     *
+     * Из кода на Kotlin это свойство не читается: его единственные потребители — запросы
+     * проекций, где оно пишется как `d.storedPlannedTotal`.
      */
     @Formula("(SELECT COALESCE(SUM(u.planned_amount), 0) FROM usings u WHERE u.drug_id = id)")
-    var totalPlannedAmount: BigDecimal = BigDecimal.ZERO
+    var storedPlannedTotal: BigDecimal = BigDecimal.ZERO
+
+    // ── Планы ────────────────────────────────────────────────────────────────────
+
+    /**
+     * Сколько препарата разобрано планами — по собственной коллекции агрегата.
+     *
+     * Единственная сумма, по которой принимаются решения: она учитывает изменения текущей
+     * транзакции, ещё не дошедшие до базы, в отличие от [storedPlannedTotal].
+     */
+    val plannedTotal: BigDecimal
+        get() = treatmentPlans.fold(BigDecimal.ZERO) { sum, plan -> sum + plan.plannedAmount }
+
+    /**
+     * Остаток, не занятый ни одним планом.
+     *
+     * Приватно: наружу такую разность отдаёт форма чтения, где обе величины взяты из одного
+     * запроса. Здесь она нужна только двум проверкам ниже.
+     */
+    private val availableQuantity: BigDecimal
+        get() = quantity - plannedTotal
+
+    fun planOf(userId: UUID): TreatmentPlan? = treatmentPlans.find { it.planKey.userId == userId }
+
+    fun requirePlanOf(userId: UUID): TreatmentPlan = planOf(userId) ?: throw NoSuchTreatmentPlan()
+
+    /**
+     * Резервирует количество за пользователем.
+     *
+     * Один пользователь — один план на препарат: составной ключ этого не допускает, и
+     * повторная попытка означает, что клиент хотел изменить существующий план.
+     */
+    fun createPlan(user: User, amount: BigDecimal): TreatmentPlan {
+        val planned = requirePositive(amount)
+        if (planOf(user.id) != null) throw TreatmentPlanAlreadyExists()
+        if (planned > availableQuantity) throw PlannedAmountExceedsStock()
+
+        val plan = TreatmentPlan(
+            planKey = TreatmentPlanKey(user.id, id),
+            user = user,
+            drug = this,
+            plannedAmount = planned
+        )
+        treatmentPlans.add(plan)
+        return plan
+    }
+
+    /** Меняет размер плана. Свой прежний размер план при проверке не занимает. */
+    fun changePlan(userId: UUID, amount: BigDecimal): TreatmentPlan {
+        val planned = requirePositive(amount)
+        val plan = requirePlanOf(userId)
+        if (planned > availableQuantity + plan.plannedAmount) throw PlannedAmountExceedsStock()
+
+        plan.plannedAmount = planned
+        return plan
+    }
+
+    /** Пользователь отказывается от своего плана. */
+    fun cancelPlan(userId: UUID) {
+        treatmentPlans.remove(requirePlanOf(userId))
+    }
+
+    /**
+     * Убирает план пользователя, если он есть.
+     *
+     * Отличается от [cancelPlan] тем, что отсутствие плана здесь не ошибка: это не решение
+     * владельца плана, а следствие того, что доступ к препарату пропал.
+     */
+    fun revokePlanOf(userId: UUID) {
+        treatmentPlans.removeIf { it.planKey.userId == userId }
+    }
+
+    // ── Остаток ──────────────────────────────────────────────────────────────────
+
+    /** Описательные поля; `null` означает «оставить как есть». */
+    fun describe(details: DrugDetails) {
+        details.name?.let { name = it }
+        details.quantityUnit?.let { quantityUnit = it }
+        details.formType?.let { formType = it }
+        details.category?.let { category = it }
+        details.manufacturer?.let { manufacturer = it }
+        details.country?.let { country = it }
+        details.description?.let { description = it }
+    }
+
+    /**
+     * Пополнение запаса.
+     *
+     * Уменьшать остаток этим методом нельзя: расход выражается списанием, и только оно
+     * говорит, сколько именно ушло. Присвоение меньшего числа под конкурентным доступом
+     * теряет чужие списания, случившиеся между чтением и записью, а планы пришлось бы
+     * пересчитывать по неизвестно чему.
+     */
+    fun increaseQuantityTo(newQuantity: BigDecimal) {
+        val increased = requirePositive(newQuantity)
+        if (increased <= quantity) throw QuantityNotIncreased()
+        quantity = increased
+    }
+
+    /**
+     * Списание вне плана лечения.
+     *
+     * Возвращает `true`, если препарат кончился: строку удаляет вызывающий, потому что
+     * удаление — работа хранилища, а не агрегата.
+     */
+    fun consume(amount: BigDecimal): Boolean {
+        val consumed = requirePositive(amount)
+        if (consumed > quantity) throw InsufficientStock()
+
+        quantity -= consumed
+        if (quantity.isZero()) {
+            treatmentPlans.clear()
+            return true
+        }
+        reconcilePlansToStock()
+        return false
+    }
+
+    /**
+     * Приём по плану: уменьшает и план, и остаток.
+     *
+     * Планы других участников трогать не приходится — приём не может увести сумму планов за
+     * остаток, поскольку убавляет обе величины одинаково.
+     */
+    fun applyIntake(userId: UUID, amount: BigDecimal): IntakeOutcome {
+        val consumed = requirePositive(amount)
+        val plan = requirePlanOf(userId)
+        if (consumed > plan.plannedAmount) throw IntakeExceedsPlan()
+        if (consumed > quantity) throw InsufficientStock()
+
+        plan.plannedAmount -= consumed
+        quantity -= consumed
+
+        if (quantity.isZero()) {
+            treatmentPlans.clear()
+            return IntakeOutcome(drugExhausted = true, plan = null)
+        }
+        if (plan.plannedAmount.isZero()) {
+            treatmentPlans.remove(plan)
+            return IntakeOutcome(drugExhausted = false, plan = null)
+        }
+        return IntakeOutcome(drugExhausted = false, plan = plan)
+    }
+
+    /**
+     * Переезд в другую аптечку.
+     *
+     * Планы тех, кто к целевой аптечке доступа не имеет, исчезают вместе с доступом: иначе
+     * препарат уносил бы с собой чужие резервы в аптечку, которую эти люди не видят.
+     */
+    fun moveTo(targetMedKit: MedKit, accessibleUserIds: Set<UUID>) {
+        treatmentPlans.removeIf { it.planKey.userId !in accessibleUserIds }
+        medKit = targetMedKit
+    }
+
+    /**
+     * Сжимает планы до остатка пропорционально их размеру.
+     *
+     * Умножение идёт до деления: отдельный коэффициент `остаток / запланировано` пришлось бы
+     * округлить, и деление 60 на 90 превратило бы план 30 в 19.999999 вместо 20. При таком
+     * порядке точное частное получается там, где оно вообще существует.
+     *
+     * Округление вниз на каждом плане оставляет инвариант в силе: сумма точных долей равна
+     * остатку, значит сумма округлённых вниз его не превышает.
+     */
+    private fun reconcilePlansToStock() {
+        val planned = plannedTotal
+        if (planned <= quantity) return
+
+        treatmentPlans.forEach { plan ->
+            plan.plannedAmount = plan.plannedAmount
+                .multiply(quantity)
+                .divide(planned, QUANTITY_SCALE, QUANTITY_ROUNDING)
+        }
+    }
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -104,4 +300,61 @@ class Drug(
     override fun hashCode(): Int {
         return id.hashCode()
     }
+
+    companion object {
+        /**
+         * Единственный способ завести препарат: количество проверяется здесь, а не в
+         * контроллере, поэтому препарата с нулевым или отрицательным остатком не бывает.
+         */
+        fun create(
+            medKit: MedKit,
+            name: String,
+            quantity: BigDecimal,
+            quantityUnit: String,
+            formType: String? = null,
+            category: String? = null,
+            manufacturer: String? = null,
+            country: String? = null,
+            description: String? = null
+        ): Drug = Drug(
+            name = name,
+            quantity = requirePositive(quantity),
+            quantityUnit = quantityUnit,
+            formType = formType,
+            category = category,
+            manufacturer = manufacturer,
+            country = country,
+            description = description,
+            medKit = medKit
+        )
+
+        private fun requirePositive(amount: BigDecimal): BigDecimal {
+            if (!amount.isPositive()) throw InvalidQuantity()
+            return amount.toQuantityScale()
+        }
+    }
 }
+
+/** Описательные поля препарата; `null` — «не менять». */
+data class DrugDetails(
+    val name: String? = null,
+    val quantityUnit: String? = null,
+    val formType: String? = null,
+    val category: String? = null,
+    val manufacturer: String? = null,
+    val country: String? = null,
+    val description: String? = null
+)
+
+/**
+ * Чем закончился приём.
+ *
+ * Оба исхода наблюдаемы снаружи: приём может исчерпать план, а может исчерпать и сам
+ * препарат, и это разные события.
+ */
+data class IntakeOutcome(
+    /** Препарат кончился этим приёмом; строку удаляет вызывающий. */
+    val drugExhausted: Boolean,
+    /** Оставшийся план или `null`, если приём его исчерпал. */
+    val plan: TreatmentPlan?
+)

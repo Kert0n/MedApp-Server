@@ -3,10 +3,9 @@ package org.kert0n.medappserver.integration.userstory
 import jakarta.persistence.EntityManager
 import java.util.*
 import kotlin.test.*
+import org.kert0n.medappserver.db.model.PlannedAmountExceedsStock
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
-import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
-import org.kert0n.medappserver.api.TreatmentPlanPatchRequest
 import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.db.repository.DrugRepository
@@ -21,7 +20,6 @@ import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.web.server.ResponseStatusException
 
 @PostgresIntegrationTest
 @Transactional
@@ -74,7 +72,7 @@ class DrugMovementStoriesTest {
         entityManager.flush()
 
         // Create treatment plan
-        treatmentPlanService.createTreatmentPlan(user.id, TreatmentPlanCreateRequest(painkiller.id, qty(20.0)))
+        drugService.createPlan(user.id, painkiller.id, qty(20.0))
         entityManager.flush()
 
         // Move drug to travel kit
@@ -106,7 +104,7 @@ class DrugMovementStoriesTest {
     /**
      * Story 12: Update treatment plan correctly checks available quantity
      * 
-     * Validates: updateTreatmentPlan bug fix (was double-counting current user's plan)
+     * Validates: changing a plan does not double-count the caller's own plan
      */
     @Test
     fun `Story 12 - Updating treatment plan correctly checks available quantity`() {
@@ -129,27 +127,21 @@ class DrugMovementStoriesTest {
         entityManager.flush()
 
         // Anna plans 40, Bob plans 30 (total 70, available 30)
-        treatmentPlanService.createTreatmentPlan(anna.id, TreatmentPlanCreateRequest(drug.id, qty(40.0)))
-        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
+        drugService.createPlan(anna.id, drug.id, qty(40.0))
+        drugService.createPlan(bob.id, drug.id, qty(30.0))
         entityManager.flush()
 
         // Anna should be able to increase her plan to 70 (available for her = 100 - 30 (bob) = 70)
-        val updated = treatmentPlanService.updateTreatmentPlan(
-            anna.id, drug.id,
-            TreatmentPlanPatchRequest(qty(70.0))
-        )
+        val updated = drugService.changePlan(anna.id, drug.id, qty(70.0))
         assertQty(70.0, updated.plannedAmount)
         entityManager.flush()
         entityManager.clear()
         // Total planned should now be 100 (70 + 30)
-        assertQty(100.0, drugRepository.findByIdOrNull(drug.id)?.totalPlannedAmount)
+        assertQty(100.0, drugRepository.findByIdOrNull(drug.id)?.storedPlannedTotal)
 
         // Anna should NOT be able to increase to 71 (exceeds available)
-        assertFailsWith<ResponseStatusException> {
-            treatmentPlanService.updateTreatmentPlan(
-                anna.id, drug.id,
-                TreatmentPlanPatchRequest(qty(71.0))
-            )
+        assertFailsWith<PlannedAmountExceedsStock> {
+            drugService.changePlan(anna.id, drug.id, qty(71.0))
         }
 
         println("✅ Story 12 passed: Treatment plan update correctly checks available quantity")
@@ -176,7 +168,7 @@ class DrugMovementStoriesTest {
         entityManager.flush()
 
         // Create treatment plan
-        treatmentPlanService.createTreatmentPlan(user.id, TreatmentPlanCreateRequest(drug.id, qty(25.0)))
+        drugService.createPlan(user.id, drug.id, qty(25.0))
         entityManager.flush()
         entityManager.clear()
 
@@ -232,9 +224,9 @@ class DrugMovementStoriesTest {
         )
 
         // Everyone creates a plan for 30 pills
-        treatmentPlanService.createTreatmentPlan(anna.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
-        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
-        treatmentPlanService.createTreatmentPlan(charlie.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
+        drugService.createPlan(anna.id, drug.id, qty(30.0))
+        drugService.createPlan(bob.id, drug.id, qty(30.0))
+        drugService.createPlan(charlie.id, drug.id, qty(30.0))
 
         entityManager.flush()
         entityManager.clear()
@@ -258,7 +250,7 @@ class DrugMovementStoriesTest {
 
     /**
      * Story 15: Heavy consumption scales down shared treatment plans proportionally
-     * * Validates: handleQuantityReduction logic precision
+     * * Validates: plan reconciliation precision
      */
     @Test
     fun `Story 15 - Consuming below reserved threshold scales plans proportionally`() {
@@ -281,8 +273,8 @@ class DrugMovementStoriesTest {
         )
 
         // Anna plans 60, Bob plans 40. Total planned = 100.
-        treatmentPlanService.createTreatmentPlan(anna.id, TreatmentPlanCreateRequest(drug.id, qty(60.0)))
-        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(40.0)))
+        drugService.createPlan(anna.id, drug.id, qty(60.0))
+        drugService.createPlan(bob.id, drug.id, qty(40.0))
 
         entityManager.flush()
         entityManager.clear()

@@ -170,7 +170,7 @@ class RepositoryIntegrationTests {
         treatmentPlanRepository.save(plan2)
         entityManager.flush()
         entityManager.clear()
-        assertQty(50.0, drugRepository.findByIdOrNull(drug.id)?.totalPlannedAmount)
+        assertQty(50.0, drugRepository.findByIdOrNull(drug.id)?.storedPlannedTotal)
     }
 
     @Test
@@ -181,7 +181,7 @@ class RepositoryIntegrationTests {
         entityManager.flush()
         entityManager.clear()
 
-        assertQty(0.0, drug.totalPlannedAmount)
+        assertQty(0.0, drug.storedPlannedTotal)
     }
 
     // === MedKitRepository Tests ===

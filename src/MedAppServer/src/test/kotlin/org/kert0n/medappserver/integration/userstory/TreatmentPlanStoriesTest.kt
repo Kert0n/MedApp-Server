@@ -6,9 +6,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import org.kert0n.medappserver.db.model.PlannedAmountExceedsStock
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
-import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
 import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.db.repository.DrugRepository
@@ -24,7 +24,6 @@ import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.web.server.ResponseStatusException
 
 @PostgresIntegrationTest
 @Transactional
@@ -84,13 +83,7 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
 
         // Create treatment plan for 30 tablets
-        val plan = treatmentPlanService.createTreatmentPlan(
-            userId = user.id,
-            createDTO = TreatmentPlanCreateRequest(
-                drugId = drug.id,
-                plannedAmount = qty(30.0)
-            )
-        )
+        val plan = drugService.createPlan(userId = user.id, drug.id, qty(30.0))
         assertNotNull(plan)
         entityManager.flush()
 
@@ -100,8 +93,8 @@ class TreatmentPlanStoriesTest {
         assertQty(30.0, createdPlan.plannedAmount, "Planned amount should be 30")
 
         // Record some intakes
-        treatmentPlanService.recordIntake(user.id, drug.id, qty(5.0))
-        treatmentPlanService.recordIntake(user.id, drug.id, qty(5.0))
+        drugService.recordIntake(user.id, drug.id, qty(5.0))
+        drugService.recordIntake(user.id, drug.id, qty(5.0))
         entityManager.flush()
         entityManager.clear()
 
@@ -146,15 +139,15 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
 
         // Anna creates a treatment plan for 40 tablets
-        treatmentPlanService.createTreatmentPlan(anna.id, TreatmentPlanCreateRequest(vitaminC.id, qty(40.0)))
+        drugService.createPlan(anna.id, vitaminC.id, qty(40.0))
         entityManager.flush()
 
         // Bob creates a treatment plan for 50 tablets (should succeed: 100 - 40 = 60 available)
-        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(vitaminC.id, qty(50.0)))
+        drugService.createPlan(bob.id, vitaminC.id, qty(50.0))
         entityManager.flush()
         entityManager.clear()
         // Total planned = 90, should match sumPlannedAmount
-        assertQty(90.0, drugRepository.findByIdOrNull(vitaminC.id)?.totalPlannedAmount, "Total planned should be 90")
+        assertQty(90.0, drugRepository.findByIdOrNull(vitaminC.id)?.storedPlannedTotal, "Total planned should be 90")
 
         // Verify each user has their own plan
         val annaPlan = treatmentPlanRepository.findByUserIdAndDrugId(anna.id, vitaminC.id)
@@ -170,7 +163,7 @@ class TreatmentPlanStoriesTest {
     /**
      * Story 8: Drug quantity reduction cascades to treatment plans
      * 
-     * Validates: handleQuantityReduction logic, proportional reduction of plans
+     * Validates: plan reconciliation, proportional reduction of plans
      */
     @Test
     fun `Story 8 - Reducing drug quantity adjusts treatment plans proportionally`() {
@@ -194,12 +187,12 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
 
         // Create plan for 80 tablets
-        treatmentPlanService.createTreatmentPlan(user.id, TreatmentPlanCreateRequest(drug.id, qty(80.0)))
+        drugService.createPlan(user.id, drug.id, qty(80.0))
         entityManager.flush()
         entityManager.clear()
 
         // Consume 50 tablets (drug goes to 50, but plan is 80 > 50)
-        // handleQuantityReduction should scale the plan down
+        // reconciliation should scale the plan down
         drugService.consumeDrug(drug.id, qty(50.0), user.id)
         entityManager.flush()
         entityManager.clear()
@@ -243,12 +236,12 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
 
         // Try to create a plan for 60 tablets when only 50 available
-        assertFailsWith<ResponseStatusException> {
-            treatmentPlanService.createTreatmentPlan(user.id, TreatmentPlanCreateRequest(drug.id, qty(60.0)))
+        assertFailsWith<PlannedAmountExceedsStock> {
+            drugService.createPlan(user.id, drug.id, qty(60.0))
         }
 
         // Create a plan for 30
-        treatmentPlanService.createTreatmentPlan(user.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
+        drugService.createPlan(user.id, drug.id, qty(30.0))
         entityManager.flush()
 
         // Another user tries to plan 25 (only 20 available: 50 - 30 = 20)
@@ -258,15 +251,15 @@ class TreatmentPlanStoriesTest {
         medKitService.joinMedKitByKey(shareKey, user2.id)
         entityManager.flush()
         entityManager.clear()
-        assertFailsWith<ResponseStatusException> {
-            treatmentPlanService.createTreatmentPlan(user2.id, TreatmentPlanCreateRequest(drug.id, qty(25.0)))
+        assertFailsWith<PlannedAmountExceedsStock> {
+            drugService.createPlan(user2.id, drug.id, qty(25.0))
         }
 
         // But 20 should work
-        treatmentPlanService.createTreatmentPlan(user2.id, TreatmentPlanCreateRequest(drug.id, qty(20.0)))
+        drugService.createPlan(user2.id, drug.id, qty(20.0))
         entityManager.flush()
         entityManager.clear()
-        assertQty(50.0, drugRepository.findByIdOrNull(drug.id)?.totalPlannedAmount)
+        assertQty(50.0, drugRepository.findByIdOrNull(drug.id)?.storedPlannedTotal)
 
         println("✅ Story 9 passed: Cannot over-plan drug quantity")
     }
@@ -312,20 +305,20 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
 
         // Everyone gets treatment plans for vitamins: 30 each
-        treatmentPlanService.createTreatmentPlan(mom.id, TreatmentPlanCreateRequest(vitamins.id, qty(30.0)))
-        treatmentPlanService.createTreatmentPlan(dad.id, TreatmentPlanCreateRequest(vitamins.id, qty(30.0)))
-        treatmentPlanService.createTreatmentPlan(child.id, TreatmentPlanCreateRequest(vitamins.id, qty(30.0)))
+        drugService.createPlan(mom.id, vitamins.id, qty(30.0))
+        drugService.createPlan(dad.id, vitamins.id, qty(30.0))
+        drugService.createPlan(child.id, vitamins.id, qty(30.0))
         entityManager.flush()
         entityManager.clear()
         // Total planned = 90 (full supply)
-        assertQty(90.0, drugRepository.findByIdOrNull(vitamins.id)?.totalPlannedAmount)
+        assertQty(90.0, drugRepository.findByIdOrNull(vitamins.id)?.storedPlannedTotal)
 
         // Everyone takes their daily vitamin
-        treatmentPlanService.recordIntake(mom.id, vitamins.id, qty(1.0))
+        drugService.recordIntake(mom.id, vitamins.id, qty(1.0))
         entityManager.flush()
-        treatmentPlanService.recordIntake(dad.id, vitamins.id, qty(1.0))
+        drugService.recordIntake(dad.id, vitamins.id, qty(1.0))
         entityManager.flush()
-        treatmentPlanService.recordIntake(child.id, vitamins.id, qty(1.0))
+        drugService.recordIntake(child.id, vitamins.id, qty(1.0))
         entityManager.flush()
         entityManager.clear()
 

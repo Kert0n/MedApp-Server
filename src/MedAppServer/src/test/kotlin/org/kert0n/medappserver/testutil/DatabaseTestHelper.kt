@@ -43,7 +43,7 @@ class DatabaseTestHelper(
 
     // Null-safe getters essential for testing Privacy-by-Default (deletion)
     fun drugQuantity(id: UUID): BigDecimal? = drugRepository.findByIdOrNull(id)?.quantity
-    fun totalPlanned(id: UUID): BigDecimal? = drugRepository.findByIdOrNull(id)?.totalPlannedAmount
+    fun totalPlanned(id: UUID): BigDecimal? = drugRepository.findByIdOrNull(id)?.storedPlannedTotal
     fun userPlan(userId: UUID, drugId: UUID): BigDecimal? =
         treatmentPlanRepository.findByUserIdAndDrugId(userId, drugId)?.plannedAmount
 }

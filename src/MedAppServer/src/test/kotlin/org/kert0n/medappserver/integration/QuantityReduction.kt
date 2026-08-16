@@ -5,7 +5,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
-import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.TreatmentPlanRepository
 import org.kert0n.medappserver.db.repository.UserRepository
@@ -20,11 +19,11 @@ import org.springframework.data.repository.findByIdOrNull
 import org.springframework.transaction.annotation.Transactional
 
 /**
- * Tests for handleQuantityReduction — the logic that fires when unplanned
- * consumption causes drug.quantity to fall below dbHelper.totalPlannedAmount.
+ * Tests for plan reconciliation — the rule that fires when unplanned
+ * consumption causes drug.quantity to fall below dbHelper.storedPlannedTotal.
  *
  * Invariant under test:
- *   After any unplanned consumption, dbHelper.totalPlannedAmount == drug.quantity
+ *   After any unplanned consumption, dbHelper.storedPlannedTotal == drug.quantity
  *   (because plans are scaled by factor = newQuantity / olddbHelper.totalPlanned)
  *
  * Critical edge case:
@@ -78,8 +77,8 @@ class QuantityReductionTests {
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
-        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(20.0)))
-        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(20.0)))
+        drugService.createPlan(alice.id, drug.id, qty(20.0))
+        drugService.createPlan(bob.id, drug.id, qty(20.0))
         dbHelper.flushAndClear()
 
         drugService.consumeDrug(drug.id, qty(50.0), alice.id)
@@ -112,9 +111,9 @@ class QuantityReductionTests {
         val drug = dbHelper.freshDrug(kit, 90.0)
         dbHelper.flushAndClear()
 
-        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
-        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
-        treatmentPlanService.createTreatmentPlan(charlie.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
+        drugService.createPlan(alice.id, drug.id, qty(30.0))
+        drugService.createPlan(bob.id, drug.id, qty(30.0))
+        drugService.createPlan(charlie.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
         drugService.consumeDrug(drug.id, qty(30.0), alice.id)
@@ -149,8 +148,8 @@ class QuantityReductionTests {
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
-        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(60.0)))
-        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(40.0)))
+        drugService.createPlan(alice.id, drug.id, qty(60.0))
+        drugService.createPlan(bob.id, drug.id, qty(40.0))
         dbHelper.flushAndClear()
 
         drugService.consumeDrug(drug.id, qty(50.0), alice.id)
@@ -192,8 +191,8 @@ class QuantityReductionTests {
         val drug = dbHelper.freshDrug(kit, 80.0)
         dbHelper.flushAndClear()
 
-        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(40.0)))
-        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(40.0)))
+        drugService.createPlan(alice.id, drug.id, qty(40.0))
+        drugService.createPlan(bob.id, drug.id, qty(40.0))
         dbHelper.flushAndClear()
 
         // First reduction
@@ -237,8 +236,8 @@ class QuantityReductionTests {
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
-        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(50.0)))
-        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(50.0)))
+        drugService.createPlan(alice.id, drug.id, qty(50.0))
+        drugService.createPlan(bob.id, drug.id, qty(50.0))
         dbHelper.flushAndClear()
 
         drugService.consumeDrug(drug.id, qty(75.0), alice.id)
@@ -258,7 +257,7 @@ class QuantityReductionTests {
      * When drug.quantity reaches 0, factor = 0/dbHelper.totalPlanned = 0.
      * Every plannedAmount becomes 0.0.
      * Plans with plannedAmount == 0 MUST be deleted — ghost rows with 0
-     * would corrupt every availability check and dbHelper.totalPlannedAmount formula.
+     * would corrupt every availability check and dbHelper.storedPlannedTotal formula.
      *
      * Setup: drug=60, alice=20, bob=20, charlie=20 → total=60
      * Consume ALL 60 unplanned:
@@ -277,9 +276,9 @@ class QuantityReductionTests {
         val drug = dbHelper.freshDrug(kit, 60.0)
         dbHelper.flushAndClear()
 
-        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(20.0)))
-        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(20.0)))
-        treatmentPlanService.createTreatmentPlan(charlie.id, TreatmentPlanCreateRequest(drug.id, qty(20.0)))
+        drugService.createPlan(alice.id, drug.id, qty(20.0))
+        drugService.createPlan(bob.id, drug.id, qty(20.0))
+        drugService.createPlan(charlie.id, drug.id, qty(20.0))
         dbHelper.flushAndClear()
 
         // Sanity: Verify initial state
@@ -318,7 +317,7 @@ class QuantityReductionTests {
         val drug = dbHelper.freshDrug(kit, 50.0)
         dbHelper.flushAndClear()
 
-        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(50.0)))
+        drugService.createPlan(alice.id, drug.id, qty(50.0))
         dbHelper.flushAndClear()
 
         assertEquals(1, treatmentPlanService.findAllByDrug(drug.id).size)
@@ -361,8 +360,8 @@ class QuantityReductionTests {
         val drug = dbHelper.freshDrug(kit, 10.0)
         dbHelper.flushAndClear()
 
-        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(6.0)))
-        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(4.0)))
+        drugService.createPlan(alice.id, drug.id, qty(6.0))
+        drugService.createPlan(bob.id, drug.id, qty(4.0))
         dbHelper.flushAndClear()
 
         // --- Step 1: Halve everything ---

@@ -10,11 +10,17 @@ interface UserRepository : JpaRepository<User, UUID> {
 
     fun findAllByMedKitsId(@Param("medId") medId: UUID): Set<User>
 
+    /**
+     * Участники, у которых есть план на препарат.
+     *
+     * Соединение явное: коллекции планов у пользователя нет, потому что план принадлежит
+     * агрегату Drug, а не пользователю.
+     */
     @Query(
         """
         SELECT u FROM User u
-        JOIN u.treatmentPlans us
-        WHERE us.drug.id = :drugId
+        JOIN TreatmentPlan tp ON tp.user = u
+        WHERE tp.drug.id = :drugId
     """
     )
     fun findByTreatmentPlansDrugId(@Param("drugId") drugId: UUID): Set<User>
