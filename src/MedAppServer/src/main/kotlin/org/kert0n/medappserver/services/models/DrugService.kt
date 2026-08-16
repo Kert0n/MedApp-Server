@@ -2,12 +2,18 @@ package org.kert0n.medappserver.services.models
 
 import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.api.DrugPatchRequest
-import org.kert0n.medappserver.db.model.Drug
-import org.kert0n.medappserver.db.model.DrugDetails
 import org.kert0n.medappserver.db.model.MedKit
-import org.kert0n.medappserver.db.model.TreatmentPlan
+import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.DrugView
+import org.kert0n.medappserver.db.repository.MedKitRepository
+import org.kert0n.medappserver.db.repository.UserRepository
+import org.kert0n.medappserver.domain.drug.Drug
+import org.kert0n.medappserver.domain.drug.DrugDetails
+import org.kert0n.medappserver.domain.drug.TreatmentPlan
+import org.kert0n.medappserver.domain.drug.applyTo
+import org.kert0n.medappserver.domain.drug.toDomain
+import org.kert0n.medappserver.domain.drug.toNewEntity
 import org.slf4j.LoggerFactory
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.http.HttpStatus
@@ -16,18 +22,20 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 import java.math.BigDecimal
 import java.util.*
+import org.kert0n.medappserver.db.model.Drug as DrugEntity
 
 /**
- * Единственный вход к агрегату `Drug` — вместе с его планами лечения.
+ * Единственный вход к агрегату препарата — вместе с его планами лечения.
  *
- * Правила здесь не живут: сервис проверяет доступ, загружает агрегат, вызывает его метод и
- * сохраняет результат. Планы обслуживаются отсюда же, потому что план не существует без
- * препарата и все проверки на нём — это проверки против остатка.
+ * Каждая команда устроена одинаково: загрузить строку под блокировкой, поднять из неё
+ * доменное состояние, вызвать метод домена, записать результат обратно в ту же строку.
+ * Правил здесь нет — они в `domain.drug.Drug`.
  */
 @Service
 class DrugService(
     private val drugRepository: DrugRepository,
-    private val userService: UserService
+    private val userRepository: UserRepository,
+    private val medKitRepository: MedKitRepository
 ) {
 
     private val logger = LoggerFactory.getLogger(DrugService::class.java)
@@ -59,34 +67,33 @@ class DrugService(
         return drugRepository.findViewsAccessibleTo(userId)
     }
 
-    // ── Поиск сущности для команд ────────────────────────────────────────────────
+    // ── Поиск строки для команд ──────────────────────────────────────────────────
     //
     // Имена говорят о поведении: `find` может не найти и возвращает `null`, `require`
     // считает отсутствие ошибкой вызывающего и даёт 404, `lock` вдобавок берёт блокировку
-    // строки. Раньше все три назывались `find…`, и по имени нельзя было понять, что
-    // вызываешь.
+    // строки.
 
     @Transactional(readOnly = true)
-    fun findById(drugId: UUID): Drug? = drugRepository.findByIdOrNull(drugId)
+    fun findById(drugId: UUID): DrugEntity? = drugRepository.findByIdOrNull(drugId)
 
     @Transactional(readOnly = true)
-    fun requireById(drugId: UUID): Drug = findById(drugId) ?: throw notFound()
+    fun requireById(drugId: UUID): DrugEntity = findById(drugId) ?: throw notFound()
 
     @Transactional(readOnly = true)
-    fun findAccessible(drugId: UUID, userId: UUID): Drug? =
+    fun findAccessible(drugId: UUID, userId: UUID): DrugEntity? =
         drugRepository.findAccessible(drugId, userId)
 
     @Transactional(readOnly = true)
-    fun requireAccessible(drugId: UUID, userId: UUID): Drug =
+    fun requireAccessible(drugId: UUID, userId: UUID): DrugEntity =
         findAccessible(drugId, userId) ?: throw notFound()
 
     /** То же плюс блокировка строки на время транзакции. */
     @Transactional(readOnly = true)
-    fun lockAccessible(drugId: UUID, userId: UUID): Drug =
+    fun lockAccessible(drugId: UUID, userId: UUID): DrugEntity =
         drugRepository.lockAccessible(drugId, userId) ?: throw notFound()
 
     @Transactional(readOnly = true)
-    fun findAllByMedKit(medKitId: UUID): List<Drug> {
+    fun findAllByMedKit(medKitId: UUID): List<DrugEntity> {
         logger.debug("Finding all drugs for medkit: {}", medKitId)
         return drugRepository.findAllByMedKitId(medKitId)
     }
@@ -97,18 +104,27 @@ class DrugService(
      */
     private fun notFound() = ResponseStatusException(HttpStatus.NOT_FOUND, "Drug not found or access denied")
 
+    // ── Обратная запись ──────────────────────────────────────────────────────────
+
+    private fun resolveUser(userId: UUID): User =
+        userRepository.findByIdOrNull(userId) ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "User not found")
+
+    private fun resolveMedKit(medKitId: UUID): MedKit =
+        medKitRepository.findByIdOrNull(medKitId) ?: throw notFound()
+
+    private fun save(entity: DrugEntity, state: Drug): DrugEntity {
+        state.applyTo(entity, ::resolveUser, ::resolveMedKit)
+        return drugRepository.save(entity)
+    }
+
     // ── Команды препарата ────────────────────────────────────────────────────────
-    //
-    // Все они устроены одинаково: блокировка доступного препарата, вызов метода агрегата,
-    // сохранение. Планы загружаются вторым запросом, когда команда до них дотрагивается;
-    // одним запросом вместе с корнем их брать нельзя, пока стоит `FOR UPDATE`.
 
     @Transactional
-    fun create(createDTO: DrugCreateRequest, medKit: MedKit, userId: UUID): Drug {
+    fun create(createDTO: DrugCreateRequest, medKit: MedKit, userId: UUID): DrugEntity {
         logger.debug("Creating drug: {} for user: {}", createDTO.name, userId)
 
-        val drug = Drug.create(
-            medKit = medKit,
+        val state = Drug.create(
+            medKitId = medKit.id,
             name = createDTO.name,
             quantity = createDTO.quantity,
             quantityUnit = createDTO.quantityUnit,
@@ -119,17 +135,18 @@ class DrugService(
             description = createDTO.description
         )
 
-        return drugRepository.save(drug)
+        return drugRepository.save(state.toNewEntity(medKit))
     }
 
     @Transactional
-    fun update(drugId: UUID, updateDTO: DrugPatchRequest, userId: UUID): Drug {
+    fun update(drugId: UUID, updateDTO: DrugPatchRequest, userId: UUID): DrugEntity {
         logger.debug("Updating drug: {}", drugId)
 
-        val drug = lockAccessible(drugId, userId)
+        val entity = lockAccessible(drugId, userId)
+        var state = entity.toDomain()
 
-        updateDTO.quantity?.let { drug.increaseQuantityTo(it) }
-        drug.describe(
+        updateDTO.quantity?.let { state = state.increaseQuantityTo(it) }
+        state = state.describe(
             DrugDetails(
                 name = updateDTO.name,
                 quantityUnit = updateDTO.quantityUnit,
@@ -141,15 +158,15 @@ class DrugService(
             )
         )
 
-        return drugRepository.save(drug)
+        return save(entity, state)
     }
 
     @Transactional
     fun delete(drugId: UUID, userId: UUID) {
         logger.debug("Deleting drug: {}", drugId)
 
-        val drug = requireAccessible(drugId, userId)
-        drugRepository.delete(drug)
+        val entity = requireAccessible(drugId, userId)
+        drugRepository.delete(entity)
     }
 
     /**
@@ -159,55 +176,49 @@ class DrugService(
      * недоступный препарат отвергается 404 ещё до списания.
      */
     @Transactional
-    fun consumeDrug(drugId: UUID, quantity: BigDecimal, userId: UUID): Drug? {
+    fun consumeDrug(drugId: UUID, quantity: BigDecimal, userId: UUID): DrugEntity? {
         logger.debug("Consuming {} of drug {}", quantity, drugId)
 
-        val drug = lockAccessible(drugId, userId)
+        val entity = lockAccessible(drugId, userId)
+        val outcome = entity.toDomain().consume(quantity)
 
-        if (drug.consume(quantity)) {
-            drugRepository.delete(drug)
+        if (outcome.exhausted) {
+            drugRepository.delete(entity)
             return null
         }
-        return drugRepository.save(drug)
+        return save(entity, outcome.drug)
     }
 
     // ── Команды планов лечения ───────────────────────────────────────────────────
-    //
-    // План — часть агрегата, поэтому меняется через его корень: и проверка против остатка,
-    // и запрет второго плана того же пользователя формулируются только там, где известны
-    // остаток и все остальные планы разом.
 
     @Transactional
     fun createPlan(userId: UUID, drugId: UUID, plannedAmount: BigDecimal): TreatmentPlan {
         logger.debug("Creating treatment plan for user {} and drug {}", userId, drugId)
 
-        val user = userService.findById(userId)
-        val drug = lockAccessible(drugId, userId)
+        val entity = lockAccessible(drugId, userId)
+        val state = entity.toDomain().createPlan(userId, plannedAmount)
+        save(entity, state)
 
-        val plan = drug.createPlan(user, plannedAmount)
-        drugRepository.save(drug)
-        return plan
+        return state.requirePlanOf(userId)
     }
 
     @Transactional
     fun changePlan(userId: UUID, drugId: UUID, plannedAmount: BigDecimal): TreatmentPlan {
         logger.debug("Updating treatment plan for user {} and drug {}", userId, drugId)
 
-        val drug = lockAccessible(drugId, userId)
+        val entity = lockAccessible(drugId, userId)
+        val state = entity.toDomain().changePlan(userId, plannedAmount)
+        save(entity, state)
 
-        val plan = drug.changePlan(userId, plannedAmount)
-        drugRepository.save(drug)
-        return plan
+        return state.requirePlanOf(userId)
     }
 
     @Transactional
     fun cancelPlan(userId: UUID, drugId: UUID) {
         logger.debug("Deleting treatment plan for user {} and drug {}", userId, drugId)
 
-        val drug = lockAccessible(drugId, userId)
-
-        drug.cancelPlan(userId)
-        drugRepository.save(drug)
+        val entity = lockAccessible(drugId, userId)
+        save(entity, entity.toDomain().cancelPlan(userId))
     }
 
     /**
@@ -220,14 +231,31 @@ class DrugService(
     fun recordIntake(userId: UUID, drugId: UUID, quantityConsumed: BigDecimal): TreatmentPlan? {
         logger.debug("Recording intake for user {} and drug {}, quantity: {}", userId, drugId, quantityConsumed)
 
-        val drug = lockAccessible(drugId, userId)
+        val entity = lockAccessible(drugId, userId)
+        val outcome = entity.toDomain().applyIntake(userId, quantityConsumed)
 
-        val outcome = drug.applyIntake(userId, quantityConsumed)
         if (outcome.drugExhausted) {
-            drugRepository.delete(drug)
+            drugRepository.delete(entity)
             return null
         }
-        drugRepository.save(drug)
+        save(entity, outcome.drug)
         return outcome.plan
+    }
+
+    /** Переезд препарата в другую аптечку вместе с судьбой планов. */
+    @Transactional
+    fun moveTo(drugId: UUID, targetMedKit: MedKit, accessibleUserIds: Set<UUID>, userId: UUID): DrugEntity {
+        logger.debug("Moving drug {} to medkit {}", drugId, targetMedKit.id)
+
+        val entity = lockAccessible(drugId, userId)
+        val state = entity.toDomain().moveTo(targetMedKit.id, accessibleUserIds)
+
+        return save(entity, state)
+    }
+
+    /** Убирает план участника, если он есть: используется при выходе из аптечки. */
+    @Transactional
+    fun revokePlanOf(entity: DrugEntity, userId: UUID) {
+        save(entity, entity.toDomain().revokePlanOf(userId))
     }
 }

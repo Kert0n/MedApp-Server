@@ -1,4 +1,4 @@
-package org.kert0n.medappserver.db.model
+package org.kert0n.medappserver.domain.drug
 
 import java.util.UUID
 import kotlin.test.assertEquals
@@ -7,25 +7,31 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
+import org.kert0n.medappserver.domain.error.InsufficientStock
+import org.kert0n.medappserver.domain.error.IntakeExceedsPlan
+import org.kert0n.medappserver.domain.error.InvalidQuantity
+import org.kert0n.medappserver.domain.error.NoSuchTreatmentPlan
+import org.kert0n.medappserver.domain.error.PlannedAmountExceedsStock
+import org.kert0n.medappserver.domain.error.QuantityNotIncreased
+import org.kert0n.medappserver.domain.error.TreatmentPlanAlreadyExists
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
 
 /**
- * Инварианты агрегата без Spring и без базы.
+ * Инварианты агрегата.
  *
- * Правила проверяются там, где они записаны, поэтому проверке не нужны ни контекст, ни
- * контейнер: агрегат — обычный объект, и всё, что он решает, он решает по своим полям.
- * Тем же самым правилам, но уже вместе с записью в базу, посвящены `DrugServiceTest` и
- * `PlanReconciliationTest`.
+ * Ни Spring, ни базы, ни единой сущности: домен — неизменяемые значения, а участники здесь
+ * всего лишь идентификаторы. Тем же правилам, но уже вместе с записью в базу, посвящены
+ * `DrugServiceTest` и `PlanReconciliationTest`.
  */
 class DrugAggregateTest {
 
-    private val kit = MedKit()
-    private val alice = User(UUID.randomUUID(), "alice")
-    private val bob = User(UUID.randomUUID(), "bob")
+    private val kit = UUID.randomUUID()
+    private val alice = UUID.randomUUID()
+    private val bob = UUID.randomUUID()
 
     private fun drug(quantity: Double): Drug =
-        Drug.create(medKit = kit, name = "Aspirin", quantity = qty(quantity), quantityUnit = "pills")
+        Drug.create(medKitId = kit, name = "Aspirin", quantity = qty(quantity), quantityUnit = "pills")
 
     // ── Создание ─────────────────────────────────────────────────────────────────
 
@@ -43,14 +49,11 @@ class DrugAggregateTest {
 
     @Test
     fun `количество можно только увеличить`() {
-        val drug = drug(10.0)
-
-        drug.increaseQuantityTo(qty(25.0))
+        val drug = drug(10.0).increaseQuantityTo(qty(25.0))
         assertQty(25.0, drug.quantity)
 
         assertFailsWith<QuantityNotIncreased> { drug.increaseQuantityTo(qty(24.0)) }
         assertFailsWith<QuantityNotIncreased> { drug.increaseQuantityTo(qty(25.0)) }
-        assertQty(25.0, drug.quantity)
     }
 
     @Test
@@ -68,111 +71,106 @@ class DrugAggregateTest {
 
     @Test
     fun `списание всего остатка исчерпывает препарат и уносит планы`() {
-        val drug = drug(10.0)
-        drug.createPlan(alice, qty(4.0))
+        val drug = drug(10.0).createPlan(alice, qty(4.0))
 
-        assertTrue(drug.consume(qty(10.0)), "препарат кончился")
-        assertQty(0.0, drug.quantity)
-        assertTrue(drug.treatmentPlans.isEmpty(), "планы не переживают препарат")
+        val outcome = drug.consume(qty(10.0))
+
+        assertTrue(outcome.exhausted, "препарат кончился")
+        assertQty(0.0, outcome.drug.quantity)
+        assertTrue(outcome.drug.plans.isEmpty(), "планы не переживают препарат")
     }
 
     // ── Планы ────────────────────────────────────────────────────────────────────
 
     @Test
     fun `второй план того же пользователя отвергается`() {
-        val drug = drug(100.0)
-        drug.createPlan(alice, qty(10.0))
+        val drug = drug(100.0).createPlan(alice, qty(10.0))
 
         assertFailsWith<TreatmentPlanAlreadyExists> { drug.createPlan(alice, qty(5.0)) }
-        assertEquals(1, drug.treatmentPlans.size)
+        assertEquals(1, drug.plans.size)
     }
 
     @Test
     fun `сумма планов не может превысить остаток`() {
-        val drug = drug(100.0)
-        drug.createPlan(alice, qty(70.0))
+        val drug = drug(100.0).createPlan(alice, qty(70.0))
 
         assertFailsWith<PlannedAmountExceedsStock> { drug.createPlan(bob, qty(31.0)) }
         // Ровно остаток — можно: запрет на «больше», а не на «всё».
-        drug.createPlan(bob, qty(30.0))
-        assertQty(100.0, drug.plannedTotal)
+        val full = drug.createPlan(bob, qty(30.0))
+        assertQty(100.0, full.plannedTotal)
 
         // Свободного не осталось: даже наименьшее возможное количество не резервируется.
-        val carol = User(UUID.randomUUID(), "carol")
-        assertFailsWith<PlannedAmountExceedsStock> { drug.createPlan(carol, qty("0.000001")) }
+        val carol = UUID.randomUUID()
+        assertFailsWith<PlannedAmountExceedsStock> { full.createPlan(carol, qty("0.000001")) }
     }
 
     @Test
     fun `изменение плана не считает его прежний размер занятым`() {
         val drug = drug(100.0)
-        drug.createPlan(alice, qty(50.0))
-        drug.createPlan(bob, qty(30.0))
+            .createPlan(alice, qty(50.0))
+            .createPlan(bob, qty(30.0))
 
-        drug.changePlan(bob.id, qty(50.0))
-        assertQty(50.0, drug.planOf(bob.id)!!.plannedAmount)
+        val changed = drug.changePlan(bob, qty(50.0))
+        assertQty(50.0, changed.planOf(bob)!!.plannedAmount)
 
-        assertFailsWith<PlannedAmountExceedsStock> { drug.changePlan(bob.id, qty(51.0)) }
+        assertFailsWith<PlannedAmountExceedsStock> { changed.changePlan(bob, qty(51.0)) }
     }
 
     @Test
     fun `отмена несуществующего плана — ошибка, отзыв — нет`() {
         val drug = drug(100.0)
 
-        assertFailsWith<NoSuchTreatmentPlan> { drug.cancelPlan(alice.id) }
-        drug.revokePlanOf(alice.id)
+        assertFailsWith<NoSuchTreatmentPlan> { drug.cancelPlan(alice) }
+        assertEquals(drug, drug.revokePlanOf(alice))
     }
 
     // ── Приём ────────────────────────────────────────────────────────────────────
 
     @Test
     fun `приём уменьшает и план, и остаток`() {
-        val drug = drug(100.0)
-        drug.createPlan(alice, qty(30.0))
+        val drug = drug(100.0).createPlan(alice, qty(30.0))
 
-        val outcome = drug.applyIntake(alice.id, qty(10.0))
+        val outcome = drug.applyIntake(alice, qty(10.0))
 
         assertFalse(outcome.drugExhausted)
         assertQty(20.0, outcome.plan!!.plannedAmount)
-        assertQty(90.0, drug.quantity)
+        assertQty(90.0, outcome.drug.quantity)
     }
 
     @Test
     fun `приём больше собственного плана отвергается`() {
-        val drug = drug(100.0)
-        drug.createPlan(alice, qty(10.0))
+        val drug = drug(100.0).createPlan(alice, qty(10.0))
 
-        assertFailsWith<IntakeExceedsPlan> { drug.applyIntake(alice.id, qty(11.0)) }
+        assertFailsWith<IntakeExceedsPlan> { drug.applyIntake(alice, qty(11.0)) }
         assertQty(100.0, drug.quantity)
     }
 
     @Test
     fun `приём без плана отвергается`() {
-        assertFailsWith<NoSuchTreatmentPlan> { drug(100.0).applyIntake(alice.id, qty(1.0)) }
+        assertFailsWith<NoSuchTreatmentPlan> { drug(100.0).applyIntake(alice, qty(1.0)) }
     }
 
     @Test
     fun `приём, исчерпавший план, удаляет его и оставляет препарат`() {
-        val drug = drug(100.0)
-        drug.createPlan(alice, qty(10.0))
+        val drug = drug(100.0).createPlan(alice, qty(10.0))
 
-        val outcome = drug.applyIntake(alice.id, qty(10.0))
+        val outcome = drug.applyIntake(alice, qty(10.0))
 
         assertFalse(outcome.drugExhausted)
         assertNull(outcome.plan, "исчерпанный план не возвращается")
-        assertNull(drug.planOf(alice.id))
-        assertQty(90.0, drug.quantity)
+        assertNull(outcome.drug.planOf(alice))
+        assertQty(90.0, outcome.drug.quantity)
     }
 
     @Test
     fun `приём, исчерпавший препарат, уносит все планы`() {
-        val drug = drug(10.0)
-        drug.createPlan(alice, qty(10.0))
+        val drug = drug(10.0).createPlan(alice, qty(10.0))
 
-        val outcome = drug.applyIntake(alice.id, qty(10.0))
+        val outcome = drug.applyIntake(alice, qty(10.0))
 
         assertTrue(outcome.drugExhausted)
         assertNull(outcome.plan)
-        assertTrue(drug.treatmentPlans.isEmpty())
+        assertTrue(outcome.drug.plans.isEmpty())
     }
 
     // ── Пересчёт планов ──────────────────────────────────────────────────────────
@@ -180,26 +178,27 @@ class DrugAggregateTest {
     @Test
     fun `списание сжимает планы пропорционально`() {
         val drug = drug(100.0)
-        drug.createPlan(alice, qty(60.0))
-        drug.createPlan(bob, qty(40.0))
+            .createPlan(alice, qty(60.0))
+            .createPlan(bob, qty(40.0))
 
-        assertFalse(drug.consume(qty(50.0)))
+        val outcome = drug.consume(qty(50.0))
 
-        assertQty(30.0, drug.planOf(alice.id)!!.plannedAmount)
-        assertQty(20.0, drug.planOf(bob.id)!!.plannedAmount)
-        assertQty(50.0, drug.plannedTotal)
+        assertFalse(outcome.exhausted)
+        assertQty(30.0, outcome.drug.planOf(alice)!!.plannedAmount)
+        assertQty(20.0, outcome.drug.planOf(bob)!!.plannedAmount)
+        assertQty(50.0, outcome.drug.plannedTotal)
     }
 
     @Test
     fun `планы, укладывающиеся в остаток, не трогаются`() {
         val drug = drug(100.0)
-        drug.createPlan(alice, qty(20.0))
-        drug.createPlan(bob, qty(20.0))
+            .createPlan(alice, qty(20.0))
+            .createPlan(bob, qty(20.0))
 
-        drug.consume(qty(50.0))
+        val left = drug.consume(qty(50.0)).drug
 
-        assertQty(20.0, drug.planOf(alice.id)!!.plannedAmount)
-        assertQty(20.0, drug.planOf(bob.id)!!.plannedAmount)
+        assertQty(20.0, left.planOf(alice)!!.plannedAmount)
+        assertQty(20.0, left.planOf(bob)!!.plannedAmount)
     }
 
     /**
@@ -209,14 +208,14 @@ class DrugAggregateTest {
     @Test
     fun `бесконечный коэффициент не создаёт количества из воздуха`() {
         val drug = drug(90.0)
-        drug.createPlan(alice, qty(30.0))
-        drug.createPlan(bob, qty(60.0))
+            .createPlan(alice, qty(30.0))
+            .createPlan(bob, qty(60.0))
 
-        drug.consume(qty(30.0))
+        val left = drug.consume(qty(30.0)).drug
 
-        assertQty(20.0, drug.planOf(alice.id)!!.plannedAmount)
-        assertQty(40.0, drug.planOf(bob.id)!!.plannedAmount)
-        assertTrue(drug.plannedTotal <= drug.quantity, "сумма планов не превышает остаток")
+        assertQty(20.0, left.planOf(alice)!!.plannedAmount)
+        assertQty(40.0, left.planOf(bob)!!.plannedAmount)
+        assertTrue(left.plannedTotal <= left.quantity, "сумма планов не превышает остаток")
     }
 
     // ── Переезд ──────────────────────────────────────────────────────────────────
@@ -224,14 +223,14 @@ class DrugAggregateTest {
     @Test
     fun `переезд уносит планы тех, кто целевую аптечку не видит`() {
         val drug = drug(100.0)
-        drug.createPlan(alice, qty(30.0))
-        drug.createPlan(bob, qty(30.0))
-        val target = MedKit()
+            .createPlan(alice, qty(30.0))
+            .createPlan(bob, qty(30.0))
+        val target = UUID.randomUUID()
 
-        drug.moveTo(target, setOf(alice.id))
+        val moved = drug.moveTo(target, setOf(alice))
 
-        assertEquals(target.id, drug.medKit.id)
-        assertQty(30.0, drug.planOf(alice.id)!!.plannedAmount)
-        assertNull(drug.planOf(bob.id), "план без доступа не переезжает")
+        assertEquals(target, moved.medKitId)
+        assertQty(30.0, moved.planOf(alice)!!.plannedAmount)
+        assertNull(moved.planOf(bob), "план без доступа не переезжает")
     }
 }

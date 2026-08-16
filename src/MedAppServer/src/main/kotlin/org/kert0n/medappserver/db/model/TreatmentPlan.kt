@@ -2,6 +2,9 @@ package org.kert0n.medappserver.db.model
 
 import jakarta.persistence.*
 import jakarta.validation.constraints.NotNull
+import org.kert0n.medappserver.domain.quantity.QUANTITY_PRECISION
+import org.kert0n.medappserver.domain.quantity.QUANTITY_SCALE
+import org.kert0n.medappserver.domain.quantity.toQuantityScale
 import java.io.Serializable
 import java.math.BigDecimal
 import java.util.*

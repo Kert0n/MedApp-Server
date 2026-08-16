@@ -41,14 +41,10 @@ class MedKitDrugServices(
             medKitRepository.findByIdAndUsersIdWithUsers(targetMedKitId, userId) ?: throw ResponseStatusException(
                 HttpStatus.NOT_FOUND
             )
-        val drug = drugService.lockAccessible(drugId, userId)
-
         // Переезд и судьба планов — одно решение агрегата: планы тех, кто целевую аптечку не
         // видит, исчезают вместе с доступом.
         val targetUserIds = targetMedKit.users.map { it.id }.toSet()
-        drug.moveTo(targetMedKit, targetUserIds)
-
-        return drugRepository.save(drug)
+        return drugService.moveTo(drugId, targetMedKit, targetUserIds, userId)
     }
 
  //   fun findAllDrugsInMedkit(medKitId: UUID): List<Drug> = drugService.findAllByMedKit(medKitId)
@@ -59,7 +55,7 @@ class MedKitDrugServices(
         val medKit = medKitService.findByIdForUser(medKitId, userId)
         val user = userService.findById(userId)
         val drugs = drugRepository.findAllWithTreatmentPlansByMedKitId(medKitId)
-        drugs.forEach { drug -> drug.revokePlanOf(userId) }
+        drugs.forEach { drug -> drugService.revokePlanOf(drug, userId) }
         medKitService.removeUserFromMedKit(medKit, user)
     }
 
@@ -74,8 +70,8 @@ class MedKitDrugServices(
 
             // Get the IDs of everyone who has access to the new MedKit
             val usersWithAccess = targetMedKit.users.map { it.id }.toSet()
-            medKit.drugs.forEach { drug ->
-                drug.moveTo(targetMedKit, usersWithAccess)
+            medKit.drugs.toList().forEach { drug ->
+                drugService.moveTo(drug.id, targetMedKit, usersWithAccess, userId)
                 targetMedKit.drugs.add(drug)
             }
             // Sync

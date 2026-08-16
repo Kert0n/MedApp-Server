@@ -1,4 +1,4 @@
-package org.kert0n.medappserver.db.model
+package org.kert0n.medappserver.domain.quantity
 
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -17,8 +17,8 @@ const val QUANTITY_SCALE: Int = 6
 val QUANTITY_ROUNDING: RoundingMode = RoundingMode.DOWN
 
 /**
- * Приводит результат арифметики к представлению колонки. Сеттеры [Drug] и [TreatmentPlan] применяют
- * это правило ко всем изменениям, поэтому масштаб не расползается от умножений и делений.
+ * Приводит результат арифметики к представлению колонки. Домен применяет это правило ко всем
+ * изменениям, поэтому масштаб не расползается от умножений и делений.
  */
 fun BigDecimal.toQuantityScale(): BigDecimal = setScale(QUANTITY_SCALE, QUANTITY_ROUNDING)
 

@@ -9,11 +9,11 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.api.DrugPatchRequest
-import org.kert0n.medappserver.db.model.InsufficientStock
-import org.kert0n.medappserver.db.model.IntakeExceedsPlan
-import org.kert0n.medappserver.db.model.PlannedAmountExceedsStock
-import org.kert0n.medappserver.db.model.QuantityNotIncreased
-import org.kert0n.medappserver.db.model.TreatmentPlanAlreadyExists
+import org.kert0n.medappserver.domain.error.InsufficientStock
+import org.kert0n.medappserver.domain.error.IntakeExceedsPlan
+import org.kert0n.medappserver.domain.error.PlannedAmountExceedsStock
+import org.kert0n.medappserver.domain.error.QuantityNotIncreased
+import org.kert0n.medappserver.domain.error.TreatmentPlanAlreadyExists
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
@@ -286,8 +286,8 @@ class DrugServiceTest {
         val plan = drugService.createPlan(alice.id, drug.id, qty(30.0))
 
         assertQty(30.0, plan.plannedAmount)
-        assertEquals(alice.id, plan.user.id)
-        assertEquals(drug.id, plan.drug.id)
+        assertEquals(alice.id, plan.userId)
+        assertQty(30.0, dbHelper.userPlan(alice.id, drug.id))
     }
 
     @Test

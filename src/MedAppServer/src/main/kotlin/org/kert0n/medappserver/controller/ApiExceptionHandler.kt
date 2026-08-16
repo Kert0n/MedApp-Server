@@ -1,8 +1,8 @@
 package org.kert0n.medappserver.controller
 
-import org.kert0n.medappserver.db.model.DomainRuleViolated
-import org.kert0n.medappserver.db.model.NoSuchTreatmentPlan
-import org.kert0n.medappserver.db.model.TreatmentPlanAlreadyExists
+import org.kert0n.medappserver.domain.error.DomainRuleViolated
+import org.kert0n.medappserver.domain.error.NoSuchTreatmentPlan
+import org.kert0n.medappserver.domain.error.TreatmentPlanAlreadyExists
 import org.springframework.http.HttpStatus
 import org.springframework.http.ProblemDetail
 import org.springframework.web.bind.MethodArgumentNotValidException

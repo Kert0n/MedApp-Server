@@ -1,6 +1,8 @@
 package org.kert0n.medappserver.db.model
 
 import org.junit.jupiter.api.Test
+import org.kert0n.medappserver.domain.quantity.QUANTITY_SCALE
+import org.kert0n.medappserver.domain.quantity.isZero
 import java.math.BigDecimal
 import kotlin.test.assertEquals
 

@@ -10,8 +10,7 @@ import org.kert0n.medappserver.api.TreatmentPlanPatchRequest
 import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.MedKit
 import org.kert0n.medappserver.db.model.User
-import org.kert0n.medappserver.db.model.TreatmentPlan
-import org.kert0n.medappserver.db.model.TreatmentPlanKey
+import org.kert0n.medappserver.domain.drug.TreatmentPlan
 import org.kert0n.medappserver.db.repository.DrugView
 import org.kert0n.medappserver.db.repository.MedKitSummary
 import org.kert0n.medappserver.db.repository.TreatmentPlanView
@@ -183,8 +182,7 @@ class ResourceApiContractTest {
 
     @Test
     fun `план лечения создаётся и меняется`() {
-        val user = User(id = userId, hashedKey = "k")
-        val plan = TreatmentPlan(planKey = TreatmentPlanKey(userId, drugId), user = user, drug = drug, plannedAmount = qty(20.0))
+        val plan = TreatmentPlan(userId = userId, plannedAmount = qty(20.0))
         whenever(drugService.createPlan(eq(userId), eq(drugId), any())).thenReturn(plan)
         whenever(drugService.changePlan(eq(userId), eq(drugId), any())).thenReturn(plan)
         whenever(treatmentPlanService.requireView(userId, drugId)).thenReturn(TreatmentPlanView(drugId, qty(20.0)))

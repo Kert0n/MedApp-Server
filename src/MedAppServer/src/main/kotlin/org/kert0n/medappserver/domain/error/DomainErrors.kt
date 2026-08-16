@@ -1,4 +1,4 @@
-package org.kert0n.medappserver.db.model
+package org.kert0n.medappserver.domain.error
 
 /**
  * Отказы агрегата.

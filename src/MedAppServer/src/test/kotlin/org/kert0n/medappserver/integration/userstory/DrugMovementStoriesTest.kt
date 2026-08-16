@@ -3,7 +3,7 @@ package org.kert0n.medappserver.integration.userstory
 import jakarta.persistence.EntityManager
 import java.util.*
 import kotlin.test.*
-import org.kert0n.medappserver.db.model.PlannedAmountExceedsStock
+import org.kert0n.medappserver.domain.error.PlannedAmountExceedsStock
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.db.model.Drug
