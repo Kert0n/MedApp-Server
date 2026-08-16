@@ -14,7 +14,7 @@ import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.models.UsingService
+import org.kert0n.medappserver.services.models.TreatmentPlanService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
@@ -35,7 +35,7 @@ class MedKitDrugServicesTest {
     @Autowired
     private lateinit var medKitService: MedKitService
     @Autowired
-    private lateinit var usingService: UsingService
+    private lateinit var treatmentPlanService: TreatmentPlanService
     @Autowired
     private lateinit var drugRepository: DrugRepository
     @Autowired
@@ -102,8 +102,8 @@ class MedKitDrugServicesTest {
         val drug = dbHelper.freshDrug(sourceKit, 50.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(10.0)))
-        usingService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(10.0)))
+        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(10.0)))
+        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(10.0)))
         dbHelper.flushAndClear()
 
         medKitDrugServices.moveDrug(drug.id, targetKit.id, alice.id)
@@ -148,7 +148,7 @@ class MedKitDrugServicesTest {
     // ── removeUserFromMedKit ──
 
     @Test
-    fun `removeUserFromMedKit removes user and their usings`() {
+    fun `removeUserFromMedKit removes user and their treatment plans`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
         val kit = medKitService.createNew(alice.id)
@@ -156,7 +156,7 @@ class MedKitDrugServicesTest {
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(10.0)))
+        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(10.0)))
         dbHelper.flushAndClear()
 
         medKitDrugServices.removeUserFromMedKit(kit.id, bob.id)
@@ -205,7 +205,7 @@ class MedKitDrugServicesTest {
     }
 
     @Test
-    fun `delete with transfer strips unauthorized usings`() {
+    fun `delete with transfer strips unauthorized treatment plans`() {
         val alice = dbHelper.freshUser("alice")
         val charlie = dbHelper.freshUser("charlie")
         val oldKit = medKitService.createNew(alice.id)
@@ -216,8 +216,8 @@ class MedKitDrugServicesTest {
         val drug = dbHelper.freshDrug(oldKit, 90.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
-        usingService.createTreatmentPlan(charlie.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
+        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
+        treatmentPlanService.createTreatmentPlan(charlie.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
         dbHelper.flushAndClear()
 
         medKitDrugServices.delete(oldKit.id, alice.id, newKit.id)

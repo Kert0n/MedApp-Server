@@ -13,11 +13,11 @@ interface UserRepository : JpaRepository<User, UUID> {
     @Query(
         """
         SELECT u FROM User u
-        JOIN u.usings us
+        JOIN u.treatmentPlans us
         WHERE us.drug.id = :drugId
     """
     )
-    fun findByUsingsDrugId(@Param("drugId") drugId: UUID): Set<User>
+    fun findByTreatmentPlansDrugId(@Param("drugId") drugId: UUID): Set<User>
 
     @Query(
         """

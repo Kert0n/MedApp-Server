@@ -10,11 +10,11 @@ import org.kert0n.medappserver.api.TreatmentPlanPatchRequest
 import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.db.repository.DrugRepository
+import org.kert0n.medappserver.db.repository.TreatmentPlanRepository
 import org.kert0n.medappserver.db.repository.UserRepository
-import org.kert0n.medappserver.db.repository.UsingRepository
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.models.UsingService
+import org.kert0n.medappserver.services.models.TreatmentPlanService
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -34,7 +34,7 @@ class DrugMovementStoriesTest {
     private lateinit var drugRepository: DrugRepository
 
     @Autowired
-    private lateinit var usingRepository: UsingRepository
+    private lateinit var treatmentPlanRepository: TreatmentPlanRepository
 
     @Autowired
     private lateinit var entityManager: EntityManager
@@ -49,7 +49,7 @@ class DrugMovementStoriesTest {
     private lateinit var medKitDrugServices: MedKitDrugServices
 
     @Autowired
-    private lateinit var usingService: UsingService
+    private lateinit var treatmentPlanService: TreatmentPlanService
 
     /**
      * Story 11: Moving drugs between medkits preserves treatment plans
@@ -74,7 +74,7 @@ class DrugMovementStoriesTest {
         entityManager.flush()
 
         // Create treatment plan
-        usingService.createTreatmentPlan(user.id, TreatmentPlanCreateRequest(painkiller.id, qty(20.0)))
+        treatmentPlanService.createTreatmentPlan(user.id, TreatmentPlanCreateRequest(painkiller.id, qty(20.0)))
         entityManager.flush()
 
         // Move drug to travel kit
@@ -96,7 +96,7 @@ class DrugMovementStoriesTest {
         assertEquals(1, travelKitDrugs.size)
 
         // Treatment plan still exists
-        val plan = usingRepository.findByUserIdAndDrugId(user.id, painkiller.id)
+        val plan = treatmentPlanRepository.findByUserIdAndDrugId(user.id, painkiller.id)
         assertNotNull(plan, "Treatment plan should survive drug move")
         assertQty(20.0, plan.plannedAmount)
 
@@ -129,12 +129,12 @@ class DrugMovementStoriesTest {
         entityManager.flush()
 
         // Anna plans 40, Bob plans 30 (total 70, available 30)
-        usingService.createTreatmentPlan(anna.id, TreatmentPlanCreateRequest(drug.id, qty(40.0)))
-        usingService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
+        treatmentPlanService.createTreatmentPlan(anna.id, TreatmentPlanCreateRequest(drug.id, qty(40.0)))
+        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
         entityManager.flush()
 
         // Anna should be able to increase her plan to 70 (available for her = 100 - 30 (bob) = 70)
-        val updated = usingService.updateTreatmentPlan(
+        val updated = treatmentPlanService.updateTreatmentPlan(
             anna.id, drug.id,
             TreatmentPlanPatchRequest(qty(70.0))
         )
@@ -146,7 +146,7 @@ class DrugMovementStoriesTest {
 
         // Anna should NOT be able to increase to 71 (exceeds available)
         assertFailsWith<ResponseStatusException> {
-            usingService.updateTreatmentPlan(
+            treatmentPlanService.updateTreatmentPlan(
                 anna.id, drug.id,
                 TreatmentPlanPatchRequest(qty(71.0))
             )
@@ -176,12 +176,12 @@ class DrugMovementStoriesTest {
         entityManager.flush()
 
         // Create treatment plan
-        usingService.createTreatmentPlan(user.id, TreatmentPlanCreateRequest(drug.id, qty(25.0)))
+        treatmentPlanService.createTreatmentPlan(user.id, TreatmentPlanCreateRequest(drug.id, qty(25.0)))
         entityManager.flush()
         entityManager.clear()
 
         // Verify plan exists
-        val plan = usingRepository.findByUserIdAndDrugId(user.id, drug.id)
+        val plan = treatmentPlanRepository.findByUserIdAndDrugId(user.id, drug.id)
         assertNotNull(plan)
 
         // Delete the drug
@@ -194,7 +194,7 @@ class DrugMovementStoriesTest {
         assertNull(deletedDrug)
 
         // Treatment plan should also be gone (cascade)
-        val deletedPlan = usingRepository.findByUserIdAndDrugId(user.id, drug.id)
+        val deletedPlan = treatmentPlanRepository.findByUserIdAndDrugId(user.id, drug.id)
         assertNull(deletedPlan)
 
         println("✅ Story 13 passed: Deleting drug removed its treatment plans")
@@ -232,9 +232,9 @@ class DrugMovementStoriesTest {
         )
 
         // Everyone creates a plan for 30 pills
-        usingService.createTreatmentPlan(anna.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
-        usingService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
-        usingService.createTreatmentPlan(charlie.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
+        treatmentPlanService.createTreatmentPlan(anna.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
+        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
+        treatmentPlanService.createTreatmentPlan(charlie.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
 
         entityManager.flush()
         entityManager.clear()
@@ -246,10 +246,10 @@ class DrugMovementStoriesTest {
         entityManager.clear()
 
         // Verify: Anna and Bob still have their plans. Charlie's plan was deleted.
-        assertNotNull(usingRepository.findByUserIdAndDrugId(anna.id, drug.id), "Anna should keep her plan")
-        assertNotNull(usingRepository.findByUserIdAndDrugId(bob.id, drug.id), "Bob should keep his plan")
+        assertNotNull(treatmentPlanRepository.findByUserIdAndDrugId(anna.id, drug.id), "Anna should keep her plan")
+        assertNotNull(treatmentPlanRepository.findByUserIdAndDrugId(bob.id, drug.id), "Bob should keep his plan")
         assertNull(
-            usingRepository.findByUserIdAndDrugId(charlie.id, drug.id),
+            treatmentPlanRepository.findByUserIdAndDrugId(charlie.id, drug.id),
             "Charlie's plan MUST be deleted for security"
         )
 
@@ -281,8 +281,8 @@ class DrugMovementStoriesTest {
         )
 
         // Anna plans 60, Bob plans 40. Total planned = 100.
-        usingService.createTreatmentPlan(anna.id, TreatmentPlanCreateRequest(drug.id, qty(60.0)))
-        usingService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(40.0)))
+        treatmentPlanService.createTreatmentPlan(anna.id, TreatmentPlanCreateRequest(drug.id, qty(60.0)))
+        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(40.0)))
 
         entityManager.flush()
         entityManager.clear()
@@ -295,8 +295,8 @@ class DrugMovementStoriesTest {
         entityManager.flush()
         entityManager.clear()
 
-        val annaPlan = usingRepository.findByUserIdAndDrugId(anna.id, drug.id)!!
-        val bobPlan = usingRepository.findByUserIdAndDrugId(bob.id, drug.id)!!
+        val annaPlan = treatmentPlanRepository.findByUserIdAndDrugId(anna.id, drug.id)!!
+        val bobPlan = treatmentPlanRepository.findByUserIdAndDrugId(bob.id, drug.id)!!
 
         // Plans should be exactly halved
         assertQty(30.0, annaPlan.plannedAmount, "Anna's plan should scale from 60 to 30")

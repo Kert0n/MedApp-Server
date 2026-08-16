@@ -80,8 +80,6 @@ CREATE TABLE usings
     user_id        uuid                        NOT NULL,
     drug_id        uuid                        NOT NULL,
     planned_amount numeric(19, 6)              NOT NULL,
-    created_at     timestamp(6) with time zone NOT NULL,
-    last_modified  timestamp(6) with time zone NOT NULL,
 
     CONSTRAINT usings_pkey PRIMARY KEY (drug_id, user_id),
     CONSTRAINT usings_user_fkey FOREIGN KEY (user_id) REFERENCES users (id),

@@ -4,7 +4,6 @@ import jakarta.persistence.*
 import jakarta.validation.constraints.NotNull
 import java.io.Serializable
 import java.math.BigDecimal
-import java.time.Instant
 import java.util.*
 
 
@@ -16,10 +15,10 @@ import java.util.*
         Index(name = "ix_usings_drug_id", columnList = "drug_id")
     ]
 )
-class Using(
+class TreatmentPlan(
 
     @EmbeddedId
-    var usingKey: UsingKey = UsingKey(),
+    var planKey: TreatmentPlanKey = TreatmentPlanKey(),
 
     @ManyToOne(fetch = FetchType.EAGER)
     @MapsId("userId")
@@ -42,15 +41,7 @@ class Using(
     )
     var drug: Drug,
 
-    plannedAmount: BigDecimal,
-
-    @NotNull
-    @Column(name = "last_modified", nullable = false)
-    var lastModified: Instant = Instant.now(),
-
-    @NotNull
-    @Column(name = "created_at", nullable = false)
-    var createdAt: Instant = Instant.now()
+    plannedAmount: BigDecimal
 ) {
 
     /** Запланированное количество, нормализованное до масштаба колонки `NUMERIC(19,6)`. */
@@ -65,19 +56,19 @@ class Using(
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
 
-        other as Using
+        other as TreatmentPlan
 
-        return usingKey == other.usingKey
+        return planKey == other.planKey
     }
 
     override fun hashCode(): Int {
-        return usingKey.hashCode()
+        return planKey.hashCode()
     }
 }
 
 @Suppress("JpaDataSourceORMInspection")
 @Embeddable
-class UsingKey(
+class TreatmentPlanKey(
     @Column(name = "user_id")
     var userId: UUID = UUID(0, 0),
     @Column(name = "drug_id")
@@ -87,7 +78,7 @@ class UsingKey(
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
 
-        other as UsingKey
+        other as TreatmentPlanKey
 
         return userId == other.userId && drugId == other.drugId
     }

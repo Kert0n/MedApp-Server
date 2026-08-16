@@ -90,6 +90,6 @@ interface DrugRepository : JpaRepository<Drug, UUID> {
     fun findAccessible(@Param("drugId") drugId: UUID, @Param("userId") userId: UUID): Drug?
 
     /** Команде выхода из аптечки нужны сами планы: она их удаляет через коллекцию. */
-    @EntityGraph(attributePaths = ["usings"])
-    fun findAllWithUsingsByMedKitId(medKitId: UUID): List<Drug>
+    @EntityGraph(attributePaths = ["treatmentPlans"])
+    fun findAllWithTreatmentPlansByMedKitId(medKitId: UUID): List<Drug>
 }

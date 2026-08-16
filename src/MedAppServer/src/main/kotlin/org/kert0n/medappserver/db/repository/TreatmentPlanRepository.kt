@@ -1,21 +1,21 @@
 package org.kert0n.medappserver.db.repository
 
-import org.kert0n.medappserver.db.model.Using
-import org.kert0n.medappserver.db.model.UsingKey
+import org.kert0n.medappserver.db.model.TreatmentPlan
+import org.kert0n.medappserver.db.model.TreatmentPlanKey
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 import java.util.*
 
-interface UsingRepository : JpaRepository<Using, UsingKey> {
+interface TreatmentPlanRepository : JpaRepository<TreatmentPlan, TreatmentPlanKey> {
 
     // ── Чтение ───────────────────────────────────────────────────────────────────
 
     @Query(
         """
         SELECT new org.kert0n.medappserver.db.repository.TreatmentPlanView(u.drug.id, u.plannedAmount)
-        FROM Using u
+        FROM TreatmentPlan u
         WHERE u.user.id = :userId
         ORDER BY u.drug.name
         """
@@ -25,7 +25,7 @@ interface UsingRepository : JpaRepository<Using, UsingKey> {
     @Query(
         """
         SELECT new org.kert0n.medappserver.db.repository.TreatmentPlanView(u.drug.id, u.plannedAmount)
-        FROM Using u
+        FROM TreatmentPlan u
         WHERE u.user.id = :userId AND u.drug.id = :drugId
         """
     )
@@ -33,30 +33,30 @@ interface UsingRepository : JpaRepository<Using, UsingKey> {
 
 
     // JPQL for explicit queries
-    fun findAllByUsingKeyUserId(userId: UUID): List<Using>
+    fun findAllByPlanKeyUserId(userId: UUID): List<TreatmentPlan>
 
-    fun findAllByUsingKeyDrugId(@Param("drugId") drugId: UUID): List<Using>
+    fun findAllByPlanKeyDrugId(@Param("drugId") drugId: UUID): List<TreatmentPlan>
 
     @Query(
         """
-        SELECT u FROM Using u
+        SELECT u FROM TreatmentPlan u
         WHERE u.user.id = :userId AND u.drug.id = :drugId
     """
     )
-    fun findByUserIdAndDrugId(@Param("userId") userId: UUID, @Param("drugId") drugId: UUID): Using?
+    fun findByUserIdAndDrugId(@Param("userId") userId: UUID, @Param("drugId") drugId: UUID): TreatmentPlan?
 
     // JPQL with fetch for eager loading
     @Query(
         """
-        SELECT u FROM Using u
+        SELECT u FROM TreatmentPlan u
         JOIN FETCH u.drug
         WHERE u.user.id = :userId
     """
     )
-    fun findAllByUserIdWithDrug(@Param("userId") userId: UUID): List<Using>
+    fun findAllByUserIdWithDrug(@Param("userId") userId: UUID): List<TreatmentPlan>
 
     @Modifying
-    @Query("DELETE FROM Using u WHERE u.user.id = :userId AND u.drug.medKit.id = :medKitId")
+    @Query("DELETE FROM TreatmentPlan u WHERE u.user.id = :userId AND u.drug.medKit.id = :medKitId")
     fun deleteByUserIdAndMedKitId(userId: UUID, medKitId: UUID)
 
 

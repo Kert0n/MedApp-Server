@@ -13,7 +13,7 @@ class UserBuilder {
     private var id: UUID = UUID.randomUUID()
     private var hashedKey: String = "hashed_test_key_123"
     private val medKits: MutableSet<MedKit> = mutableSetOf()
-    private val usings: MutableSet<Using> = mutableSetOf()
+    private val treatmentPlans: MutableSet<TreatmentPlan> = mutableSetOf()
 
     fun withId(id: UUID) = apply { this.id = id }
     fun withHashedKey(key: String) = apply { this.hashedKey = key }
@@ -22,7 +22,7 @@ class UserBuilder {
     fun build(): User {
         val user = User(id = id, hashedKey = hashedKey)
         user.medKits.addAll(medKits)
-        user.usings.addAll(usings)
+        user.treatmentPlans.addAll(treatmentPlans)
         return user
     }
 }
@@ -81,14 +81,14 @@ class DrugBuilder(private val medKit: MedKit) {
     }
 }
 
-class UsingBuilder(private val user: User, private val drug: Drug) {
+class TreatmentPlanBuilder(private val user: User, private val drug: Drug) {
     private var plannedAmount: Double = 30.0
 
     fun withPlannedAmount(amount: Double) = apply { this.plannedAmount = amount }
 
-    fun build(): Using {
-        return Using(
-            usingKey = UsingKey(userId = user.id, drugId = drug.id),
+    fun build(): TreatmentPlan {
+        return TreatmentPlan(
+            planKey = TreatmentPlanKey(userId = user.id, drugId = drug.id),
             user = user,
             drug = drug,
             plannedAmount = qty(plannedAmount)
@@ -168,6 +168,6 @@ class DrugPatchRequestBuilder {
 fun userBuilder() = UserBuilder()
 fun medKitBuilder() = MedKitBuilder()
 fun drugBuilder(medKit: MedKit) = DrugBuilder(medKit)
-fun usingBuilder(user: User, drug: Drug) = UsingBuilder(user, drug)
+fun treatmentPlanBuilder(user: User, drug: Drug) = TreatmentPlanBuilder(user, drug)
 fun drugCreateDTOBuilder() = DrugCreateRequestBuilder()
 fun drugUpdateDTOBuilder() = DrugPatchRequestBuilder()

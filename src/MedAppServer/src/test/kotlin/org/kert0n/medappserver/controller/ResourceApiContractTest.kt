@@ -10,14 +10,14 @@ import org.kert0n.medappserver.api.TreatmentPlanPatchRequest
 import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.MedKit
 import org.kert0n.medappserver.db.model.User
-import org.kert0n.medappserver.db.model.Using
-import org.kert0n.medappserver.db.model.UsingKey
+import org.kert0n.medappserver.db.model.TreatmentPlan
+import org.kert0n.medappserver.db.model.TreatmentPlanKey
 import org.kert0n.medappserver.db.repository.DrugView
 import org.kert0n.medappserver.db.repository.MedKitSummary
 import org.kert0n.medappserver.db.repository.TreatmentPlanView
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.models.UsingService
+import org.kert0n.medappserver.services.models.TreatmentPlanService
 import org.kert0n.medappserver.services.models.VidalDrugService
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
 import org.kert0n.medappserver.testutil.ApiRoutes
@@ -57,7 +57,7 @@ class ResourceApiContractTest {
     @Autowired private lateinit var objectMapper: ObjectMapper
 
     @MockitoBean private lateinit var drugService: DrugService
-    @MockitoBean private lateinit var usingService: UsingService
+    @MockitoBean private lateinit var treatmentPlanService: TreatmentPlanService
     @MockitoBean private lateinit var medKitService: MedKitService
     @MockitoBean private lateinit var medKitDrugServices: MedKitDrugServices
     @MockitoBean private lateinit var vidalDrugService: VidalDrugService
@@ -184,10 +184,10 @@ class ResourceApiContractTest {
     @Test
     fun `план лечения создаётся и меняется`() {
         val user = User(id = userId, hashedKey = "k")
-        val plan = Using(usingKey = UsingKey(userId, drugId), user = user, drug = drug, plannedAmount = qty(20.0))
-        whenever(usingService.createTreatmentPlan(eq(userId), any())).thenReturn(plan)
-        whenever(usingService.updateTreatmentPlan(eq(userId), eq(drugId), any())).thenReturn(plan)
-        whenever(usingService.requireView(userId, drugId)).thenReturn(TreatmentPlanView(drugId, qty(20.0)))
+        val plan = TreatmentPlan(planKey = TreatmentPlanKey(userId, drugId), user = user, drug = drug, plannedAmount = qty(20.0))
+        whenever(treatmentPlanService.createTreatmentPlan(eq(userId), any())).thenReturn(plan)
+        whenever(treatmentPlanService.updateTreatmentPlan(eq(userId), eq(drugId), any())).thenReturn(plan)
+        whenever(treatmentPlanService.requireView(userId, drugId)).thenReturn(TreatmentPlanView(drugId, qty(20.0)))
 
         mockMvc.perform(
             post(ApiRoutes.TREATMENT_PLANS).with(asUser())
@@ -210,7 +210,7 @@ class ResourceApiContractTest {
 
     @Test
     fun `план лечения удаляется`() {
-        doNothing().whenever(usingService).deleteTreatmentPlan(userId, drugId)
+        doNothing().whenever(treatmentPlanService).deleteTreatmentPlan(userId, drugId)
 
         mockMvc.perform(delete(ApiRoutes.treatmentPlan(drugId)).with(asUser()))
             .andExpect(status().isNoContent)

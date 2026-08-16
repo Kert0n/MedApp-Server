@@ -46,7 +46,7 @@ interface MedKitRepository : JpaRepository<MedKit, UUID> {
     )
     fun findMedKitSummariesByUserId(@Param("userId") userId: UUID): Set<MedKitSummary>
 
-    @EntityGraph(attributePaths = ["users", "drugs", "drugs.usings"])
+    @EntityGraph(attributePaths = ["users", "drugs", "drugs.treatmentPlans"])
     @Query(
         """
         SELECT mk FROM MedKit mk

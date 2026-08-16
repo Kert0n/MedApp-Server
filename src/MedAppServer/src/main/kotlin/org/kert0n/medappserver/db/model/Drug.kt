@@ -67,7 +67,7 @@ class Drug(
     var medKit: MedKit,
 
     @OneToMany(mappedBy = "drug", fetch = FetchType.LAZY, cascade = [CascadeType.ALL], orphanRemoval = true)
-    var usings: MutableSet<Using> = mutableSetOf()
+    var treatmentPlans: MutableSet<TreatmentPlan> = mutableSetOf()
 
 ) {
 

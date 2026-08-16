@@ -11,8 +11,8 @@ import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.db.model.*
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
+import org.kert0n.medappserver.db.repository.TreatmentPlanRepository
 import org.kert0n.medappserver.db.repository.UserRepository
-import org.kert0n.medappserver.db.repository.UsingRepository
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
@@ -33,7 +33,7 @@ class RepositoryIntegrationTests {
     private lateinit var drugRepository: DrugRepository
 
     @Autowired
-    private lateinit var usingRepository: UsingRepository
+    private lateinit var treatmentPlanRepository: TreatmentPlanRepository
 
     @Autowired
     private lateinit var entityManager: EntityManager
@@ -120,21 +120,21 @@ class RepositoryIntegrationTests {
     }
 
     @Test
-    fun `DrugRepository - findByUsingsUserId returns drugs user has treatment plans for`() {
+    fun `DrugRepository - findByTreatmentPlansUserId returns drugs user has treatment plans for`() {
         val user = createUser()
         val medKit = createMedKitForUser(user)
         val drug1 = createDrug(medKit, "Drug A")
         val drug2 = createDrug(medKit, "Drug B")
         entityManager.flush()
 
-        // Create using for drug1 only
-        val using = Using(
-            usingKey = UsingKey(user.id, drug1.id),
+        // Create treatment plan for drug1 only
+        val plan = TreatmentPlan(
+            planKey = TreatmentPlanKey(user.id, drug1.id),
             user = user,
             drug = drug1,
             plannedAmount = qty(10.0)
         )
-        usingRepository.save(using)
+        treatmentPlanRepository.save(plan)
         entityManager.flush()
         entityManager.clear()
 
@@ -154,27 +154,27 @@ class RepositoryIntegrationTests {
         val drug = createDrug(medKit)
         entityManager.flush()
 
-        val using1 = Using(
-            usingKey = UsingKey(user1.id, drug.id),
+        val plan1 = TreatmentPlan(
+            planKey = TreatmentPlanKey(user1.id, drug.id),
             user = user1,
             drug = drug,
             plannedAmount = qty(20.0)
         )
-        val using2 = Using(
-            usingKey = UsingKey(user2.id, drug.id),
+        val plan2 = TreatmentPlan(
+            planKey = TreatmentPlanKey(user2.id, drug.id),
             user = user2,
             drug = drug,
             plannedAmount = qty(30.0)
         )
-        usingRepository.save(using1)
-        usingRepository.save(using2)
+        treatmentPlanRepository.save(plan1)
+        treatmentPlanRepository.save(plan2)
         entityManager.flush()
         entityManager.clear()
         assertQty(50.0, drugRepository.findByIdOrNull(drug.id)?.totalPlannedAmount)
     }
 
     @Test
-    fun `DrugRepository - sumPlannedAmount returns 0 when no usings exist`() {
+    fun `DrugRepository - sumPlannedAmount returns 0 when no treatment plans exist`() {
         val user = createUser()
         val medKit = createMedKitForUser(user)
         val drug = createDrug(medKit)
@@ -250,7 +250,7 @@ class RepositoryIntegrationTests {
     }
 
     @Test
-    fun `UserRepository - findByUsingsDrugId returns users with treatment plans for drug`() {
+    fun `UserRepository - findByTreatmentPlansDrugId returns users with treatment plans for drug`() {
         val user1 = createUser()
         val user2 = createUser()
         val medKit = createMedKitForUser(user1)
@@ -259,17 +259,17 @@ class RepositoryIntegrationTests {
         val drug = createDrug(medKit)
         entityManager.flush()
 
-        val using = Using(
-            usingKey = UsingKey(user1.id, drug.id),
+        val plan = TreatmentPlan(
+            planKey = TreatmentPlanKey(user1.id, drug.id),
             user = user1,
             drug = drug,
             plannedAmount = qty(10.0)
         )
-        usingRepository.save(using)
+        treatmentPlanRepository.save(plan)
         entityManager.flush()
         entityManager.clear()
 
-        val users = userRepository.findByUsingsDrugId(drug.id)
+        val users = userRepository.findByTreatmentPlansDrugId(drug.id)
         assertEquals(1, users.size)
         assertTrue(users.any { it.id == user1.id })
     }
@@ -287,27 +287,27 @@ class RepositoryIntegrationTests {
         assertEquals(2, found.medKits.size)
     }
 
-    // === UsingRepository Tests ===
+    // === TreatmentPlanRepository Tests ===
 
     @Test
-    fun `UsingRepository - findAllByUserId returns usings for user`() {
+    fun `TreatmentPlanRepository - findAllByUserId returns treatment plans for user`() {
         val user = createUser()
         val medKit = createMedKitForUser(user)
         val drug1 = createDrug(medKit, "Drug A")
         val drug2 = createDrug(medKit, "Drug B")
         entityManager.flush()
 
-        usingRepository.save(Using(UsingKey(user.id, drug1.id), user, drug1, qty(10.0)))
-        usingRepository.save(Using(UsingKey(user.id, drug2.id), user, drug2, qty(20.0)))
+        treatmentPlanRepository.save(TreatmentPlan(TreatmentPlanKey(user.id, drug1.id), user, drug1, qty(10.0)))
+        treatmentPlanRepository.save(TreatmentPlan(TreatmentPlanKey(user.id, drug2.id), user, drug2, qty(20.0)))
         entityManager.flush()
         entityManager.clear()
 
-        val usings = usingRepository.findAllByUsingKeyUserId(user.id)
-        assertEquals(2, usings.size)
+        val plans = treatmentPlanRepository.findAllByPlanKeyUserId(user.id)
+        assertEquals(2, plans.size)
     }
 
     @Test
-    fun `UsingRepository - findAllByDrugId returns usings for drug`() {
+    fun `TreatmentPlanRepository - findAllByDrugId returns treatment plans for drug`() {
         val user1 = createUser()
         val user2 = createUser()
         val medKit = createMedKitForUser(user1)
@@ -316,55 +316,55 @@ class RepositoryIntegrationTests {
         val drug = createDrug(medKit)
         entityManager.flush()
 
-        usingRepository.save(Using(UsingKey(user1.id, drug.id), user1, drug, qty(10.0)))
-        usingRepository.save(Using(UsingKey(user2.id, drug.id), user2, drug, qty(20.0)))
+        treatmentPlanRepository.save(TreatmentPlan(TreatmentPlanKey(user1.id, drug.id), user1, drug, qty(10.0)))
+        treatmentPlanRepository.save(TreatmentPlan(TreatmentPlanKey(user2.id, drug.id), user2, drug, qty(20.0)))
         entityManager.flush()
         entityManager.clear()
 
-        val usings = usingRepository.findAllByUsingKeyDrugId(drug.id)
-        assertEquals(2, usings.size)
+        val plans = treatmentPlanRepository.findAllByPlanKeyDrugId(drug.id)
+        assertEquals(2, plans.size)
     }
 
     @Test
-    fun `UsingRepository - findByUserIdAndDrugId returns specific using`() {
+    fun `TreatmentPlanRepository - findByUserIdAndDrugId returns specific treatment plan`() {
         val user = createUser()
         val medKit = createMedKitForUser(user)
         val drug = createDrug(medKit)
         entityManager.flush()
 
-        usingRepository.save(Using(UsingKey(user.id, drug.id), user, drug, qty(15.0)))
+        treatmentPlanRepository.save(TreatmentPlan(TreatmentPlanKey(user.id, drug.id), user, drug, qty(15.0)))
         entityManager.flush()
         entityManager.clear()
 
-        val using = usingRepository.findByUserIdAndDrugId(user.id, drug.id)
-        assertNotNull(using)
-        assertQty(15.0, using.plannedAmount)
+        val plan = treatmentPlanRepository.findByUserIdAndDrugId(user.id, drug.id)
+        assertNotNull(plan)
+        assertQty(15.0, plan.plannedAmount)
     }
 
     @Test
-    fun `UsingRepository - findByUserIdAndDrugId returns null when not found`() {
+    fun `TreatmentPlanRepository - findByUserIdAndDrugId returns null when not found`() {
         val user = createUser()
         val medKit = createMedKitForUser(user)
         val drug = createDrug(medKit)
         entityManager.flush()
 
-        val using = usingRepository.findByUserIdAndDrugId(user.id, drug.id)
-        assertNull(using)
+        val plan = treatmentPlanRepository.findByUserIdAndDrugId(user.id, drug.id)
+        assertNull(plan)
     }
 
     @Test
-    fun `UsingRepository - findAllByUserIdWithDrug eagerly loads drug`() {
+    fun `TreatmentPlanRepository - findAllByUserIdWithDrug eagerly loads drug`() {
         val user = createUser()
         val medKit = createMedKitForUser(user)
         val drug = createDrug(medKit, "TestDrug")
         entityManager.flush()
 
-        usingRepository.save(Using(UsingKey(user.id, drug.id), user, drug, qty(10.0)))
+        treatmentPlanRepository.save(TreatmentPlan(TreatmentPlanKey(user.id, drug.id), user, drug, qty(10.0)))
         entityManager.flush()
         entityManager.clear()
 
-        val usings = usingRepository.findAllByUserIdWithDrug(user.id)
-        assertEquals(1, usings.size)
-        assertEquals("TestDrug", usings[0].drug.name)
+        val plans = treatmentPlanRepository.findAllByUserIdWithDrug(user.id)
+        assertEquals(1, plans.size)
+        assertEquals("TestDrug", plans[0].drug.name)
     }
 }
