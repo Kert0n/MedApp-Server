@@ -53,6 +53,18 @@ class PublicEndpointScopeTest {
         mockMvc.perform(get("/actuator/health")).andExpect(status().isOk)
     }
 
+    /**
+     * Документация должна открываться без токена — и по тому адресу, который открыт в
+     * конфигурации безопасности. Раньше `/swagger` был разрешён, но ни на что не отображён:
+     * security пропускала запрос, а дальше он упирался в отсутствие обработчика и отвечал
+     * 404 со стектрейсом Whitelabel-страницы.
+     */
+    @Test
+    fun `документация доступна без токена`() {
+        mockMvc.perform(get("/swagger")).andExpect(status().is3xxRedirection)
+        mockMvc.perform(get("/v3/api-docs")).andExpect(status().isOk)
+    }
+
     @Test
     fun `other actuator endpoints require authentication`() {
         // Not exposed over HTTP by default either, so 401 rather than 404 is what we
