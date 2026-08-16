@@ -39,7 +39,7 @@ class TreatmentPlanController(
     @ApiResponse(responseCode = "200", description = "Plans returned")
     fun listTreatmentPlans(authentication: Authentication): List<TreatmentPlanDTO> {
         logger.debug("GET /v1/treatment-plans by user {}", authentication.userId)
-        return usingService.findAllByUser(authentication.userId).map { it.toDto() }
+        return usingService.viewsOf(authentication.userId).map { it.toDto() }
     }
 
     @GetMapping("/{drugId}")
@@ -50,7 +50,7 @@ class TreatmentPlanController(
         @Parameter(description = "Drug identifier") @PathVariable drugId: UUID
     ): TreatmentPlanDTO {
         logger.debug("GET /v1/treatment-plans/{} by user {}", drugId, authentication.userId)
-        return usingService.findByUserAndDrug(authentication.userId, drugId).toDto()
+        return usingService.requireView(authentication.userId, drugId).toDto()
     }
 
     @PostMapping
@@ -65,7 +65,8 @@ class TreatmentPlanController(
         @Valid @RequestBody request: TreatmentPlanCreateRequest
     ): TreatmentPlanDTO {
         logger.debug("POST /v1/treatment-plans by user {} for drug {}", authentication.userId, request.drugId)
-        return usingService.createTreatmentPlan(authentication.userId, request).toDto()
+        usingService.createTreatmentPlan(authentication.userId, request)
+        return usingService.requireView(authentication.userId, request.drugId).toDto()
     }
 
     @PatchMapping("/{drugId}")
@@ -79,7 +80,8 @@ class TreatmentPlanController(
         @Valid @RequestBody request: TreatmentPlanPatchRequest
     ): TreatmentPlanDTO {
         logger.debug("PATCH /v1/treatment-plans/{} by user {}", drugId, authentication.userId)
-        return usingService.updateTreatmentPlan(authentication.userId, drugId, request).toDto()
+        usingService.updateTreatmentPlan(authentication.userId, drugId, request)
+        return usingService.requireView(authentication.userId, drugId).toDto()
     }
 
     @DeleteMapping("/{drugId}")

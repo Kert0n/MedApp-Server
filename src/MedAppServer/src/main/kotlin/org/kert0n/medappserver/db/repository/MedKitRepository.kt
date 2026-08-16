@@ -24,24 +24,6 @@ interface MedKitRepository : JpaRepository<MedKit, UUID> {
     @Query(
         """
         SELECT mk FROM MedKit mk
-        LEFT JOIN FETCH mk.drugs
-        WHERE mk.id = :id
-    """
-    )
-    fun findByIdWithDrugs(@Param("id") id: UUID): MedKit?
-
-    @Query(
-        """
-        SELECT DISTINCT mk FROM MedKit mk
-        LEFT JOIN FETCH mk.users
-        WHERE mk.id = :id
-    """
-    )
-    fun findByIdWithUsers(@Param("id") id: UUID): MedKit?
-
-    @Query(
-        """
-        SELECT mk FROM MedKit mk
         JOIN mk.users u
         WHERE mk.id = :id AND u.id = :userId
     """
@@ -90,19 +72,5 @@ interface MedKitRepository : JpaRepository<MedKit, UUID> {
         @Param("userId") userId: UUID
     ): MedKit?
 
-    @Modifying
-    @Query("UPDATE Drug d SET d.medKit.id = :targetMedKitId WHERE d.medKit.id = :homeMedkit")
-    fun reassignMedKit(homeMedkit: UUID, targetMedKitId: UUID)
 }
 
-/**
- * Счётчики аптечки без загрузки её содержимого.
- *
- * Своя проекция, а не DTO представления: запрос не должен зависеть от формы публичного
- * ответа — иначе правка контракта API меняла бы SQL.
- */
-data class MedKitSummary(
-    val id: java.util.UUID,
-    val userCount: Long,
-    val drugCount: Long
-)

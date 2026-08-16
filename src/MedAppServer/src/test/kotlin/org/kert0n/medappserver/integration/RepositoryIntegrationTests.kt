@@ -101,7 +101,7 @@ class RepositoryIntegrationTests {
         entityManager.flush()
         entityManager.clear()
 
-        val found = drugRepository.findByIdAndMedKitUsersId(drug.id, user.id)
+        val found = drugRepository.findAccessible(drug.id, user.id)
         assertNotNull(found)
         assertEquals(drug.id, found.id)
     }
@@ -115,7 +115,7 @@ class RepositoryIntegrationTests {
         entityManager.flush()
         entityManager.clear()
 
-        val found = drugRepository.findByIdAndMedKitUsersId(drug.id, user2.id)
+        val found = drugRepository.findAccessible(drug.id, user2.id)
         assertNull(found)
     }
 
@@ -138,9 +138,10 @@ class RepositoryIntegrationTests {
         entityManager.flush()
         entityManager.clear()
 
-        val drugs = drugRepository.findByUsingsUserId(user.id)
-        assertEquals(1, drugs.size)
-        assertEquals(drug1.id, drugs[0].id)
+        // Читается проекцией по доступным аптечкам: отдельный запрос «препараты, на которые
+        // есть план» больше не нужен, снимок и так отдаёт всё содержимое аптечек.
+        val views = drugRepository.findViewsAccessibleTo(user.id)
+        assertEquals(1, views.count { it.id == drug1.id })
     }
 
     @Test
@@ -230,34 +231,7 @@ class RepositoryIntegrationTests {
         assertNull(found)
     }
 
-    @Test
-    fun `MedKitRepository - findByIdWithDrugs eagerly loads drugs`() {
-        val user = createUser()
-        val medKit = createMedKitForUser(user)
-        createDrug(medKit, "Drug A")
-        createDrug(medKit, "Drug B")
-        entityManager.flush()
-        entityManager.clear()
 
-        val found = medKitRepository.findByIdWithDrugs(medKit.id)
-        assertNotNull(found)
-        assertEquals(2, found.drugs.size)
-    }
-
-    @Test
-    fun `MedKitRepository - findByIdWithUsers eagerly loads users`() {
-        val user1 = createUser()
-        val user2 = createUser()
-        val medKit = createMedKitForUser(user1)
-        user2.medKits.add(medKit)
-        medKit.users.add(user2)
-        entityManager.flush()
-        entityManager.clear()
-
-        val found = medKitRepository.findByIdWithUsers(medKit.id)
-        assertNotNull(found)
-        assertEquals(2, found.users.size)
-    }
 
     // === UserRepository Tests ===
 

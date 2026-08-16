@@ -51,8 +51,6 @@ class Drug(
     @Column(name = "description", length = Integer.MAX_VALUE)
     var description: String?,
 
-    totalPlannedAmount: BigDecimal = BigDecimal.ZERO,
-
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(
@@ -82,13 +80,17 @@ class Drug(
         }
 
     /**
-     * Сумма планов, вычисленная базой при загрузке. Собственного столбца нет: писать сюда
-     * нечего, присваивание меняет только копию в памяти текущей транзакции и не сохраняется.
-     * `var` стоит потому, что поле заполняет Hibernate. Из модели записи поле уходит вместе
-     * с переездом планов внутрь агрегата Drug.
+     * Сумма планов, вычисленная базой при загрузке: единственное определение этой величины.
+     *
+     * Собственного столбца нет — подзапрос подставляется в тот же SELECT, которым читается
+     * препарат, поэтому список приходит вместе с суммами одним запросом. Присваивание
+     * меняет только копию в памяти текущей транзакции и не сохраняется; `var` стоит потому,
+     * что поле заполняет Hibernate, а команды правят его вручную, компенсируя устаревание
+     * внутри транзакции. И присваивание, и сама формула уходят вместе с переездом планов
+     * внутрь агрегата Drug.
      */
     @Formula("(SELECT COALESCE(SUM(u.planned_amount), 0) FROM usings u WHERE u.drug_id = id)")
-    var totalPlannedAmount: BigDecimal = totalPlannedAmount
+    var totalPlannedAmount: BigDecimal = BigDecimal.ZERO
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true

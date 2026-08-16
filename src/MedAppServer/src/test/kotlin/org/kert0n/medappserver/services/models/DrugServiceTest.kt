@@ -40,7 +40,7 @@ class DrugServiceTest {
     @Test
     fun `findById throws NOT_FOUND for non-existent drug`() {
         assertThrows<ResponseStatusException> {
-            drugService.findById(UUID.randomUUID())
+            drugService.requireById(UUID.randomUUID())
         }
     }
 
@@ -55,7 +55,7 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         assertThrows<ResponseStatusException> {
-            drugService.findByIdForUser(drug.id, eve.id)
+            drugService.requireAccessible(drug.id, eve.id)
         }
     }
 
@@ -68,7 +68,7 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         assertThrows<ResponseStatusException> {
-            drugService.findByIdForUserForUpdate(drug.id, eve.id)
+            drugService.lockAccessible(drug.id, eve.id)
         }
     }
 
@@ -92,12 +92,12 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
-        assertEquals(0, drugService.findAllByUser(alice.id).size)
+        assertEquals(0, usingService.viewsOf(alice.id).size)
 
         usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(10.0)))
         dbHelper.flushAndClear()
 
-        assertEquals(1, drugService.findAllByUser(alice.id).size)
+        assertEquals(1, usingService.viewsOf(alice.id).size)
     }
 
     // ── create ──
@@ -132,7 +132,7 @@ class DrugServiceTest {
         drugService.update(drug.id, emptyUpdate, alice.id)
         dbHelper.flushAndClear()
 
-        assertQty(10.0, drugService.findById(drug.id).quantity)
+        assertQty(10.0, drugService.requireById(drug.id).quantity)
     }
 
     @Test
@@ -150,7 +150,7 @@ class DrugServiceTest {
         drugService.update(drug.id, fullUpdate, alice.id)
         dbHelper.flushAndClear()
 
-        val updated = drugService.findById(drug.id)
+        val updated = drugService.requireById(drug.id)
         assertEquals("New Name", updated.name)
         assertQty(100.0, updated.quantity)
         assertEquals("ml", updated.quantityUnit)
@@ -204,7 +204,7 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         assertThrows<ResponseStatusException> {
-            drugService.findById(drug.id)
+            drugService.requireById(drug.id)
         }
     }
 
@@ -246,8 +246,11 @@ class DrugServiceTest {
         usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(25.0)))
         dbHelper.flushAndClear()
 
-        val dto = drugService.findById(drug.id).toDto()
+        // DTO собирается только из формы чтения: сумма планов приходит из запроса, а не из
+        // поля сущности, которое после изменения планов в той же транзакции устаревало.
+        val dto = drugService.requireView(drug.id, alice.id).toDto()
         assertQty(25.0, dto.plannedQuantity)
         assertQty(100.0, dto.quantity)
+        assertQty(75.0, dto.availableQuantity)
     }
 }

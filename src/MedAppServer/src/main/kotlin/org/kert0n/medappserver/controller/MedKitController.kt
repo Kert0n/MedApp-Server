@@ -9,6 +9,7 @@ import org.kert0n.medappserver.api.InvitationDTO
 import org.kert0n.medappserver.api.MedKitCreatedDTO
 import org.kert0n.medappserver.api.MedKitDTO
 import org.kert0n.medappserver.api.MedKitSummaryDTO
+import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.api.MembershipCreateRequest
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.userId
@@ -42,9 +43,7 @@ class MedKitController(
     @ApiResponse(responseCode = "200", description = "Kits returned")
     fun listMedKits(authentication: Authentication): Set<MedKitSummaryDTO> {
         logger.debug("GET /v1/med-kits by user {}", authentication.userId)
-        return medKitService.findMedKitSummaries(authentication.userId)
-            .map { MedKitSummaryDTO(id = it.id, userCount = it.userCount, drugCount = it.drugCount) }
-            .toSet()
+        return medKitService.findMedKitSummaries(authentication.userId).map { it.toDto() }.toSet()
     }
 
     @GetMapping("/{medKitId}")

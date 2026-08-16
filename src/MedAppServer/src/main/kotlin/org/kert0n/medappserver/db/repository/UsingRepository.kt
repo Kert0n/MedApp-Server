@@ -10,6 +10,28 @@ import java.util.*
 
 interface UsingRepository : JpaRepository<Using, UsingKey> {
 
+    // ── Чтение ───────────────────────────────────────────────────────────────────
+
+    @Query(
+        """
+        SELECT new org.kert0n.medappserver.db.repository.TreatmentPlanView(u.drug.id, u.plannedAmount)
+        FROM Using u
+        WHERE u.user.id = :userId
+        ORDER BY u.drug.name
+        """
+    )
+    fun findViewsOf(@Param("userId") userId: UUID): List<TreatmentPlanView>
+
+    @Query(
+        """
+        SELECT new org.kert0n.medappserver.db.repository.TreatmentPlanView(u.drug.id, u.plannedAmount)
+        FROM Using u
+        WHERE u.user.id = :userId AND u.drug.id = :drugId
+        """
+    )
+    fun findView(@Param("userId") userId: UUID, @Param("drugId") drugId: UUID): TreatmentPlanView?
+
+
     // JPQL for explicit queries
     fun findAllByUsingKeyUserId(userId: UUID): List<Using>
 

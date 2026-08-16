@@ -9,6 +9,26 @@ import java.util.*
 interface VidalDrugRepository : JpaRepository<VidalDrug, UUID> {
 
     /**
+     * Карточка справочника с уже развёрнутыми названиями формы и единицы.
+     *
+     * Джойн вместо EAGER-связей: поиск — нативный запрос, join fetch к нему не приделать, и
+     * каждая строка выдачи тянула за собой отдельную загрузку справочников.
+     */
+    @Query(
+        """
+        SELECT new org.kert0n.medappserver.db.repository.DrugTemplateView(
+            v.id, v.name, v.nameLat, v.activeSubstance, f.name, v.category, q.name,
+            v.manufacturer, v.country, v.description)
+        FROM VidalDrug v
+        LEFT JOIN v.formType f
+        LEFT JOIN v.quantityUnit q
+        WHERE v.id = :id
+        """
+    )
+    fun findViewById(@Param("id") id: UUID): DrugTemplateView?
+
+
+    /**
      * Поиск по названию, латинскому названию, действующему веществу и производителю.
      *
      * Раньше искали только по названию, и препарат нельзя было найти ни по действующему
