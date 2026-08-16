@@ -20,6 +20,8 @@ import org.kert0n.medappserver.application.orchestrator.TreatmentPlanOrchestrato
 import org.kert0n.medappserver.domain.drug.TreatmentPlan
 import org.kert0n.medappserver.domain.drug.TreatmentPlanBook
 import org.kert0n.medappserver.services.security.SecurityService
+import org.kert0n.medappserver.services.models.UserService
+import org.kert0n.medappserver.services.models.VidalDrugService
 import org.kert0n.medappserver.db.model.User
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -54,6 +56,8 @@ class QueryPlanTest {
     @Autowired private lateinit var treatmentPlanOrchestrator: TreatmentPlanOrchestrator
     @Autowired private lateinit var medKitOrchestrator: MedKitOrchestrator
     @Autowired private lateinit var securityService: SecurityService
+    @Autowired private lateinit var userService: UserService
+    @Autowired private lateinit var vidalDrugService: VidalDrugService
 
     @Autowired private lateinit var container: PostgreSQLContainer
 
@@ -242,6 +246,29 @@ class QueryPlanTest {
         captureAndRecord("CatalogueQueryService", "get") {
             catalogueQueryService.get(fixture.catalogueId)
         }
+        captureAndRecord("VidalDrugService", "fuzzySearch") {
+            vidalDrugService.fuzzySearch(fixture.catalogueName, 10)
+        }
+        captureAndRecord("VidalDrugService", "findById") {
+            vidalDrugService.findById(fixture.catalogueId)
+        }
+        captureAndRecord("UserService", "loadUserByUsername") {
+            userService.loadUserByUsername(fixture.ownerId.toString())
+        }
+        captureAndRecord("UserService", "findById") {
+            userService.findById(fixture.ownerId)
+        }
+        captureAndRecord("UserService", "registerNewUser") {
+            userService.registerNewUser(UUID.randomUUID(), "query-plan-secret", "198.51.100.10")
+        }
+        recordZeroSql("VidalDrugService", "fuzzySearch", "blank input") {
+            assertTrue(vidalDrugService.fuzzySearch("   ").isEmpty())
+        }
+        recordZeroSql("UserService", "loadUserByUsername", "malformed username") {
+            assertFailsWith<org.springframework.security.core.userdetails.UsernameNotFoundException> {
+                userService.loadUserByUsername("not-a-uuid")
+            }
+        }
     }
 
     @Test
@@ -262,7 +289,7 @@ class QueryPlanTest {
             securityService.recordLoginAttempt("192.0.2.1")
         }
         recordZeroSql("SecurityService", "generateToken", "success") {
-            securityService.generateToken(User(id = UUID.randomUUID(), hashedKey = hash))
+            securityService.generateToken(UUID.randomUUID().toString())
         }
         recordZeroSql("TreatmentPlanBook", "reconcileTo", "pure domain") {
             val drugId = UUID.randomUUID()

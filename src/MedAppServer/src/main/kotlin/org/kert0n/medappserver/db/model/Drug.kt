@@ -6,7 +6,6 @@ import jakarta.validation.constraints.Size
 import org.kert0n.medappserver.domain.quantity.QUANTITY_PRECISION
 import org.kert0n.medappserver.domain.quantity.QUANTITY_SCALE
 import org.kert0n.medappserver.domain.quantity.toQuantityScale
-import org.hibernate.annotations.Formula
 import java.math.BigDecimal
 import java.util.*
 
@@ -54,8 +53,6 @@ class Drug(
     @Column(name = "description", length = Integer.MAX_VALUE)
     var description: String?,
 
-    totalPlannedAmount: BigDecimal = BigDecimal.ZERO,
-
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(
@@ -67,41 +64,14 @@ class Drug(
                 "FOREIGN KEY (med_kit_id) REFERENCES med_kits (id) ON DELETE CASCADE"
         )
     )
-    var medKit: MedKit,
-
-    @OneToMany(mappedBy = "drug", fetch = FetchType.LAZY, cascade = [CascadeType.ALL], orphanRemoval = true)
-    var usings: MutableSet<TreatmentPlan> = mutableSetOf()
+    var medKit: MedKit
 
 ) {
 
-    /**
-     * Остаток препарата. Значение всегда нормализовано до [QUANTITY_SCALE].
-     *
-     * Приведение живёт в сеттере, а не в вызывающем коде: иначе каждая арифметическая строка в
-     * сервисах обрастает `.toQuantityScale()`, и достаточно один раз забыть — как scale начинает
-     * накапливаться (умножение складывает scale операндов), значения перестают совпадать с
-     * прочитанными из базы, и сравнения через `equals` начинают врать.
-     *
-     * Hibernate работает с полями напрямую (доступ FIELD, потому что `@Id` стоит на поле),
-     * поэтому при загрузке из БД сеттер не вызывается — и это правильно: в колонке
-     * `numeric(19,6)` значение уже нужного вида.
-     */
+    /** Stock is normalized to the NUMERIC(19,6) persistence contract on assignment. */
     @NotNull
     @Column(name = "quantity", nullable = false, precision = QUANTITY_PRECISION, scale = QUANTITY_SCALE)
     var quantity: BigDecimal = quantity.toQuantityScale()
-        set(value) {
-            field = value.toQuantityScale()
-        }
-
-    /**
-     * Сумма всех планов по препарату, считается формулой при загрузке.
-     *
-     * Нормализация здесь нужна ещё и потому, что формула возвращает разный scale: при
-     * отсутствии планов `COALESCE(SUM(...), 0)` даёт целочисленный ноль со scale 0, а при
-     * наличии — scale колонки. Сеттер убирает эту разницу для значений, которые проставляет код.
-     */
-    @Formula("(SELECT COALESCE(SUM(u.planned_amount), 0) FROM usings u WHERE u.drug_id = id)")
-    var totalPlannedAmount: BigDecimal = totalPlannedAmount.toQuantityScale()
         set(value) {
             field = value.toQuantityScale()
         }

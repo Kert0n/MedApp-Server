@@ -3,6 +3,7 @@ package org.kert0n.medappserver.controller
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.services.models.UserService
 import org.kert0n.medappserver.services.security.SecurityService
+import org.kert0n.medappserver.services.security.RegistrationSecret
 import org.mockito.kotlin.mock
 import org.springframework.mock.env.MockEnvironment
 import java.nio.file.Files
@@ -26,9 +27,13 @@ class RegistrationSecretGuardTest {
 
     private val mockProdSecret = "mock-prod-secret"
 
-    private fun build(secret: String, vararg profiles: String) = AuthController(
-        registrationSecret = secret,
-        environment = MockEnvironment().apply { setActiveProfiles(*profiles) },
+    private fun build(secret: String, vararg profiles: String) = RegistrationSecret(
+        value = secret,
+        environment = MockEnvironment().apply { setActiveProfiles(*profiles) }
+    )
+
+    private fun controller(secret: String, vararg profiles: String) = AuthController(
+        registrationSecret = build(secret, *profiles),
         userService = mock<UserService>(),
         securityService = mock<SecurityService>()
     )
@@ -50,12 +55,12 @@ class RegistrationSecretGuardTest {
     fun `стенд mock-prod с заглушкой поднимается`() {
         // Ровно ради этого профиль и существует: продовая конфигурация без продовых
         // секретов. Если бы проверка смотрела только на значение, стенд бы сломался.
-        build(mockProdSecret, "mock-prod")
+        controller(mockProdSecret, "mock-prod")
     }
 
     @Test
     fun `прод с настоящим секретом поднимается`() {
-        build("s3cret-from-docker-secrets", "mock-prod", "prod")
+        controller("s3cret-from-docker-secrets", "mock-prod", "prod")
     }
 
     @Test

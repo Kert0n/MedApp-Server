@@ -1,46 +1,13 @@
 #!/usr/bin/env python3
-"""Переписывает дамп справочника так, чтобы он грузился прямо в parsed_drugs.
+"""Convert a scraper pg_dump into data-only COPY statements for the application schema.
 
-Скраппер отдаёт pg_dump своей базы: таблица `drugs` со своими колонками, своей
-последовательностью, своим владельцем и шестью индексами. Приложению из всего этого нужны
-данные и ничего больше — `parsed_drugs` создаёт `db/schema.sql`. Пока дамп применялся как
-есть, инициализация делала одну и ту же работу дважды:
+Usage: python3 db/rewrite-catalogue-dump.py init-scripts/cleaned-init.sql
 
-  * 18087 строк писались в `drugs`, потом переносились в `parsed_drugs` и `drugs` удалялась;
-  * на `drugs` строились PRIMARY KEY, два FOREIGN KEY и шесть индексов — и всё это ради
-    таблицы, живущей несколько секунд (два из шести, `idx_drugs_name` и `ix_drugs_name`,
-    вдобавок дублировали друг друга);
-  * заводилась последовательность `drugs_id_seq` с `setval` — под колонку `id`, которая в
-    `parsed_drugs` не переезжает вообще;
-  * четыре `ALTER ... OWNER TO vidal` заставляли `load-catalogue.sh` создавать временную
-    роль, передавать владение и удалять её.
-
-После обработки остаются три `COPY` и `ANALYZE`. Ничего из перечисленного не выполняется, и
-`db/fill-parsed-drugs.sql` становится не нужен.
-
-Скрипт нужен в репозитории, а не одноразово: дамп пересобирается скраппером, и следующая
-выгрузка принесёт ту же структуру. Сам скраппер (`src/scrapper/`) не трогаем — он владеет
-своей схемой законно, преобразование к нуждам приложения его не касается.
-
-    python3 db/rewrite-catalogue-dump.py init-scripts/cleaned-init.sql
-
-По умолчанию файл переписывается на месте, рядом остаётся `.orig`. Запуск на уже обработанном
-файле безвреден: он распознаётся по отсутствию таблицы `drugs` и завершается без изменений.
-
-Что происходит с данными:
-
-  * `id` заменяется на UUID, выведенный из `drug_id` через uuid5. Детерминированно, поэтому
-    повторный прогон и пересборка дампа дают те же идентификаторы, а diff между выгрузками
-    показывает изменения данных, а не перетасовку ключей.
-  * `drug_id`, `form`, `dosage`, `url` отбрасываются: в сущности `VidalDrug` их нет. `form` —
-    текстовый дубль нормализованного `form_type_id`.
-  * `manufacturer` в справочнике пуст у 5 строк из 18087, а в сущности он NOT NULL. Такие
-    записи получают заглушку, чтобы каталог остался полным.
-  * `otc` в данных заполнен везде; подстановка `false` оставлена страховкой от будущих
-    выгрузок, где это перестанет быть верным.
-  * Порядок таблиц меняется: `form_types` и `quantity_units` идут перед `parsed_drugs`. В
-    исходном дампе `drugs` шла первой — там внешние ключи навешивались в самом конце, а
-    теперь они существуют с момента создания схемы и проверяются на COPY.
+The output contains form_types, quantity_units and parsed_drugs in foreign-key order.
+Catalogue UUIDs are derived deterministically from scraper drug_id values. Columns outside
+the public catalogue model are omitted, missing manufacturers receive a stable fallback,
+and PostgreSQL statistics are refreshed after loading. The source is preserved as `.orig`.
+Running the command on an already converted file is a no-op.
 """
 
 import re

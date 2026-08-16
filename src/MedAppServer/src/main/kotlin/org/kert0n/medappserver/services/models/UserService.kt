@@ -2,17 +2,15 @@ package org.kert0n.medappserver.services.models
 
 import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.db.repository.UserRepository
+import org.kert0n.medappserver.domain.error.UserNotFound
 import org.kert0n.medappserver.services.security.SecurityService
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.data.repository.findByIdOrNull
-import org.springframework.http.HttpStatus
-import org.springframework.security.core.Authentication
 import org.springframework.security.core.userdetails.UserDetails
 import org.springframework.security.core.userdetails.UserDetailsService
 import org.springframework.security.core.userdetails.UsernameNotFoundException
 import org.springframework.stereotype.Service
-import org.springframework.web.server.ResponseStatusException
 import java.util.*
 
 @Service
@@ -22,29 +20,16 @@ class UserService(
     private val logger: Logger = LoggerFactory.getLogger(UserService::class.java)
 ) : UserDetailsService {
 
-    fun registerNewUser(login: UUID, password: String, ip: String): User {
+    fun registerNewUser(login: UUID, password: String, ip: String): UUID {
         logger.debug("Register new user $login")
         val user = userRepository.save(
             User(login, securityService.hashPassword(password))
         )
         securityService.registerIncrease(ip)
-        return user
+        return user.id
     }
 
-    /**
-     * Логин у нас — это UUID, но приходит он строкой из заголовка Basic, то есть от кого
-     * угодно и в любом виде.
-     *
-     * `UUID.fromString` на мусоре бросает `IllegalArgumentException`, и Spring Security
-     * заворачивает его в `InternalAuthenticationServiceException`. Статус наружу при этом
-     * оставался верным — 401, потому что это всё-таки `AuthenticationException`, — но
-     * каждый такой запрос печатал в лог полный стектрейс как внутреннюю ошибку. То есть
-     * любой неаутентифицированный клиент мог одной строкой в заголовке заставить сервер
-     * писать стектрейсы, а дежурного — искать несуществующий сбой.
-     *
-     * Неразобранный логин — это «такого пользователя нет», а не сбой: тот же
-     * [UsernameNotFoundException], что и для несуществующего UUID.
-     */
+    /** Malformed Basic usernames are authentication failures, not server errors. */
     override fun loadUserByUsername(username: String): UserDetails {
         logger.debug("Load user $username")
         val id = runCatching { UUID.fromString(username) }.getOrNull()
@@ -54,16 +39,6 @@ class UserService(
 
     fun findById(id: UUID): User {
         logger.debug("Find user by id $id")
-        return userRepository.findByIdOrNull(id) ?: throw ResponseStatusException(
-            HttpStatus.NOT_FOUND,
-            "User with ID $id not found"
-        )
+        return userRepository.findByIdOrNull(id) ?: throw UserNotFound(id)
     }
-
-    // fun findAllByDrug(drugId: UUID): Set<User> = userRepository.findByUsingsDrugId(drugId)
-
-
 }
-
-val Authentication.userId: UUID
-    get() = UUID.fromString(this.name)

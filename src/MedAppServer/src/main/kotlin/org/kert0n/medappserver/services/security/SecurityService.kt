@@ -1,7 +1,6 @@
 package org.kert0n.medappserver.services.security
 
 import com.sksamuel.aedile.core.Cache
-import org.kert0n.medappserver.db.model.User
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.security.crypto.password.PasswordEncoder
@@ -40,82 +39,44 @@ class SecurityService(
     fun hashToken(token: String): String =
         Base64.encode(MessageDigest.getInstance("SHA-256").digest(token.toByteArray()))
 
-    /**
-     * Compares two shared secrets without leaking how much of a candidate was correct.
-     *
-     * `==` on strings stops at the first differing character, so response time depends on
-     * the length of the matching prefix. Both sides are hashed first because
-     * [MessageDigest.isEqual] itself returns early when lengths differ — hashing makes both
-     * inputs the same length, so neither the content nor the length of the expected secret
-     * shows through.
-     */
+    /** Compares fixed-length secret digests in constant time. */
     fun secretsMatch(candidate: String, expected: String): Boolean = MessageDigest.isEqual(
         hashToken(candidate).toByteArray(StandardCharsets.UTF_8),
         hashToken(expected).toByteArray(StandardCharsets.UTF_8)
     )
 
 
-    fun generateToken(user: User, termInMinutes: Long = authenticationTerm): String {
+    fun generateToken(subject: String, termInMinutes: Long = authenticationTerm): String {
         val now = Instant.now()
         return encoder.encode(
             JwtEncoderParameters.from(
                 JwtClaimsSet.builder().run {
                     issuedAt(now)
                     expiresAt(now.plus(termInMinutes, ChronoUnit.MINUTES))
-                    subject(user.id.toString())
+                    subject(subject)
                     build()
                 }
             )
         ).tokenValue
     }
 
-    /**
-     * Cache key for a client address, so no address is used as a key verbatim.
-     *
-     * Plain SHA-256 on purpose. A keyed digest would be more machinery for nothing here:
-     * entries expire within minutes, the cache is in-memory and dies with the process, and
-     * anyone able to read that heap can see the live connections anyway.
-     */
+    /** Client addresses are represented in ephemeral caches only by their SHA-256 digest. */
     private fun addressCacheKey(clientAddress: String): String = hashToken(clientAddress)
 
-    /**
-     * Tracks successful registrations per client address to throttle automated signups.
-     *
-     * Two imprecisions are accepted deliberately, because this only has to deter casual
-     * bots and is not a security boundary:
-     *  - the check happens before the increment, so concurrent requests can slip past the
-     *    limit together;
-     *  - the comparison is `<=`, so one registration more than [registrationNumber] is
-     *    allowed.
-     * Making this exact would need an atomic counter with a release on failed
-     * registration. That is not a coroutine or asynchrony question — an AtomicInteger
-     * would do — but it is extra machinery for no real gain here, so it is left out on
-     * purpose. Do not "fix" this without a reason.
-     */
+    /** Registration throttling is a best-effort abuse control, not an authorization boundary. */
     fun validateRequest(ip: String): Boolean =
         (successfulRegistrationsCache.getOrNull(addressCacheKey(ip)) ?: 0) <= registrationNumber
 
-    /**
-     * Whether another token request from this address may proceed to authentication.
-     *
-     * Unlike [validateRequest] this uses a strict comparison: it guards a real cost
-     * (a bcrypt verification per request) rather than merely deterring bots.
-     */
+    /** Rejects token attempts before their bcrypt verification exceeds the configured limit. */
     fun isLoginAllowed(clientAddress: String): Boolean =
         (loginAttemptsCache.getOrNull(addressCacheKey(clientAddress)) ?: 0) < maxLoginAttempts
 
-    /**
-     * Counts a token request. Every attempt is counted, not just failures: a legitimate
-     * client asks for a token roughly once per token lifetime, so the limit is far above
-     * normal use, and counting all attempts also covers an attacker holding valid
-     * credentials.
-     */
+    /** Counts every token attempt, including requests with valid credentials. */
     fun recordLoginAttempt(clientAddress: String) {
         val key = addressCacheKey(clientAddress)
         loginAttemptsCache[key] = (loginAttemptsCache.getOrNull(key) ?: 0) + 1
     }
 
-    // Creates or increases successful registration attempt from a client address
     fun registerIncrease(ip: String) {
         val key = addressCacheKey(ip)
         val current = successfulRegistrationsCache.getOrNull(key)

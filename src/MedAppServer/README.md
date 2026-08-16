@@ -28,7 +28,7 @@ REST API сервер для мобильного приложения-орга�
 - **User**: идентификатор, храним только логин-пароль
 - **MedKit**: аптечка, связь между препаратами и идентификаторами
 - **Drug**: название, количество, единицы измерения, форма, категория, производитель, страна, описание.
-- **Using**: план прием по препарату у юзера (с резервированием количества).
+- **TreatmentPlan**: плановое количество препарата для пользователя (таблица `usings`).
 - **VidalDrug**: справочник препаратов для поиска по названию.
 
 ## Аутентификация и регистрация
@@ -126,20 +126,17 @@ docker compose -f compose.yaml logs -f med-app-server
 Загружается автоматически при инициализации Postgres, во всех трёх профилях. Порядок
 задан именами файлов в `docker-entrypoint-initdb.d`:
 
-1. `db/load-catalogue.sh` — дамп `init-scripts/cleaned-init.sql`, если он есть:
-   `form_types`, `quantity_units` и таблицу `drugs` с данными;
-2. `db/schema.sql` — остальные таблицы приложения;
-3. `db/fill-parsed-drugs.sql` — перенос `drugs` → `parsed_drugs`.
+1. `db/schema.sql` создаёт всю схему, включая `parsed_drugs`;
+2. `db/load-catalogue.sh` загружает data-only `init-scripts/cleaned-init.sql`, если он есть.
 
-`drugs` и `parsed_drugs` — разные таблицы: первая приходит из дампа со своими колонками
-(`drug_id`, `name_lat`, `form`, `dosage`, `url`), вторая принадлежит приложению (сущность
-`VidalDrug`). Поэтому нужен перенос, а не переименование; `drugs` остаётся в базе как
-источник для повторного прогона.
+Выгрузку скраппера преобразует
+`python3 db/rewrite-catalogue-dump.py init-scripts/cleaned-init.sql`. Результат содержит только
+`COPY`/`ANALYZE` для таблиц, которыми владеет приложение.
 
 Дамп в git не попадает — это закрытые данные. Монтируется каталог `init-scripts` целиком,
 а не файл: при отсутствии файла Docker создал бы на его месте каталог и init базы упал бы.
 Если дампа нет, загрузчик сообщает об этом и пропускает шаг — приложение поднимется, но
-`GET /v1/drug/template/search` вернёт пустой список.
+`GET /v1/drug-templates` вернёт пустой список.
 
 ## API Документация
 
@@ -181,33 +178,29 @@ http://localhost:8080/v3/api-docs
 
 ### Пользователь
 
-- `GET /v1/user` - Получить все данные пользователя
+- `GET /v1/users/me` — snapshot текущего пользователя
 
 ### Аптечки
 
-- `POST /v1/med-kit` - Создать аптечку
-- `GET /v1/med-kit/{id}` - Получить аптечку
-- `GET /v1/med-kit` - Получить все аптечки
-- `POST /v1/med-kit/{id}/share` - Сгенерировать ключ доступа
-- `POST /v1/med-kit/join` - Присоединиться к аптечке по ключу
-- `DELETE /v1/med-kit/{id}/leave` - Выйти из аптечки
-- `DELETE /v1/med-kit/{id}` - Удалить аптечку
+- `GET/POST /v1/med-kits` — список и создание
+- `GET/DELETE /v1/med-kits/{medKitId}` — содержимое и удаление
+- `POST /v1/med-kits/{medKitId}/invitations` — приглашение
+- `POST /v1/med-kit-memberships` — присоединение
+- `DELETE /v1/med-kit-memberships/{medKitId}` — выход
 
 ### Препараты
 
-- `POST /v1/drug` - Создать препарат
-- `GET /v1/drug/{id}` - Получить препарат
-- `PUT /v1/drug/{id}` - Обновить препарат
-- `DELETE /v1/drug/{id}` - Удалить препарат
-- `GET /v1/drug/template/search` - Поиск в базе препаратов
+- `GET/PATCH/DELETE /v1/drugs/{drugId}` — чтение, коррекция и удаление
+- `POST /v1/med-kits/{medKitId}/drugs` — создание
+- `POST /v1/drugs/{drugId}/consumptions` — списание
+- `PUT /v1/med-kits/{targetMedKitId}/drugs/{drugId}` — перенос
+- `GET /v1/drug-templates` и `GET /v1/drug-templates/{templateId}` — каталог
 
 ### Планы лечения
 
-- `POST /v1/using` - Создать план лечения
-- `GET /v1/using` - Получить все планы
-- `PUT /v1/using/drug/{drugId}` - Обновить план
-- `POST /v1/using/drug/{drugId}/intake` - Отметить прием
-- `DELETE /v1/using/drug/{drugId}` - Удалить план
+- `GET/POST /v1/treatment-plans` — список и создание
+- `GET/PATCH/DELETE /v1/treatment-plans/{drugId}` — адресные операции
+- `PUT /v1/intakes/{intakeId}` — идемпотентная регистрация приёма
 
 ## Конфигурация
 
@@ -244,8 +237,10 @@ registration.timeout.BanNumber=1
 ## Тестирование
 
 ```bash
-# Запуск всех тестов
+# Обычные тесты
 ./gradlew test
+# PostgreSQL N+1, SQL fingerprints и EXPLAIN
+./gradlew queryPlanTest
 ```
 
 ## Безопасность

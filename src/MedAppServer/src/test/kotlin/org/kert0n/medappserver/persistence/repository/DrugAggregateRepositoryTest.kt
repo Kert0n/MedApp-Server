@@ -125,16 +125,23 @@ class DrugAggregateRepositoryTest {
     private fun fixture(planCount: Int): Fixture {
         val owner = userRepository.save(User(hashedKey = "owner_${UUID.randomUUID()}"))
         val medKit = medKitRepository.save(MedKit())
-        owner.medKits.add(medKit)
-        medKit.users.add(owner)
+        entityManager.flush()
+        jdbc.update(
+            "INSERT INTO user_med_kits (user_id, med_kit_id) VALUES (?, ?)",
+            owner.id, medKit.id
+        )
         val drug = drugRepository.save(drugRecord(medKit, UUID.randomUUID(), "Drug"))
 
         repeat(planCount) { index ->
             val participant = if (index == 0) owner else userRepository.save(
                 User(hashedKey = "participant_${index}_${UUID.randomUUID()}")
-            ).also {
-                it.medKits.add(medKit)
-                medKit.users.add(it)
+            )
+            entityManager.flush()
+            if (participant.id != owner.id) {
+                jdbc.update(
+                    "INSERT INTO user_med_kits (user_id, med_kit_id) VALUES (?, ?)",
+                    participant.id, medKit.id
+                )
             }
             planRepository.save(
                 TreatmentPlanRecord(
