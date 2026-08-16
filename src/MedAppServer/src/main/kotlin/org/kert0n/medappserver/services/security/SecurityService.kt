@@ -33,7 +33,12 @@ class SecurityService(
 
     private val secureRandom = SecureRandom()
 
-    fun generateKey(size: Int) = Base64.encode(ByteArray(size).also { secureRandom.nextBytes(it) })
+    /**
+     * Ключ печатается в URL приглашения и уезжает в заголовок Basic, поэтому кодировка
+     * URL-safe и без набивки: символы `+`, `/` и `=` пришлось бы экранировать, а часть
+     * клиентов сделала бы это по-разному.
+     */
+    fun generateKey(size: Int) = URL_SAFE_KEYS.encode(ByteArray(size).also { secureRandom.nextBytes(it) })
     fun check(raw: String, hashedPassword: String): Boolean = passwordEncoder.matches(raw, hashedPassword)
     fun hashPassword(rawPassword: String): String = passwordEncoder.encode(rawPassword)!!
     fun hashToken(token: String): String =
@@ -112,6 +117,10 @@ class SecurityService(
     fun recordLoginAttempt(clientAddress: String) {
         val key = addressCacheKey(clientAddress)
         loginAttemptsCache[key] = (loginAttemptsCache.getOrNull(key) ?: 0) + 1
+    }
+
+    private companion object {
+        val URL_SAFE_KEYS: Base64 = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT)
     }
 
     // Creates or increases successful registration attempt from a client address

@@ -2,6 +2,7 @@ package org.kert0n.medappserver.integration
 
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.kert0n.medappserver.testutil.ApiRoutes
 import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.services.models.UserService
 import org.mockito.kotlin.whenever
@@ -13,6 +14,7 @@ import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
@@ -78,7 +80,7 @@ class PublicEndpointScopeTest {
         whenever(userService.loadUserByUsername(userId.toString())).thenReturn(user)
 
         mockMvc.perform(
-            get("/auth/login").with(httpBasic(userId.toString(), "password"))
+            post(ApiRoutes.TOKEN).with(httpBasic(userId.toString(), "password"))
         ).andExpect(status().isOk)
     }
 

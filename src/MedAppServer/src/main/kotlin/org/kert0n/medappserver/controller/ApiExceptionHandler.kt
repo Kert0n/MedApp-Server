@@ -42,23 +42,5 @@ class ApiExceptionHandler {
             )
         }
 
-    private fun problem(status: HttpStatus): ProblemDetail =
-        ProblemDetail.forStatusAndDetail(status, detailFor(status)).apply {
-            title = status.reasonPhrase
-        }
-
-    /**
-     * Deliberately coarse: the caller learns what class of thing went wrong, never which
-     * record or how much of it there is.
-     */
-    private fun detailFor(status: HttpStatus): String = when (status) {
-        HttpStatus.BAD_REQUEST -> "Request cannot be processed"
-        HttpStatus.UNAUTHORIZED -> "Authentication is required"
-        HttpStatus.FORBIDDEN -> "Request is not allowed"
-        HttpStatus.NOT_FOUND -> "Requested resource does not exist"
-        HttpStatus.CONFLICT -> "Request conflicts with the current state"
-        HttpStatus.TOO_MANY_REQUESTS -> "Too many requests"
-        HttpStatus.GATEWAY_TIMEOUT -> "Too many registration requests"
-        else -> status.reasonPhrase
-    }
+    private fun problem(status: HttpStatus): ProblemDetail = ProblemDetails.forStatus(status)
 }

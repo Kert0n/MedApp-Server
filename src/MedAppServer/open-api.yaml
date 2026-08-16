@@ -236,6 +236,52 @@ paths:
           description: Invalid quantity
         "404":
           description: Drug not found
+  /v1/auth/token:
+    post:
+      tags:
+      - Authentication
+      summary: Issue JWT token
+      description: "Uses HTTP Basic authentication and returns a JWT access token.\
+        \ The token carries its own expiry in the `exp` claim; use it as `Authorization:\
+        \ Bearer <token>`."
+      operationId: token
+      responses:
+        "200":
+          description: JWT token issued
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "401":
+          description: Invalid credentials
+        "429":
+          description: Too many token requests
+  /v1/auth/register:
+    post:
+      tags:
+      - Authentication
+      summary: Register a new user
+      description: Creates a new user and returns generated credentials.
+      operationId: register
+      parameters:
+      - name: X-Registration-Token
+        in: header
+        description: Shared registration secret
+        required: true
+        schema:
+          type: string
+        example: dev-secret
+      responses:
+        "200":
+          description: User registered
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RegisterResponse"
+        "403":
+          description: Invalid registration secret
+        "429":
+          description: Too many registration attempts
   /using:
     get:
       tags:
@@ -415,32 +461,6 @@ paths:
           description: Invalid input
         "403":
           description: User does not have access to the medicine kit
-  /auth/register:
-    post:
-      tags:
-      - Authentication
-      summary: Register a new user
-      description: Creates a new user and returns generated credentials.
-      operationId: register
-      parameters:
-      - name: X-Registration-Token
-        in: header
-        description: Shared registration secret
-        required: true
-        schema:
-          type: string
-        example: dev-secret
-      responses:
-        "200":
-          description: User registered
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/RegisterResponse"
-        "403":
-          description: Invalid registration secret
-        "504":
-          description: Too many registration attempts
   /user:
     get:
       tags:
@@ -595,22 +615,6 @@ paths:
                 $ref: "#/components/schemas/QuantityInfo"
         "404":
           description: Drug not found
-  /auth/login:
-    get:
-      tags:
-      - Authentication
-      summary: Issue JWT token
-      description: Uses HTTP Basic authentication and returns a JWT access token.
-      operationId: login
-      responses:
-        "200":
-          description: JWT token issued
-          content:
-            '*/*':
-              schema:
-                type: string
-        "401":
-          description: Invalid credentials
   /med-kit/{id}/leave:
     delete:
       tags:
@@ -785,6 +789,24 @@ components:
           minimum: 0.0
       required:
       - quantity
+    TokenResponse:
+      type: object
+      description: Issued access token
+      properties:
+        accessToken:
+          type: string
+          description: JWT access token
+    RegisterResponse:
+      type: object
+      description: Registration response with generated credentials
+      properties:
+        login:
+          type: string
+          format: uuid
+          description: Generated login identifier
+        key:
+          type: string
+          description: Generated secret key for authentication
     UsingCreateDTO:
       type: object
       description: Create treatment plan request
@@ -905,17 +927,6 @@ components:
       - name
       - quantity
       - quantityUnit
-    RegisterResponse:
-      type: object
-      description: Registration response with generated credentials
-      properties:
-        login:
-          type: string
-          format: uuid
-          description: Generated login identifier
-        key:
-          type: string
-          description: Generated secret key for authentication
     UserDto:
       type: object
       description: Full user snapshot
