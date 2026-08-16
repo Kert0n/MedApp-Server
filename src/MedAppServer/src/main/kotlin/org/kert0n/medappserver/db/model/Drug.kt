@@ -4,6 +4,7 @@ import jakarta.persistence.*
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
 import org.hibernate.annotations.Formula
+import java.math.BigDecimal
 import java.util.*
 
 @Entity
@@ -24,9 +25,7 @@ class Drug(
     @Column(name = "name", nullable = false, length = 300)
     var name: String,
 
-    @NotNull
-    @Column(name = "quantity", nullable = false)
-    var quantity: Double,
+    quantity: BigDecimal,
 
     @NotNull
     @Size(max = 50)
@@ -52,12 +51,21 @@ class Drug(
     @Column(name = "description", length = Integer.MAX_VALUE)
     var description: String?,
 
-    @Formula("(SELECT COALESCE(SUM(u.planned_amount), 0) FROM usings u WHERE u.drug_id = id)")
-    var totalPlannedAmount: Double = 0.0,
+    totalPlannedAmount: BigDecimal = BigDecimal.ZERO,
 
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "med_kit_id", nullable = false)
+    @JoinColumn(
+        name = "med_kit_id",
+        nullable = false,
+        // Определение задано явно, чтобы схема, сгенерированная Hibernate в тестах, совпадала
+        // с db/schema.sql: иначе каскад проверялся бы только в одной из двух схем.
+        foreignKey = ForeignKey(
+            name = "user_drugs_med_kit_fkey",
+            foreignKeyDefinition =
+                "FOREIGN KEY (med_kit_id) REFERENCES med_kits (id) ON DELETE CASCADE"
+        )
+    )
     var medKit: MedKit,
 
     @OneToMany(mappedBy = "drug", fetch = FetchType.LAZY, cascade = [CascadeType.ALL], orphanRemoval = true)
@@ -65,6 +73,22 @@ class Drug(
 
 ) {
 
+    /** Остаток препарата, нормализованный до масштаба колонки `NUMERIC(19,6)`. */
+    @NotNull
+    @Column(name = "quantity", nullable = false, precision = QUANTITY_PRECISION, scale = QUANTITY_SCALE)
+    var quantity: BigDecimal = quantity.toQuantityScale()
+        set(value) {
+            field = value.toQuantityScale()
+        }
+
+    /**
+     * Сумма планов, вычисленная базой при загрузке. Собственного столбца нет: писать сюда
+     * нечего, присваивание меняет только копию в памяти текущей транзакции и не сохраняется.
+     * `var` стоит потому, что поле заполняет Hibernate. Из модели записи поле уходит вместе
+     * с переездом планов внутрь агрегата Drug.
+     */
+    @Formula("(SELECT COALESCE(SUM(u.planned_amount), 0) FROM usings u WHERE u.drug_id = id)")
+    var totalPlannedAmount: BigDecimal = totalPlannedAmount
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -79,4 +103,3 @@ class Drug(
         return id.hashCode()
     }
 }
-

@@ -3,6 +3,7 @@ package org.kert0n.medappserver.db.model
 import jakarta.persistence.*
 import jakarta.validation.constraints.NotNull
 import java.io.Serializable
+import java.math.BigDecimal
 import java.time.Instant
 import java.util.*
 
@@ -22,17 +23,26 @@ class Using(
 
     @ManyToOne(fetch = FetchType.EAGER)
     @MapsId("userId")
-    @JoinColumn(name = "user_id")
+    // Имя задано явно, чтобы схема Hibernate и db/schema.sql совпадали и по именам ключей.
+    // Каскада здесь намеренно нет: план не удаляется вслед за пользователем.
+    @JoinColumn(name = "user_id", foreignKey = ForeignKey(name = "usings_user_fkey"))
     var user: User,
 
     @ManyToOne(fetch = FetchType.EAGER)
     @MapsId("drugId")
-    @JoinColumn(name = "drug_id")
+    @JoinColumn(
+        name = "drug_id",
+        // Как и у Drug.medKit: явное определение держит схему Hibernate и db/schema.sql
+        // в одном каскадном контракте.
+        foreignKey = ForeignKey(
+            name = "usings_drug_fkey",
+            foreignKeyDefinition =
+                "FOREIGN KEY (drug_id) REFERENCES user_drugs (id) ON DELETE CASCADE"
+        )
+    )
     var drug: Drug,
 
-    @NotNull
-    @Column(name = "planned_amount", nullable = false)
-    var plannedAmount: Double,
+    plannedAmount: BigDecimal,
 
     @NotNull
     @Column(name = "last_modified", nullable = false)
@@ -42,6 +52,14 @@ class Using(
     @Column(name = "created_at", nullable = false)
     var createdAt: Instant = Instant.now()
 ) {
+
+    /** Запланированное количество, нормализованное до масштаба колонки `NUMERIC(19,6)`. */
+    @NotNull
+    @Column(name = "planned_amount", nullable = false, precision = QUANTITY_PRECISION, scale = QUANTITY_SCALE)
+    var plannedAmount: BigDecimal = plannedAmount.toQuantityScale()
+        set(value) {
+            field = value.toQuantityScale()
+        }
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true

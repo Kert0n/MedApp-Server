@@ -1,9 +1,11 @@
 package org.kert0n.medappserver.controller
 
+import java.util.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
+import org.kert0n.medappserver.testutil.qty
 import org.mockito.kotlin.any
 import org.mockito.kotlin.whenever
 import org.springframework.beans.factory.annotation.Autowired
@@ -19,7 +21,6 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
-import java.util.*
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -49,8 +50,8 @@ class UserControllerTest {
     @Test
     fun `GET user data - returns user with medkits`() {
         val drugDTO = DrugDTO(
-            id = UUID.randomUUID(), name = "Aspirin", quantity = 100.0,
-            plannedQuantity = 0.0, quantityUnit = "mg", formType = null,
+            id = UUID.randomUUID(), name = "Aspirin", quantity = qty(100.0),
+            plannedQuantity = qty(0.0), quantityUnit = "mg", formType = null,
             category = null, manufacturer = null, country = null,
             description = null, medKitId = medKitId
         )

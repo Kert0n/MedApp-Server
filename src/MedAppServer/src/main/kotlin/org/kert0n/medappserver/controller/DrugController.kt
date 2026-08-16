@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
+import java.math.BigDecimal
 import java.util.*
 import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBody
 
@@ -273,11 +274,11 @@ class DrugController(
 @Schema(description = "Drug quantity information")
 data class QuantityInfo(
     @Schema(description = "Actual quantity in stock")
-    val actualQuantity: Double,
+    val actualQuantity: BigDecimal,
     @Schema(description = "Total planned quantity across all treatment plans")
-    val plannedQuantity: Double,
+    val plannedQuantity: BigDecimal,
     @Schema(description = "Available quantity (actual - planned)")
-    val availableQuantity: Double
+    val availableQuantity: BigDecimal
 )
 
 @Schema(description = "Request to consume a drug")
@@ -285,7 +286,7 @@ data class ConsumeRequest(
     @NotNull
     @DecimalMin(value = "0.0", inclusive = false)
     @Schema(description = "Quantity to consume", example = "2.0", minimum = "0")
-    val quantity: Double
+    val quantity: BigDecimal
 )
 
 @Schema(description = "Request to move a drug to another medicine kit")
@@ -322,9 +323,9 @@ data class DrugDTO(
     @Schema(description = "Drug name", example = "Aspirin")
     val name: String,
     @Schema(description = "Current quantity", example = "100.0")
-    val quantity: Double,
+    val quantity: BigDecimal,
     @Schema(description = "Total planned quantity across treatment plans", example = "30.0")
-    val plannedQuantity: Double,
+    val plannedQuantity: BigDecimal,
     @Schema(description = "Quantity unit", example = "mg")
     val quantityUnit: String,
     @Schema(description = "Form type", example = "tablet")
@@ -351,7 +352,7 @@ data class DrugCreateDTO(
     @NotNull
     @DecimalMin("0.0")
     @Schema(description = "Quantity", example = "100.0", required = true, minimum = "0")
-    val quantity: Double,
+    val quantity: BigDecimal,
 
     @NotNull
     @Size(min = 1, max = 50)
@@ -391,7 +392,7 @@ data class DrugUpdateDTO(
 
     @DecimalMin("0.0")
     @Schema(description = "Quantity", example = "100.0", minimum = "0")
-    val quantity: Double? = null,
+    val quantity: BigDecimal? = null,
 
     @Size(min = 1, max = 50)
     @Schema(description = "Quantity unit", example = "mg")

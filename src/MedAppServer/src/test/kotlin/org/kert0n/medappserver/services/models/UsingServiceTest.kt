@@ -1,20 +1,22 @@
 package org.kert0n.medappserver.services.models
 
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertNotNull
 import org.kert0n.medappserver.controller.UsingCreateDTO
 import org.kert0n.medappserver.controller.UsingUpdateDTO
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
+import org.kert0n.medappserver.testutil.assertQty
+import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -41,7 +43,7 @@ class UsingServiceTest {
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 10.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(10.0)))
         dbHelper.flushAndClear()
 
         assertEquals(1, usingService.findAllByUser(alice.id).size)
@@ -54,7 +56,7 @@ class UsingServiceTest {
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 10.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(10.0)))
         dbHelper.flushAndClear()
 
         assertEquals(1, usingService.findAllByDrug(drug.id).size)
@@ -83,7 +85,7 @@ class UsingServiceTest {
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 10.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(10.0)))
         dbHelper.flushAndClear()
 
         assertEquals(1, usingService.findAllByUser(alice.id).size)
@@ -103,9 +105,9 @@ class UsingServiceTest {
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
-        val using = usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 30.0))
+        val using = usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(30.0)))
 
-        assertEquals(30.0, using.plannedAmount)
+        assertQty(30.0, using.plannedAmount)
         assertEquals(alice.id, using.user.id)
         assertEquals(drug.id, using.drug.id)
     }
@@ -117,11 +119,11 @@ class UsingServiceTest {
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 30.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(30.0)))
         dbHelper.flushAndClear()
 
         assertFailsWith<ResponseStatusException> {
-            usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 20.0))
+            usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(20.0)))
         }
     }
 
@@ -133,7 +135,7 @@ class UsingServiceTest {
         dbHelper.flushAndClear()
 
         assertFailsWith<ResponseStatusException> {
-            usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 100.0))
+            usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(100.0)))
         }
     }
 
@@ -146,11 +148,11 @@ class UsingServiceTest {
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 30.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(30.0)))
         dbHelper.flushAndClear()
 
-        val updated = usingService.updateTreatmentPlan(alice.id, drug.id, UsingUpdateDTO(50.0))
-        assertEquals(50.0, updated.plannedAmount)
+        val updated = usingService.updateTreatmentPlan(alice.id, drug.id, UsingUpdateDTO(qty(50.0)))
+        assertQty(50.0, updated.plannedAmount)
     }
 
     @Test
@@ -162,13 +164,13 @@ class UsingServiceTest {
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 50.0))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, 30.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(50.0)))
+        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(30.0)))
         dbHelper.flushAndClear()
 
         // Bob tries to increase to 60 but only 100 - 50 = 50 available for him
         assertFailsWith<ResponseStatusException> {
-            usingService.updateTreatmentPlan(bob.id, drug.id, UsingUpdateDTO(60.0))
+            usingService.updateTreatmentPlan(bob.id, drug.id, UsingUpdateDTO(qty(60.0)))
         }
     }
 
@@ -181,13 +183,13 @@ class UsingServiceTest {
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 30.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(30.0)))
         dbHelper.flushAndClear()
 
-        val updated = usingService.recordIntake(alice.id, drug.id, 10.0)
+        val updated = usingService.recordIntake(alice.id, drug.id, qty(10.0))
         assertNotNull(updated)
-        assertEquals(20.0, updated.plannedAmount)
-        assertEquals(90.0, drugService.findById(drug.id).quantity)
+        assertQty(20.0, updated.plannedAmount)
+        assertQty(90.0, drugService.findById(drug.id).quantity)
     }
 
     @Test
@@ -197,11 +199,11 @@ class UsingServiceTest {
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 10.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(10.0)))
         dbHelper.flushAndClear()
 
         val ex = assertFailsWith<ResponseStatusException> {
-            usingService.recordIntake(alice.id, drug.id, 15.0)
+            usingService.recordIntake(alice.id, drug.id, qty(15.0))
         }
         assertTrue(ex.reason!!.contains("exceeds planned amount"))
     }
@@ -213,16 +215,16 @@ class UsingServiceTest {
         val drug = dbHelper.freshDrug(kit, 20.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 10.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(10.0)))
         dbHelper.flushAndClear()
 
         // Artificially corrupt DB state to simulate race condition
         val directDrug = drugService.findByIdForUserForUpdate(drug.id, alice.id)
-        directDrug.quantity = 2.0
+        directDrug.quantity = qty(2.0)
         drugRepository.saveAndFlush(directDrug)
 
         val ex = assertFailsWith<ResponseStatusException> {
-            usingService.recordIntake(alice.id, drug.id, 5.0)
+            usingService.recordIntake(alice.id, drug.id, qty(5.0))
         }
         assertTrue(ex.reason!!.contains("Insufficient drug quantity"))
     }
@@ -234,15 +236,15 @@ class UsingServiceTest {
         val drug = dbHelper.freshDrug(kit, 20.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 10.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(10.0)))
         dbHelper.flushAndClear()
 
-        val result = usingService.recordIntake(alice.id, drug.id, 10.0)
+        val result = usingService.recordIntake(alice.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
         assertNull(result)
         assertNull(dbHelper.userPlan(alice.id, drug.id))
-        assertEquals(10.0, dbHelper.drugQuantity(drug.id)!!, 0.001)
+        assertQty(10.0, dbHelper.drugQuantity(drug.id)!!)
     }
 
     // ── deleteTreatmentPlan ──
@@ -254,7 +256,7 @@ class UsingServiceTest {
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 30.0))
+        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(30.0)))
         dbHelper.flushAndClear()
 
         usingService.deleteTreatmentPlan(alice.id, drug.id)
@@ -274,12 +276,12 @@ class UsingServiceTest {
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
-        val using = usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, 30.0))
+        val using = usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(30.0)))
         dbHelper.flushAndClear()
 
         val dto = usingService.toUsingDTO(using)
         assertEquals(alice.id, dto.userId)
         assertEquals(drug.id, dto.drugId)
-        assertEquals(30.0, dto.plannedAmount)
+        assertQty(30.0, dto.plannedAmount)
     }
 }

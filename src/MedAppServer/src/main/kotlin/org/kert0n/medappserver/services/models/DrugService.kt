@@ -13,6 +13,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
+import java.math.BigDecimal
 import java.util.*
 
 @Service
@@ -114,7 +115,7 @@ class DrugService(
 
 
     @Transactional
-    fun consumeDrug(drugId: UUID, quantity: Double, userId: UUID): Drug? {
+    fun consumeDrug(drugId: UUID, quantity: BigDecimal, userId: UUID): Drug? {
         logger.debug("Consuming {} of drug {}", quantity, drugId)
 
         val drug = findByIdForUserForUpdate(drugId, userId)

@@ -1,5 +1,8 @@
 package org.kert0n.medappserver.integration
 
+import java.util.UUID
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.controller.UsingCreateDTO
@@ -9,6 +12,7 @@ import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.UserRepository
+import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.http.MediaType
@@ -24,9 +28,6 @@ import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
 import tools.jackson.databind.ObjectMapper
-import java.util.UUID
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 /**
  * Error bodies must not describe what failed in terms of the caller's data.
@@ -92,7 +93,7 @@ class ErrorResponseShapeTest {
         user.medKits.add(medKit)
         medKitRepository.save(medKit)
         val drug = drugRepository.save(
-            Drug(name = "Aspirin", quantity = 5.0, quantityUnit = "tab", formType = null,
+            Drug(name = "Aspirin", quantity = qty(5.0), quantityUnit = "tab", formType = null,
                 category = null, manufacturer = null, country = null, description = null,
                 medKit = medKit)
         )
@@ -101,7 +102,7 @@ class ErrorResponseShapeTest {
             post("/using")
                 .with(jwt().jwt { it.subject(user.id.toString()) })
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(UsingCreateDTO(drug.id, 500.0)))
+                .content(objectMapper.writeValueAsString(UsingCreateDTO(drug.id, qty(500.0))))
         )
             .andExpect(status().isBadRequest)
             .andReturn().response.contentAsString

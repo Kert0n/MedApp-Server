@@ -33,13 +33,19 @@ CREATE TABLE med_kits
     CONSTRAINT med_kits_pkey PRIMARY KEY (id)
 );
 
+-- Членство. Каскад только со стороны аптечки: удалили аптечку — членства нет.
+--
+-- Со стороны пользователя каскада намеренно нет, и это относится ко всем FK на users ниже.
+-- Удаление пользователя не является операцией API: аптечки общие, и каскад молча вынес бы из
+-- чужой аптечки чужие планы. Если такая операция понадобится, она должна быть явной, а не
+-- побочным эффектом DELETE.
 CREATE TABLE user_med_kits
 (
     med_kit_id uuid NOT NULL,
     user_id    uuid NOT NULL,
 
     CONSTRAINT user_med_kits_pkey PRIMARY KEY (med_kit_id, user_id),
-    CONSTRAINT user_med_kits_med_kit_fkey FOREIGN KEY (med_kit_id) REFERENCES med_kits (id),
+    CONSTRAINT user_med_kits_med_kit_fkey FOREIGN KEY (med_kit_id) REFERENCES med_kits (id) ON DELETE CASCADE,
     CONSTRAINT user_med_kits_user_fkey FOREIGN KEY (user_id) REFERENCES users (id)
 );
 
@@ -47,19 +53,21 @@ CREATE TABLE user_med_kits
 -- справочник: препарат можно добавить руками, не найдя его в каталоге.
 CREATE TABLE user_drugs
 (
-    id            uuid             NOT NULL,
-    name          varchar(300)     NOT NULL,
-    quantity      double precision NOT NULL,
-    quantity_unit varchar(50)      NOT NULL,
+    id            uuid           NOT NULL,
+    name          varchar(300)   NOT NULL,
+    -- numeric, а не double precision: количество препарата — это точная величина, и половина
+    -- таблетки не должна превращаться в 0.49999999999999994 при первом же делении.
+    quantity      numeric(19, 6) NOT NULL,
+    quantity_unit varchar(50)    NOT NULL,
     form_type     varchar(100),
     category      varchar(200),
     manufacturer  varchar(300),
     country       varchar(100),
     description   text,
-    med_kit_id    uuid             NOT NULL,
+    med_kit_id    uuid           NOT NULL,
 
     CONSTRAINT user_drugs_pkey PRIMARY KEY (id),
-    CONSTRAINT user_drugs_med_kit_fkey FOREIGN KEY (med_kit_id) REFERENCES med_kits (id)
+    CONSTRAINT user_drugs_med_kit_fkey FOREIGN KEY (med_kit_id) REFERENCES med_kits (id) ON DELETE CASCADE
 );
 
 CREATE INDEX ix_user_drugs_name ON user_drugs (name);
@@ -71,13 +79,13 @@ CREATE TABLE usings
 (
     user_id        uuid                        NOT NULL,
     drug_id        uuid                        NOT NULL,
-    planned_amount double precision            NOT NULL,
+    planned_amount numeric(19, 6)              NOT NULL,
     created_at     timestamp(6) with time zone NOT NULL,
     last_modified  timestamp(6) with time zone NOT NULL,
 
     CONSTRAINT usings_pkey PRIMARY KEY (drug_id, user_id),
     CONSTRAINT usings_user_fkey FOREIGN KEY (user_id) REFERENCES users (id),
-    CONSTRAINT usings_drug_fkey FOREIGN KEY (drug_id) REFERENCES user_drugs (id)
+    CONSTRAINT usings_drug_fkey FOREIGN KEY (drug_id) REFERENCES user_drugs (id) ON DELETE CASCADE
 );
 
 CREATE INDEX ix_usings_user_id ON usings (user_id);
