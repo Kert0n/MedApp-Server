@@ -1,7 +1,8 @@
 package org.kert0n.medappserver.services.orchestrators
 
-import org.kert0n.medappserver.controller.DrugCreateDTO
-import org.kert0n.medappserver.controller.MedKitDTO
+import org.kert0n.medappserver.api.DrugCreateRequest
+import org.kert0n.medappserver.api.MedKitDTO
+import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.MedKit
 import org.kert0n.medappserver.db.repository.DrugRepository
@@ -27,9 +28,9 @@ class MedKitDrugServices(
     private val drugRepository: DrugRepository
 ) {
     @Transactional
-    fun createDrugInMedkit(createDTO: DrugCreateDTO, userId: UUID): Drug {
+    fun createDrugInMedkit(medKitId: UUID, createDTO: DrugCreateRequest, userId: UUID): Drug {
         logger.debug("Creating drug: {} for user: {}", createDTO.name, userId)
-        val medKit = medKitService.findByIdForUser(createDTO.medKitId, userId)
+        val medKit = medKitService.findByIdForUser(medKitId, userId)
         return drugService.create(createDTO, medKit, userId)
     }
 
@@ -105,7 +106,7 @@ class MedKitDrugServices(
         val drugs = drugRepository.findAllWithUsingsByMedKitId(medKit.id)
         return MedKitDTO(
             id = medKit.id,
-            drugs = (drugs.map { drugService.toDrugDTO(it) }).toSet()
+            drugs = drugs.map { it.toDto() }.toSet()
         )
     }
 }

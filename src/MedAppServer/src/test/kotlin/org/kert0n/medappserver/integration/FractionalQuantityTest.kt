@@ -2,7 +2,7 @@ package org.kert0n.medappserver.integration
 
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
-import org.kert0n.medappserver.controller.UsingCreateDTO
+import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.UsingRepository
 import org.kert0n.medappserver.services.models.DrugService
@@ -43,7 +43,7 @@ class FractionalQuantityTest {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
         val drug = dbHelper.freshDrug(kit, 1.0)
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(1.0)))
+        usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(1.0)))
         dbHelper.flushAndClear()
 
         val third = third("1")   // 0.333333
@@ -78,8 +78,8 @@ class FractionalQuantityTest {
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
 
         val drug = dbHelper.freshDrug(kit, 10.0)
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(7.0)))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(3.0)))
+        usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(7.0)))
+        usingService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(3.0)))
         dbHelper.flushAndClear()
 
         // Списываем треть остатка: коэффициент сжатия — бесконечная дробь.
@@ -109,8 +109,8 @@ class FractionalQuantityTest {
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
 
         val drug = dbHelper.freshDrug(kit, 90.0)
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(30.0)))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(60.0)))
+        usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
+        usingService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(60.0)))
         dbHelper.flushAndClear()
 
         // Незапланированный расход: остаток падает до 60 при сумме планов 90, поэтому планы

@@ -3,7 +3,7 @@ package org.kert0n.medappserver.services.orchestrators
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import org.junit.jupiter.api.Test
-import org.kert0n.medappserver.controller.UsingCreateDTO
+import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.UsingRepository
 import org.kert0n.medappserver.services.models.DrugService
@@ -45,7 +45,7 @@ class QuantityReductionServiceTest {
         val drug = dbHelper.freshDrug(kit, 50.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(50.0)))
+        usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(50.0)))
         dbHelper.flushAndClear()
 
         drugService.consumeDrug(drug.id, qty(50.0), alice.id)
@@ -66,8 +66,8 @@ class QuantityReductionServiceTest {
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(20.0)))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(20.0)))
+        usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(20.0)))
+        usingService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(20.0)))
         dbHelper.flushAndClear()
 
         drugService.consumeDrug(drug.id, qty(50.0), alice.id)
@@ -89,8 +89,8 @@ class QuantityReductionServiceTest {
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(60.0)))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(40.0)))
+        usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(60.0)))
+        usingService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(40.0)))
         dbHelper.flushAndClear()
 
         // Consume 50 → quantity=50, factor=50/100=0.5
@@ -114,8 +114,8 @@ class QuantityReductionServiceTest {
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(60.0)))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(40.0)))
+        usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(60.0)))
+        usingService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(40.0)))
         dbHelper.flushAndClear()
 
         drugService.consumeDrug(drug.id, qty(50.0), alice.id)

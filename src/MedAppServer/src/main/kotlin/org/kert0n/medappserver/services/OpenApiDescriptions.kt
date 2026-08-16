@@ -1,0 +1,206 @@
+package org.kert0n.medappserver.services
+
+import io.swagger.v3.oas.models.Operation
+import io.swagger.v3.oas.models.responses.ApiResponse
+import org.springdoc.core.customizers.GlobalOperationCustomizer
+import org.springframework.stereotype.Component
+import org.springframework.core.annotation.AnnotatedElementUtils
+import org.springframework.web.method.HandlerMethod
+import io.swagger.v3.oas.annotations.Operation as SwaggerOperation
+
+/** Название и описание операции в опубликованном контракте. */
+data class OperationText(val summary: String, val description: String)
+
+/**
+ * Тексты операций API, вынесенные из контроллеров.
+ *
+ * В контроллерах аннотации занимали треть исходника, и сам метод терялся между `@Operation`
+ * и списком ответов. Здесь — текст для клиентов API; обоснования решений остаются KDoc-ом
+ * рядом с кодом, потому что объясняют они код, а не контракт.
+ *
+ * Ключ — `operationId`, то есть имя метода контроллера. Поэтому имена методов должны быть
+ * глобально уникальными: springdoc при совпадении дописывает `_1`, и ключ переставал бы
+ * что-либо значить.
+ *
+ * Механизм `springdoc.spec-properties` из документации библиотеки для этого не подошёл:
+ * ключом там оказался URL-пути с методом (`v1/drugs/{drugId}.get`), а не operationId, и
+ * такой ключ пришлось бы править при каждом изменении маршрута.
+ */
+val OPERATION_TEXTS: Map<String, OperationText> = mapOf(
+    // ── Аутентификация ───────────────────────────────────────────────────────────
+    "register" to OperationText(
+        "Register a new user",
+        "Creates a new user and returns generated credentials."
+    ),
+    "token" to OperationText(
+        "Issue JWT token",
+        "Uses HTTP Basic authentication and returns a JWT access token. The token carries its own " +
+            "expiry in the `exp` claim; use it as `Authorization: Bearer <token>`."
+    ),
+
+    // ── Препараты ────────────────────────────────────────────────────────────────
+    "getDrug" to OperationText(
+        "Get a drug",
+        "Returns a drug the caller has access to."
+    ),
+    "createDrug" to OperationText(
+        "Add a drug to a medicine kit",
+        "Creates a drug in the given kit."
+    ),
+    "patchDrug" to OperationText(
+        "Update a drug",
+        "Changes the given fields. Absent fields are left as they are; quantity may only increase — " +
+            "use consumptions to reduce it."
+    ),
+    "deleteDrug" to OperationText(
+        "Delete a drug",
+        "Removes the drug and every treatment plan for it."
+    ),
+    "consumeDrug" to OperationText(
+        "Consume a drug",
+        "Reduces the stock by the given amount outside any treatment plan. Returns no body when the " +
+            "drug ran out and was removed."
+    ),
+    "moveDrug" to OperationText(
+        "Move a drug to another medicine kit",
+        "Transfers the drug between kits."
+    ),
+
+    // ── Справочник ───────────────────────────────────────────────────────────────
+    "searchDrugTemplates" to OperationText(
+        "Search the catalogue",
+        "Searches by name, Latin name, active substance and manufacturer."
+    ),
+    "getDrugTemplate" to OperationText(
+        "Get a catalogue entry",
+        "Returns a single catalogue entry."
+    ),
+
+    // ── Планы лечения и приёмы ───────────────────────────────────────────────────
+    "listTreatmentPlans" to OperationText(
+        "List treatment plans",
+        "Returns every plan of the caller."
+    ),
+    "getTreatmentPlan" to OperationText(
+        "Get a treatment plan",
+        "Returns the caller's plan for the drug."
+    ),
+    "createTreatmentPlan" to OperationText(
+        "Create a treatment plan",
+        "Reserves an amount of a drug for the caller."
+    ),
+    "patchTreatmentPlan" to OperationText(
+        "Change the planned amount",
+        "Sets a new planned amount for the drug."
+    ),
+    "deleteTreatmentPlan" to OperationText(
+        "Delete a treatment plan",
+        "Releases the reserved amount."
+    ),
+    "recordIntake" to OperationText(
+        "Record an intake",
+        "Not enabled yet: the endpoint answers 501. The final behaviour applies the intake once — " +
+            "repeating the request with the same identifier returns the first result instead of " +
+            "consuming again — and arrives together with optimistic concurrency."
+    ),
+
+    // ── Аптечки и членство ───────────────────────────────────────────────────────
+    "createMedKit" to OperationText(
+        "Create a medicine kit",
+        "Creates a kit owned by nobody in particular."
+    ),
+    "listMedKits" to OperationText(
+        "List medicine kits",
+        "Returns counters for every kit of the caller, without loading their contents."
+    ),
+    "getMedKit" to OperationText(
+        "Get a medicine kit",
+        "Returns the kit with its drugs."
+    ),
+    "createInvitation" to OperationText(
+        "Create an invitation",
+        "Issues a key others can use to join the kit."
+    ),
+    "deleteMedKit" to OperationText(
+        "Delete a medicine kit",
+        "Deletes the kit for every participant, including its drugs and their treatment plans. Use when " +
+            "the physical kit no longer exists as a shared thing. Pass targetMedKitId to move the drugs " +
+            "into another kit of yours instead of discarding them. To leave a shared kit without " +
+            "destroying it, delete your membership instead."
+    ),
+    "joinMedKit" to OperationText(
+        "Join a medicine kit",
+        "Accepts an invitation and joins the kit."
+    ),
+    "leaveMedKit" to OperationText(
+        "Leave a medicine kit",
+        "Removes the caller from the kit together with their treatment plans in it. The kit itself and " +
+            "other participants stay."
+    ),
+
+    // ── Пользователь ─────────────────────────────────────────────────────────────
+    "getSnapshot" to OperationText(
+        "Get the caller's snapshot",
+        "Returns the caller identifier with every accessible medicine kit and its drugs, for sync."
+    )
+)
+
+/**
+ * Подставляет тексты в операции и требует, чтобы текст был у каждой.
+ *
+ * Падение при отсутствии ключа намеренно: новый эндпойнт без описания должен ломать сборку
+ * сразу, а не появляться в контракте безымянным. Молча пропустить — значит опубликовать
+ * операцию, о назначении которой клиенту негде прочитать.
+ */
+@Component
+class OperationTextCustomizer : GlobalOperationCustomizer {
+
+    override fun customize(operation: Operation, handlerMethod: HandlerMethod): Operation {
+        // Чужие контроллеры (например, актуатор, если его когда-нибудь начнут показывать)
+        // документируются своими средствами и требовать от них записи здесь незачем.
+        if (!handlerMethod.beanType.packageName.startsWith(CONTROLLER_PACKAGE)) return operation
+
+        val operationId = operation.operationId ?: handlerMethod.method.name
+        val text = OPERATION_TEXTS[operationId] ?: error(
+            "Для операции '$operationId' (${handlerMethod.beanType.simpleName}.${handlerMethod.method.name}) " +
+                "нет текста в OPERATION_TEXTS. Добавьте summary и description — эндпойнт не должен " +
+                "попадать в контракт без описания."
+        )
+        operation.summary = text.summary
+        operation.description = text.description
+        addUnauthorizedUnlessPublic(operation, handlerMethod)
+        return operation
+    }
+
+    /**
+     * Дописывает 401 всем операциям, кроме публичных.
+     *
+     * Раньше 401 был задокументирован ровно у одной операции из двадцати пяти, хотя вернуть
+     * его может любая защищённая: требование Bearer стоит глобально. Это был не шум, а
+     * пробел — клиент не мог узнать из контракта, что ответ бывает и таким.
+     *
+     * Публичность определяется по аннотации метода, а не по `operation.security`: springdoc
+     * для `security = []` не заполняет список требований, а оставляет его пустым — отличить
+     * «требований нет» от «глобальное требование ещё не применено» по нему невозможно.
+     */
+    private fun addUnauthorizedUnlessPublic(operation: Operation, handlerMethod: HandlerMethod) {
+        // Публичной операцию делает пустой список требований: `security = []`. Непустой
+        // список — это своя схема вместо глобальной (Basic у выдачи токена), и такая
+        // операция 401 вернуть может.
+        val declared = AnnotatedElementUtils.findMergedAnnotation(
+            handlerMethod.method, SwaggerOperation::class.java
+        )
+        if (declared != null && declared.security.isEmpty()) return
+        val responses = operation.responses ?: return
+        if (responses.containsKey(UNAUTHORIZED)) return
+        responses.addApiResponse(
+            UNAUTHORIZED,
+            ApiResponse().description("Authentication is required")
+        )
+    }
+
+    private companion object {
+        const val CONTROLLER_PACKAGE = "org.kert0n.medappserver.controller"
+        const val UNAUTHORIZED = "401"
+    }
+}

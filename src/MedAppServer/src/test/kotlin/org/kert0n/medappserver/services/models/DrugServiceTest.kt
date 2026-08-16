@@ -1,13 +1,14 @@
 package org.kert0n.medappserver.services.models
 
+import org.kert0n.medappserver.api.toDto
 import java.util.*
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
-import org.kert0n.medappserver.controller.DrugCreateDTO
-import org.kert0n.medappserver.controller.DrugUpdateDTO
-import org.kert0n.medappserver.controller.UsingCreateDTO
+import org.kert0n.medappserver.api.DrugCreateRequest
+import org.kert0n.medappserver.api.DrugPatchRequest
+import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
@@ -93,7 +94,7 @@ class DrugServiceTest {
 
         assertEquals(0, drugService.findAllByUser(alice.id).size)
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(10.0)))
+        usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(10.0)))
         dbHelper.flushAndClear()
 
         assertEquals(1, drugService.findAllByUser(alice.id).size)
@@ -108,7 +109,7 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         val drug = drugService.create(
-            DrugCreateDTO(name = "Aspirin", quantity = qty(100.0), quantityUnit = "mg", medKitId = kit.id),
+            DrugCreateRequest(name = "Aspirin", quantity = qty(100.0), quantityUnit = "mg"),
             kit, alice.id
         )
 
@@ -127,7 +128,7 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit, 10.0)
         dbHelper.flushAndClear()
 
-        val emptyUpdate = DrugUpdateDTO(null, null, null, null, null, null, null, null)
+        val emptyUpdate = DrugPatchRequest(null, null, null, null, null, null, null, null)
         drugService.update(drug.id, emptyUpdate, alice.id)
         dbHelper.flushAndClear()
 
@@ -141,7 +142,7 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit, 50.0)
         dbHelper.flushAndClear()
 
-        val fullUpdate = DrugUpdateDTO(
+        val fullUpdate = DrugPatchRequest(
             name = "New Name", quantity = qty(100.0), quantityUnit = "ml",
             formType = "liquid", category = "cat", manufacturer = "man",
             country = "co", description = "desc"
@@ -167,7 +168,7 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit, 10.0)
         dbHelper.flushAndClear()
 
-        drugService.update(drug.id, DrugUpdateDTO(quantity = qty(20.0)), alice.id)
+        drugService.update(drug.id, DrugPatchRequest(quantity = qty(20.0)), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(20.0, dbHelper.drugQuantity(drug.id))
@@ -180,10 +181,10 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(80.0)))
+        usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(80.0)))
         dbHelper.flushAndClear()
 
-        drugService.update(drug.id, DrugUpdateDTO(quantity = qty(40.0)), alice.id)
+        drugService.update(drug.id, DrugPatchRequest(quantity = qty(40.0)), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(40.0, dbHelper.drugQuantity(drug.id)!!)
@@ -239,13 +240,13 @@ class DrugServiceTest {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
         val drug = drugService.create(
-            DrugCreateDTO(name = "Drug", quantity = qty(100.0), quantityUnit = "mg", medKitId = kit.id),
+            DrugCreateRequest(name = "Drug", quantity = qty(100.0), quantityUnit = "mg"),
             kit, alice.id
         )
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(25.0)))
+        usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(25.0)))
         dbHelper.flushAndClear()
 
-        val dto = drugService.toDrugDTO(drugService.findById(drug.id))
+        val dto = drugService.findById(drug.id).toDto()
         assertQty(25.0, dto.plannedQuantity)
         assertQty(100.0, dto.quantity)
     }

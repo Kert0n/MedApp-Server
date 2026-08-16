@@ -8,10 +8,10 @@ import kotlin.test.assertNull
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertDoesNotThrow
 import org.kert0n.medappserver.PostgresIntegrationTest
-import org.kert0n.medappserver.controller.DrugCreateDTO
-import org.kert0n.medappserver.controller.DrugUpdateDTO
-import org.kert0n.medappserver.controller.UsingCreateDTO
-import org.kert0n.medappserver.controller.UsingUpdateDTO
+import org.kert0n.medappserver.api.DrugCreateRequest
+import org.kert0n.medappserver.api.DrugPatchRequest
+import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
+import org.kert0n.medappserver.api.TreatmentPlanPatchRequest
 import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.db.repository.DrugRepository
@@ -116,13 +116,13 @@ class ComplexWorkflowStoriesTest {
         // PHASE 2: Everyone makes Treatment Plans
         // ==========================================
         // Allergy Meds: 60 total. Alice (20), Bob (20), Charlie (20) = 60 planned.
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(allergyMeds.id, qty(20.0)))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(allergyMeds.id, qty(20.0)))
-        usingService.createTreatmentPlan(charlie.id, UsingCreateDTO(allergyMeds.id, qty(20.0)))
+        usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(allergyMeds.id, qty(20.0)))
+        usingService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(allergyMeds.id, qty(20.0)))
+        usingService.createTreatmentPlan(charlie.id, TreatmentPlanCreateRequest(allergyMeds.id, qty(20.0)))
 
         // Painkillers: 100 total. Bob plans 30, Charlie plans 30.
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(painkillers.id, qty(30.0)))
-        usingService.createTreatmentPlan(charlie.id, UsingCreateDTO(painkillers.id, qty(30.0)))
+        usingService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(painkillers.id, qty(30.0)))
+        usingService.createTreatmentPlan(charlie.id, TreatmentPlanCreateRequest(painkillers.id, qty(30.0)))
 
         entityManager.flush()
         entityManager.clear()
@@ -239,23 +239,22 @@ class ComplexWorkflowStoriesTest {
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(sourceKit.id, alice.id), bob.id)
 
         // Alice adds 100 tablets to sourceKit
-        val createDrugDto = DrugCreateDTO(
-            name = "LifePill", quantity = qty(100.0), quantityUnit = "tablets",
-            medKitId = sourceKit.id, formType = null, category = null,
+        val createDrugDto = DrugCreateRequest(
+            name = "LifePill", quantity = qty(100.0), quantityUnit = "tablets", formType = null, category = null,
             manufacturer = null, country = null, description = null
         )
-        val drug = medKitDrugServices.createDrugInMedkit(createDrugDto, alice.id)
+        val drug = medKitDrugServices.createDrugInMedkit(sourceKit.id, createDrugDto, alice.id)
         dbHelper.flushAndClear()
 
         // Alice and Bob create treatment plans (40 each, total 80)
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(40.0)))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(40.0)))
+        usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(40.0)))
+        usingService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(40.0)))
         dbHelper.flushAndClear()
 
         // ── Phase 1: Alter Using ──
         // Bob increases his plan from 40 to 60.
         // Allowed because 100 stock - 40 Alice = 60 available.
-        usingService.updateTreatmentPlan(bob.id, drug.id, UsingUpdateDTO(plannedAmount = qty(60.0)))
+        usingService.updateTreatmentPlan(bob.id, drug.id, TreatmentPlanPatchRequest(plannedAmount = qty(60.0)))
         dbHelper.flushAndClear()
 
         assertQty(60.0, dbHelper.userPlan(bob.id, drug.id)!!, "Bob's plan updated to 60")
@@ -264,7 +263,7 @@ class ComplexWorkflowStoriesTest {
         // ── Phase 2: Alter Drug (The Spill) ──
         // Alice updates the drug quantity from 100 to 50.
         // This MUST trigger `handleQuantityReduction`. Factor = 50 / 100 = 0.5.
-        val updateDrugDto = DrugUpdateDTO(quantity = qty(50.0))
+        val updateDrugDto = DrugPatchRequest(quantity = qty(50.0))
         drugService.update(drug.id, updateDrugDto, alice.id)
         dbHelper.flushAndClear()
 
@@ -312,7 +311,7 @@ class ComplexWorkflowStoriesTest {
         medKitService.joinMedKitByKey(shareKey, bob.id)
 
         // Alice creates a drug
-        val drug = drugService.create(DrugCreateDTO("Shared Meds", qty(10.0), "pcs", kitA.id), kitA, alice.id)
+        val drug = drugService.create(DrugCreateRequest("Shared Meds", qty(10.0), "pcs"), kitA, alice.id)
 
         // Bob creates a private kit
         val kitB = medKitService.createNew(bob.id)
@@ -336,11 +335,11 @@ class ComplexWorkflowStoriesTest {
         val kitA = medKitService.createNew(alice.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kitA.id, alice.id), bob.id)
 
-        val drug = drugService.create(DrugCreateDTO("Audit Meds", qty(10.0), "pcs", kitA.id), kitA, alice.id)
+        val drug = drugService.create(DrugCreateRequest("Audit Meds", qty(10.0), "pcs"), kitA, alice.id)
 
         // Both have plans
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(5.0)))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(2.0)))
+        usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(5.0)))
+        usingService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(2.0)))
 
         // Alice has a private kit (Bob is NOT in this one)
         val kitB = medKitService.createNew(alice.id)
@@ -366,7 +365,7 @@ class ComplexWorkflowStoriesTest {
         entityManager.flush()
         entityManager.clear()
         val drug =
-            medKitDrugServices.createDrugInMedkit(DrugCreateDTO("Migrating Meds", qty(10.0), "pcs", kitA.id), alice.id)
+            medKitDrugServices.createDrugInMedkit(kitA.id, DrugCreateRequest("Migrating Meds", qty(10.0), "pcs"), alice.id)
 
         // ACT: Delete Kit A and migrate drugs to Kit B
         entityManager.flush()

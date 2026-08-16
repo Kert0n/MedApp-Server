@@ -1,8 +1,7 @@
 package org.kert0n.medappserver.services.models
 
-import org.kert0n.medappserver.controller.UsingCreateDTO
-import org.kert0n.medappserver.controller.UsingDTO
-import org.kert0n.medappserver.controller.UsingUpdateDTO
+import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
+import org.kert0n.medappserver.api.TreatmentPlanPatchRequest
 import org.kert0n.medappserver.db.model.Using
 import org.kert0n.medappserver.db.model.UsingKey
 import org.kert0n.medappserver.db.model.isZero
@@ -54,7 +53,7 @@ class UsingService(
     }
 
     @Transactional
-    fun createTreatmentPlan(userId: UUID, createDTO: UsingCreateDTO): Using {
+    fun createTreatmentPlan(userId: UUID, createDTO: TreatmentPlanCreateRequest): Using {
         logger.debug("Creating treatment for user {} and drug {}", userId, createDTO.drugId)
 
 
@@ -89,7 +88,7 @@ class UsingService(
     }
 
     @Transactional
-    fun updateTreatmentPlan(userId: UUID, drugId: UUID, updateDTO: UsingUpdateDTO): Using {
+    fun updateTreatmentPlan(userId: UUID, drugId: UUID, updateDTO: TreatmentPlanPatchRequest): Using {
         logger.debug("Updating using for user {} and drug {}", userId, drugId)
 
         // Lock the drug row to prevent concurrent plan modifications
@@ -152,15 +151,4 @@ class UsingService(
     }
 
 
-    @Transactional(readOnly = true)
-    fun toUsingDTO(using: Using): UsingDTO {
-
-        return UsingDTO(
-            userId = using.user.id,
-            drugId = using.drug.id,
-            plannedAmount = using.plannedAmount,
-            createdAt = using.createdAt,
-            lastModified = using.lastModified
-        )
-    }
 }

@@ -1,7 +1,7 @@
 package org.kert0n.medappserver.services.models
 
 import com.sksamuel.aedile.core.Cache
-import org.kert0n.medappserver.controller.MedKitSummaryDTO
+import org.kert0n.medappserver.db.repository.MedKitSummary
 import org.kert0n.medappserver.db.model.MedKit
 import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.db.repository.MedKitRepository
@@ -60,7 +60,7 @@ class MedKitService(
     }
 
     @Transactional(readOnly = true)
-    fun findMedKitSummaries(userId: UUID): Set<MedKitSummaryDTO> {
+    fun findMedKitSummaries(userId: UUID): Set<MedKitSummary> {
         logger.debug("Finding medkit summaries for user: {}", userId)
         return medKitRepository.findMedKitSummariesByUserId(userId)
     }

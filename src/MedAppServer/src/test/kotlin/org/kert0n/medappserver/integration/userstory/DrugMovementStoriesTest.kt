@@ -5,8 +5,8 @@ import java.util.*
 import kotlin.test.*
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
-import org.kert0n.medappserver.controller.UsingCreateDTO
-import org.kert0n.medappserver.controller.UsingUpdateDTO
+import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
+import org.kert0n.medappserver.api.TreatmentPlanPatchRequest
 import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.db.repository.DrugRepository
@@ -74,7 +74,7 @@ class DrugMovementStoriesTest {
         entityManager.flush()
 
         // Create treatment plan
-        usingService.createTreatmentPlan(user.id, UsingCreateDTO(painkiller.id, qty(20.0)))
+        usingService.createTreatmentPlan(user.id, TreatmentPlanCreateRequest(painkiller.id, qty(20.0)))
         entityManager.flush()
 
         // Move drug to travel kit
@@ -129,14 +129,14 @@ class DrugMovementStoriesTest {
         entityManager.flush()
 
         // Anna plans 40, Bob plans 30 (total 70, available 30)
-        usingService.createTreatmentPlan(anna.id, UsingCreateDTO(drug.id, qty(40.0)))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(30.0)))
+        usingService.createTreatmentPlan(anna.id, TreatmentPlanCreateRequest(drug.id, qty(40.0)))
+        usingService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
         entityManager.flush()
 
         // Anna should be able to increase her plan to 70 (available for her = 100 - 30 (bob) = 70)
         val updated = usingService.updateTreatmentPlan(
             anna.id, drug.id,
-            UsingUpdateDTO(qty(70.0))
+            TreatmentPlanPatchRequest(qty(70.0))
         )
         assertQty(70.0, updated.plannedAmount)
         entityManager.flush()
@@ -148,7 +148,7 @@ class DrugMovementStoriesTest {
         assertFailsWith<ResponseStatusException> {
             usingService.updateTreatmentPlan(
                 anna.id, drug.id,
-                UsingUpdateDTO(qty(71.0))
+                TreatmentPlanPatchRequest(qty(71.0))
             )
         }
 
@@ -176,7 +176,7 @@ class DrugMovementStoriesTest {
         entityManager.flush()
 
         // Create treatment plan
-        usingService.createTreatmentPlan(user.id, UsingCreateDTO(drug.id, qty(25.0)))
+        usingService.createTreatmentPlan(user.id, TreatmentPlanCreateRequest(drug.id, qty(25.0)))
         entityManager.flush()
         entityManager.clear()
 
@@ -232,9 +232,9 @@ class DrugMovementStoriesTest {
         )
 
         // Everyone creates a plan for 30 pills
-        usingService.createTreatmentPlan(anna.id, UsingCreateDTO(drug.id, qty(30.0)))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(30.0)))
-        usingService.createTreatmentPlan(charlie.id, UsingCreateDTO(drug.id, qty(30.0)))
+        usingService.createTreatmentPlan(anna.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
+        usingService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
+        usingService.createTreatmentPlan(charlie.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
 
         entityManager.flush()
         entityManager.clear()
@@ -281,8 +281,8 @@ class DrugMovementStoriesTest {
         )
 
         // Anna plans 60, Bob plans 40. Total planned = 100.
-        usingService.createTreatmentPlan(anna.id, UsingCreateDTO(drug.id, qty(60.0)))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(40.0)))
+        usingService.createTreatmentPlan(anna.id, TreatmentPlanCreateRequest(drug.id, qty(60.0)))
+        usingService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(40.0)))
 
         entityManager.flush()
         entityManager.clear()

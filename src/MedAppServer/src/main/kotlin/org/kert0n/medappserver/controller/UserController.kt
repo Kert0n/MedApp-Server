@@ -1,11 +1,10 @@
 package org.kert0n.medappserver.controller
 
-import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
-import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
+import org.kert0n.medappserver.api.MedKitDTO
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.userId
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
@@ -17,8 +16,8 @@ import org.springframework.web.bind.annotation.RestController
 import java.util.*
 
 @RestController
-@RequestMapping("/user")
-@Tag(name = "User Data", description = "Endpoints for user profile and synchronization data")
+@RequestMapping("/v1/users")
+@Tag(name = "User", description = "The authenticated user")
 class UserController(
     private val medKitService: MedKitService,
     private val medKitDrugServices: MedKitDrugServices
@@ -26,36 +25,25 @@ class UserController(
 
     private val logger = LoggerFactory.getLogger(UserController::class.java)
 
-    @GetMapping
-    @Operation(
-        summary = "Get user snapshot",
-        description = "Returns user identifier with all accessible medkits and drugs for sync."
-    )
-    @ApiResponses(
-        value = [
-            ApiResponse(
-                responseCode = "200",
-                description = "User snapshot retrieved",
-                content = [Content(schema = Schema(implementation = UserDto::class))]
-            ),
-            ApiResponse(responseCode = "401", description = "Unauthorized", content = [Content()])
-        ]
-    )
-    fun getAllDataForUser(authentication: Authentication): UserDto {
-        logger.debug("GET /user by user {}", authentication.userId)
-        val medKitDTOs =
-            medKitService.findAllByUser(authentication.userId).map { medKitDrugServices.toMedKitDTO(it) }.toSet()
-        return UserDto(
-            id = authentication.userId,
-            medKits = medKitDTOs
-        )
+    /**
+     * `me`, а не идентификатор в пути: другого пользователя здесь всё равно не посмотреть,
+     * а путь с идентификатором обещал бы обратное.
+     */
+    @GetMapping("/me")
+    @ApiResponse(responseCode = "200", description = "Snapshot returned", content = [Content(schema = Schema(implementation = UserSnapshotDTO::class))])
+    fun getSnapshot(authentication: Authentication): UserSnapshotDTO {
+        logger.debug("GET /v1/users/me by user {}", authentication.userId)
+        val medKits = medKitService.findAllByUser(authentication.userId)
+            .map { medKitDrugServices.toMedKitDTO(it) }
+            .toSet()
+        return UserSnapshotDTO(id = authentication.userId, medKits = medKits)
     }
 }
 
-@Schema(description = "Full user snapshot")
-data class UserDto(
-    @Schema(description = "User identifier")
+@Schema(description = "Everything the caller can see, in one response")
+data class UserSnapshotDTO(
+    @Schema(description = "Caller identifier")
     val id: UUID,
-    @Schema(description = "All medkits available to the user")
+    @Schema(description = "All medicine kits available to the caller")
     val medKits: Set<MedKitDTO>
 )

@@ -5,7 +5,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
-import org.kert0n.medappserver.controller.UsingCreateDTO
+import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.db.repository.UsingRepository
@@ -88,8 +88,8 @@ class PlannedQuantityTrackingTests {
         val drug = dbHelper.freshDrug(kit, 120.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(40.0)))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(30.0)))
+        usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(40.0)))
+        usingService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
         dbHelper.flushAndClear()
 
         // Sanity: initial state
@@ -151,9 +151,9 @@ class PlannedQuantityTrackingTests {
         val drug = dbHelper.freshDrug(kit, 90.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(30.0)))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(30.0)))
-        usingService.createTreatmentPlan(charlie.id, UsingCreateDTO(drug.id, qty(30.0)))
+        usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
+        usingService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
+        usingService.createTreatmentPlan(charlie.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
         dbHelper.flushAndClear()
 
         // Initial state: zero slack
@@ -232,9 +232,9 @@ class PlannedQuantityTrackingTests {
         val drug = dbHelper.freshDrug(kit, 90.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(30.0)))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(30.0)))
-        usingService.createTreatmentPlan(charlie.id, UsingCreateDTO(drug.id, qty(30.0)))
+        usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
+        usingService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
+        usingService.createTreatmentPlan(charlie.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
         dbHelper.flushAndClear()
 
         // Bob emergency-consumes 30 (ignores the plan system)
@@ -293,8 +293,8 @@ class PlannedQuantityTrackingTests {
         val drug = dbHelper.freshDrug(kit, 120.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, UsingCreateDTO(drug.id, qty(40.0)))
-        usingService.createTreatmentPlan(bob.id, UsingCreateDTO(drug.id, qty(40.0)))
+        usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(40.0)))
+        usingService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(40.0)))
         dbHelper.flushAndClear()
 
         assertQty(120.0, dbHelper.drugQuantity(drug.id))

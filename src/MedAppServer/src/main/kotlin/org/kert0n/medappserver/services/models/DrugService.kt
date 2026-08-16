@@ -1,8 +1,7 @@
 package org.kert0n.medappserver.services.models
 
-import org.kert0n.medappserver.controller.DrugCreateDTO
-import org.kert0n.medappserver.controller.DrugDTO
-import org.kert0n.medappserver.controller.DrugUpdateDTO
+import org.kert0n.medappserver.api.DrugCreateRequest
+import org.kert0n.medappserver.api.DrugPatchRequest
 import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.MedKit
 import org.kert0n.medappserver.db.repository.DrugRepository
@@ -62,7 +61,7 @@ class DrugService(
 
 
     @Transactional
-    fun create(createDTO: DrugCreateDTO, medKit: MedKit, userId: UUID): Drug {
+    fun create(createDTO: DrugCreateRequest, medKit: MedKit, userId: UUID): Drug {
         logger.debug("Creating drug: {} for user: {}", createDTO.name, userId)
 
         val drug = Drug(
@@ -81,7 +80,7 @@ class DrugService(
     }
 
     @Transactional
-    fun update(drugId: UUID, updateDTO: DrugUpdateDTO, userId: UUID): Drug {
+    fun update(drugId: UUID, updateDTO: DrugPatchRequest, userId: UUID): Drug {
         logger.debug("Updating drug: {}", drugId)
 
         val drug = findByIdForUserForUpdate(drugId, userId)
@@ -131,26 +130,6 @@ class DrugService(
     }
 
 
-    //    @Transactional(readOnly = true)
-//    fun getPlannedQuantity(drugId: UUID): Double {
-//        return drugRepository.sumPlannedAmount(drugId)
-//    }
-    @Transactional(readOnly = true)
-    fun toDrugDTO(drug: Drug): DrugDTO {
-        return DrugDTO(
-            id = drug.id,
-            name = drug.name,
-            quantity = drug.quantity,
-            plannedQuantity = drug.totalPlannedAmount,
-            quantityUnit = drug.quantityUnit,
-            formType = drug.formType,
-            category = drug.category,
-            manufacturer = drug.manufacturer,
-            country = drug.country,
-            description = drug.description,
-            medKitId = drug.medKit.id
-        )
-    }
 
 
 }

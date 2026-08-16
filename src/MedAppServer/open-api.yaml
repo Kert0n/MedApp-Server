@@ -9,189 +9,45 @@ servers:
 security:
 - Bearer Authentication: []
 tags:
-- name: Drug Management
-  description: APIs for managing drugs in medicine kits
-- name: MedKit Management
-  description: APIs for managing medicine kits
-- name: User Data
-  description: Endpoints for user profile and synchronization data
+- name: Medicine kit memberships
+  description: Participation of the caller in shared kits
+- name: User
+  description: The authenticated user
+- name: Drug catalogue
+  description: Reference catalogue used when adding a drug
+- name: Treatment plans
+  description: How much of a drug the user reserved for themselves
+- name: Medicine kits
+  description: Shared medicine kits
 - name: Authentication
   description: Public endpoints for registration and token issuance
-- name: Treatment Plans
-  description: Endpoints for treatment plans and intake tracking
+- name: Drugs
+  description: Drugs stored in medicine kits
+- name: Intakes
+  description: Recorded intakes of planned drugs
 paths:
-  /using/drug/{drugId}:
-    get:
-      tags:
-      - Treatment Plans
-      summary: Get treatment plan by drug
-      description: Returns a treatment plan for a specific drug.
-      operationId: getSpecificUsing
-      parameters:
-      - name: drugId
-        in: path
-        description: Drug ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "200":
-          description: Treatment plan retrieved
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/UsingDTO"
-        "404":
-          description: Treatment plan not found
+  /v1/med-kits/{targetMedKitId}/drugs/{drugId}:
     put:
       tags:
-      - Treatment Plans
-      summary: Update treatment plan
-      description: Updates the planned amount for a drug.
-      operationId: updateUsing
-      parameters:
-      - name: drugId
-        in: path
-        description: Drug ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        description: Updated treatment plan
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UsingUpdateDTO"
-        required: true
-      responses:
-        "200":
-          description: Treatment plan updated
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/UsingDTO"
-        "400":
-          description: Invalid input
-        "404":
-          description: Treatment plan not found
-    delete:
-      tags:
-      - Treatment Plans
-      summary: Delete treatment plan
-      description: Deletes a planned usage for a drug.
-      operationId: deleteTreatmentPlan
-      parameters:
-      - name: drugId
-        in: path
-        description: Drug ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "204":
-          description: Treatment plan deleted
-        "404":
-          description: Treatment plan not found
-  /drug/{id}:
-    get:
-      tags:
-      - Drug Management
-      summary: Get drug by ID
-      description: Retrieves a drug by its ID if the user has access
-      operationId: getDrug
-      parameters:
-      - name: id
-        in: path
-        description: Drug ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "200":
-          description: Drug found
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/DrugDTO"
-        "404":
-          description: Drug not found or access denied
-    put:
-      tags:
-      - Drug Management
-      summary: Update a drug
-      description: Updates an existing drug
-      operationId: updateDrug
-      parameters:
-      - name: id
-        in: path
-        description: Drug ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        description: Drug update details
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/DrugUpdateDTO"
-        required: true
-      responses:
-        "200":
-          description: Drug updated successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/DrugDTO"
-        "400":
-          description: Invalid input
-        "404":
-          description: Drug not found
-    delete:
-      tags:
-      - Drug Management
-      summary: Delete a drug
-      description: Deletes a drug from the medicine kit
-      operationId: deleteDrug
-      parameters:
-      - name: id
-        in: path
-        description: Drug ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "204":
-          description: Drug deleted successfully
-        "404":
-          description: Drug not found
-  /drug/move/{id}:
-    put:
-      tags:
-      - Drug Management
-      summary: Move drug to another medicine kit
-      description: Transfers a drug between medicine kits
+      - Drugs
+      summary: Move a drug to another medicine kit
+      description: Transfers the drug between kits.
       operationId: moveDrug
       parameters:
-      - name: id
+      - name: targetMedKitId
         in: path
-        description: Drug ID
+        description: Target medicine kit identifier
         required: true
         schema:
           type: string
           format: uuid
-      requestBody:
-        description: Target medicine kit
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/MoveDrugRequest"
+      - name: drugId
+        in: path
+        description: Drug identifier
         required: true
+        schema:
+          type: string
+          format: uuid
       responses:
         "200":
           description: Drug moved
@@ -199,43 +55,245 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/DrugDTO"
-        "400":
-          description: Invalid target medkit
         "404":
-          description: Drug or medkit not found
-  /drug/consume/{id}:
+          description: Drug or target kit is not accessible
+        "401":
+          description: Authentication is required
+  /v1/intakes/{intakeId}:
     put:
       tags:
-      - Drug Management
-      summary: Consume drug
-      description: Reduces drug quantity by the consumed amount
-      operationId: consumeDrug
+      - Intakes
+      summary: Record an intake
+      description: "Not enabled yet: the endpoint answers 501. The final behaviour\
+        \ applies the intake once — repeating the request with the same identifier\
+        \ returns the first result instead of consuming again — and arrives together\
+        \ with optimistic concurrency."
+      operationId: recordIntake
       parameters:
-      - name: id
+      - name: intakeId
         in: path
-        description: Drug ID
+        description: Client-generated intake identifier
         required: true
         schema:
           type: string
           format: uuid
       requestBody:
-        description: Consumption details
+        description: Intake details
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ConsumeRequest"
+              $ref: "#/components/schemas/IntakeRequest"
         required: true
       responses:
+        "501":
+          description: Intake is not enabled yet
+        "401":
+          description: Authentication is required
+  /v1/treatment-plans:
+    get:
+      tags:
+      - Treatment plans
+      summary: List treatment plans
+      description: Returns every plan of the caller.
+      operationId: listTreatmentPlans
+      responses:
         "200":
-          description: Drug consumed
+          description: Plans returned
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TreatmentPlanDTO"
+        "401":
+          description: Authentication is required
+    post:
+      tags:
+      - Treatment plans
+      summary: Create a treatment plan
+      description: Reserves an amount of a drug for the caller.
+      operationId: createTreatmentPlan
+      requestBody:
+        description: Plan to create
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TreatmentPlanCreateRequest"
+        required: true
+      responses:
+        "201":
+          description: Plan created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TreatmentPlanDTO"
+        "400":
+          description: Amount exceeds the available stock
+        "404":
+          description: Drug is not accessible
+        "409":
+          description: Plan for this drug already exists
+        "401":
+          description: Authentication is required
+  /v1/med-kits:
+    get:
+      tags:
+      - Medicine kits
+      summary: List medicine kits
+      description: "Returns counters for every kit of the caller, without loading\
+        \ their contents."
+      operationId: listMedKits
+      responses:
+        "200":
+          description: Kits returned
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MedKitSummaryDTO"
+                uniqueItems: true
+        "401":
+          description: Authentication is required
+    post:
+      tags:
+      - Medicine kits
+      summary: Create a medicine kit
+      description: Creates a kit owned by nobody in particular.
+      operationId: createMedKit
+      responses:
+        "201":
+          description: Kit created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MedKitCreatedDTO"
+        "401":
+          description: Authentication is required
+  /v1/med-kits/{medKitId}/invitations:
+    post:
+      tags:
+      - Medicine kits
+      summary: Create an invitation
+      description: Issues a key others can use to join the kit.
+      operationId: createInvitation
+      parameters:
+      - name: medKitId
+        in: path
+        description: Medicine kit identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "201":
+          description: Invitation created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/InvitationDTO"
+        "404":
+          description: Kit does not exist or is not accessible
+        "401":
+          description: Authentication is required
+  /v1/med-kits/{medKitId}/drugs:
+    post:
+      tags:
+      - Drugs
+      summary: Add a drug to a medicine kit
+      description: Creates a drug in the given kit.
+      operationId: createDrug
+      parameters:
+      - name: medKitId
+        in: path
+        description: Medicine kit identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        description: Drug to create
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DrugCreateRequest"
+        required: true
+      responses:
+        "201":
+          description: Drug created
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/DrugDTO"
         "400":
-          description: Invalid quantity
+          description: Invalid request
         "404":
-          description: Drug not found
+          description: Medicine kit is not accessible
+        "401":
+          description: Authentication is required
+  /v1/med-kit-memberships:
+    post:
+      tags:
+      - Medicine kit memberships
+      summary: Join a medicine kit
+      description: Accepts an invitation and joins the kit.
+      operationId: joinMedKit
+      requestBody:
+        description: Invitation key
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MembershipCreateRequest"
+        required: true
+      responses:
+        "201":
+          description: Joined
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MedKitDTO"
+        "404":
+          description: Invitation expired or unknown
+        "401":
+          description: Authentication is required
+  /v1/drugs/{drugId}/consumptions:
+    post:
+      tags:
+      - Drugs
+      summary: Consume a drug
+      description: Reduces the stock by the given amount outside any treatment plan.
+        Returns no body when the drug ran out and was removed.
+      operationId: consumeDrug
+      parameters:
+      - name: drugId
+        in: path
+        description: Drug identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        description: Amount consumed
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConsumptionRequest"
+        required: true
+      responses:
+        "200":
+          description: Stock reduced
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DrugDTO"
+        "204":
+          description: Drug ran out and was removed
+        "400":
+          description: Amount exceeds the stock
+        "404":
+          description: Drug does not exist or is not accessible
+        "401":
+          description: Authentication is required
   /v1/auth/token:
     post:
       tags:
@@ -256,6 +314,8 @@ paths:
           description: Invalid credentials
         "429":
           description: Too many token requests
+      security:
+      - Basic Authentication: []
   /v1/auth/register:
     post:
       tags:
@@ -282,292 +342,255 @@ paths:
           description: Invalid registration secret
         "429":
           description: Too many registration attempts
-  /using:
+  /v1/treatment-plans/{drugId}:
     get:
       tags:
-      - Treatment Plans
-      summary: Get all treatment plans
-      description: Returns all planned drug usages for the user.
-      operationId: getUsings
-      responses:
-        "200":
-          description: Treatment plans retrieved
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/UsingDTO"
-        "401":
-          description: Unauthorized
-    post:
-      tags:
-      - Treatment Plans
-      summary: Create treatment plan
-      description: Creates a planned usage for a drug.
-      operationId: createUsing
-      requestBody:
-        description: Treatment plan details
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UsingCreateDTO"
-        required: true
-      responses:
-        "201":
-          description: Treatment plan created
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/UsingDTO"
-        "400":
-          description: Invalid input
-        "409":
-          description: Treatment plan already exists
-  /using/drug/{drugId}/intake:
-    post:
-      tags:
-      - Treatment Plans
-      summary: Record intake
-      description: Registers a drug intake and updates the planned amount.
-      operationId: recordRegularUsing
+      - Treatment plans
+      summary: Get a treatment plan
+      description: Returns the caller's plan for the drug.
+      operationId: getTreatmentPlan
       parameters:
       - name: drugId
         in: path
-        description: Drug ID
+        description: Drug identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Plan found
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TreatmentPlanDTO"
+        "404":
+          description: No plan for this drug
+        "401":
+          description: Authentication is required
+    delete:
+      tags:
+      - Treatment plans
+      summary: Delete a treatment plan
+      description: Releases the reserved amount.
+      operationId: deleteTreatmentPlan
+      parameters:
+      - name: drugId
+        in: path
+        description: Drug identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "204":
+          description: Plan deleted
+        "404":
+          description: No plan for this drug
+        "401":
+          description: Authentication is required
+    patch:
+      tags:
+      - Treatment plans
+      summary: Change the planned amount
+      description: Sets a new planned amount for the drug.
+      operationId: patchTreatmentPlan
+      parameters:
+      - name: drugId
+        in: path
+        description: Drug identifier
         required: true
         schema:
           type: string
           format: uuid
       requestBody:
-        description: Intake details
+        description: New planned amount
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/IntakeRequest"
+              $ref: "#/components/schemas/TreatmentPlanPatchRequest"
         required: true
       responses:
         "200":
-          description: Intake recorded
+          description: Plan updated
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/UsingDTO"
+                $ref: "#/components/schemas/TreatmentPlanDTO"
         "400":
-          description: Invalid intake amount
+          description: Amount exceeds the available stock
         "404":
-          description: Treatment plan not found
-  /med-kit:
+          description: No plan for this drug
+        "401":
+          description: Authentication is required
+  /v1/drugs/{drugId}:
     get:
       tags:
-      - MedKit Management
-      summary: Get all medkits
-      description: Returns summary info for all medkits accessible to the user
-      operationId: getAllMedKits
-      responses:
-        "200":
-          description: Medkits retrieved
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/MedKitSummaryDTO"
-        "401":
-          description: Unauthorized
-    post:
-      tags:
-      - MedKit Management
-      summary: Create a new medkit
-      description: Creates a new medkit for the authenticated user
-      operationId: createNew
-      responses:
-        "201":
-          description: Medkit created successfully
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/MedKitCreatedResponse"
-        "401":
-          description: Unauthorized
-  /med-kit/{medKitId}/share:
-    post:
-      tags:
-      - MedKit Management
-      summary: Generate share key
-      description: "Generates a share key for a medkit. The key stays valid until\
-        \ it expires (medkit.share.termInMinutes) and can be used more than once during\
-        \ that window, so treat it as a short-lived invitation rather than a single-use\
-        \ token."
-      operationId: generateKeyToMedKit
+      - Drugs
+      summary: Get a drug
+      description: Returns a drug the caller has access to.
+      operationId: getDrug
       parameters:
-      - name: medKitId
+      - name: drugId
         in: path
-        description: Medkit ID
+        description: Drug identifier
         required: true
         schema:
           type: string
           format: uuid
       responses:
         "200":
-          description: Share key generated
+          description: Drug found
           content:
             '*/*':
               schema:
-                type: string
+                $ref: "#/components/schemas/DrugDTO"
         "404":
-          description: Medkit not found or access denied
-  /med-kit/join:
-    post:
+          description: Drug does not exist or is not accessible
+        "401":
+          description: Authentication is required
+    delete:
       tags:
-      - MedKit Management
-      summary: Join medkit by share key
-      description: Joins an existing medkit using a share key
-      operationId: joinMedKitByKey
+      - Drugs
+      summary: Delete a drug
+      description: Removes the drug and every treatment plan for it.
+      operationId: deleteDrug
+      parameters:
+      - name: drugId
+        in: path
+        description: Drug identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "204":
+          description: Drug deleted
+        "404":
+          description: Drug does not exist or is not accessible
+        "401":
+          description: Authentication is required
+    patch:
+      tags:
+      - Drugs
+      summary: Update a drug
+      description: Changes the given fields. Absent fields are left as they are; quantity
+        may only increase — use consumptions to reduce it.
+      operationId: patchDrug
+      parameters:
+      - name: drugId
+        in: path
+        description: Drug identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
       requestBody:
-        description: Join request
+        description: Fields to change
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/JoinMedKitRequest"
+              $ref: "#/components/schemas/DrugPatchRequest"
         required: true
       responses:
         "200":
-          description: Successfully joined medkit
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/MedKitDTO"
-        "404":
-          description: Share key expired or invalid
-  /drug:
-    post:
-      tags:
-      - Drug Management
-      summary: Create a new drug
-      description: Creates a new drug in a medicine kit
-      operationId: createDrug
-      requestBody:
-        description: Drug details to create
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/DrugCreateDTO"
-        required: true
-      responses:
-        "201":
-          description: Drug created successfully
+          description: Drug updated
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/DrugDTO"
         "400":
-          description: Invalid input
-        "403":
-          description: User does not have access to the medicine kit
-  /user:
+          description: Invalid request
+        "404":
+          description: Drug does not exist or is not accessible
+        "401":
+          description: Authentication is required
+  /v1/users/me:
     get:
       tags:
-      - User Data
-      summary: Get user snapshot
-      description: Returns user identifier with all accessible medkits and drugs for
-        sync.
-      operationId: getAllDataForUser
+      - User
+      summary: Get the caller's snapshot
+      description: "Returns the caller identifier with every accessible medicine kit\
+        \ and its drugs, for sync."
+      operationId: getSnapshot
       responses:
         "200":
-          description: User snapshot retrieved
+          description: Snapshot returned
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/UserDto"
+                $ref: "#/components/schemas/UserSnapshotDTO"
         "401":
-          description: Unauthorized
-  /med-kit/{id}:
+          description: Authentication is required
+  /v1/med-kits/{medKitId}:
     get:
       tags:
-      - MedKit Management
-      summary: Get medkit by ID
-      description: Retrieves a medkit if the user has access
+      - Medicine kits
+      summary: Get a medicine kit
+      description: Returns the kit with its drugs.
       operationId: getMedKit
       parameters:
-      - name: id
+      - name: medKitId
         in: path
-        description: Medkit ID
+        description: Medicine kit identifier
         required: true
         schema:
           type: string
           format: uuid
       responses:
         "200":
-          description: Medkit found
+          description: Kit found
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/MedKitDTO"
         "404":
-          description: Medkit not found or access denied
+          description: Kit does not exist or is not accessible
+        "401":
+          description: Authentication is required
     delete:
       tags:
-      - MedKit Management
-      summary: Delete medkit
-      description: "Deletes the medkit for everyone who shares it, including its drugs\
-        \ and the treatment plans of other participants. Use when the physical medicine\
-        \ kit has ceased to exist as a shared thing — it was taken away or was damaged\
-        \ beyond use. Pass transferToMedKitId to move the drugs into another of your\
-        \ medkits instead of discarding them. To leave a shared medkit without destroying\
-        \ it, use DELETE /med-kit/{id}/leave."
+      - Medicine kits
+      summary: Delete a medicine kit
+      description: "Deletes the kit for every participant, including its drugs and\
+        \ their treatment plans. Use when the physical kit no longer exists as a shared\
+        \ thing. Pass targetMedKitId to move the drugs into another kit of yours instead\
+        \ of discarding them. To leave a shared kit without destroying it, delete\
+        \ your membership instead."
       operationId: deleteMedKit
       parameters:
-      - name: id
+      - name: medKitId
         in: path
-        description: Medkit ID
+        description: Medicine kit identifier
         required: true
         schema:
           type: string
           format: uuid
-      - name: transferToMedKitId
+      - name: targetMedKitId
         in: query
-        description: Target medkit ID to transfer drugs
+        description: Kit to move the drugs into instead of discarding them
         required: false
         schema:
           type: string
           format: uuid
       responses:
         "204":
-          description: Medkit deleted for all participants
+          description: Kit deleted for everyone
         "404":
-          description: Medkit not found
-  /drug/template/{id}:
+          description: Kit does not exist or is not accessible
+        "401":
+          description: Authentication is required
+  /v1/drug-templates:
     get:
       tags:
-      - Drug Management
-      summary: Get drug template by ID
-      description: Retrieves a drug template from the database
-      operationId: getDrugTemplate
-      parameters:
-      - name: id
-        in: path
-        description: Template ID
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "200":
-          description: Template retrieved
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/DrugTemplateDTO"
-        "404":
-          description: Template not found
-  /drug/template/search:
-    get:
-      tags:
-      - Drug Management
-      summary: Search drug templates
-      description: Fuzzy search for drug templates in the database
+      - Drug catalogue
+      summary: Search the catalogue
+      description: "Searches by name, Latin name, active substance and manufacturer."
       operationId: searchDrugTemplates
       parameters:
-      - name: searchTerm
+      - name: query
         in: query
-        description: Search term
+        description: Search query
         required: true
         schema:
           type: string
@@ -575,7 +598,7 @@ paths:
           minLength: 1
       - name: limit
         in: query
-        description: Maximum results
+        description: Maximum number of results
         required: false
         schema:
           type: integer
@@ -584,96 +607,182 @@ paths:
           minimum: 1
       responses:
         "200":
-          description: Templates found
+          description: Matches found
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/DrugTemplateDTO"
+                type: array
+                items:
+                  $ref: "#/components/schemas/DrugTemplateDTO"
         "400":
-          description: Invalid search term
-  /drug/quantity/{id}:
+          description: Invalid query or limit
+        "401":
+          description: Authentication is required
+  /v1/drug-templates/{templateId}:
     get:
       tags:
-      - Drug Management
-      summary: Get drug quantity info
-      description: "Returns actual, planned, and available quantities"
-      operationId: getDrugQuantityInfo
+      - Drug catalogue
+      summary: Get a catalogue entry
+      description: Returns a single catalogue entry.
+      operationId: getDrugTemplate
       parameters:
-      - name: id
+      - name: templateId
         in: path
-        description: Drug ID
+        description: Template identifier
         required: true
         schema:
           type: string
           format: uuid
       responses:
         "200":
-          description: Quantity info retrieved
+          description: Entry found
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/QuantityInfo"
+                $ref: "#/components/schemas/DrugTemplateDTO"
         "404":
-          description: Drug not found
-  /med-kit/{id}/leave:
+          description: Entry does not exist
+        "401":
+          description: Authentication is required
+  /v1/med-kit-memberships/{medKitId}:
     delete:
       tags:
-      - MedKit Management
-      summary: Leave medkit
-      description: Removes the authenticated user from the medkit
+      - Medicine kit memberships
+      summary: Leave a medicine kit
+      description: Removes the caller from the kit together with their treatment plans
+        in it. The kit itself and other participants stay.
       operationId: leaveMedKit
       parameters:
-      - name: id
+      - name: medKitId
         in: path
-        description: Medkit ID
+        description: Medicine kit identifier
         required: true
         schema:
           type: string
           format: uuid
       responses:
         "204":
-          description: User removed from medkit
+          description: Left the kit
         "404":
-          description: Medkit not found
+          description: Kit does not exist or is not accessible
+        "401":
+          description: Authentication is required
 components:
   schemas:
-    UsingUpdateDTO:
+    DrugDTO:
       type: object
-      description: Update treatment plan request
+      description: Drug stock and descriptive fields
       properties:
-        plannedAmount:
-          type: number
-          description: Planned amount
-          example: 20.0
-          minimum: 0.0
-      required:
-      - plannedAmount
-    UsingDTO:
-      type: object
-      description: Treatment plan information
-      properties:
-        userId:
+        id:
           type: string
           format: uuid
-          description: User identifier
+          description: Drug identifier
+        name:
+          type: string
+          description: Drug name
+          example: Aspirin
+        quantity:
+          type: number
+          description: Current stock
+          example: 100.0
+        plannedQuantity:
+          type: number
+          description: Sum of all treatment plans for this drug
+          example: 30.0
+        availableQuantity:
+          type: number
+          description: Stock not reserved by treatment plans
+          example: 70.0
+        quantityUnit:
+          type: string
+          description: Quantity unit
+          example: mg
+        formType:
+          type: string
+          description: Dosage form
+          example: tablet
+        category:
+          type: string
+          description: Category
+          example: painkiller
+        manufacturer:
+          type: string
+          description: Manufacturer
+          example: Bayer
+        country:
+          type: string
+          description: Country
+          example: Germany
+        description:
+          type: string
+          description: Description
+        medKitId:
+          type: string
+          format: uuid
+          description: Medicine kit the drug belongs to
+    IntakeRequest:
+      type: object
+      description: Recorded intake of a planned drug
+      properties:
+        drugId:
+          type: string
+          format: uuid
+          description: Drug identifier
+        quantityConsumed:
+          type: number
+          description: "Amount consumed, greater than zero"
+          example: 1.0
+          minimum: 0.0
+      required:
+      - drugId
+      - quantityConsumed
+    TreatmentPlanCreateRequest:
+      type: object
+      description: Request to reserve an amount of a drug
+      properties:
         drugId:
           type: string
           format: uuid
           description: Drug identifier
         plannedAmount:
           type: number
-          description: Planned total amount for the course
-        createdAt:
-          type: string
-          format: date-time
-          description: Date when the plan was created
-        lastModified:
-          type: string
-          format: date-time
-          description: Date of last modification
-    DrugUpdateDTO:
+          description: "Planned amount, greater than zero"
+          example: 20.0
+          minimum: 0.0
+      required:
+      - drugId
+      - plannedAmount
+    TreatmentPlanDTO:
       type: object
-      description: Request to update a drug
+      description: How much of a drug the user reserved for themselves
+      properties:
+        drugId:
+          type: string
+          format: uuid
+          description: Drug the plan belongs to
+        plannedAmount:
+          type: number
+          description: Planned amount for the course
+          example: 20.0
+    MedKitCreatedDTO:
+      type: object
+      description: Created medicine kit
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Medicine kit identifier
+    InvitationDTO:
+      type: object
+      description: Invitation to join a medicine kit
+      properties:
+        key:
+          type: string
+          description: Key to join the kit; valid for a limited time and reusable
+            within it
+    DrugCreateRequest:
+      type: object
+      description: Request to add a drug to a medicine kit
       properties:
         name:
           type: string
@@ -683,7 +792,7 @@ components:
           minLength: 1
         quantity:
           type: number
-          description: Quantity
+          description: "Initial stock, greater than zero"
           example: 100.0
           minimum: 0.0
         quantityUnit:
@@ -694,7 +803,7 @@ components:
           minLength: 1
         formType:
           type: string
-          description: Form type
+          description: Dosage form
           example: tablet
           maxLength: 100
           minLength: 0
@@ -721,70 +830,41 @@ components:
           description: Description
           maxLength: 4000
           minLength: 0
-    DrugDTO:
+      required:
+      - name
+      - quantity
+      - quantityUnit
+    MembershipCreateRequest:
       type: object
-      description: Drug information with planned quantity
+      description: Request to join a medicine kit by invitation
+      properties:
+        key:
+          type: string
+          description: Invitation key
+          example: sSQUCT8iOjYsobZ7StyspQ
+      required:
+      - key
+    MedKitDTO:
+      type: object
+      description: Medicine kit with its drugs
       properties:
         id:
           type: string
           format: uuid
-          description: Drug ID
-        name:
-          type: string
-          description: Drug name
-          example: Aspirin
-        quantity:
-          type: number
-          description: Current quantity
-          example: 100.0
-        plannedQuantity:
-          type: number
-          description: Total planned quantity across treatment plans
-          example: 30.0
-        quantityUnit:
-          type: string
-          description: Quantity unit
-          example: mg
-        formType:
-          type: string
-          description: Form type
-          example: tablet
-        category:
-          type: string
-          description: Category
-          example: painkiller
-        manufacturer:
-          type: string
-          description: Manufacturer
-          example: Bayer
-        country:
-          type: string
-          description: Country
-          example: Germany
-        description:
-          type: string
-          description: Description
-        medKitId:
-          type: string
-          format: uuid
-          description: Medicine kit ID
-    MoveDrugRequest:
+          description: Medicine kit identifier
+        drugs:
+          type: array
+          description: Drugs stored in the kit
+          items:
+            $ref: "#/components/schemas/DrugDTO"
+          uniqueItems: true
+    ConsumptionRequest:
       type: object
-      description: Request to move a drug to another medicine kit
-      properties:
-        targetMedKitId:
-          type: string
-          format: uuid
-          description: Target medicine kit ID
-      required:
-      - targetMedKitId
-    ConsumeRequest:
-      type: object
-      description: Request to consume a drug
+      description: Unplanned consumption of a drug
       properties:
         quantity:
           type: number
-          description: Quantity to consume
+          description: "Amount consumed, greater than zero"
           example: 2.0
           minimum: 0.0
       required:
@@ -807,70 +887,20 @@ components:
         key:
           type: string
           description: Generated secret key for authentication
-    UsingCreateDTO:
+    TreatmentPlanPatchRequest:
       type: object
-      description: Create treatment plan request
+      description: Request to change the planned amount
       properties:
-        drugId:
-          type: string
-          format: uuid
-          description: Drug identifier
         plannedAmount:
           type: number
-          description: Planned amount
-          example: 20.0
+          description: "New planned amount, greater than zero"
+          example: 15.0
           minimum: 0.0
       required:
-      - drugId
       - plannedAmount
-    IntakeRequest:
+    DrugPatchRequest:
       type: object
-      description: Intake request
-      properties:
-        quantityConsumed:
-          type: number
-          description: Amount consumed
-          example: 1.0
-          minimum: 0.0
-      required:
-      - quantityConsumed
-    MedKitCreatedResponse:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-          description: Created medkit ID
-      required:
-      - id
-    JoinMedKitRequest:
-      type: object
-      description: Join medkit request
-      properties:
-        key:
-          type: string
-          description: Share key to join medkit
-          example: share-key-123
-          minLength: 1
-      required:
-      - key
-    MedKitDTO:
-      type: object
-      description: Medkit with drugs
-      properties:
-        id:
-          type: string
-          format: uuid
-          description: Medkit ID
-        drugs:
-          type: array
-          description: Drugs in medkit
-          items:
-            $ref: "#/components/schemas/DrugDTO"
-          uniqueItems: true
-    DrugCreateDTO:
-      type: object
-      description: Request to create a new drug
+      description: Partial update of a drug
       properties:
         name:
           type: string
@@ -880,8 +910,8 @@ components:
           minLength: 1
         quantity:
           type: number
-          description: Quantity
-          example: 100.0
+          description: New stock; may only increase. Use consumptions to reduce it.
+          example: 120.0
           minimum: 0.0
         quantityUnit:
           type: string
@@ -889,13 +919,9 @@ components:
           example: mg
           maxLength: 50
           minLength: 1
-        medKitId:
-          type: string
-          format: uuid
-          description: Medicine kit ID
         formType:
           type: string
-          description: Form type
+          description: Dosage form
           example: tablet
           maxLength: 100
           minLength: 0
@@ -922,55 +948,50 @@ components:
           description: Description
           maxLength: 4000
           minLength: 0
-      required:
-      - medKitId
-      - name
-      - quantity
-      - quantityUnit
-    UserDto:
+    UserSnapshotDTO:
       type: object
-      description: Full user snapshot
+      description: "Everything the caller can see, in one response"
       properties:
         id:
           type: string
           format: uuid
-          description: User identifier
+          description: Caller identifier
         medKits:
           type: array
-          description: All medkits available to the user
+          description: All medicine kits available to the caller
           items:
             $ref: "#/components/schemas/MedKitDTO"
           uniqueItems: true
     MedKitSummaryDTO:
       type: object
+      description: Medicine kit counters without loading its contents
       properties:
         id:
           type: string
           format: uuid
-          description: Medkit ID
+          description: Medicine kit identifier
         userCount:
           type: integer
           format: int64
-          description: Number of users in medkit
+          description: Number of participants
+          example: 2
         drugCount:
           type: integer
           format: int64
-          description: Number of drugs in medkit
-      required:
-      - drugCount
-      - id
-      - userCount
+          description: Number of drugs
+          example: 17
     DrugTemplateDTO:
       type: object
-      description: Drug template from the database
+      description: Catalogue entry used as a template for a new drug
       properties:
         id:
           type: string
           format: uuid
-          description: Template ID
+          description: Template identifier
         name:
           type: string
           description: Drug name
+          example: Аспирин
         nameLat:
           type: string
           description: International name in Latin script
@@ -981,37 +1002,32 @@ components:
           example: Acetylsalicylic acid
         formType:
           type: string
-          description: "Form type (e.g., tablet, syrup)"
+          description: Dosage form
+          example: таблетки
         category:
           type: string
           description: Category
         quantityUnit:
           type: string
           description: Quantity unit
+          example: шт
         manufacturer:
           type: string
           description: Manufacturer
+          example: Bayer
         country:
           type: string
           description: Country
+          example: Германия
         description:
           type: string
           description: Description
-    QuantityInfo:
-      type: object
-      description: Drug quantity information
-      properties:
-        actualQuantity:
-          type: number
-          description: Actual quantity in stock
-        plannedQuantity:
-          type: number
-          description: Total planned quantity across all treatment plans
-        availableQuantity:
-          type: number
-          description: Available quantity (actual - planned)
   securitySchemes:
     Bearer Authentication:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    Basic Authentication:
+      type: http
+      description: "Login is the identifier from registration, password is the key"
+      scheme: basic

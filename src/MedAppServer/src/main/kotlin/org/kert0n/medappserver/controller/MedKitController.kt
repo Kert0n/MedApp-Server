@@ -1,19 +1,18 @@
 package org.kert0n.medappserver.controller
 
-import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.media.Content
-import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
-import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
-import jakarta.validation.constraints.NotBlank
-import jakarta.validation.constraints.NotNull
+import org.kert0n.medappserver.api.InvitationDTO
+import org.kert0n.medappserver.api.MedKitCreatedDTO
+import org.kert0n.medappserver.api.MedKitDTO
+import org.kert0n.medappserver.api.MedKitSummaryDTO
+import org.kert0n.medappserver.api.MembershipCreateRequest
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.userId
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
-import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
@@ -22,182 +21,114 @@ import java.util.*
 import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBody
 
 @RestController
-@RequestMapping("/med-kit")
-@Tag(name = "MedKit Management", description = "APIs for managing medicine kits")
+@RequestMapping("/v1/med-kits")
+@Tag(name = "Medicine kits", description = "Shared medicine kits")
 class MedKitController(
     private val medKitService: MedKitService,
-    private val logger: Logger = LoggerFactory.getLogger(MedKitController::class.java),
     private val medKitDrugServices: MedKitDrugServices
 ) {
-    data class MedKitCreatedResponse(
-        @NotNull
-        @Schema(description = "Created medkit ID")
-        val id: UUID
-    )
 
-    data class AddUserRequest(
-        @NotNull
-        @Schema(description = "User ID to share medkit with")
-        val userId: UUID
-    )
-
-    @Schema(description = "Join medkit request")
-    data class JoinMedKitRequest(
-        @NotBlank
-        @Schema(description = "Share key to join medkit", example = "share-key-123")
-        val key: String
-    )
-
+    private val logger = LoggerFactory.getLogger(MedKitController::class.java)
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Create a new medkit", description = "Creates a new medkit for the authenticated user")
-    @ApiResponses(
-        value = [
-            ApiResponse(responseCode = "201", description = "Medkit created successfully"),
-            ApiResponse(responseCode = "401", description = "Unauthorized", content = [Content()])
-        ]
-    )
-    fun createNew(authentication: Authentication): MedKitCreatedResponse {
-        logger.debug("POST /med-kit by user {}", authentication.userId)
-        val medKit = medKitService.createNew(authentication.userId)
-        return MedKitCreatedResponse(medKit.id)
-    }
-
-    @GetMapping("/{id}")
-    @Operation(summary = "Get medkit by ID", description = "Retrieves a medkit if the user has access")
-    @ApiResponses(
-        value = [
-            ApiResponse(responseCode = "200", description = "Medkit found"),
-            ApiResponse(responseCode = "404", description = "Medkit not found or access denied", content = [Content()])
-        ]
-    )
-    fun getMedKit(
-        authentication: Authentication,
-        @Parameter(description = "Medkit ID") @PathVariable id: UUID
-    ): MedKitDTO {
-        logger.debug("GET /med-kit/{} by user {}", id, authentication.userId)
-        val medKit = medKitService.findByIdForUser(id, authentication.userId)
-        return medKitDrugServices.toMedKitDTO(medKit)
+    @ApiResponse(responseCode = "201", description = "Kit created")
+    fun createMedKit(authentication: Authentication): MedKitCreatedDTO {
+        logger.debug("POST /v1/med-kits by user {}", authentication.userId)
+        return MedKitCreatedDTO(medKitService.createNew(authentication.userId).id)
     }
 
     @GetMapping
-    @Operation(summary = "Get all medkits", description = "Returns summary info for all medkits accessible to the user")
-    @ApiResponses(
-        value = [
-            ApiResponse(
-                responseCode = "200",
-                description = "Medkits retrieved",
-                content = [Content(schema = Schema(implementation = MedKitSummaryDTO::class))]
-            ),
-            ApiResponse(responseCode = "401", description = "Unauthorized", content = [Content()])
-        ]
-    )
-    fun getAllMedKits(authentication: Authentication): Set<MedKitSummaryDTO> {
-        logger.debug("GET /med-kit by user {}", authentication.userId)
+    @ApiResponse(responseCode = "200", description = "Kits returned")
+    fun listMedKits(authentication: Authentication): Set<MedKitSummaryDTO> {
+        logger.debug("GET /v1/med-kits by user {}", authentication.userId)
         return medKitService.findMedKitSummaries(authentication.userId)
+            .map { MedKitSummaryDTO(id = it.id, userCount = it.userCount, drugCount = it.drugCount) }
+            .toSet()
     }
 
-    @PostMapping("/{medKitId}/share")
-    @Operation(
-        summary = "Generate share key",
-        description = "Generates a share key for a medkit. The key stays valid until it expires " +
-            "(medkit.share.termInMinutes) and can be used more than once during that window, so " +
-            "treat it as a short-lived invitation rather than a single-use token."
-    )
-    @ApiResponses(
-        value = [
-            ApiResponse(responseCode = "200", description = "Share key generated"),
-            ApiResponse(responseCode = "404", description = "Medkit not found or access denied", content = [Content()])
-        ]
-    )
-    fun generateKeyToMedKit(
+    @GetMapping("/{medKitId}")
+    @ApiResponse(responseCode = "200", description = "Kit found")
+    @ApiResponse(responseCode = "404", description = "Kit does not exist or is not accessible", content = [Content()])
+    fun getMedKit(
         authentication: Authentication,
-        @Parameter(description = "Medkit ID") @PathVariable medKitId: UUID
-    ): String {
-        logger.debug("POST /med-kit/{}/share by user {}", medKitId, authentication.userId)
-        return medKitService.generateMedKitShareKey(medKitId, authentication.userId)
-    }
-
-    @PostMapping("/join")
-    @Operation(summary = "Join medkit by share key", description = "Joins an existing medkit using a share key")
-    @ApiResponses(
-        value = [
-            ApiResponse(responseCode = "200", description = "Successfully joined medkit"),
-            ApiResponse(responseCode = "404", description = "Share key expired or invalid", content = [Content()])
-        ]
-    )
-    fun joinMedKitByKey(
-        authentication: Authentication,
-        @SwaggerRequestBody(description = "Join request")
-        @Valid @RequestBody request: JoinMedKitRequest
+        @Parameter(description = "Medicine kit identifier") @PathVariable medKitId: UUID
     ): MedKitDTO {
-        logger.debug("POST /med-kit/join by user {}", authentication.userId)
-        val medKit = medKitService.joinMedKitByKey(request.key, authentication.userId)
-        return medKitDrugServices.toMedKitDTO(medKit)
+        logger.debug("GET /v1/med-kits/{} by user {}", medKitId, authentication.userId)
+        return medKitDrugServices.toMedKitDTO(medKitService.findByIdForUser(medKitId, authentication.userId))
     }
 
-    @DeleteMapping("/{id}/leave")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    @Operation(summary = "Leave medkit", description = "Removes the authenticated user from the medkit")
-    @ApiResponses(
-        value = [
-            ApiResponse(responseCode = "204", description = "User removed from medkit"),
-            ApiResponse(responseCode = "404", description = "Medkit not found", content = [Content()])
-        ]
-    )
-    fun leaveMedKit(
+    /**
+     * Приглашение — подчинённый ресурс аптечки, а не действие «share» над ней.
+     *
+     * Ключ живёт ограниченное время и в течение него принимается многократно: это
+     * приглашение, а не одноразовый токен.
+     */
+    @PostMapping("/{medKitId}/invitations")
+    @ResponseStatus(HttpStatus.CREATED)
+    @ApiResponse(responseCode = "201", description = "Invitation created")
+    @ApiResponse(responseCode = "404", description = "Kit does not exist or is not accessible", content = [Content()])
+    fun createInvitation(
         authentication: Authentication,
-        @Parameter(description = "Medkit ID") @PathVariable id: UUID
-    ) {
-        logger.debug("DELETE /med-kit/{}/leave by user {}", id, authentication.userId)
-        medKitDrugServices.removeUserFromMedKit(id, authentication.userId)
+        @Parameter(description = "Medicine kit identifier") @PathVariable medKitId: UUID
+    ): InvitationDTO {
+        logger.debug("POST /v1/med-kits/{}/invitations by user {}", medKitId, authentication.userId)
+        return InvitationDTO(medKitService.generateMedKitShareKey(medKitId, authentication.userId))
     }
 
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/{medKitId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @Operation(
-        summary = "Delete medkit",
-        description = "Deletes the medkit for everyone who shares it, including its drugs and " +
-            "the treatment plans of other participants. Use when the physical medicine kit has " +
-            "ceased to exist as a shared thing — it was taken away or was damaged beyond use. " +
-            "Pass transferToMedKitId to move the drugs into another of your medkits instead of " +
-            "discarding them. To leave a shared medkit without destroying it, use " +
-            "DELETE /med-kit/{id}/leave."
-    )
-    @ApiResponses(
-        value = [
-            ApiResponse(responseCode = "204", description = "Medkit deleted for all participants"),
-            ApiResponse(responseCode = "404", description = "Medkit not found", content = [Content()])
-        ]
-    )
+    @ApiResponse(responseCode = "204", description = "Kit deleted for everyone")
+    @ApiResponse(responseCode = "404", description = "Kit does not exist or is not accessible", content = [Content()])
     fun deleteMedKit(
         authentication: Authentication,
-        @Parameter(description = "Medkit ID") @PathVariable id: UUID,
-        @Parameter(description = "Target medkit ID to transfer drugs")
-        @RequestParam(required = false) transferToMedKitId: UUID?
+        @Parameter(description = "Medicine kit identifier") @PathVariable medKitId: UUID,
+        @Parameter(description = "Kit to move the drugs into instead of discarding them")
+        @RequestParam(required = false) targetMedKitId: UUID?
     ) {
-        logger.debug("DELETE /med-kit/{} by user {}, transfer to: {}", id, authentication.userId, transferToMedKitId)
-        medKitDrugServices.delete(id, authentication.userId, transferToMedKitId)
+        logger.debug("DELETE /v1/med-kits/{} by user {}, target {}", medKitId, authentication.userId, targetMedKitId)
+        medKitDrugServices.delete(medKitId, authentication.userId, targetMedKitId)
     }
 }
 
-@Schema(description = "Medkit with drugs")
-data class MedKitDTO(
-    @Schema(description = "Medkit ID")
-    val id: UUID,
-    @Schema(description = "Drugs in medkit")
-    val drugs: Set<DrugDTO>
-)
+/**
+ * Членство — собственный ресурс, а не действие над аптечкой.
+ *
+ * Раньше это были `POST /med-kit/join` и `DELETE /med-kit/{id}/leave`: два глагола вместо
+ * создания и удаления одной и той же связи.
+ */
+@RestController
+@RequestMapping("/v1/med-kit-memberships")
+@Tag(name = "Medicine kit memberships", description = "Participation of the caller in shared kits")
+class MedKitMembershipController(
+    private val medKitService: MedKitService,
+    private val medKitDrugServices: MedKitDrugServices
+) {
 
-data class MedKitSummaryDTO(
-    @NotNull
-    @Schema(description = "Medkit ID")
-    val id: UUID,
-    @NotNull
-    @Schema(description = "Number of users in medkit")
-    val userCount: Long,
-    @NotNull
-    @Schema(description = "Number of drugs in medkit")
-    val drugCount: Long
-)
+    private val logger = LoggerFactory.getLogger(MedKitMembershipController::class.java)
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    @ApiResponse(responseCode = "201", description = "Joined")
+    @ApiResponse(responseCode = "404", description = "Invitation expired or unknown", content = [Content()])
+    fun joinMedKit(
+        authentication: Authentication,
+        @SwaggerRequestBody(description = "Invitation key")
+        @Valid @RequestBody request: MembershipCreateRequest
+    ): MedKitDTO {
+        logger.debug("POST /v1/med-kit-memberships by user {}", authentication.userId)
+        return medKitDrugServices.toMedKitDTO(medKitService.joinMedKitByKey(request.key, authentication.userId))
+    }
+
+    @DeleteMapping("/{medKitId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @ApiResponse(responseCode = "204", description = "Left the kit")
+    @ApiResponse(responseCode = "404", description = "Kit does not exist or is not accessible", content = [Content()])
+    fun leaveMedKit(
+        authentication: Authentication,
+        @Parameter(description = "Medicine kit identifier") @PathVariable medKitId: UUID
+    ) {
+        logger.debug("DELETE /v1/med-kit-memberships/{} by user {}", medKitId, authentication.userId)
+        medKitDrugServices.removeUserFromMedKit(medKitId, authentication.userId)
+    }
+}
