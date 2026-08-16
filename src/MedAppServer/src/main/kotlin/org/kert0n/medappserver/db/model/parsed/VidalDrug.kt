@@ -19,14 +19,7 @@ import java.util.*
  */
 @Entity
 @Table(
-    // Индексы названы по своей таблице. Раньше они назывались ix_drugs_*/idx_drugs_* и
-    // сталкивались с одноимёнными индексами таблицы drugs, которую приносил дамп, — имена
-    // индексов в Postgres уникальны на схему, поэтому init базы падал.
-    //
-    // Список неполный намеренно: индексы поиска — GIN по триграммам и по выражению
-    // to_tsvector — объявлены только в db/schema.sql, потому что JPA не выражает ни тип
-    // индекса, ни opclass. Btree по active_substance и manufacturer убраны оттуда же: для
-    // `LIKE '%…%'` и similarity() они бесполезны, а вставку замедляют.
+    // GIN/trigram indexes live in schema.sql because JPA cannot express their opclasses.
     name = "parsed_drugs", indexes = [
         Index(
             name = "ix_parsed_drugs_name",
@@ -49,13 +42,7 @@ class VidalDrug(
     @NotNull
     @Column(name = "name", nullable = false, length = 300) var name: String,
 
-    /**
-     * Международное название латиницей.
-     *
-     * Nullable: в справочнике заполнено у 17646 записей из 18087. До этого колонка при
-     * переносе из дампа отбрасывалась, из-за чего поиск по латинскому названию не находил
-     * ничего вообще — снаружи это выглядело как «поиск не работает с языками».
-     */
+    /** Optional international name written in Latin characters. */
     @Size(max = 300)
     @Column(name = "name_lat", length = 300) var nameLat: String? = null,
 
@@ -85,27 +72,7 @@ class VidalDrug(
     @Column(name = "otc", nullable = false)
     @NotNull var otc: Boolean,
 
-    /**
-     * Склейка искомых полей для полнотекстового поиска; считает база.
-     *
-     * Отображена только ради того, чтобы схема и модель не расходились: значение
-     * генерируемое, поэтому `insertable`/`updatable` сняты — приложение его не пишет и не
-     * читает, обращается к нему только нативный запрос поиска по имени колонки.
-     *
-     * Без этого объявления колонки не было бы в схеме, которую Hibernate создаёт для тестов,
-     * и поиск падал бы на «column search_tsv does not exist» — притом что в проде, где схема
-     * берётся из `db/schema.sql`, всё работало бы.
-     *
-     * Колонка, а не выражение в индексе: по индексу от выражения Hibernate при старте не
-     * может сопоставить колонку и пишет HHH000475.
-     *
-     * Выражение объявлено через [GeneratedColumn], а не внутри `columnDefinition`. Разница
-     * принципиальная: `columnDefinition` Hibernate подставляет в DDL целиком и **им же**
-     * сравнивает при `validate`, поэтому вариант со встроенным `GENERATED ALWAYS AS` создавал
-     * схему в тестах, но валил прод — база сообщает тип `tsvector`, а ожидалась вся строка
-     * определения. Проверено на стенде. `@GeneratedColumn` разводит эти две роли: в DDL
-     * выражение попадает, в сравнение типов — нет.
-     */
+    /** Database-generated full-text document; application code never writes it. */
     @Column(name = "search_tsv", insertable = false, updatable = false, columnDefinition = "tsvector")
     @GeneratedColumn(
         "to_tsvector('simple', coalesce(name, '') || ' ' || coalesce(name_lat, '') || ' ' || " +

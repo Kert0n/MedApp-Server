@@ -25,6 +25,10 @@ class MedKitService(
 
     @Transactional(propagation = Propagation.MANDATORY)
     fun lockAccessible(userId: UUID, medKitIds: Collection<UUID>) {
+        requireLockedAccess(userId, medKitIds)
+    }
+
+    private fun requireLockedAccess(userId: UUID, medKitIds: Collection<UUID>) {
         val expected = medKitIds.toSet()
         val locked = repository.lockAccessible(userId, expected)
         if (locked.size != expected.size) throw MedKitNotFound(expected.first { it !in locked })
@@ -41,7 +45,7 @@ class MedKitService(
 
     @Transactional(propagation = Propagation.MANDATORY)
     fun prepareLeave(userId: UUID, medKitId: UUID): LeaveMedKitDecision {
-        lockAccessible(userId, listOf(medKitId))
+        requireLockedAccess(userId, listOf(medKitId))
         val medKit = repository.load(medKitId) ?: throw MedKitNotFound(medKitId)
         return medKit.leave(userId)
     }

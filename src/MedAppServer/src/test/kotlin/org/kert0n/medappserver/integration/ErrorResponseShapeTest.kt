@@ -13,6 +13,7 @@ import org.kert0n.medappserver.db.repository.UserRepository
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.http.MediaType
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers
 import org.springframework.test.context.ActiveProfiles
@@ -53,6 +54,9 @@ class ErrorResponseShapeTest {
     private lateinit var drugRepository: DrugRepository
 
     @Autowired
+    private lateinit var jdbc: JdbcTemplate
+
+    @Autowired
     private lateinit var objectMapper: ObjectMapper
 
     private lateinit var mockMvc: MockMvc
@@ -89,9 +93,10 @@ class ErrorResponseShapeTest {
         // A real drug with 5 units in stock; ask for a plan of 500.
         val user = userRepository.save(User(hashedKey = "{noop}k"))
         val medKit = medKitRepository.save(MedKit())
-        medKit.users.add(user)
-        user.medKits.add(medKit)
-        medKitRepository.save(medKit)
+        jdbc.update(
+            "INSERT INTO user_med_kits (user_id, med_kit_id) VALUES (?, ?)",
+            user.id, medKit.id
+        )
         val drug = drugRepository.save(
             Drug(name = "Aspirin", quantity = qty(5.0), quantityUnit = "tab", formType = null,
                 category = null, manufacturer = null, country = null, description = null,

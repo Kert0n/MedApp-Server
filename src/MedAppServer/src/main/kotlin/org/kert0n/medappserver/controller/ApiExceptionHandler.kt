@@ -21,14 +21,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.server.ResponseStatusException
 
-/**
- * Single place where failures become responses.
- *
- * Without it the default error body echoed the exception message, and those messages
- * carry drug identifiers and quantities ("Available: 3.0, Requested: 5.0"). That is
- * exactly the kind of detail this server is built not to hand out, and it was switched on
- * in production. The status code stays informative; the body does not.
- */
+/** Maps typed failures to stable responses without exposing identifiers or quantities. */
 @RestControllerAdvice
 class ApiExceptionHandler {
 
@@ -47,11 +40,7 @@ class ApiExceptionHandler {
     fun handleResponseStatus(exception: ResponseStatusException): ProblemDetail =
         problem(HttpStatus.valueOf(exception.statusCode.value()))
 
-    /**
-     * Request body validation. Field names and the constraint that failed are part of the
-     * published contract, so they are safe to return — the rejected values are not, and
-     * are left out.
-     */
+    /** Returns field and constraint names, but never rejected values. */
     @ExceptionHandler(MethodArgumentNotValidException::class)
     fun handleBodyValidation(exception: MethodArgumentNotValidException): ProblemDetail =
         problem(HttpStatus.BAD_REQUEST).apply {
@@ -72,10 +61,7 @@ class ApiExceptionHandler {
             title = status.reasonPhrase
         }
 
-    /**
-     * Deliberately coarse: the caller learns what class of thing went wrong, never which
-     * record or how much of it there is.
-     */
+    /** Details identify only the error class. */
     private fun detailFor(status: HttpStatus): String = when (status) {
         HttpStatus.BAD_REQUEST -> "Request cannot be processed"
         HttpStatus.UNAUTHORIZED -> "Authentication is required"

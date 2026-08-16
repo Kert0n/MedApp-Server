@@ -19,25 +19,7 @@ class User(
     var id: UUID = UUID.randomUUID(),
     @NotNull
     @Column(name = "hashed_key", nullable = false)
-    var hashedKey: String,
-    @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(
-        name = "user_med_kits",
-        joinColumns = [JoinColumn(name = "user_id")],
-        inverseJoinColumns = [
-            JoinColumn(
-                name = "med_kit_id",
-                foreignKey = ForeignKey(
-                    name = "user_med_kits_med_kit_fkey",
-                    foreignKeyDefinition =
-                        "FOREIGN KEY (med_kit_id) REFERENCES med_kits (id) ON DELETE CASCADE"
-                )
-            )
-        ]
-    )
-    var medKits: MutableSet<MedKit> = mutableSetOf(),
-    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
-    var usings: MutableSet<TreatmentPlan> = mutableSetOf()
+    var hashedKey: String
 ) : UserDetails {
 
 

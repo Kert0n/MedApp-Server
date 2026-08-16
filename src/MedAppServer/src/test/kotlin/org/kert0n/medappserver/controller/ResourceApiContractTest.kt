@@ -32,6 +32,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
 import java.math.BigDecimal
 import java.util.UUID
+import kotlin.test.assertEquals
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -93,10 +94,31 @@ class ResourceApiContractTest {
 
     @Test
     fun `legacy routes have no aliases`() {
-        listOf("/drug/$drugId", "/using", "/med-kit", "/user").forEach { path ->
+        listOf("/v1/drug/$drugId", "/v1/using", "/v1/med-kit", "/v1/user").forEach { path ->
             mockMvc.perform(get(path).with(jwt().jwt { it.subject(userId.toString()) }))
                 .andExpect(status().isNotFound)
         }
+    }
+
+    @Test
+    fun `OpenAPI publishes the complete resource method and path set`() {
+        val yaml = mockMvc.perform(get("/v3/api-docs.yaml"))
+            .andExpect(status().isOk)
+            .andReturn().response.contentAsString
+        var path = ""
+        val operations = yaml.lineSequence().mapNotNull { line ->
+            when {
+                line.startsWith("  /v1/") && line.endsWith(":") -> {
+                    path = line.trim().removeSuffix(":")
+                    null
+                }
+                line.matches(Regex("    (get|post|put|patch|delete):")) ->
+                    "${line.trim().removeSuffix(":").uppercase()} $path"
+                else -> null
+            }
+        }.toSet()
+
+        assertEquals(EXPECTED_OPERATIONS, operations)
     }
 
     @Test
@@ -129,4 +151,33 @@ class ResourceApiContractTest {
         country = null,
         description = null
     )
+
+    private companion object {
+        val EXPECTED_OPERATIONS = setOf(
+            "POST /v1/auth/register",
+            "GET /v1/auth/login",
+            "GET /v1/users/me",
+            "GET /v1/drugs/{drugId}",
+            "PATCH /v1/drugs/{drugId}",
+            "DELETE /v1/drugs/{drugId}",
+            "POST /v1/med-kits/{medKitId}/drugs",
+            "POST /v1/drugs/{drugId}/consumptions",
+            "PUT /v1/med-kits/{targetMedKitId}/drugs/{drugId}",
+            "GET /v1/drug-templates",
+            "GET /v1/drug-templates/{templateId}",
+            "GET /v1/treatment-plans",
+            "POST /v1/treatment-plans",
+            "GET /v1/treatment-plans/{drugId}",
+            "PATCH /v1/treatment-plans/{drugId}",
+            "DELETE /v1/treatment-plans/{drugId}",
+            "PUT /v1/intakes/{intakeId}",
+            "GET /v1/med-kits",
+            "POST /v1/med-kits",
+            "GET /v1/med-kits/{medKitId}",
+            "DELETE /v1/med-kits/{medKitId}",
+            "POST /v1/med-kits/{medKitId}/invitations",
+            "POST /v1/med-kit-memberships",
+            "DELETE /v1/med-kit-memberships/{medKitId}"
+        )
+    }
 }

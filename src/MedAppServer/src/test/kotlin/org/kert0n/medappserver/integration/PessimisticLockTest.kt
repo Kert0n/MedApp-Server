@@ -8,6 +8,8 @@ import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.UserRepository
+import org.kert0n.medappserver.persistence.repository.DrugAggregateRepository
+import org.springframework.jdbc.core.JdbcTemplate
 import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.transaction.PlatformTransactionManager
@@ -38,15 +40,18 @@ class PessimisticLockTest {
     @Autowired private lateinit var userRepository: UserRepository
     @Autowired private lateinit var medKitRepository: MedKitRepository
     @Autowired private lateinit var drugRepository: DrugRepository
+    @Autowired private lateinit var aggregateRepository: DrugAggregateRepository
+    @Autowired private lateinit var jdbc: JdbcTemplate
     @Autowired private lateinit var dataSource: DataSource
     @Autowired private lateinit var transactionManager: PlatformTransactionManager
 
     private fun createCommittedDrug(): Pair<UUID, UUID> {
         val user = userRepository.save(User(hashedKey = "{noop}lock-${UUID.randomUUID()}"))
         val medKit = medKitRepository.save(MedKit())
-        medKit.users.add(user)
-        user.medKits.add(medKit)
-        medKitRepository.save(medKit)
+        jdbc.update(
+            "INSERT INTO user_med_kits (user_id, med_kit_id) VALUES (?, ?)",
+            user.id, medKit.id
+        )
         val drug = drugRepository.save(
             Drug(
                 name = "Заблокированный", quantity = qty(10.0), quantityUnit = "таб",
@@ -88,7 +93,7 @@ class PessimisticLockTest {
         val (drugId, userId) = createCommittedDrug()
 
         TransactionTemplate(transactionManager).execute {
-            val locked = drugRepository.findByIdAndMedKitUsersIdForUpdate(drugId, userId)
+            val locked = aggregateRepository.lockAccessible(userId, drugId)
             assertNotNull(locked, "препарат должен найтись")
 
             assertFalse(
@@ -113,7 +118,7 @@ class PessimisticLockTest {
         val (drugId, userId) = createCommittedDrug()
 
         TransactionTemplate(transactionManager).execute {
-            drugRepository.findByIdAndMedKitUsersIdForUpdate(drugId, userId)
+            aggregateRepository.lockAccessible(userId, drugId)
 
             assertTrue(
                 otherConnectionCanLock("users", userId),

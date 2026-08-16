@@ -1,6 +1,5 @@
 package org.kert0n.medappserver.application
 
-import jakarta.persistence.EntityManager
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.application.model.CreateDrugCommand
@@ -29,7 +28,6 @@ class MedKitApplicationTest {
     @Autowired private lateinit var planOrchestrator: TreatmentPlanOrchestrator
     @Autowired private lateinit var queryService: MedKitQueryService
     @Autowired private lateinit var userRepository: UserRepository
-    @Autowired private lateinit var entityManager: EntityManager
     @Autowired private lateinit var jdbc: JdbcTemplate
     @Autowired private lateinit var transactionManager: PlatformTransactionManager
 
@@ -131,8 +129,7 @@ class MedKitApplicationTest {
     }
 
     private fun user(): UUID = TransactionTemplate(transactionManager).execute {
-        val user = userRepository.save(User(hashedKey = "user_${UUID.randomUUID()}"))
-        entityManager.flush()
+        val user = userRepository.saveAndFlush(User(hashedKey = "user_${UUID.randomUUID()}"))
         user.id
     }!!
 

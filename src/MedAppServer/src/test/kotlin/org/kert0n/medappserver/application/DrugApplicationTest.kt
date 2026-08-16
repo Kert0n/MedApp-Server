@@ -1,6 +1,5 @@
 package org.kert0n.medappserver.application
 
-import jakarta.persistence.EntityManager
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.application.model.CreateDrugCommand
@@ -37,7 +36,6 @@ class DrugApplicationTest {
     @Autowired private lateinit var drugService: DrugService
     @Autowired private lateinit var userRepository: UserRepository
     @Autowired private lateinit var medKitRepository: MedKitRepository
-    @Autowired private lateinit var entityManager: EntityManager
     @Autowired private lateinit var jdbc: JdbcTemplate
     @Autowired private lateinit var transactionManager: PlatformTransactionManager
 
@@ -194,22 +192,24 @@ class DrugApplicationTest {
 
     private fun fixture(withSecondUser: Boolean = false): Fixture =
         TransactionTemplate(transactionManager).execute {
-            val owner = userRepository.save(User(hashedKey = "owner_${UUID.randomUUID()}"))
+            val owner = userRepository.saveAndFlush(User(hashedKey = "owner_${UUID.randomUUID()}"))
             val second = if (withSecondUser) {
-                userRepository.save(User(hashedKey = "second_${UUID.randomUUID()}"))
+                userRepository.saveAndFlush(User(hashedKey = "second_${UUID.randomUUID()}"))
             } else {
                 null
             }
-            val source = medKitRepository.save(MedKit())
-            val target = medKitRepository.save(MedKit())
-            owner.medKits.addAll(listOf(source, target))
-            source.users.add(owner)
-            target.users.add(owner)
+            val source = medKitRepository.saveAndFlush(MedKit())
+            val target = medKitRepository.saveAndFlush(MedKit())
+            jdbc.update(
+                "INSERT INTO user_med_kits (user_id, med_kit_id) VALUES (?, ?), (?, ?)",
+                owner.id, source.id, owner.id, target.id
+            )
             second?.let {
-                it.medKits.add(source)
-                source.users.add(it)
+                jdbc.update(
+                    "INSERT INTO user_med_kits (user_id, med_kit_id) VALUES (?, ?)",
+                    it.id, source.id
+                )
             }
-            entityManager.flush()
             Fixture(owner.id, second?.id, source.id, target.id)
         }!!
 

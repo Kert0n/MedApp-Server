@@ -10,14 +10,7 @@ class VidalDrugService(
     private val vidalDrugRepository: VidalDrugRepository
 ) {
 
-    /**
-     * Поиск по названию, латинскому названию, действующему веществу и производителю.
-     *
-     * Запрос получает термин в двух видах. Экранированный нужен для `LIKE`, иначе введённый
-     * пользователем `%` превращается в «совпадает с чем угодно». Сырой — для
-     * `plainto_tsquery` и `similarity()`: там подстановочных знаков нет, а добавленные
-     * обратные слэши попали бы в сравнение как обычные символы и портили бы сходство.
-     */
+    /** Searches catalogue text while treating LIKE metacharacters as literal input. */
     fun fuzzySearch(searchTerm: String, limit: Int = 10): List<VidalDrug> {
         val term = searchTerm.trim()
         if (term.isBlank()) {

@@ -12,6 +12,9 @@ import org.kert0n.medappserver.application.query.TreatmentPlanQueryService
 import org.kert0n.medappserver.application.service.DrugService
 import org.kert0n.medappserver.application.service.MedKitAccessService
 import org.kert0n.medappserver.application.service.MedKitService
+import org.kert0n.medappserver.services.models.UserService
+import org.kert0n.medappserver.services.models.VidalDrugService
+import org.kert0n.medappserver.services.security.SecurityService
 import java.lang.reflect.Modifier
 import kotlin.test.assertEquals
 
@@ -35,7 +38,9 @@ class PublicDbSurfaceRegistryTest {
             CatalogueQueryService::class.java to setOf("search", "get"),
             DrugQueryService::class.java to setOf("getAccessible"),
             TreatmentPlanQueryService::class.java to setOf("listForUser", "getForUser"),
-            MedKitQueryService::class.java to setOf("listForUser", "getContent", "getUserSnapshot")
+            MedKitQueryService::class.java to setOf("listForUser", "getContent", "getUserSnapshot"),
+            UserService::class.java to setOf("registerNewUser", "loadUserByUsername", "findById"),
+            VidalDrugService::class.java to setOf("fuzzySearch", "findById")
         )
 
         expected.forEach { (type, registered) ->
@@ -44,5 +49,17 @@ class PublicDbSurfaceRegistryTest {
                 .mapTo(sortedSetOf()) { it.name }
             assertEquals(registered.toSortedSet(), actual, "Update SQL scenario registry for ${type.simpleName}")
         }
+    }
+
+    @Test
+    fun `all public security methods belong to explicit zero SQL scenarios`() {
+        val registered = setOf(
+            "generateKey", "check", "hashPassword", "hashToken", "secretsMatch", "generateToken",
+            "validateRequest", "isLoginAllowed", "recordLoginAttempt", "registerIncrease"
+        )
+        val actual = SecurityService::class.java.declaredMethods
+            .filter { Modifier.isPublic(it.modifiers) && !it.isSynthetic }
+            .mapTo(sortedSetOf()) { it.name }
+        assertEquals(registered.toSortedSet(), actual)
     }
 }

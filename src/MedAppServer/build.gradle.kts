@@ -68,6 +68,7 @@ testing {
                 implementation(project())
                 implementation("org.springframework.boot:spring-boot-starter-test")
                 implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+                implementation("org.springframework.boot:spring-boot-starter-security")
                 implementation("org.springframework.boot:spring-boot-testcontainers")
                 implementation("org.jetbrains.kotlin:kotlin-test-junit5")
                 implementation("org.testcontainers:testcontainers-junit-jupiter")
@@ -90,6 +91,15 @@ tasks.withType<Test> {
     systemProperty("runBenchmark", System.getProperty("runBenchmark") ?: "false")
 }
 
+val finalizeQueryPlanReports by tasks.registering(JavaExec::class) {
+    group = "verification"
+    description = "Adds completed test task results to generated query-plan reports"
+    classpath = sourceSets["queryPlanTest"].runtimeClasspath
+    mainClass.set("org.kert0n.medappserver.queryplan.ReportFinalizer")
+    args(layout.projectDirectory.asFile.absolutePath)
+}
+
 tasks.named("queryPlanTest") {
     mustRunAfter(tasks.named("test"))
+    finalizedBy(finalizeQueryPlanReports)
 }

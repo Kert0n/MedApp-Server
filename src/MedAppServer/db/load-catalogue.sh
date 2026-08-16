@@ -1,20 +1,6 @@
 #!/bin/sh
-# Загружает справочник препаратов, если дамп есть.
-#
-# Дамп (init-scripts/cleaned-init.sql, ~57 МБ) — закрытые данные, в git его нет. Поэтому
-# монтировать сам файл в docker-entrypoint-initdb.d нельзя: при отсутствии пути Docker
-# создаёт на его месте каталог, и init базы падает. Вместо этого монтируется каталог
-# init-scripts целиком (его отсутствие безвредно), а этот скрипт решает, есть что грузить
-# или нет.
-#
-# Порядок в docker-entrypoint-initdb.d: сначала 01-schema.sql (все таблицы приложения,
-# включая form_types, quantity_units и parsed_drugs), затем этот скрипт — он приносит
-# только данные.
-#
-# Раньше порядок был обратным, а дамп нёс собственную таблицу drugs, которую третий шаг
-# переливал в parsed_drugs и удалял. Ту же работу это делало дважды и требовало временной
-# роли vidal — владельца в выгрузке. Дамп обрабатывается db/rewrite-catalogue-dump.py, и
-# ни того, ни другого в нём больше нет.
+# Loads the optional data-only catalogue after 01-schema.sql.
+# The catalogue directory is mounted because the closed-data SQL file may be absent.
 
 set -eu
 
@@ -26,9 +12,7 @@ if [ ! -f "$CATALOGUE" ]; then
     exit 0
 fi
 
-# Признак необработанной выгрузки. Такая создаёт таблицу drugs и требует роль vidal —
-# сейчас она не применится, и сказать об этом лучше сразу, чем дать psql упасть на середине
-# с сообщением про несуществующую роль.
+# Reject scraper schema dumps; initialization accepts data-only catalogue SQL.
 if grep -q '^CREATE TABLE public\.drugs' "$CATALOGUE"; then
     echo "load-catalogue: $CATALOGUE — необработанная выгрузка скраппера." >&2
     echo "load-catalogue: примените db/rewrite-catalogue-dump.py и пересоздайте том." >&2

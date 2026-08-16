@@ -65,10 +65,9 @@ class AuthControllerTest {
     @Test
     fun `POST register - returns login and key with correct secret`() {
         val userId = UUID.randomUUID()
-        val user = User(id = userId, hashedKey = "hashed")
         whenever(securityService.validateRequest(any())).thenReturn(true)
         whenever(securityService.generateKey(32)).thenReturn("generated-key")
-        whenever(userService.registerNewUser(any(), eq("generated-key"), any())).thenReturn(user)
+        whenever(userService.registerNewUser(any(), eq("generated-key"), any())).thenReturn(userId)
 
         mockMvc.perform(
             post("/v1/auth/register")
@@ -95,7 +94,7 @@ class AuthControllerTest {
         val hashedPassword = "{noop}password"
         val user = User(id = userId, hashedKey = hashedPassword)
         whenever(userService.loadUserByUsername(userId.toString())).thenReturn(user)
-        whenever(securityService.generateToken(any<User>(), any())).thenReturn("jwt-token-123")
+        whenever(securityService.generateToken(any(), any())).thenReturn("jwt-token-123")
 
         mockMvc.perform(
             get("/v1/auth/login")
