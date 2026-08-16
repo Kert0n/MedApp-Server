@@ -73,7 +73,7 @@ class UsingServiceTest {
         dbHelper.flushAndClear()
 
         assertFailsWith<ResponseStatusException> {
-            usingService.findByUserAndDrug(alice.id, drug.id)
+            usingService.requirePlan(alice.id, drug.id)
         }
     }
 
@@ -190,7 +190,7 @@ class UsingServiceTest {
         val updated = usingService.recordIntake(alice.id, drug.id, qty(10.0))
         assertNotNull(updated)
         assertQty(20.0, updated.plannedAmount)
-        assertQty(90.0, drugService.findById(drug.id).quantity)
+        assertQty(90.0, drugService.requireById(drug.id).quantity)
     }
 
     @Test
@@ -220,7 +220,7 @@ class UsingServiceTest {
         dbHelper.flushAndClear()
 
         // Artificially corrupt DB state to simulate race condition
-        val directDrug = drugService.findByIdForUserForUpdate(drug.id, alice.id)
+        val directDrug = drugService.lockAccessible(drug.id, alice.id)
         directDrug.quantity = qty(2.0)
         drugRepository.saveAndFlush(directDrug)
 
@@ -264,7 +264,7 @@ class UsingServiceTest {
         dbHelper.flushAndClear()
 
         assertFailsWith<ResponseStatusException> {
-            usingService.findByUserAndDrug(alice.id, drug.id)
+            usingService.requirePlan(alice.id, drug.id)
         }
     }
 
@@ -280,7 +280,7 @@ class UsingServiceTest {
         val using = usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
         dbHelper.flushAndClear()
 
-        val dto = using.toDto()
+        val dto = usingService.requireView(alice.id, drug.id).toDto()
         assertEquals(drug.id, dto.drugId)
         assertQty(30.0, dto.plannedAmount)
     }

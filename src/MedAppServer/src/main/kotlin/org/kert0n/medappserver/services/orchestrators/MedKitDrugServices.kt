@@ -10,6 +10,7 @@ import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.UserService
+import org.kert0n.medappserver.services.models.UsingService
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
@@ -23,6 +24,7 @@ class MedKitDrugServices(
     private val drugService: DrugService,
     private val medKitService: MedKitService,
     private val userService: UserService,
+    private val usingService: UsingService,
     private val logger: Logger = LoggerFactory.getLogger(DrugService::class.java),
     private val medKitRepository: MedKitRepository,
     private val drugRepository: DrugRepository
@@ -41,15 +43,13 @@ class MedKitDrugServices(
             medKitRepository.findByIdAndUsersIdWithUsers(targetMedKitId, userId) ?: throw ResponseStatusException(
                 HttpStatus.NOT_FOUND
             )
-        val drug = drugRepository.findByIdAndMedKitUsersIdWithUsings(drugId, userId) ?: throw ResponseStatusException(
-            HttpStatus.NOT_FOUND
-        )
+        val drug = drugService.requireAccessible(drugId, userId)
 
+        // Планы удаляются отдельной операцией, а не через коллекцию препарата: коллекция
+        // здесь нужна была только чтобы выбросить часть из них, и тянуть её ради этого
+        // незачем.
         val targetUserIds = targetMedKit.users.map { it.id }.toSet()
-        val usingsToRemove = drug.usings.filter { it.user.id !in targetUserIds }.toSet()
-        if (usingsToRemove.isNotEmpty()) {
-            drug.usings.removeAll(usingsToRemove)
-        }
+        usingService.deletePlansExcept(drugId, targetUserIds)
 
         drug.medKit = targetMedKit
         return drugRepository.save(drug)
@@ -102,11 +102,9 @@ class MedKitDrugServices(
     }
 
     @Transactional(readOnly = true)
-    fun toMedKitDTO(medKit: MedKit): MedKitDTO {
-        val drugs = drugRepository.findAllWithUsingsByMedKitId(medKit.id)
-        return MedKitDTO(
-            id = medKit.id,
-            drugs = drugs.map { it.toDto() }.toSet()
-        )
-    }
+    /** Содержимое аптечки читается проекцией: суммы планов считает база. */
+    fun toMedKitDTO(medKit: MedKit): MedKitDTO = MedKitDTO(
+        id = medKit.id,
+        drugs = drugService.viewsOfMedKit(medKit.id).map { it.toDto() }.toSet()
+    )
 }

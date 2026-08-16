@@ -2,6 +2,7 @@ package org.kert0n.medappserver.services.models
 
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.db.model.parsed.VidalDrug
+import org.kert0n.medappserver.db.repository.DrugTemplateView
 import org.kert0n.medappserver.db.repository.VidalDrugRepository
 import org.mockito.kotlin.*
 import java.util.*
@@ -85,22 +86,24 @@ class VidalDrugServiceTest {
     }
 
     @Test
-    fun `findById returns drug when found`() {
+    fun `findView returns entry when found`() {
         val id = UUID.randomUUID()
         val drug = VidalDrug(id = id, name = "Test", manufacturer = "Pharma", otc = true)
-        whenever(vidalDrugRepository.findById(id)).thenReturn(Optional.of(drug))
+        whenever(vidalDrugRepository.findViewById(id)).thenReturn(
+            DrugTemplateView(id, "Test", null, null, null, null, null, "Pharma", null, null)
+        )
 
-        val result = vidalDrugService.findById(id)
+        val result = vidalDrugService.findView(id)
         assertNotNull(result)
         assertEquals(id, result.id)
     }
 
     @Test
-    fun `findById returns null when not found`() {
+    fun `findView returns null when not found`() {
         val id = UUID.randomUUID()
-        whenever(vidalDrugRepository.findById(id)).thenReturn(Optional.empty())
+        whenever(vidalDrugRepository.findViewById(id)).thenReturn(null)
 
-        val result = vidalDrugService.findById(id)
+        val result = vidalDrugService.findView(id)
         assertNull(result)
     }
 }

@@ -1,44 +1,52 @@
 package org.kert0n.medappserver.api
 
-import org.kert0n.medappserver.db.model.Drug
-import org.kert0n.medappserver.db.model.Using
-import org.kert0n.medappserver.db.model.parsed.VidalDrug
+import org.kert0n.medappserver.db.repository.DrugTemplateView
+import org.kert0n.medappserver.db.repository.DrugView
+import org.kert0n.medappserver.db.repository.MedKitSummary
+import org.kert0n.medappserver.db.repository.TreatmentPlanView
 
 /**
- * Перевод модели хранения в публичный контракт.
+ * Перевод форм чтения в публичный контракт.
  *
- * Собран в одном месте, чтобы форма ответа не разъезжалась между контроллерами: раньше один
- * и тот же препарат собирался в DTO в трёх разных файлах.
+ * DTO собирается только из проекций, и другого пути нет. Пока их было два — из сущности и из
+ * запроса, — доступный остаток считался в каждом отдельно, и такие пары рано или поздно
+ * расходятся.
  */
-fun Drug.toDto(): DrugDTO = DrugDTO(
+fun DrugView.toDto(): DrugDTO = DrugDTO(
     id = id,
     name = name,
     quantity = quantity,
-    plannedQuantity = totalPlannedAmount,
-    availableQuantity = quantity - totalPlannedAmount,
+    plannedQuantity = plannedQuantity,
+    availableQuantity = availableQuantity,
     quantityUnit = quantityUnit,
     formType = formType,
     category = category,
     manufacturer = manufacturer,
     country = country,
     description = description,
-    medKitId = medKit.id
+    medKitId = medKitId
 )
 
-fun Using.toDto(): TreatmentPlanDTO = TreatmentPlanDTO(
-    drugId = drug.id,
+fun TreatmentPlanView.toDto(): TreatmentPlanDTO = TreatmentPlanDTO(
+    drugId = drugId,
     plannedAmount = plannedAmount
 )
 
-fun VidalDrug.toDto(): DrugTemplateDTO = DrugTemplateDTO(
+fun DrugTemplateView.toDto(): DrugTemplateDTO = DrugTemplateDTO(
     id = id,
     name = name,
     nameLat = nameLat,
     activeSubstance = activeSubstance,
-    formType = formType?.name,
+    formType = formType,
     category = category,
-    quantityUnit = quantityUnit?.name,
+    quantityUnit = quantityUnit,
     manufacturer = manufacturer,
     country = country,
     description = description
+)
+
+fun MedKitSummary.toDto(): MedKitSummaryDTO = MedKitSummaryDTO(
+    id = id,
+    userCount = userCount,
+    drugCount = drugCount
 )

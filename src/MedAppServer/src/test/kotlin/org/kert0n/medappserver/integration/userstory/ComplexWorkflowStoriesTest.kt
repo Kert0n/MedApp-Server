@@ -276,7 +276,7 @@ class ComplexWorkflowStoriesTest {
         medKitDrugServices.moveDrug(drug.id, targetKit.id, alice.id)
         dbHelper.flushAndClear()
 
-        val movedDrug = drugService.findById(drug.id)
+        val movedDrug = drugService.requireById(drug.id)
         assertEquals(targetKit.id, movedDrug.medKit.id, "Drug successfully moved to targetKit")
 
         // The ultimate security check: Bob's plan must be gone

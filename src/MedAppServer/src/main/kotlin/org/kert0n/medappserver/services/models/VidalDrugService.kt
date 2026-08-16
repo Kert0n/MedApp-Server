@@ -1,6 +1,7 @@
 package org.kert0n.medappserver.services.models
 
 import org.kert0n.medappserver.db.model.parsed.VidalDrug
+import org.kert0n.medappserver.db.repository.DrugTemplateView
 import org.kert0n.medappserver.db.repository.VidalDrugRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -18,7 +19,7 @@ class VidalDrugService(
      * сырой термин, иначе обратные слэши попали бы в сам искомый текст.
      */
     @Transactional(readOnly = true)
-    fun fuzzySearch(searchTerm: String, limit: Int = DEFAULT_LIMIT): List<VidalDrug> {
+    fun fuzzySearch(searchTerm: String, limit: Int = DEFAULT_LIMIT): List<DrugTemplateView> {
         val term = searchTerm.trim()
         if (term.isBlank()) {
             return emptyList()
@@ -27,11 +28,12 @@ class VidalDrugService(
             .replace("\\", "\\\\")
             .replace("%", "\\%")
             .replace("_", "\\_")
-        return vidalDrugRepository.fuzzySearch(term, likeTerm, clampLimit(limit))
+        return vidalDrugRepository.fuzzySearch(term, likeTerm, clampLimit(limit)).map { it.toView() }
     }
 
     @Transactional(readOnly = true)
-    fun findById(id: UUID): VidalDrug? = vidalDrugRepository.findById(id).orElse(null)
+    /** Карточка справочника или `null`: отсутствие обрабатывает вызывающий. */
+    fun findView(id: UUID): DrugTemplateView? = vidalDrugRepository.findViewById(id)
 
     /**
      * Границы лимита проверяет и контроллер, но полагаться только на него нельзя: `LIMIT -1`
@@ -45,4 +47,22 @@ class VidalDrugService(
         const val MAX_LIMIT = 50
         const val DEFAULT_LIMIT = 10
     }
+
+    /**
+     * Поиск — нативный запрос, конструктор проекции к нему не приделать, поэтому форма
+     * чтения собирается здесь. Названия формы и единицы приходят батчем, а не запросом на
+     * строку выдачи.
+     */
+    private fun VidalDrug.toView() = DrugTemplateView(
+        id = id,
+        name = name,
+        nameLat = nameLat,
+        activeSubstance = activeSubstance,
+        formType = formType?.name,
+        category = category,
+        quantityUnit = quantityUnit?.name,
+        manufacturer = manufacturer,
+        country = country,
+        description = description
+    )
 }

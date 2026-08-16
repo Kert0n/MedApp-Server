@@ -5,6 +5,7 @@ import org.kert0n.medappserver.api.DrugPatchRequest
 import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.MedKit
 import org.kert0n.medappserver.db.repository.DrugRepository
+import org.kert0n.medappserver.db.repository.DrugView
 import org.kert0n.medappserver.services.orchestrators.QuantityReductionService
 import org.slf4j.LoggerFactory
 import org.springframework.data.repository.findByIdOrNull
@@ -23,29 +24,58 @@ class DrugService(
 
     private val logger = LoggerFactory.getLogger(DrugService::class.java)
 
+    // ── Чтение: проекции, суммы планов считает база ──────────────────────────────
+
+    /** Препарат для показа или `null`, если его нет или он недоступен вызывающему. */
     @Transactional(readOnly = true)
-    fun findById(drugId: UUID): Drug {
-        logger.debug("Finding drug by ID: {}", drugId)
-        return drugRepository.findByIdOrNull(drugId) ?: throw ResponseStatusException(
-            HttpStatus.NOT_FOUND,
-            "Drug not found: $drugId"
-        )
+    fun findView(drugId: UUID, userId: UUID): DrugView? {
+        logger.debug("Reading drug {} for user {}", drugId, userId)
+        return drugRepository.findViewAccessible(drugId, userId)
     }
 
+    /** Препарат для показа или 404. */
     @Transactional(readOnly = true)
-    fun findByIdForUser(drugId: UUID, userId: UUID): Drug {
-        logger.debug("Finding drug {} for user {}", drugId, userId)
-        return drugRepository.findByIdAndMedKitUsersId(drugId, userId)
-            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Drug not found or access denied")
-    }
-
+    fun requireView(drugId: UUID, userId: UUID): DrugView =
+        findView(drugId, userId) ?: throw notFound()
 
     @Transactional(readOnly = true)
-    fun findByIdForUserForUpdate(drugId: UUID, userId: UUID): Drug {
-        logger.debug("Finding locked drug {} for user {}", drugId, userId)
-        return drugRepository.findByIdAndMedKitUsersIdForUpdate(drugId, userId)
-            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Drug not found or access denied")
+    fun viewsOfMedKit(medKitId: UUID): List<DrugView> {
+        logger.debug("Reading drugs of medkit {}", medKitId)
+        return drugRepository.findViewsByMedKit(medKitId)
     }
+
+    /** Препараты всех аптечек пользователя — одним запросом, для снимка. */
+    @Transactional(readOnly = true)
+    fun viewsAccessibleTo(userId: UUID): List<DrugView> {
+        logger.debug("Reading all drugs available to user {}", userId)
+        return drugRepository.findViewsAccessibleTo(userId)
+    }
+
+    // ── Поиск сущности для команд ────────────────────────────────────────────────
+    //
+    // Имена говорят о поведении: `find` может не найти и возвращает `null`, `require`
+    // считает отсутствие ошибкой вызывающего и даёт 404, `lock` вдобавок берёт блокировку
+    // строки. Раньше все три назывались `find…`, и по имени нельзя было понять, что
+    // вызываешь.
+
+    @Transactional(readOnly = true)
+    fun findById(drugId: UUID): Drug? = drugRepository.findByIdOrNull(drugId)
+
+    @Transactional(readOnly = true)
+    fun requireById(drugId: UUID): Drug = findById(drugId) ?: throw notFound()
+
+    @Transactional(readOnly = true)
+    fun findAccessible(drugId: UUID, userId: UUID): Drug? =
+        drugRepository.findAccessible(drugId, userId)
+
+    @Transactional(readOnly = true)
+    fun requireAccessible(drugId: UUID, userId: UUID): Drug =
+        findAccessible(drugId, userId) ?: throw notFound()
+
+    /** То же плюс блокировка строки на время транзакции. */
+    @Transactional(readOnly = true)
+    fun lockAccessible(drugId: UUID, userId: UUID): Drug =
+        drugRepository.lockAccessible(drugId, userId) ?: throw notFound()
 
     @Transactional(readOnly = true)
     fun findAllByMedKit(medKitId: UUID): List<Drug> {
@@ -53,11 +83,11 @@ class DrugService(
         return drugRepository.findAllByMedKitId(medKitId)
     }
 
-    @Transactional(readOnly = true)
-    fun findAllByUser(userId: UUID): List<Drug> {
-        logger.debug("Finding all drugs for user: {}", userId)
-        return drugRepository.findByUsingsUserId(userId)
-    }
+    /**
+     * Недоступный препарат и несуществующий отвечают одинаково: иначе по коду ответа можно
+     * было бы узнать, что такой препарат существует в чужой аптечке.
+     */
+    private fun notFound() = ResponseStatusException(HttpStatus.NOT_FOUND, "Drug not found or access denied")
 
 
     @Transactional
@@ -83,7 +113,7 @@ class DrugService(
     fun update(drugId: UUID, updateDTO: DrugPatchRequest, userId: UUID): Drug {
         logger.debug("Updating drug: {}", drugId)
 
-        val drug = findByIdForUserForUpdate(drugId, userId)
+        val drug = lockAccessible(drugId, userId)
 
         updateDTO.name?.let { drug.name = it }
         updateDTO.quantity?.let {
@@ -108,16 +138,22 @@ class DrugService(
     fun delete(drugId: UUID, userId: UUID) {
         logger.debug("Deleting drug: {}", drugId)
 
-        val drug = findByIdForUser(drugId, userId)
+        val drug = requireAccessible(drugId, userId)
         drugRepository.delete(drug)
     }
 
 
+    /**
+     * Списывает количество вне плана лечения.
+     *
+     * `null` здесь означает «препарат кончился и удалён этим списанием», а не «не найден»:
+     * недоступный препарат отвергается 404 ещё до списания.
+     */
     @Transactional
     fun consumeDrug(drugId: UUID, quantity: BigDecimal, userId: UUID): Drug? {
         logger.debug("Consuming {} of drug {}", quantity, drugId)
 
-        val drug = findByIdForUserForUpdate(drugId, userId)
+        val drug = lockAccessible(drugId, userId)
 
         if (quantity > drug.quantity) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Insufficient quantity available")

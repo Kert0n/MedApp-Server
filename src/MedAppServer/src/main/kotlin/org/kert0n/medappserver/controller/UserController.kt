@@ -5,9 +5,10 @@ import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.kert0n.medappserver.api.MedKitDTO
+import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.userId
-import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
+import org.kert0n.medappserver.services.models.DrugService
 import org.slf4j.LoggerFactory
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.GetMapping
@@ -20,7 +21,7 @@ import java.util.*
 @Tag(name = "User", description = "The authenticated user")
 class UserController(
     private val medKitService: MedKitService,
-    private val medKitDrugServices: MedKitDrugServices
+    private val drugService: DrugService
 ) {
 
     private val logger = LoggerFactory.getLogger(UserController::class.java)
@@ -33,8 +34,16 @@ class UserController(
     @ApiResponse(responseCode = "200", description = "Snapshot returned", content = [Content(schema = Schema(implementation = UserSnapshotDTO::class))])
     fun getSnapshot(authentication: Authentication): UserSnapshotDTO {
         logger.debug("GET /v1/users/me by user {}", authentication.userId)
+        // Один запрос на все препараты вместо запроса на каждую аптечку: раньше число
+        // обращений к базе росло вместе с числом аптечек пользователя.
+        val drugsByMedKit = drugService.viewsAccessibleTo(authentication.userId).groupBy { it.medKitId }
         val medKits = medKitService.findAllByUser(authentication.userId)
-            .map { medKitDrugServices.toMedKitDTO(it) }
+            .map { medKit ->
+                MedKitDTO(
+                    id = medKit.id,
+                    drugs = drugsByMedKit[medKit.id].orEmpty().map { it.toDto() }.toSet()
+                )
+            }
             .toSet()
         return UserSnapshotDTO(id = authentication.userId, medKits = medKits)
     }

@@ -45,7 +45,7 @@ class DrugController(
         @Parameter(description = "Drug identifier") @PathVariable drugId: UUID
     ): DrugDTO {
         logger.debug("GET /v1/drugs/{} by user {}", drugId, authentication.userId)
-        return drugService.findByIdForUser(drugId, authentication.userId).toDto()
+        return drugService.requireView(drugId, authentication.userId).toDto()
     }
 
     /**
@@ -65,7 +65,8 @@ class DrugController(
         @Valid @RequestBody request: DrugCreateRequest
     ): DrugDTO {
         logger.debug("POST /v1/med-kits/{}/drugs by user {}", medKitId, authentication.userId)
-        return medKitDrugServices.createDrugInMedkit(medKitId, request, authentication.userId).toDto()
+        val created = medKitDrugServices.createDrugInMedkit(medKitId, request, authentication.userId)
+        return drugService.requireView(created.id, authentication.userId).toDto()
     }
 
     /** PATCH, а не PUT: тело описывает изменение части полей, а не препарат целиком. */
@@ -80,7 +81,8 @@ class DrugController(
         @Valid @RequestBody request: DrugPatchRequest
     ): DrugDTO {
         logger.debug("PATCH /v1/drugs/{} by user {}", drugId, authentication.userId)
-        return drugService.update(drugId, request, authentication.userId).toDto()
+        drugService.update(drugId, request, authentication.userId)
+        return drugService.requireView(drugId, authentication.userId).toDto()
     }
 
     @DeleteMapping("/drugs/{drugId}")
@@ -111,7 +113,9 @@ class DrugController(
         @Valid @RequestBody request: ConsumptionRequest
     ): DrugDTO? {
         logger.debug("POST /v1/drugs/{}/consumptions by user {}", drugId, authentication.userId)
-        return drugService.consumeDrug(drugId, request.quantity, authentication.userId)?.toDto()
+        // null означает, что препарат кончился и удалён этим списанием.
+        drugService.consumeDrug(drugId, request.quantity, authentication.userId) ?: return null
+        return drugService.findView(drugId, authentication.userId)?.toDto()
     }
 
     /**
@@ -127,7 +131,8 @@ class DrugController(
         @Parameter(description = "Drug identifier") @PathVariable drugId: UUID
     ): DrugDTO {
         logger.debug("PUT /v1/med-kits/{}/drugs/{} by user {}", targetMedKitId, drugId, authentication.userId)
-        return medKitDrugServices.moveDrug(drugId, targetMedKitId, authentication.userId).toDto()
+        medKitDrugServices.moveDrug(drugId, targetMedKitId, authentication.userId)
+        return drugService.requireView(drugId, authentication.userId).toDto()
     }
 }
 
@@ -168,7 +173,7 @@ class DrugTemplateController(
         @Parameter(description = "Template identifier") @PathVariable templateId: UUID
     ): DrugTemplateDTO {
         logger.debug("GET /v1/drug-templates/{} by user {}", templateId, authentication.userId)
-        return vidalDrugService.findById(templateId)?.toDto()
+        return vidalDrugService.findView(templateId)?.toDto()
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Drug template not found")
     }
 }
