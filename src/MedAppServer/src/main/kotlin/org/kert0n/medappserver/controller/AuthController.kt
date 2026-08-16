@@ -10,8 +10,8 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.servlet.http.HttpServletRequest
 import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.services.models.UserService
+import org.kert0n.medappserver.services.security.RegistrationSecret
 import org.kert0n.medappserver.services.security.SecurityService
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
@@ -22,24 +22,12 @@ import java.util.*
 @RequestMapping("/v1/auth")
 @Tag(name = "Authentication", description = "Public endpoints for registration and token issuance")
 class AuthController(
-    // Пустая строка по умолчанию, а не отсутствие значения: так секрет может прийти любым
-    // путём (переменная окружения, файл секрета через configtree, профиль), а проверка
-    // ниже одинаково поймает случай, когда он не пришёл ниоткуда.
-    @Value($$"${registration.secret:}") private val registrationSecret: String,
+    // Проверки секрета живут в самом RegistrationSecret: секрет-заглушка в проде должен
+    // ронять старт независимо от того, кто его читает.
+    private val registrationSecret: RegistrationSecret,
     private val userService: UserService,
     private val securityService: SecurityService
 ) {
-
-    init {
-        // Пустой секрет — не конфигурация, а обходимый барьер. Падаем при старте, а не
-        // принимаем любую регистрацию: базовый application.properties оставляет значение
-        // пустым специально, чтобы его обязательно задали через REGISTRATION_SECRET или
-        // application-prod.properties.
-        require(registrationSecret.isNotBlank()) {
-            "registration.secret must not be blank: set the REGISTRATION_SECRET environment " +
-                "variable or provide application-prod.properties"
-        }
-    }
 
 
     @Schema(description = "Registration response with generated credentials")
@@ -75,7 +63,7 @@ class AuthController(
         // Validate the shared secret first to avoid exposing rate-limit status to unauthorized callers.
         // Constant-time: `!=` stops at the first differing character, so response time would
         // reveal how long a correct prefix was.
-        if (!securityService.secretsMatch(token, registrationSecret)) {
+        if (!securityService.secretsMatch(token, registrationSecret.value)) {
             throw ResponseStatusException(HttpStatus.FORBIDDEN, "Invalid secret")
         }
         // Rate limit registration by IP address to reduce abuse without storing user PII.
