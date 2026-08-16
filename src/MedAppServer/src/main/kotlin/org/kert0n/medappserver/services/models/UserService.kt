@@ -44,7 +44,7 @@ class UserService(
         )
     }
 
-    // fun findAllByDrug(drugId: UUID): Set<User> = userRepository.findByUsingsDrugId(drugId)
+    // fun findAllByDrug(drugId: UUID): Set<User> = userRepository.findByTreatmentPlansDrugId(drugId)
 
 
 }

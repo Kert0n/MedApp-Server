@@ -36,7 +36,7 @@ class User(
     )
     var medKits: MutableSet<MedKit> = mutableSetOf(),
     @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
-    var usings: MutableSet<Using> = mutableSetOf()
+    var treatmentPlans: MutableSet<TreatmentPlan> = mutableSetOf()
 ) : UserDetails {
 
 

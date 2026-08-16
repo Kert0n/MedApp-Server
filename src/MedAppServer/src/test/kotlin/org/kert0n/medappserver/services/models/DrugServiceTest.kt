@@ -29,7 +29,7 @@ class DrugServiceTest {
     @Autowired
     private lateinit var medKitService: MedKitService
     @Autowired
-    private lateinit var usingService: UsingService
+    private lateinit var treatmentPlanService: TreatmentPlanService
     @Autowired
     private lateinit var drugRepository: DrugRepository
     @Autowired
@@ -92,12 +92,12 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
-        assertEquals(0, usingService.viewsOf(alice.id).size)
+        assertEquals(0, treatmentPlanService.viewsOf(alice.id).size)
 
-        usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(10.0)))
+        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(10.0)))
         dbHelper.flushAndClear()
 
-        assertEquals(1, usingService.viewsOf(alice.id).size)
+        assertEquals(1, treatmentPlanService.viewsOf(alice.id).size)
     }
 
     // ── create ──
@@ -181,7 +181,7 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(80.0)))
+        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(80.0)))
         dbHelper.flushAndClear()
 
         drugService.update(drug.id, DrugPatchRequest(quantity = qty(40.0)), alice.id)
@@ -243,7 +243,7 @@ class DrugServiceTest {
             DrugCreateRequest(name = "Drug", quantity = qty(100.0), quantityUnit = "mg"),
             kit, alice.id
         )
-        usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(25.0)))
+        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(25.0)))
         dbHelper.flushAndClear()
 
         // DTO собирается только из формы чтения: сумма планов приходит из запроса, а не из

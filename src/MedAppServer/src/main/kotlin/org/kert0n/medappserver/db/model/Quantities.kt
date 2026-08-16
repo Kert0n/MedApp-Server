@@ -17,7 +17,7 @@ const val QUANTITY_SCALE: Int = 6
 val QUANTITY_ROUNDING: RoundingMode = RoundingMode.DOWN
 
 /**
- * Приводит результат арифметики к представлению колонки. Сеттеры [Drug] и [Using] применяют
+ * Приводит результат арифметики к представлению колонки. Сеттеры [Drug] и [TreatmentPlan] применяют
  * это правило ко всем изменениям, поэтому масштаб не расползается от умножений и делений.
  */
 fun BigDecimal.toQuantityScale(): BigDecimal = setScale(QUANTITY_SCALE, QUANTITY_ROUNDING)

@@ -7,11 +7,11 @@ import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
 import org.kert0n.medappserver.db.repository.DrugRepository
+import org.kert0n.medappserver.db.repository.TreatmentPlanRepository
 import org.kert0n.medappserver.db.repository.UserRepository
-import org.kert0n.medappserver.db.repository.UsingRepository
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.models.UsingService
+import org.kert0n.medappserver.services.models.TreatmentPlanService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -42,7 +42,7 @@ class QuantityReductionTests {
     private lateinit var drugRepository: DrugRepository
 
     @Autowired
-    private lateinit var usingRepository: UsingRepository
+    private lateinit var treatmentPlanRepository: TreatmentPlanRepository
 
     @Autowired
     private lateinit var entityManager: EntityManager
@@ -54,7 +54,7 @@ class QuantityReductionTests {
     private lateinit var medKitService: MedKitService
 
     @Autowired
-    private lateinit var usingService: UsingService
+    private lateinit var treatmentPlanService: TreatmentPlanService
 
     @Autowired
     private lateinit var dbHelper: DatabaseTestHelper
@@ -78,8 +78,8 @@ class QuantityReductionTests {
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(20.0)))
-        usingService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(20.0)))
+        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(20.0)))
+        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(20.0)))
         dbHelper.flushAndClear()
 
         drugService.consumeDrug(drug.id, qty(50.0), alice.id)
@@ -112,9 +112,9 @@ class QuantityReductionTests {
         val drug = dbHelper.freshDrug(kit, 90.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
-        usingService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
-        usingService.createTreatmentPlan(charlie.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
+        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
+        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
+        treatmentPlanService.createTreatmentPlan(charlie.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
         dbHelper.flushAndClear()
 
         drugService.consumeDrug(drug.id, qty(30.0), alice.id)
@@ -149,8 +149,8 @@ class QuantityReductionTests {
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(60.0)))
-        usingService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(40.0)))
+        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(60.0)))
+        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(40.0)))
         dbHelper.flushAndClear()
 
         drugService.consumeDrug(drug.id, qty(50.0), alice.id)
@@ -192,8 +192,8 @@ class QuantityReductionTests {
         val drug = dbHelper.freshDrug(kit, 80.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(40.0)))
-        usingService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(40.0)))
+        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(40.0)))
+        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(40.0)))
         dbHelper.flushAndClear()
 
         // First reduction
@@ -237,8 +237,8 @@ class QuantityReductionTests {
         val drug = dbHelper.freshDrug(kit, 100.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(50.0)))
-        usingService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(50.0)))
+        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(50.0)))
+        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(50.0)))
         dbHelper.flushAndClear()
 
         drugService.consumeDrug(drug.id, qty(75.0), alice.id)
@@ -264,7 +264,7 @@ class QuantityReductionTests {
      * Consume ALL 60 unplanned:
      *   drug=0, factor=0
      *   all plans → 0.0 → must be DELETED
-     *   dbHelper.totalPlanned=0, usingRepository has 0 rows for this drug
+     *   dbHelper.totalPlanned=0, treatmentPlanRepository has 0 rows for this drug
      */
     @Test
     fun `Consuming entire stock deletes all treatment plans`() {
@@ -277,13 +277,13 @@ class QuantityReductionTests {
         val drug = dbHelper.freshDrug(kit, 60.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(20.0)))
-        usingService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(20.0)))
-        usingService.createTreatmentPlan(charlie.id, TreatmentPlanCreateRequest(drug.id, qty(20.0)))
+        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(20.0)))
+        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(20.0)))
+        treatmentPlanService.createTreatmentPlan(charlie.id, TreatmentPlanCreateRequest(drug.id, qty(20.0)))
         dbHelper.flushAndClear()
 
         // Sanity: Verify initial state
-        assertEquals(3, usingService.findAllByDrug(drug.id).size)
+        assertEquals(3, treatmentPlanService.findAllByDrug(drug.id).size)
 
         // Action: Consume ALL 60 unplanned
         drugService.consumeDrug(drug.id, qty(60.0), alice.id)
@@ -293,9 +293,9 @@ class QuantityReductionTests {
         val deletedDrug = drugRepository.findByIdOrNull(drug.id)
         assertNull(deletedDrug, "Drug record must be deleted from the database when quantity reaches zero")
 
-        // 2. Verify all bridge records (Usings) are GONE
-        val remainingUsings = usingRepository.findAllByUsingKeyDrugId(drug.id)
-        assertEquals(0, remainingUsings.size, "All treatment plans must be deleted to prevent ghost records")
+        // 2. Verify all bridge records (treatment plans) are GONE
+        val remainingPlans = treatmentPlanRepository.findAllByPlanKeyDrugId(drug.id)
+        assertEquals(0, remainingPlans.size, "All treatment plans must be deleted to prevent ghost records")
 
         // 3. Individual lookups must return null
         assertNull(dbHelper.userPlan(alice.id, drug.id), "Alice's plan must be purged")
@@ -309,7 +309,7 @@ class QuantityReductionTests {
 
     /**
      * Same as Test 6 but with a single user — ensures the deletion path
-     * works when usings.size == 1 (no iteration edge case).
+     * works when plans.size == 1 (no iteration edge case).
      */
     @Test
     fun `Consuming entire stock with single plan deletes drug and plan`() {
@@ -318,10 +318,10 @@ class QuantityReductionTests {
         val drug = dbHelper.freshDrug(kit, 50.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(50.0)))
+        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(50.0)))
         dbHelper.flushAndClear()
 
-        assertEquals(1, usingService.findAllByDrug(drug.id).size)
+        assertEquals(1, treatmentPlanService.findAllByDrug(drug.id).size)
 
         // Action: Consume everything in one go
         drugService.consumeDrug(drug.id, qty(50.0), alice.id)
@@ -332,7 +332,7 @@ class QuantityReductionTests {
         assertNull(remainingDrug, "Drug record must be deleted to maintain privacy-by-default")
 
         // 2. Verify Plan is PURGED
-        val remainingPlans = usingService.findAllByDrug(drug.id)
+        val remainingPlans = treatmentPlanService.findAllByDrug(drug.id)
         assertEquals(0, remainingPlans.size, "Associated treatment plan must be purged")
 
         // 3. Direct lookup should fail
@@ -361,8 +361,8 @@ class QuantityReductionTests {
         val drug = dbHelper.freshDrug(kit, 10.0)
         dbHelper.flushAndClear()
 
-        usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(6.0)))
-        usingService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(4.0)))
+        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(6.0)))
+        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(4.0)))
         dbHelper.flushAndClear()
 
         // --- Step 1: Halve everything ---
@@ -373,7 +373,7 @@ class QuantityReductionTests {
         assertQty(5.0, dbHelper.drugQuantity(drug.id))
         assertQty(3.0, dbHelper.userPlan(alice.id, drug.id)!!)
         assertQty(2.0, dbHelper.userPlan(bob.id, drug.id)!!)
-        assertEquals(2, usingService.findAllByDrug(drug.id).size, "Still 2 plans after partial reduction")
+        assertEquals(2, treatmentPlanService.findAllByDrug(drug.id).size, "Still 2 plans after partial reduction")
 
         // --- Step 2: Wipe everything ---
         drugService.consumeDrug(drug.id, qty(5.0), alice.id)
@@ -384,7 +384,7 @@ class QuantityReductionTests {
         assertNull(remainingDrug, "Drug record must be deleted when quantity reaches zero")
 
         // 2. Verify Plans are PURGED
-        val remainingPlans = usingService.findAllByDrug(drug.id)
+        val remainingPlans = treatmentPlanService.findAllByDrug(drug.id)
         assertEquals(0, remainingPlans.size, "All plans must be deleted on final step")
 
         assertNull(dbHelper.userPlan(alice.id, drug.id), "Alice's plan must be null")

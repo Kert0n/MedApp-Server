@@ -8,8 +8,8 @@ import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.MedKit
 import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.db.repository.DrugRepository
+import org.kert0n.medappserver.db.repository.TreatmentPlanRepository
 import org.kert0n.medappserver.db.repository.UserRepository
-import org.kert0n.medappserver.db.repository.UsingRepository
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
@@ -18,7 +18,7 @@ import org.springframework.transaction.annotation.Transactional
 class DatabaseTestHelper(
     private val userRepository: UserRepository,
     private val drugRepository: DrugRepository,
-    private val usingRepository: UsingRepository,
+    private val treatmentPlanRepository: TreatmentPlanRepository,
     private val entityManager: EntityManager
 ) {
     @Transactional
@@ -45,5 +45,5 @@ class DatabaseTestHelper(
     fun drugQuantity(id: UUID): BigDecimal? = drugRepository.findByIdOrNull(id)?.quantity
     fun totalPlanned(id: UUID): BigDecimal? = drugRepository.findByIdOrNull(id)?.totalPlannedAmount
     fun userPlan(userId: UUID, drugId: UUID): BigDecimal? =
-        usingRepository.findByUserIdAndDrugId(userId, drugId)?.plannedAmount
+        treatmentPlanRepository.findByUserIdAndDrugId(userId, drugId)?.plannedAmount
 }

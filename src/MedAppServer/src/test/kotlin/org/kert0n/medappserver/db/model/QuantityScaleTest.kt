@@ -33,8 +33,8 @@ class QuantityScaleTest {
 
     @Test
     fun `умножение не раздувает масштаб плана`() {
-        val plan = Using(
-            usingKey = UsingKey(), user = User(hashedKey = "k"),
+        val plan = TreatmentPlan(
+            planKey = TreatmentPlanKey(), user = User(hashedKey = "k"),
             drug = drug(BigDecimal("10")), plannedAmount = BigDecimal("7")
         )
 

@@ -5,7 +5,7 @@ import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.models.UsingService
+import org.kert0n.medappserver.services.models.TreatmentPlanService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -28,7 +28,7 @@ import kotlin.test.assertTrue
 class ReadProjectionTest {
 
     @Autowired private lateinit var drugService: DrugService
-    @Autowired private lateinit var usingService: UsingService
+    @Autowired private lateinit var treatmentPlanService: TreatmentPlanService
     @Autowired private lateinit var medKitService: MedKitService
     @Autowired private lateinit var dbHelper: DatabaseTestHelper
 
@@ -40,8 +40,8 @@ class ReadProjectionTest {
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit, 100.0)
 
-        usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
-        usingService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(20.0)))
+        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
+        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(20.0)))
         dbHelper.flushAndClear()
 
         val view = drugService.requireView(drug.id, alice.id)
@@ -107,11 +107,11 @@ class ReadProjectionTest {
         val bob = dbHelper.freshUser("bob")
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit, 100.0)
-        usingService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
+        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
         dbHelper.flushAndClear()
 
-        assertQty(30.0, usingService.requireView(alice.id, drug.id).plannedAmount)
+        assertQty(30.0, treatmentPlanService.requireView(alice.id, drug.id).plannedAmount)
         // Препарат общий, план — личный: Боб видит препарат, но не чужой план.
-        assertNull(usingService.findView(bob.id, drug.id), "чужой план не читается")
+        assertNull(treatmentPlanService.findView(bob.id, drug.id), "чужой план не читается")
     }
 }

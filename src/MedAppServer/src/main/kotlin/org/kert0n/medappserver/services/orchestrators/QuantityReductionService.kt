@@ -4,8 +4,8 @@ import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.QUANTITY_SCALE
 import org.kert0n.medappserver.db.model.isZero
 import org.kert0n.medappserver.db.repository.DrugRepository
-import org.kert0n.medappserver.db.repository.UsingRepository
-import org.kert0n.medappserver.services.models.UsingService
+import org.kert0n.medappserver.db.repository.TreatmentPlanRepository
+import org.kert0n.medappserver.services.models.TreatmentPlanService
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -15,16 +15,16 @@ import java.util.*
 
 @Service
 class QuantityReductionService(
-    private val usingRepository: UsingRepository,
+    private val treatmentPlanRepository: TreatmentPlanRepository,
     private val drugRepository: DrugRepository,
-    val logger: Logger = LoggerFactory.getLogger(UsingService::class.java)
+    val logger: Logger = LoggerFactory.getLogger(TreatmentPlanService::class.java)
 
 ) {
     fun handleQuantityReduction(drug: Drug): Drug? {
         logger.debug("Handling quantity reduction for drug: {}", drug.id)
 
         if (drug.quantity.isZero()) {
-            drugRepository.delete(drug)  // CascadeType.ALL removes usings
+            drugRepository.delete(drug)  // CascadeType.ALL removes treatment plans
             return null
         }
         if (drug.totalPlannedAmount <= drug.quantity) return drug
@@ -33,7 +33,7 @@ class QuantityReductionService(
         logger.warn("Planned quantity exceeded current stock; treatment plans were reduced")
 
         // Reducing all fairly
-        handleUsingReduction(drug.id, remaining = drug.quantity, planned = drug.totalPlannedAmount)
+        handlePlanReduction(drug.id, remaining = drug.quantity, planned = drug.totalPlannedAmount)
         drug.totalPlannedAmount = drug.quantity
         return drugRepository.save(drug)
         // TODO FIREBASE NOTIFICATION
@@ -49,14 +49,14 @@ class QuantityReductionService(
      * Округление вниз на каждом плане оставляет инвариант в силе: сумма точных долей равна
      * остатку, значит сумма округлённых вниз его не превышает.
      */
-    private fun handleUsingReduction(drugId: UUID, remaining: BigDecimal, planned: BigDecimal) {
-        val usings = usingRepository.findAllByUsingKeyDrugId(drugId)
-        usings.forEach {
+    private fun handlePlanReduction(drugId: UUID, remaining: BigDecimal, planned: BigDecimal) {
+        val plans = treatmentPlanRepository.findAllByPlanKeyDrugId(drugId)
+        plans.forEach {
             it.plannedAmount = it.plannedAmount
                 .multiply(remaining)
                 .divide(planned, QUANTITY_SCALE, RoundingMode.DOWN)
         }
-        usingRepository.saveAll(usings)
+        treatmentPlanRepository.saveAll(plans)
 
     }
 }

@@ -13,11 +13,11 @@ import org.kert0n.medappserver.db.model.Drug
 import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
+import org.kert0n.medappserver.db.repository.TreatmentPlanRepository
 import org.kert0n.medappserver.db.repository.UserRepository
-import org.kert0n.medappserver.db.repository.UsingRepository
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.models.UsingService
+import org.kert0n.medappserver.services.models.TreatmentPlanService
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -40,7 +40,7 @@ class TreatmentPlanStoriesTest {
     private lateinit var drugRepository: DrugRepository
 
     @Autowired
-    private lateinit var usingRepository: UsingRepository
+    private lateinit var treatmentPlanRepository: TreatmentPlanRepository
 
     @Autowired
     private lateinit var entityManager: EntityManager
@@ -55,7 +55,7 @@ class TreatmentPlanStoriesTest {
     private lateinit var medKitDrugServices: MedKitDrugServices
 
     @Autowired
-    private lateinit var usingService: UsingService
+    private lateinit var treatmentPlanService: TreatmentPlanService
 
     /**
      * Story 6: Complex workflow with treatment plans
@@ -84,7 +84,7 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
 
         // Create treatment plan for 30 tablets
-        val plan = usingService.createTreatmentPlan(
+        val plan = treatmentPlanService.createTreatmentPlan(
             userId = user.id,
             createDTO = TreatmentPlanCreateRequest(
                 drugId = drug.id,
@@ -95,13 +95,13 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
 
         // Verify plan was created
-        val createdPlan = usingRepository.findByUserIdAndDrugId(user.id, drug.id)
+        val createdPlan = treatmentPlanRepository.findByUserIdAndDrugId(user.id, drug.id)
         assertNotNull(createdPlan, "Plan should be created")
         assertQty(30.0, createdPlan.plannedAmount, "Planned amount should be 30")
 
         // Record some intakes
-        usingService.recordIntake(user.id, drug.id, qty(5.0))
-        usingService.recordIntake(user.id, drug.id, qty(5.0))
+        treatmentPlanService.recordIntake(user.id, drug.id, qty(5.0))
+        treatmentPlanService.recordIntake(user.id, drug.id, qty(5.0))
         entityManager.flush()
         entityManager.clear()
 
@@ -146,23 +146,23 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
 
         // Anna creates a treatment plan for 40 tablets
-        usingService.createTreatmentPlan(anna.id, TreatmentPlanCreateRequest(vitaminC.id, qty(40.0)))
+        treatmentPlanService.createTreatmentPlan(anna.id, TreatmentPlanCreateRequest(vitaminC.id, qty(40.0)))
         entityManager.flush()
 
         // Bob creates a treatment plan for 50 tablets (should succeed: 100 - 40 = 60 available)
-        usingService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(vitaminC.id, qty(50.0)))
+        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(vitaminC.id, qty(50.0)))
         entityManager.flush()
         entityManager.clear()
         // Total planned = 90, should match sumPlannedAmount
         assertQty(90.0, drugRepository.findByIdOrNull(vitaminC.id)?.totalPlannedAmount, "Total planned should be 90")
 
         // Verify each user has their own plan
-        val annaUsing = usingRepository.findByUserIdAndDrugId(anna.id, vitaminC.id)
-        val bobUsing = usingRepository.findByUserIdAndDrugId(bob.id, vitaminC.id)
-        assertNotNull(annaUsing)
-        assertNotNull(bobUsing)
-        assertQty(40.0, annaUsing.plannedAmount)
-        assertQty(50.0, bobUsing.plannedAmount)
+        val annaPlan = treatmentPlanRepository.findByUserIdAndDrugId(anna.id, vitaminC.id)
+        val bobPlan = treatmentPlanRepository.findByUserIdAndDrugId(bob.id, vitaminC.id)
+        assertNotNull(annaPlan)
+        assertNotNull(bobPlan)
+        assertQty(40.0, annaPlan.plannedAmount)
+        assertQty(50.0, bobPlan.plannedAmount)
 
         println("✅ Story 7 passed: Multiple users created treatment plans on shared drug")
     }
@@ -194,7 +194,7 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
 
         // Create plan for 80 tablets
-        usingService.createTreatmentPlan(user.id, TreatmentPlanCreateRequest(drug.id, qty(80.0)))
+        treatmentPlanService.createTreatmentPlan(user.id, TreatmentPlanCreateRequest(drug.id, qty(80.0)))
         entityManager.flush()
         entityManager.clear()
 
@@ -209,7 +209,7 @@ class TreatmentPlanStoriesTest {
         assertQty(50.0, updatedDrug.quantity)
 
         // Plan should be reduced proportionally: 80 * (50/80) = 50
-        val updatedPlan = usingRepository.findByUserIdAndDrugId(user.id, drug.id)
+        val updatedPlan = treatmentPlanRepository.findByUserIdAndDrugId(user.id, drug.id)
         assertNotNull(updatedPlan)
         assertTrue(updatedPlan.plannedAmount <= qty(50.0), "Plan should be reduced to fit available quantity")
 
@@ -244,11 +244,11 @@ class TreatmentPlanStoriesTest {
 
         // Try to create a plan for 60 tablets when only 50 available
         assertFailsWith<ResponseStatusException> {
-            usingService.createTreatmentPlan(user.id, TreatmentPlanCreateRequest(drug.id, qty(60.0)))
+            treatmentPlanService.createTreatmentPlan(user.id, TreatmentPlanCreateRequest(drug.id, qty(60.0)))
         }
 
         // Create a plan for 30
-        usingService.createTreatmentPlan(user.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
+        treatmentPlanService.createTreatmentPlan(user.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
         entityManager.flush()
 
         // Another user tries to plan 25 (only 20 available: 50 - 30 = 20)
@@ -259,11 +259,11 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
         entityManager.clear()
         assertFailsWith<ResponseStatusException> {
-            usingService.createTreatmentPlan(user2.id, TreatmentPlanCreateRequest(drug.id, qty(25.0)))
+            treatmentPlanService.createTreatmentPlan(user2.id, TreatmentPlanCreateRequest(drug.id, qty(25.0)))
         }
 
         // But 20 should work
-        usingService.createTreatmentPlan(user2.id, TreatmentPlanCreateRequest(drug.id, qty(20.0)))
+        treatmentPlanService.createTreatmentPlan(user2.id, TreatmentPlanCreateRequest(drug.id, qty(20.0)))
         entityManager.flush()
         entityManager.clear()
         assertQty(50.0, drugRepository.findByIdOrNull(drug.id)?.totalPlannedAmount)
@@ -312,20 +312,20 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
 
         // Everyone gets treatment plans for vitamins: 30 each
-        usingService.createTreatmentPlan(mom.id, TreatmentPlanCreateRequest(vitamins.id, qty(30.0)))
-        usingService.createTreatmentPlan(dad.id, TreatmentPlanCreateRequest(vitamins.id, qty(30.0)))
-        usingService.createTreatmentPlan(child.id, TreatmentPlanCreateRequest(vitamins.id, qty(30.0)))
+        treatmentPlanService.createTreatmentPlan(mom.id, TreatmentPlanCreateRequest(vitamins.id, qty(30.0)))
+        treatmentPlanService.createTreatmentPlan(dad.id, TreatmentPlanCreateRequest(vitamins.id, qty(30.0)))
+        treatmentPlanService.createTreatmentPlan(child.id, TreatmentPlanCreateRequest(vitamins.id, qty(30.0)))
         entityManager.flush()
         entityManager.clear()
         // Total planned = 90 (full supply)
         assertQty(90.0, drugRepository.findByIdOrNull(vitamins.id)?.totalPlannedAmount)
 
         // Everyone takes their daily vitamin
-        usingService.recordIntake(mom.id, vitamins.id, qty(1.0))
+        treatmentPlanService.recordIntake(mom.id, vitamins.id, qty(1.0))
         entityManager.flush()
-        usingService.recordIntake(dad.id, vitamins.id, qty(1.0))
+        treatmentPlanService.recordIntake(dad.id, vitamins.id, qty(1.0))
         entityManager.flush()
-        usingService.recordIntake(child.id, vitamins.id, qty(1.0))
+        treatmentPlanService.recordIntake(child.id, vitamins.id, qty(1.0))
         entityManager.flush()
         entityManager.clear()
 

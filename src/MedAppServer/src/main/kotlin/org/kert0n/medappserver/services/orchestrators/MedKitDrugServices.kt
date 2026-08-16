@@ -10,7 +10,7 @@ import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.UserService
-import org.kert0n.medappserver.services.models.UsingService
+import org.kert0n.medappserver.services.models.TreatmentPlanService
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
@@ -24,7 +24,7 @@ class MedKitDrugServices(
     private val drugService: DrugService,
     private val medKitService: MedKitService,
     private val userService: UserService,
-    private val usingService: UsingService,
+    private val treatmentPlanService: TreatmentPlanService,
     private val logger: Logger = LoggerFactory.getLogger(DrugService::class.java),
     private val medKitRepository: MedKitRepository,
     private val drugRepository: DrugRepository
@@ -49,7 +49,7 @@ class MedKitDrugServices(
         // здесь нужна была только чтобы выбросить часть из них, и тянуть её ради этого
         // незачем.
         val targetUserIds = targetMedKit.users.map { it.id }.toSet()
-        usingService.deletePlansExcept(drugId, targetUserIds)
+        treatmentPlanService.deletePlansExcept(drugId, targetUserIds)
 
         drug.medKit = targetMedKit
         return drugRepository.save(drug)
@@ -62,9 +62,9 @@ class MedKitDrugServices(
         logger.debug("Removing user {} from MedKit {}",userId, medKitId)
         val medKit = medKitService.findByIdForUser(medKitId, userId)
         val user = userService.findById(userId)
-        val drugs = drugRepository.findAllWithUsingsByMedKitId(medKitId)
+        val drugs = drugRepository.findAllWithTreatmentPlansByMedKitId(medKitId)
         drugs.forEach { drug ->
-            drug.usings.removeIf { it.usingKey.userId == userId }
+            drug.treatmentPlans.removeIf { it.planKey.userId == userId }
         }
         medKitService.removeUserFromMedKit(medKit, user)
     }
@@ -80,13 +80,13 @@ class MedKitDrugServices(
 
             // Get the IDs of everyone who has access to the new MedKit
             val usersWithAccess = targetMedKit.users.map { it.id }.toSet()
-            // Find which usings are affected
-            val usingsToRemove = medKit.drugs.flatMap { drug ->
-                drug.usings.filter { it.user.id !in usersWithAccess }
+            // Find which treatment plans are affected
+            val plansToRemove = medKit.drugs.flatMap { drug ->
+                drug.treatmentPlans.filter { it.user.id !in usersWithAccess }
             }.toSet()
             // Removing
             medKit.drugs.forEach { drug ->
-                drug.usings.removeAll(usingsToRemove)
+                drug.treatmentPlans.removeAll(plansToRemove)
                 drug.medKit = targetMedKit
                 targetMedKit.drugs.add(drug)
             }
