@@ -1,11 +1,12 @@
 package org.kert0n.medappserver.controller
 
 import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.security.SecurityRequirement
+import org.kert0n.medappserver.services.OpenApiConfiguration
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
-import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.servlet.http.HttpServletRequest
 import org.kert0n.medappserver.db.model.User
@@ -39,22 +40,10 @@ class AuthController(
     )
 
     @PostMapping("/register")
-    @Operation(
-        summary = "Register a new user",
-        description = "Creates a new user and returns generated credentials.",
-        security = []
-    )
-    @ApiResponses(
-        value = [
-            ApiResponse(
-                responseCode = "200",
-                description = "User registered",
-                content = [Content(schema = Schema(implementation = RegisterResponse::class))]
-            ),
-            ApiResponse(responseCode = "403", description = "Invalid registration secret", content = [Content()]),
-            ApiResponse(responseCode = "429", description = "Too many registration attempts", content = [Content()])
-        ]
-    )
+    @Operation(security = [])
+    @ApiResponse(responseCode = "200", description = "User registered", content = [Content(schema = Schema(implementation = RegisterResponse::class))])
+    @ApiResponse(responseCode = "403", description = "Invalid registration secret", content = [Content()])
+    @ApiResponse(responseCode = "429", description = "Too many registration attempts", content = [Content()])
     fun register(
         request: HttpServletRequest,
         @Parameter(description = "Shared registration secret", required = true, example = "dev-secret")
@@ -100,23 +89,10 @@ class AuthController(
      * уходили Basic-заголовком на кешируемый запрос.
      */
     @PostMapping("/token")
-    @Operation(
-        summary = "Issue JWT token",
-        description = "Uses HTTP Basic authentication and returns a JWT access token. " +
-            "The token carries its own expiry in the `exp` claim; use it as `Authorization: Bearer <token>`.",
-        security = []
-    )
-    @ApiResponses(
-        value = [
-            ApiResponse(
-                responseCode = "200",
-                description = "JWT token issued",
-                content = [Content(schema = Schema(implementation = TokenResponse::class))]
-            ),
-            ApiResponse(responseCode = "401", description = "Invalid credentials", content = [Content()]),
-            ApiResponse(responseCode = "429", description = "Too many token requests", content = [Content()])
-        ]
-    )
+    @Operation(security = [SecurityRequirement(name = OpenApiConfiguration.BASIC_SCHEME)])
+    @ApiResponse(responseCode = "200", description = "JWT token issued", content = [Content(schema = Schema(implementation = TokenResponse::class))])
+    @ApiResponse(responseCode = "401", description = "Invalid credentials", content = [Content()])
+    @ApiResponse(responseCode = "429", description = "Too many token requests", content = [Content()])
     fun token(authentication: Authentication): TokenResponse =
         TokenResponse(securityService.generateToken(authentication.principal as User))
 }

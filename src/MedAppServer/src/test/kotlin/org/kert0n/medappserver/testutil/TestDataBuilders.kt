@@ -1,8 +1,8 @@
 package org.kert0n.medappserver.testutil
 
 import java.util.*
-import org.kert0n.medappserver.controller.DrugCreateDTO
-import org.kert0n.medappserver.controller.DrugUpdateDTO
+import org.kert0n.medappserver.api.DrugCreateRequest
+import org.kert0n.medappserver.api.DrugPatchRequest
 import org.kert0n.medappserver.db.model.*
 
 /**
@@ -96,7 +96,7 @@ class UsingBuilder(private val user: User, private val drug: Drug) {
     }
 }
 
-class DrugCreateDTOBuilder {
+class DrugCreateRequestBuilder {
     private var name: String = "Test Drug"
     private var quantity: Double = 100.0
     private var quantityUnit: String = "mg"
@@ -117,12 +117,11 @@ class DrugCreateDTOBuilder {
     fun withCountry(country: String?) = apply { this.country = country }
     fun withDescription(description: String?) = apply { this.description = description }
 
-    fun build(): DrugCreateDTO {
-        return DrugCreateDTO(
+    fun build(): DrugCreateRequest {
+        return DrugCreateRequest(
             name = name,
             quantity = qty(quantity),
             quantityUnit = quantityUnit,
-            medKitId = medKitId,
             formType = formType,
             category = category,
             manufacturer = manufacturer,
@@ -132,7 +131,7 @@ class DrugCreateDTOBuilder {
     }
 }
 
-class DrugUpdateDTOBuilder {
+class DrugPatchRequestBuilder {
     private var name: String? = null
     private var quantity: Double? = null
     private var quantityUnit: String? = null
@@ -151,8 +150,8 @@ class DrugUpdateDTOBuilder {
     fun withCountry(country: String) = apply { this.country = country }
     fun withDescription(description: String) = apply { this.description = description }
 
-    fun build(): DrugUpdateDTO {
-        return DrugUpdateDTO(
+    fun build(): DrugPatchRequest {
+        return DrugPatchRequest(
             name = name,
             quantity = quantity?.let(::qty),
             quantityUnit = quantityUnit,
@@ -170,5 +169,5 @@ fun userBuilder() = UserBuilder()
 fun medKitBuilder() = MedKitBuilder()
 fun drugBuilder(medKit: MedKit) = DrugBuilder(medKit)
 fun usingBuilder(user: User, drug: Drug) = UsingBuilder(user, drug)
-fun drugCreateDTOBuilder() = DrugCreateDTOBuilder()
-fun drugUpdateDTOBuilder() = DrugUpdateDTOBuilder()
+fun drugCreateDTOBuilder() = DrugCreateRequestBuilder()
+fun drugUpdateDTOBuilder() = DrugPatchRequestBuilder()

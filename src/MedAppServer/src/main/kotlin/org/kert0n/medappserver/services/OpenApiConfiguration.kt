@@ -11,6 +11,11 @@ import org.springframework.context.annotation.Configuration
 @Configuration
 class OpenApiConfiguration {
 
+    companion object {
+        const val BEARER_SCHEME = "Bearer Authentication"
+        const val BASIC_SCHEME = "Basic Authentication"
+    }
+
     @Bean
     fun openApi(): OpenAPI {
         return OpenAPI()
@@ -20,15 +25,26 @@ class OpenApiConfiguration {
                     .description("REST API for MedApp medicine kit synchronization and catalog search.")
                     .version("0.0.1")
             )
-            .addSecurityItem(SecurityRequirement().addList("Bearer Authentication"))
+            .addSecurityItem(SecurityRequirement().addList(BEARER_SCHEME))
             .components(
-                Components().addSecuritySchemes(
-                    "Bearer Authentication",
-                    SecurityScheme()
-                        .type(SecurityScheme.Type.HTTP)
-                        .scheme("bearer")
-                        .bearerFormat("JWT")
-                )
+                Components()
+                    .addSecuritySchemes(
+                        BEARER_SCHEME,
+                        SecurityScheme()
+                            .type(SecurityScheme.Type.HTTP)
+                            .scheme("bearer")
+                            .bearerFormat("JWT")
+                    )
+                    // Выдача токена ходит по Basic, и без этой схемы её нельзя было вызвать
+                    // из Swagger: диалог авторизации не предлагал места для логина и ключа,
+                    // а запрос уходил без заголовка и получал 401.
+                    .addSecuritySchemes(
+                        BASIC_SCHEME,
+                        SecurityScheme()
+                            .type(SecurityScheme.Type.HTTP)
+                            .scheme("basic")
+                            .description("Login is the identifier from registration, password is the key")
+                    )
             )
     }
 }

@@ -14,6 +14,32 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 object ApiRoutes {
     const val REGISTER = "/v1/auth/register"
     const val TOKEN = "/v1/auth/token"
+    const val ME = "/v1/users/me"
+
+    const val DRUG_TEMPLATES = "/v1/drug-templates"
+    const val TREATMENT_PLANS = "/v1/treatment-plans"
+    const val MED_KITS = "/v1/med-kits"
+    const val MEMBERSHIPS = "/v1/med-kit-memberships"
+
+    fun drug(drugId: Any) = "/v1/drugs/$drugId"
+    fun consumptions(drugId: Any) = "/v1/drugs/$drugId/consumptions"
+    fun drugsOf(medKitId: Any) = "/v1/med-kits/$medKitId/drugs"
+    fun drugIn(medKitId: Any, drugId: Any) = "/v1/med-kits/$medKitId/drugs/$drugId"
+    fun drugTemplate(templateId: Any) = "/v1/drug-templates/$templateId"
+    fun treatmentPlan(drugId: Any) = "/v1/treatment-plans/$drugId"
+    fun intake(intakeId: Any) = "/v1/intakes/$intakeId"
+    fun medKit(medKitId: Any) = "/v1/med-kits/$medKitId"
+    fun invitations(medKitId: Any) = "/v1/med-kits/$medKitId/invitations"
+    fun membership(medKitId: Any) = "/v1/med-kit-memberships/$medKitId"
+
+    /** Маршруты, которые API больше не обслуживает. */
+    val RETIRED = listOf(
+        "/auth/register", "/auth/login", "/user",
+        "/drug", "/drug/quantity/x", "/drug/consume/x", "/drug/move/x",
+        "/drug/template/search", "/drug/template/x",
+        "/using", "/using/drug/x", "/using/drug/x/intake",
+        "/med-kit", "/med-kit/x", "/med-kit/join", "/med-kit/x/share", "/med-kit/x/leave"
+    )
 }
 
 /** Обёртка над MockMvc для публичных операций аутентификации. */

@@ -1,6 +1,6 @@
 package org.kert0n.medappserver.db.repository
 
-import org.kert0n.medappserver.controller.MedKitSummaryDTO
+
 import org.kert0n.medappserver.db.model.MedKit
 import org.springframework.data.jpa.repository.EntityGraph
 import org.springframework.data.jpa.repository.JpaRepository
@@ -50,7 +50,7 @@ interface MedKitRepository : JpaRepository<MedKit, UUID> {
 
     @Query(
         """
-        SELECT new org.kert0n.medappserver.controller.MedKitSummaryDTO(
+        SELECT new org.kert0n.medappserver.db.repository.MedKitSummary(
         mk.id, 
         COUNT(DISTINCT u), 
         COUNT(DISTINCT d)
@@ -62,7 +62,7 @@ interface MedKitRepository : JpaRepository<MedKit, UUID> {
     GROUP BY mk.id
     """
     )
-    fun findMedKitSummariesByUserId(@Param("userId") userId: UUID): Set<MedKitSummaryDTO>
+    fun findMedKitSummariesByUserId(@Param("userId") userId: UUID): Set<MedKitSummary>
 
     @EntityGraph(attributePaths = ["users", "drugs", "drugs.usings"])
     @Query(
@@ -94,3 +94,15 @@ interface MedKitRepository : JpaRepository<MedKit, UUID> {
     @Query("UPDATE Drug d SET d.medKit.id = :targetMedKitId WHERE d.medKit.id = :homeMedkit")
     fun reassignMedKit(homeMedkit: UUID, targetMedKitId: UUID)
 }
+
+/**
+ * Счётчики аптечки без загрузки её содержимого.
+ *
+ * Своя проекция, а не DTO представления: запрос не должен зависеть от формы публичного
+ * ответа — иначе правка контракта API меняла бы SQL.
+ */
+data class MedKitSummary(
+    val id: java.util.UUID,
+    val userCount: Long,
+    val drugCount: Long
+)
