@@ -5,11 +5,13 @@ import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.db.model.User
 import org.kert0n.medappserver.services.models.UserService
 import org.kert0n.medappserver.services.security.SecurityService
+import org.kert0n.medappserver.testutil.ApiRoutes
 import org.mockito.kotlin.any
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.whenever
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.http.MediaType
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers
 import org.springframework.test.context.ActiveProfiles
@@ -44,7 +46,7 @@ class AuthControllerTest {
             .apply<DefaultMockMvcBuilder>(SecurityMockMvcConfigurers.springSecurity())
             .build()
         // SecurityService is mocked, so the token-request throttle would otherwise see the
-        // default `false` and reject every /auth/login with 429 before authentication.
+        // default `false` and reject every token request with 429 before authentication.
         // Throttling itself is covered by LoginThrottleTest.
         whenever(securityService.isLoginAllowed(any())).thenReturn(true)
         // Same reason: the registration secret comparison now goes through the service, and
@@ -56,7 +58,7 @@ class AuthControllerTest {
     @Test
     fun `POST register - returns 403 with wrong secret`() {
         mockMvc.perform(
-            post("/auth/register")
+            post(ApiRoutes.REGISTER)
                 .header("X-Registration-Token", "wrong-secret")
         )
             .andExpect(status().isForbidden)
@@ -71,7 +73,7 @@ class AuthControllerTest {
         whenever(userService.registerNewUser(any(), eq("generated-key"), any())).thenReturn(user)
 
         mockMvc.perform(
-            post("/auth/register")
+            post(ApiRoutes.REGISTER)
                 .header("X-Registration-Token", "test-secret")
         )
             .andExpect(status().isOk)
@@ -79,43 +81,61 @@ class AuthControllerTest {
     }
 
     @Test
-    fun `POST register - returns 504 when rate limited`() {
+    fun `POST register - returns 429 when rate limited`() {
         whenever(securityService.validateRequest(any())).thenReturn(false)
 
         mockMvc.perform(
-            post("/auth/register")
+            post(ApiRoutes.REGISTER)
                 .header("X-Registration-Token", "test-secret")
         )
-            .andExpect(status().isGatewayTimeout)
+            .andExpect(status().isTooManyRequests)
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.detail").value("Too many requests"))
     }
 
     @Test
-    fun `GET login - returns token for authenticated user`() {
+    fun `POST token - returns the token`() {
         val userId = UUID.randomUUID()
-        val hashedPassword = "{noop}password"
-        val user = User(id = userId, hashedKey = hashedPassword)
+        val user = User(id = userId, hashedKey = "{noop}password")
         whenever(userService.loadUserByUsername(userId.toString())).thenReturn(user)
         whenever(securityService.generateToken(any<User>(), any())).thenReturn("jwt-token-123")
 
         mockMvc.perform(
-            get("/auth/login")
+            post(ApiRoutes.TOKEN)
                 .with(httpBasic(userId.toString(), "password"))
         )
             .andExpect(status().isOk)
-            .andExpect(content().string("jwt-token-123"))
+            .andExpect(jsonPath("$.accessToken").value("jwt-token-123"))
+            // Срока жизни в ответе нет намеренно: он уже в claim exp самого токена.
+            .andExpect(jsonPath("$.expiresIn").doesNotExist())
     }
 
     @Test
-    fun `GET login - returns 401 with wrong password`() {
+    fun `POST token - returns 401 with wrong password`() {
         val userId = UUID.randomUUID()
-        val hashedPassword = "{noop}correct-password"
-        val user = User(id = userId, hashedKey = hashedPassword)
+        val user = User(id = userId, hashedKey = "{noop}correct-password")
         whenever(userService.loadUserByUsername(userId.toString())).thenReturn(user)
 
         mockMvc.perform(
-            get("/auth/login")
+            post(ApiRoutes.TOKEN)
                 .with(httpBasic(userId.toString(), "wrong-password"))
         )
+            .andExpect(status().isUnauthorized)
+            // Отказ безопасности отвечает тем же форматом, что и ошибки контроллеров.
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.detail").value("Authentication is required"))
+    }
+
+    @Test
+    fun `старый маршрут выдачи токена больше не существует`() {
+        val userId = UUID.randomUUID()
+        val user = User(id = userId, hashedKey = "{noop}password")
+        whenever(userService.loadUserByUsername(userId.toString())).thenReturn(user)
+
+        // Basic здесь уже не принимается: цепочка выдачи токена слушает только новый путь.
+        mockMvc.perform(get("/auth/login").with(httpBasic(userId.toString(), "password")))
+            .andExpect(status().isUnauthorized)
+        mockMvc.perform(post("/auth/register").header("X-Registration-Token", "test-secret"))
             .andExpect(status().isUnauthorized)
     }
 }

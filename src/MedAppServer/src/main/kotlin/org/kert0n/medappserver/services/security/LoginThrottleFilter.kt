@@ -3,6 +3,7 @@ package org.kert0n.medappserver.services.security
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import org.kert0n.medappserver.controller.ProblemResponseWriter
 import org.springframework.http.HttpStatus
 import org.springframework.web.filter.OncePerRequestFilter
 
@@ -18,7 +19,8 @@ import org.springframework.web.filter.OncePerRequestFilter
  * belongs only to the token-issuing chain. It is wired up in [SecurityConfiguration].
  */
 class LoginThrottleFilter(
-    private val securityService: SecurityService
+    private val securityService: SecurityService,
+    private val problems: ProblemResponseWriter
 ) : OncePerRequestFilter() {
 
     override fun doFilterInternal(
@@ -32,7 +34,7 @@ class LoginThrottleFilter(
         val clientAddress = request.remoteAddr
 
         if (!securityService.isLoginAllowed(clientAddress)) {
-            response.status = HttpStatus.TOO_MANY_REQUESTS.value()
+            problems.write(response, HttpStatus.TOO_MANY_REQUESTS)
             return
         }
 

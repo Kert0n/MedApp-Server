@@ -19,7 +19,7 @@ import org.springframework.web.server.ResponseStatusException
 import java.util.*
 
 @RestController
-@RequestMapping("/auth")
+@RequestMapping("/v1/auth")
 @Tag(name = "Authentication", description = "Public endpoints for registration and token issuance")
 class AuthController(
     // Пустая строка по умолчанию, а не отсутствие значения: так секрет может прийти любым
@@ -64,7 +64,7 @@ class AuthController(
                 content = [Content(schema = Schema(implementation = RegisterResponse::class))]
             ),
             ApiResponse(responseCode = "403", description = "Invalid registration secret", content = [Content()]),
-            ApiResponse(responseCode = "504", description = "Too many registration attempts", content = [Content()])
+            ApiResponse(responseCode = "429", description = "Too many registration attempts", content = [Content()])
         ]
     )
     fun register(
@@ -79,8 +79,10 @@ class AuthController(
             throw ResponseStatusException(HttpStatus.FORBIDDEN, "Invalid secret")
         }
         // Rate limit registration by IP address to reduce abuse without storing user PII.
+        // 429, а не 504: превышен лимит вызывающего, а не истёк срок ответа вышестоящего
+        // сервиса — 504 отправлял бы клиента чинить не ту проблему.
         if (!securityService.validateRequest(request.remoteAddr)) {
-            throw ResponseStatusException(HttpStatus.GATEWAY_TIMEOUT, "Too many registration request")
+            throw ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "Too many registration request")
         }
         val login = UUID.randomUUID()
         val pwd: String = securityService.generateKey(32)
@@ -88,10 +90,32 @@ class AuthController(
         return RegisterResponse(login, pwd)
     }
 
-    @GetMapping("/login")
+    /**
+     * Только сам токен.
+     *
+     * Срока жизни здесь нет: он уже лежит в claim `exp` внутри возвращаемого JWT, и
+     * дублировать его в обёртке значит держать два источника одного факта. Клиенту,
+     * которому срок нужен, достаточно разобрать токен; остальным хватает 401 на протухшем.
+     *
+     * Схему (`Bearer`) тоже не передаём: она одна, зафиксирована в OpenAPI и никогда не
+     * меняется от ответа к ответу.
+     */
+    @Schema(description = "Issued access token")
+    data class TokenResponse(
+        @Schema(description = "JWT access token")
+        val accessToken: String
+    )
+
+    /**
+     * POST, а не GET: выдача токена меняет состояние — она расходует лимит попыток и
+     * создаёт новый токен, — а GET разрешено повторять и кешировать. Раньше учётные данные
+     * уходили Basic-заголовком на кешируемый запрос.
+     */
+    @PostMapping("/token")
     @Operation(
         summary = "Issue JWT token",
-        description = "Uses HTTP Basic authentication and returns a JWT access token.",
+        description = "Uses HTTP Basic authentication and returns a JWT access token. " +
+            "The token carries its own expiry in the `exp` claim; use it as `Authorization: Bearer <token>`.",
         security = []
     )
     @ApiResponses(
@@ -99,11 +123,12 @@ class AuthController(
             ApiResponse(
                 responseCode = "200",
                 description = "JWT token issued",
-                content = [Content(schema = Schema(implementation = String::class))]
+                content = [Content(schema = Schema(implementation = TokenResponse::class))]
             ),
-            ApiResponse(responseCode = "401", description = "Invalid credentials", content = [Content()])
+            ApiResponse(responseCode = "401", description = "Invalid credentials", content = [Content()]),
+            ApiResponse(responseCode = "429", description = "Too many token requests", content = [Content()])
         ]
     )
-    fun login(authentication: Authentication): String =
-        securityService.generateToken(authentication.principal as User)
+    fun token(authentication: Authentication): TokenResponse =
+        TokenResponse(securityService.generateToken(authentication.principal as User))
 }

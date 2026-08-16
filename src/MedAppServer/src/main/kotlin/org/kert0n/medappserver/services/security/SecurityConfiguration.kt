@@ -13,14 +13,15 @@ import org.springframework.http.HttpStatus
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
 import org.springframework.security.config.http.SessionCreationPolicy
+import org.springframework.security.web.AuthenticationEntryPoint
 import org.springframework.security.crypto.factory.PasswordEncoderFactories
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.security.oauth2.jwt.JwtDecoder
 import org.springframework.security.oauth2.jwt.JwtEncoder
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder
+import org.kert0n.medappserver.controller.ProblemResponseWriter
 import org.springframework.security.web.SecurityFilterChain
-import org.springframework.security.web.authentication.HttpStatusEntryPoint
 import org.springframework.security.web.authentication.www.BasicAuthenticationFilter
 
 
@@ -28,7 +29,18 @@ import org.springframework.security.web.authentication.www.BasicAuthenticationFi
 @EnableWebSecurity
 class SecurityConfiguration(
     private val rsaKeys: RsaKeyProperties,
+    private val problems: ProblemResponseWriter,
 ) {
+
+    /**
+     * Отказ аутентификации отвечает problem+json, как и остальные ошибки.
+     *
+     * Заголовка WWW-Authenticate по-прежнему нет намеренно: это мобильный API, и запрос
+     * учётных данных браузером здесь только мешал бы.
+     */
+    private fun unauthorized() = AuthenticationEntryPoint { _, response, _ ->
+        problems.write(response, HttpStatus.UNAUTHORIZED)
+    }
 
     @Bean
     fun jwtDecoder(): JwtDecoder = NimbusJwtDecoder.withPublicKey(rsaKeys.publicKey).build()
@@ -64,20 +76,21 @@ class SecurityConfiguration(
         securityService: SecurityService
     ): SecurityFilterChain {
         return httpSecurity
-            .securityMatcher("/auth/login")
+            .securityMatcher("/v1/auth/token")
             .csrf { csrf -> csrf.disable() }
             .addFilterBefore(
-                LoginThrottleFilter(securityService),
+                LoginThrottleFilter(securityService, problems),
                 BasicAuthenticationFilter::class.java
             )
             .authorizeHttpRequests { auth -> auth.anyRequest().authenticated() }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .exceptionHandling { configurer ->
-                // Deliberately no WWW-Authenticate challenge: this is a mobile API, a
-                // browser credential prompt would be noise.
-                configurer.authenticationEntryPoint(HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
+                configurer.authenticationEntryPoint(unauthorized())
             }
-            .httpBasic { }
+            // Точку входа нужно задать и здесь: неверные учётные данные отвергает сам
+            // BasicAuthenticationFilter, и он отвечает своей точкой входа, а не общей —
+            // иначе на 401 от неверного пароля возвращалось бы пустое тело.
+            .httpBasic { basic -> basic.authenticationEntryPoint(unauthorized()) }
             .build()
     }
 
@@ -89,9 +102,9 @@ class SecurityConfiguration(
             .authorizeHttpRequests { auth ->
                 auth
                     .requestMatchers(
-                        // Registration only. /auth/login is handled by the Basic chain
+                        // Registration only. /v1/auth/token is handled by the Basic chain
                         // above and must not be open here.
-                        "/auth/register",
+                        "/v1/auth/register",
                         "/swagger",
                         "/swagger-ui/**",
                         "/v3/api-docs/**",
@@ -113,8 +126,7 @@ class SecurityConfiguration(
             // BEWARE OF THIS! XCSS possible if code changes
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .exceptionHandling { configurer ->
-                configurer
-                    .authenticationEntryPoint(HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
+                configurer.authenticationEntryPoint(unauthorized())
             }
             .oauth2ResourceServer { oauth2 ->
                 oauth2.jwt { jwt ->
