@@ -249,7 +249,7 @@ class DrugControllerTest {
             manufacturer = "Bayer",
             otc = true
         )
-        whenever(vidalDrugService.fuzzySearchByName("asp", 10)).thenReturn(listOf(vd))
+        whenever(vidalDrugService.fuzzySearch("asp", 10)).thenReturn(listOf(vd))
 
         mockMvc.perform(
             get("/drug/template/search")
@@ -268,7 +268,7 @@ class DrugControllerTest {
             manufacturer = "Байер",
             otc = true
         )
-        whenever(vidalDrugService.fuzzySearchByName("аспир", 10)).thenReturn(listOf(vd))
+        whenever(vidalDrugService.fuzzySearch("аспир", 10)).thenReturn(listOf(vd))
 
         mockMvc.perform(
             get("/drug/template/search")

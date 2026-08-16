@@ -55,8 +55,14 @@ class VidalDrugFuzzySearchTest {
             val drugs = listOf(
                 VidalDrug(name = "Аспирин", manufacturer = "Байер", otc = true, formType = tabletType),
                 VidalDrug(name = "Аспирин Кардио", manufacturer = "Байер", otc = true, formType = tabletType),
-                VidalDrug(name = "Ибупрофен", manufacturer = "Фармстандарт", otc = true),
-                VidalDrug(name = "Парацетамол", manufacturer = "Медисорб", otc = true),
+                VidalDrug(
+                    name = "Ибупрофен", nameLat = "Ibuprofenum", manufacturer = "Фармстандарт",
+                    activeSubstance = "ибупрофен", otc = true
+                ),
+                VidalDrug(
+                    name = "Парацетамол", nameLat = "Paracetamolum", manufacturer = "Медисорб",
+                    activeSubstance = "парацетамол", otc = true
+                ),
                 VidalDrug(name = "Aspirin", manufacturer = "Bayer", otc = true, formType = tabletType),
                 VidalDrug(name = "Ibuprofen", manufacturer = "Generic", otc = true)
             )
@@ -64,57 +70,64 @@ class VidalDrugFuzzySearchTest {
         }
     }
 
+    /**
+     * Термины здесь без метасимволов LIKE, поэтому экранированный вариант совпадает с
+     * исходным. Экранирование проверяется отдельно, на уровне сервиса.
+     */
+    private fun search(term: String, limit: Int = 10) =
+        vidalDrugRepository.fuzzySearch(term, term, limit)
+
     @Test
-    fun `fuzzySearchByName finds Cyrillic drugs by prefix`() {
-        val results = vidalDrugRepository.fuzzySearchByName("аспир", 10)
+    fun `fuzzySearch finds Cyrillic drugs by prefix`() {
+        val results = search("аспир", 10)
         assertTrue(results.isNotEmpty(), "Should find drugs matching 'аспир'")
         assertTrue(results.any { it.name == "Аспирин" }, "Should find 'Аспирин'")
         assertTrue(results.any { it.name == "Аспирин Кардио" }, "Should find 'Аспирин Кардио'")
     }
 
     @Test
-    fun `fuzzySearchByName is case-insensitive for Cyrillic`() {
-        val results = vidalDrugRepository.fuzzySearchByName("АСПИР", 10)
+    fun `fuzzySearch is case-insensitive for Cyrillic`() {
+        val results = search("АСПИР", 10)
         assertTrue(results.isNotEmpty(), "Should find drugs matching uppercase 'АСПИР'")
         assertTrue(results.any { it.name == "Аспирин" })
     }
 
     @Test
-    fun `fuzzySearchByName finds Latin drugs by prefix`() {
-        val results = vidalDrugRepository.fuzzySearchByName("asp", 10)
+    fun `fuzzySearch finds Latin drugs by prefix`() {
+        val results = search("asp", 10)
         assertTrue(results.isNotEmpty(), "Should find drugs matching 'asp'")
         assertTrue(results.any { it.name == "Aspirin" })
     }
 
     @Test
-    fun `fuzzySearchByName is case-insensitive for Latin`() {
-        val results = vidalDrugRepository.fuzzySearchByName("ASP", 10)
+    fun `fuzzySearch is case-insensitive for Latin`() {
+        val results = search("ASP", 10)
         assertTrue(results.isNotEmpty(), "Should find drugs matching uppercase 'ASP'")
         assertTrue(results.any { it.name == "Aspirin" })
     }
 
     @Test
-    fun `fuzzySearchByName finds drugs by substring`() {
-        val results = vidalDrugRepository.fuzzySearchByName("профен", 10)
+    fun `fuzzySearch finds drugs by substring`() {
+        val results = search("профен", 10)
         assertTrue(results.isNotEmpty(), "Should find drugs matching 'профен'")
         assertTrue(results.any { it.name == "Ибупрофен" })
     }
 
     @Test
-    fun `fuzzySearchByName respects limit`() {
-        val results = vidalDrugRepository.fuzzySearchByName("а", 2)
+    fun `fuzzySearch respects limit`() {
+        val results = search("а", 2)
         assertTrue(results.size <= 2, "Should return at most 2 results")
     }
 
     @Test
-    fun `fuzzySearchByName returns empty for no match`() {
-        val results = vidalDrugRepository.fuzzySearchByName("xyz123", 10)
+    fun `fuzzySearch returns empty for no match`() {
+        val results = search("xyz123", 10)
         assertTrue(results.isEmpty(), "Should return no results for unrelated term")
     }
 
     @Test
-    fun `fuzzySearchByName uses trigram similarity for fuzzy matches`() {
-        val results = vidalDrugRepository.fuzzySearchByName("Аспирн", 10)
+    fun `fuzzySearch uses trigram similarity for fuzzy matches`() {
+        val results = search("Аспирн", 10)
         assertTrue(
             results.any { it.name == "Аспирин" },
             "Trigram similarity should find 'Аспирин' even with typo 'Аспирн'"
@@ -122,7 +135,7 @@ class VidalDrugFuzzySearchTest {
     }
 
     @Test
-    fun `fuzzySearchByName prioritizes exact and prefix matches`() {
+    fun `fuzzySearch prioritizes exact and prefix matches`() {
         txTemplate.execute {
             vidalDrugRepository.deleteAll()
             vidalDrugRepository.saveAll(
@@ -134,14 +147,14 @@ class VidalDrugFuzzySearchTest {
             )
         }
 
-        val results = vidalDrugRepository.fuzzySearchByName("Aspirin", 10)
+        val results = search("Aspirin", 10)
         assertTrue(results.isNotEmpty())
         assertEquals("Aspirin", results.first().name, "Exact match should be first")
     }
 
     @Test
-    fun `fuzzySearchByName eagerly loads formType - no LazyInitializationException`() {
-        val results = vidalDrugRepository.fuzzySearchByName("аспир", 10)
+    fun `fuzzySearch eagerly loads formType - no LazyInitializationException`() {
+        val results = search("аспир", 10)
         assertTrue(results.isNotEmpty())
         val formTypeName = results.first { it.formType != null }.formType?.name
         assertNotNull(formTypeName, "FormType should be eagerly loaded and accessible outside transaction")
@@ -149,22 +162,81 @@ class VidalDrugFuzzySearchTest {
     }
 
     @Test
-    fun `service fuzzySearchByName returns results with accessible formType`() {
-        val results = vidalDrugService.fuzzySearchByName("аспир", 10)
+    fun `service fuzzySearch returns results with accessible formType`() {
+        val results = vidalDrugService.fuzzySearch("аспир", 10)
         assertTrue(results.isNotEmpty())
         val drugWithForm = results.first { it.formType != null }
         assertNotNull(drugWithForm.formType?.name, "FormType should be accessible via service results")
     }
 
     @Test
-    fun `service fuzzySearchByName returns empty for blank input`() {
-        val results = vidalDrugService.fuzzySearchByName("   ", 10)
+    fun `service fuzzySearch returns empty for blank input`() {
+        val results = vidalDrugService.fuzzySearch("   ", 10)
         assertTrue(results.isEmpty(), "Should return empty for blank input")
     }
 
     @Test
-    fun `service fuzzySearchByName sanitizes special characters`() {
-        val results = vidalDrugService.fuzzySearchByName("аспир%", 10)
+    fun `service fuzzySearch sanitizes special characters`() {
+        val results = vidalDrugService.fuzzySearch("аспир%", 10)
         assertNotNull(results)
+    }
+
+    // ── Поиск не только по названию ────────────────────────────────────────────────
+    //
+    // Раньше искали исключительно по name: препарат нельзя было найти ни по действующему
+    // веществу, ни по латинскому написанию, ни по производителю — то есть ровно теми
+    // способами, которыми его обычно и ищут.
+
+    @Test
+    fun `находит по латинскому названию`() {
+        val results = search("Paracetamolum")
+
+        assertTrue(
+            results.any { it.name == "Парацетамол" },
+            "препарат должен находиться по латинскому названию"
+        )
+    }
+
+    @Test
+    fun `находит по действующему веществу`() {
+        val results = search("ибупрофен")
+
+        assertTrue(
+            results.any { it.name == "Ибупрофен" },
+            "препарат должен находиться по действующему веществу"
+        )
+    }
+
+    @Test
+    fun `находит по производителю`() {
+        val results = search("Фармстандарт")
+
+        assertTrue(
+            results.any { it.name == "Ибупрофен" },
+            "препарат должен находиться по производителю"
+        )
+    }
+
+    @Test
+    fun `точное совпадение названия идёт первым`() {
+        // Иначе опечаточная выдача может вытеснить наверх то, что пользователь набрал точно.
+        val results = search("Аспирин")
+
+        assertEquals("Аспирин", results.first().name)
+    }
+
+    @Test
+    fun `лимит ограничивает выдачу`() {
+        assertEquals(1, search("аспир", limit = 1).size)
+    }
+
+    @Test
+    fun `выдача содержит поля, по которым идёт поиск`() {
+        // Иначе результат не объясняет, почему запись нашлась: набрали «Ibuprofenum»,
+        // а в ответе одно торговое название.
+        val found = vidalDrugService.fuzzySearch("Ibuprofenum").first { it.name == "Ибупрофен" }
+
+        assertEquals("Ibuprofenum", found.nameLat)
+        assertEquals("ибупрофен", found.activeSubstance)
     }
 }
