@@ -1,21 +1,23 @@
 package org.kert0n.medappserver.integration
 
-import org.kert0n.medappserver.PostgresIntegrationTest
 import jakarta.persistence.EntityManager
-import org.junit.jupiter.api.Test
-import org.kert0n.medappserver.db.model.*
-import org.kert0n.medappserver.db.repository.DrugRepository
-import org.kert0n.medappserver.db.repository.MedKitRepository
-import org.kert0n.medappserver.db.repository.UserRepository
-import org.kert0n.medappserver.db.repository.UsingRepository
-import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.data.repository.findByIdOrNull
-import org.springframework.transaction.annotation.Transactional
 import java.util.*
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.jupiter.api.Test
+import org.kert0n.medappserver.PostgresIntegrationTest
+import org.kert0n.medappserver.db.model.*
+import org.kert0n.medappserver.db.repository.DrugRepository
+import org.kert0n.medappserver.db.repository.MedKitRepository
+import org.kert0n.medappserver.db.repository.UserRepository
+import org.kert0n.medappserver.db.repository.UsingRepository
+import org.kert0n.medappserver.testutil.assertQty
+import org.kert0n.medappserver.testutil.qty
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.data.repository.findByIdOrNull
+import org.springframework.transaction.annotation.Transactional
 
 @PostgresIntegrationTest
 @Transactional
@@ -52,7 +54,7 @@ class RepositoryIntegrationTests {
         return drugRepository.save(
             Drug(
                 name = name,
-                quantity = quantity,
+                quantity = qty(quantity),
                 quantityUnit = "tablets",
                 formType = null,
                 category = null,
@@ -130,7 +132,7 @@ class RepositoryIntegrationTests {
             usingKey = UsingKey(user.id, drug1.id),
             user = user,
             drug = drug1,
-            plannedAmount = 10.0
+            plannedAmount = qty(10.0)
         )
         usingRepository.save(using)
         entityManager.flush()
@@ -155,19 +157,19 @@ class RepositoryIntegrationTests {
             usingKey = UsingKey(user1.id, drug.id),
             user = user1,
             drug = drug,
-            plannedAmount = 20.0
+            plannedAmount = qty(20.0)
         )
         val using2 = Using(
             usingKey = UsingKey(user2.id, drug.id),
             user = user2,
             drug = drug,
-            plannedAmount = 30.0
+            plannedAmount = qty(30.0)
         )
         usingRepository.save(using1)
         usingRepository.save(using2)
         entityManager.flush()
         entityManager.clear()
-        assertEquals(50.0, drugRepository.findByIdOrNull(drug.id)?.totalPlannedAmount)
+        assertQty(50.0, drugRepository.findByIdOrNull(drug.id)?.totalPlannedAmount)
     }
 
     @Test
@@ -178,7 +180,7 @@ class RepositoryIntegrationTests {
         entityManager.flush()
         entityManager.clear()
 
-        assertEquals(0.0, drug.totalPlannedAmount)
+        assertQty(0.0, drug.totalPlannedAmount)
     }
 
     // === MedKitRepository Tests ===
@@ -287,7 +289,7 @@ class RepositoryIntegrationTests {
             usingKey = UsingKey(user1.id, drug.id),
             user = user1,
             drug = drug,
-            plannedAmount = 10.0
+            plannedAmount = qty(10.0)
         )
         usingRepository.save(using)
         entityManager.flush()
@@ -321,8 +323,8 @@ class RepositoryIntegrationTests {
         val drug2 = createDrug(medKit, "Drug B")
         entityManager.flush()
 
-        usingRepository.save(Using(UsingKey(user.id, drug1.id), user, drug1, 10.0))
-        usingRepository.save(Using(UsingKey(user.id, drug2.id), user, drug2, 20.0))
+        usingRepository.save(Using(UsingKey(user.id, drug1.id), user, drug1, qty(10.0)))
+        usingRepository.save(Using(UsingKey(user.id, drug2.id), user, drug2, qty(20.0)))
         entityManager.flush()
         entityManager.clear()
 
@@ -340,8 +342,8 @@ class RepositoryIntegrationTests {
         val drug = createDrug(medKit)
         entityManager.flush()
 
-        usingRepository.save(Using(UsingKey(user1.id, drug.id), user1, drug, 10.0))
-        usingRepository.save(Using(UsingKey(user2.id, drug.id), user2, drug, 20.0))
+        usingRepository.save(Using(UsingKey(user1.id, drug.id), user1, drug, qty(10.0)))
+        usingRepository.save(Using(UsingKey(user2.id, drug.id), user2, drug, qty(20.0)))
         entityManager.flush()
         entityManager.clear()
 
@@ -356,13 +358,13 @@ class RepositoryIntegrationTests {
         val drug = createDrug(medKit)
         entityManager.flush()
 
-        usingRepository.save(Using(UsingKey(user.id, drug.id), user, drug, 15.0))
+        usingRepository.save(Using(UsingKey(user.id, drug.id), user, drug, qty(15.0)))
         entityManager.flush()
         entityManager.clear()
 
         val using = usingRepository.findByUserIdAndDrugId(user.id, drug.id)
         assertNotNull(using)
-        assertEquals(15.0, using.plannedAmount)
+        assertQty(15.0, using.plannedAmount)
     }
 
     @Test
@@ -383,7 +385,7 @@ class RepositoryIntegrationTests {
         val drug = createDrug(medKit, "TestDrug")
         entityManager.flush()
 
-        usingRepository.save(Using(UsingKey(user.id, drug.id), user, drug, 10.0))
+        usingRepository.save(Using(UsingKey(user.id, drug.id), user, drug, qty(10.0)))
         entityManager.flush()
         entityManager.clear()
 

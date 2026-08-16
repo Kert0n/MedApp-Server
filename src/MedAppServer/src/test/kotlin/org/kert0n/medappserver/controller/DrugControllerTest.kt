@@ -1,5 +1,6 @@
 package org.kert0n.medappserver.controller
 
+import java.util.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.db.model.Drug
@@ -9,6 +10,7 @@ import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.UsingService
 import org.kert0n.medappserver.services.models.VidalDrugService
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
+import org.kert0n.medappserver.testutil.qty
 import org.mockito.kotlin.any
 import org.mockito.kotlin.doNothing
 import org.mockito.kotlin.eq
@@ -30,7 +32,6 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
 import org.springframework.web.server.ResponseStatusException
 import tools.jackson.databind.ObjectMapper
-import java.util.*
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -72,7 +73,7 @@ class DrugControllerTest {
     private fun createTestDrug(): Drug = Drug(
         id = drugId,
         name = "Aspirin",
-        quantity = 100.0,
+        quantity = qty(100.0),
         quantityUnit = "mg",
         formType = "tablet",
         category = "painkiller",
@@ -85,8 +86,8 @@ class DrugControllerTest {
     private fun createTestDrugDTO(): DrugDTO = DrugDTO(
         id = drugId,
         name = "Aspirin",
-        quantity = 100.0,
-        plannedQuantity = 30.0,
+        quantity = qty(100.0),
+        plannedQuantity = qty(30.0),
         quantityUnit = "mg",
         formType = "tablet",
         category = "painkiller",
@@ -141,7 +142,7 @@ class DrugControllerTest {
 
         val createDTO = DrugCreateDTO(
             name = "Aspirin",
-            quantity = 100.0,
+            quantity = qty(100.0),
             quantityUnit = "mg",
             medKitId = medKitId
         )
@@ -190,7 +191,7 @@ class DrugControllerTest {
     fun `GET quantity info - returns quantity info`() {
         val drug = createTestDrug()
         whenever(drugService.findByIdForUser(drugId, userId)).thenReturn(drug)
-        drug.totalPlannedAmount = 30.0
+        drug.totalPlannedAmount = qty(30.0)
 
         mockMvc.perform(
             get("/drug/quantity/$drugId")
@@ -204,12 +205,12 @@ class DrugControllerTest {
 
     @Test
     fun `PUT consume drug - reduces quantity and returns drug`() {
-        val drug = createTestDrug().apply { quantity = 90.0 }
-        val dto = createTestDrugDTO().copy(quantity = 90.0)
-        whenever(drugService.consumeDrug(eq(drugId), eq(10.0), eq(userId))).thenReturn(drug)
+        val drug = createTestDrug().apply { quantity = qty(90.0) }
+        val dto = createTestDrugDTO().copy(quantity = qty(90.0))
+        whenever(drugService.consumeDrug(eq(drugId), eq(qty(10.0)), eq(userId))).thenReturn(drug)
         whenever(drugService.toDrugDTO(drug)).thenReturn(dto)
 
-        val consumeRequest = ConsumeRequest(quantity = 10.0)
+        val consumeRequest = ConsumeRequest(quantity = qty(10.0))
 
         mockMvc.perform(
             put("/drug/consume/$drugId")

@@ -1,9 +1,12 @@
 package org.kert0n.medappserver.controller
 
+import java.time.Instant
+import java.util.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.db.model.*
 import org.kert0n.medappserver.services.models.UsingService
+import org.kert0n.medappserver.testutil.qty
 import org.mockito.kotlin.any
 import org.mockito.kotlin.doNothing
 import org.mockito.kotlin.eq
@@ -25,8 +28,6 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
 import org.springframework.web.server.ResponseStatusException
 import tools.jackson.databind.ObjectMapper
-import java.time.Instant
-import java.util.*
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -58,7 +59,7 @@ class UsingsControllerTest {
         val user = User(id = userId, hashedKey = "key")
         val medKit = MedKit(id = UUID.randomUUID())
         val drug = Drug(
-            id = drugId, name = "Drug", quantity = 100.0,
+            id = drugId, name = "Drug", quantity = qty(100.0),
             quantityUnit = "mg", formType = null, category = null,
             manufacturer = null, country = null, description = null,
             medKit = medKit
@@ -67,7 +68,7 @@ class UsingsControllerTest {
             usingKey = UsingKey(userId, drugId),
             user = user,
             drug = drug,
-            plannedAmount = 30.0,
+            plannedAmount = qty(30.0),
             createdAt = now,
             lastModified = now
         )
@@ -76,7 +77,7 @@ class UsingsControllerTest {
     private fun createTestUsingDTO(): UsingDTO = UsingDTO(
         userId = userId,
         drugId = drugId,
-        plannedAmount = 30.0,
+        plannedAmount = qty(30.0),
         createdAt = now,
         lastModified = now
     )
@@ -139,7 +140,7 @@ class UsingsControllerTest {
         whenever(usingService.createTreatmentPlan(eq(userId), any())).thenReturn(using)
         whenever(usingService.toUsingDTO(using)).thenReturn(dto)
 
-        val createDTO = UsingCreateDTO(drugId = drugId, plannedAmount = 30.0)
+        val createDTO = UsingCreateDTO(drugId = drugId, plannedAmount = qty(30.0))
 
         mockMvc.perform(
             post("/using")
@@ -156,7 +157,7 @@ class UsingsControllerTest {
         whenever(usingService.createTreatmentPlan(eq(userId), any()))
             .thenThrow(ResponseStatusException(HttpStatus.CONFLICT, "Already exists"))
 
-        val createDTO = UsingCreateDTO(drugId = drugId, plannedAmount = 30.0)
+        val createDTO = UsingCreateDTO(drugId = drugId, plannedAmount = qty(30.0))
 
         mockMvc.perform(
             post("/using")
@@ -169,12 +170,12 @@ class UsingsControllerTest {
 
     @Test
     fun `PUT update using - updates and returns using`() {
-        val using = createTestUsing().apply { plannedAmount = 50.0 }
-        val dto = createTestUsingDTO().copy(plannedAmount = 50.0)
+        val using = createTestUsing().apply { plannedAmount = qty(50.0) }
+        val dto = createTestUsingDTO().copy(plannedAmount = qty(50.0))
         whenever(usingService.updateTreatmentPlan(eq(userId), eq(drugId), any())).thenReturn(using)
         whenever(usingService.toUsingDTO(using)).thenReturn(dto)
 
-        val updateDTO = UsingUpdateDTO(plannedAmount = 50.0)
+        val updateDTO = UsingUpdateDTO(plannedAmount = qty(50.0))
 
         mockMvc.perform(
             put("/using/drug/$drugId")
@@ -188,12 +189,12 @@ class UsingsControllerTest {
 
     @Test
     fun `POST record intake - records and returns using`() {
-        val using = createTestUsing().apply { plannedAmount = 20.0 }
-        val dto = createTestUsingDTO().copy(plannedAmount = 20.0)
-        whenever(usingService.recordIntake(eq(userId), eq(drugId), eq(10.0))).thenReturn(using)
+        val using = createTestUsing().apply { plannedAmount = qty(20.0) }
+        val dto = createTestUsingDTO().copy(plannedAmount = qty(20.0))
+        whenever(usingService.recordIntake(eq(userId), eq(drugId), eq(qty(10.0)))).thenReturn(using)
         whenever(usingService.toUsingDTO(using)).thenReturn(dto)
 
-        val intakeRequest = IntakeRequest(quantityConsumed = 10.0)
+        val intakeRequest = IntakeRequest(quantityConsumed = qty(10.0))
 
         mockMvc.perform(
             post("/using/drug/$drugId/intake")
@@ -210,7 +211,7 @@ class UsingsControllerTest {
         whenever(usingService.recordIntake(eq(userId), eq(drugId), any()))
             .thenThrow(ResponseStatusException(HttpStatus.BAD_REQUEST, "Exceeds planned amount"))
 
-        val intakeRequest = IntakeRequest(quantityConsumed = 100.0)
+        val intakeRequest = IntakeRequest(quantityConsumed = qty(100.0))
 
         mockMvc.perform(
             post("/using/drug/$drugId/intake")

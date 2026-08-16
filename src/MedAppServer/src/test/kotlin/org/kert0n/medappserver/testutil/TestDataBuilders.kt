@@ -1,9 +1,9 @@
 package org.kert0n.medappserver.testutil
 
+import java.util.*
 import org.kert0n.medappserver.controller.DrugCreateDTO
 import org.kert0n.medappserver.controller.DrugUpdateDTO
 import org.kert0n.medappserver.db.model.*
-import java.util.*
 
 /**
  * Test data builders for creating consistent test entities
@@ -69,7 +69,7 @@ class DrugBuilder(private val medKit: MedKit) {
         return Drug(
             id = id,
             name = name,
-            quantity = quantity,
+            quantity = qty(quantity),
             quantityUnit = quantityUnit,
             formType = formType,
             category = category,
@@ -91,7 +91,7 @@ class UsingBuilder(private val user: User, private val drug: Drug) {
             usingKey = UsingKey(userId = user.id, drugId = drug.id),
             user = user,
             drug = drug,
-            plannedAmount = plannedAmount
+            plannedAmount = qty(plannedAmount)
         )
     }
 }
@@ -120,7 +120,7 @@ class DrugCreateDTOBuilder {
     fun build(): DrugCreateDTO {
         return DrugCreateDTO(
             name = name,
-            quantity = quantity,
+            quantity = qty(quantity),
             quantityUnit = quantityUnit,
             medKitId = medKitId,
             formType = formType,
@@ -154,7 +154,7 @@ class DrugUpdateDTOBuilder {
     fun build(): DrugUpdateDTO {
         return DrugUpdateDTO(
             name = name,
-            quantity = quantity,
+            quantity = quantity?.let(::qty),
             quantityUnit = quantityUnit,
             formType = formType,
             category = category,
