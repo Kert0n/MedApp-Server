@@ -17,6 +17,11 @@ class TestcontainersConfiguration {
         // продом обнаруживалась бы уже в проде.
         return PostgreSQLContainer(DockerImageName.parse("postgres:18.3-trixie"))
             .withInitScript("init-pg-trgm.sql")
+            // Локаль та же, что в compose: pg_trgm определяет «буквенность» символа через
+            // LC_CTYPE, и в локали C кириллица буквой не считается — триграммы из русского
+            // текста не извлекаются вовсе. Унаследовать локаль от образа значит проверять
+            // не ту конфигурацию, что в проде.
+            .withEnv("POSTGRES_INITDB_ARGS", "--encoding=UTF8 --lc-ctype=en_US.utf8 --lc-collate=en_US.utf8")
     }
 
 }

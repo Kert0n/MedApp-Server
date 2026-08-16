@@ -3,6 +3,7 @@ package org.kert0n.medappserver.db.model.parsed
 import jakarta.persistence.*
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
+import org.hibernate.annotations.GeneratedColumn
 import java.util.*
 
 /**
@@ -29,14 +30,6 @@ import java.util.*
         Index(
             name = "ix_parsed_drugs_quantity_unit_id",
             columnList = "quantity_unit_id"
-        ),
-        Index(
-            name = "ix_parsed_drugs_active_substance",
-            columnList = "active_substance"
-        ),
-        Index(
-            name = "ix_parsed_drugs_manufacturer",
-            columnList = "manufacturer"
         )]
 )
 class VidalDrug(
@@ -46,6 +39,10 @@ class VidalDrug(
     @Size(max = 300)
     @NotNull
     @Column(name = "name", nullable = false, length = 300) var name: String,
+
+    /** Международное название латиницей; часть записей справочника его не содержит. */
+    @Size(max = 300)
+    @Column(name = "name_lat", length = 300) var nameLat: String? = null,
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "form_type_id") var formType: FormType? = null,
@@ -71,8 +68,21 @@ class VidalDrug(
     @Column(name = "description", length = Integer.MAX_VALUE) var description: String? = null,
 
     @Column(name = "otc", nullable = false)
-    @NotNull var otc: Boolean
+    @NotNull var otc: Boolean,
 
+    /**
+     * Склейка искомых полей для полнотекстового поиска; значение считает база.
+     *
+     * Поле только для чтения. [GeneratedColumn] нужен, чтобы Hibernate одинаково понимал
+     * колонку в двух режимах: генерируя схему для тестов и проверяя её через
+     * ddl-auto=validate против schema.sql.
+     */
+    @Column(name = "search_tsv", insertable = false, updatable = false, columnDefinition = "tsvector")
+    @GeneratedColumn(
+        "to_tsvector('simple', coalesce(name, '') || ' ' || coalesce(name_lat, '') || ' ' || " +
+            "coalesce(active_substance, '') || ' ' || coalesce(manufacturer, ''))"
+    )
+    var searchTsv: String? = null
 
 ) {
     override fun equals(other: Any?): Boolean {

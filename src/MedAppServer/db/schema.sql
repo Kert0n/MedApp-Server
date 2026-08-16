@@ -123,6 +123,9 @@ CREATE TABLE parsed_drugs
 (
     id               uuid         NOT NULL,
     name             varchar(300) NOT NULL,
+    -- Международное название латиницей; в справочнике заполнено не всюду. Искать по нему
+    -- нужно: пользователь набирает и «Ибупрофен», и «Ibuprofen».
+    name_lat         varchar(300),
     form_type_id     uuid,
     quantity         integer,
     quantity_unit_id uuid,
@@ -133,6 +136,15 @@ CREATE TABLE parsed_drugs
     description      text,
     otc              boolean      NOT NULL,
 
+    -- Документ полнотекстового поиска, который считает сама база. Конфигурация simple, а не
+    -- russian: стемминг ломает торговые названия и фамилии производителей, а искать нужно
+    -- именно их написание.
+    search_tsv       tsvector GENERATED ALWAYS AS (
+        to_tsvector('simple',
+                    coalesce(name, '') || ' ' || coalesce(name_lat, '') || ' ' ||
+                    coalesce(active_substance, '') || ' ' || coalesce(manufacturer, ''))
+        ) STORED,
+
     CONSTRAINT parsed_drugs_pkey PRIMARY KEY (id),
     CONSTRAINT parsed_drugs_form_type_fkey FOREIGN KEY (form_type_id) REFERENCES form_types (id),
     CONSTRAINT parsed_drugs_quantity_unit_fkey FOREIGN KEY (quantity_unit_id) REFERENCES quantity_units (id)
@@ -141,7 +153,15 @@ CREATE TABLE parsed_drugs
 -- Имена по своей таблице: ix_drugs_* сталкивались с индексами таблицы drugs из дампа
 -- справочника, а имена индексов в Postgres уникальны на схему.
 CREATE INDEX ix_parsed_drugs_name ON parsed_drugs (name);
-CREATE INDEX ix_parsed_drugs_active_substance ON parsed_drugs (active_substance);
-CREATE INDEX ix_parsed_drugs_manufacturer ON parsed_drugs (manufacturer);
 CREATE INDEX ix_parsed_drugs_form_type_id ON parsed_drugs (form_type_id);
 CREATE INDEX ix_parsed_drugs_quantity_unit_id ON parsed_drugs (quantity_unit_id);
+
+-- GIN по search_tsv обслуживает многословный запрос сразу по четырём полям. Отдельные
+-- trigram-индексы обслуживают ILIKE и поиск по опечатке для каждого поля по отдельности:
+-- в общей склейке сходство размывалось бы длиной документа. Opclass этих индексов
+-- аннотациями JPA не выражается, поэтому они живут только здесь.
+CREATE INDEX ix_parsed_drugs_search_tsv ON parsed_drugs USING gin (search_tsv);
+CREATE INDEX ix_parsed_drugs_name_trgm ON parsed_drugs USING gin (name gin_trgm_ops);
+CREATE INDEX ix_parsed_drugs_name_lat_trgm ON parsed_drugs USING gin (name_lat gin_trgm_ops);
+CREATE INDEX ix_parsed_drugs_substance_trgm ON parsed_drugs USING gin (active_substance gin_trgm_ops);
+CREATE INDEX ix_parsed_drugs_manufacturer_trgm ON parsed_drugs USING gin (manufacturer gin_trgm_ops);

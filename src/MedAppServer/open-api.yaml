@@ -971,6 +971,14 @@ components:
         name:
           type: string
           description: Drug name
+        nameLat:
+          type: string
+          description: International name in Latin script
+          example: Aspirin
+        activeSubstance:
+          type: string
+          description: Active substance
+          example: Acetylsalicylic acid
         formType:
           type: string
           description: "Form type (e.g., tablet, syrup)"
