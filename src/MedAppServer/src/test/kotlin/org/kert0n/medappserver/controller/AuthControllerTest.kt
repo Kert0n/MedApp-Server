@@ -2,7 +2,9 @@ package org.kert0n.medappserver.controller
 
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.kert0n.medappserver.db.model.User
+import org.kert0n.medappserver.domain.user.User
+import org.kert0n.medappserver.services.security.AuthenticatedUser
+import org.kert0n.medappserver.services.security.AuthenticatedUserService
 import org.kert0n.medappserver.services.models.UserService
 import org.kert0n.medappserver.services.security.SecurityService
 import org.kert0n.medappserver.testutil.ApiRoutes
@@ -38,6 +40,9 @@ class AuthControllerTest {
     private lateinit var userService: UserService
 
     @MockitoBean
+    private lateinit var authenticatedUserService: AuthenticatedUserService
+
+    @MockitoBean
     private lateinit var securityService: SecurityService
 
     @BeforeEach
@@ -67,7 +72,7 @@ class AuthControllerTest {
     @Test
     fun `POST register - returns login and key with correct secret`() {
         val userId = UUID.randomUUID()
-        val user = User(id = userId, hashedKey = "hashed")
+        val user = User.register(hashedKey = "hashed", id = userId)
         whenever(securityService.validateRequest(any())).thenReturn(true)
         whenever(securityService.generateKey(32)).thenReturn("generated-key")
         whenever(userService.registerNewUser(any(), eq("generated-key"), any())).thenReturn(user)
@@ -96,8 +101,8 @@ class AuthControllerTest {
     @Test
     fun `POST token - returns the token`() {
         val userId = UUID.randomUUID()
-        val user = User(id = userId, hashedKey = "{noop}password")
-        whenever(userService.loadUserByUsername(userId.toString())).thenReturn(user)
+        val user = User.register(hashedKey = "{noop}password", id = userId)
+        whenever(authenticatedUserService.loadUserByUsername(userId.toString())).thenReturn(AuthenticatedUser(user))
         whenever(securityService.generateToken(any<User>(), any())).thenReturn("jwt-token-123")
 
         mockMvc.perform(
@@ -113,8 +118,8 @@ class AuthControllerTest {
     @Test
     fun `POST token - returns 401 with wrong password`() {
         val userId = UUID.randomUUID()
-        val user = User(id = userId, hashedKey = "{noop}correct-password")
-        whenever(userService.loadUserByUsername(userId.toString())).thenReturn(user)
+        val user = User.register(hashedKey = "{noop}correct-password", id = userId)
+        whenever(authenticatedUserService.loadUserByUsername(userId.toString())).thenReturn(AuthenticatedUser(user))
 
         mockMvc.perform(
             post(ApiRoutes.TOKEN)
@@ -129,8 +134,8 @@ class AuthControllerTest {
     @Test
     fun `старый маршрут выдачи токена больше не существует`() {
         val userId = UUID.randomUUID()
-        val user = User(id = userId, hashedKey = "{noop}password")
-        whenever(userService.loadUserByUsername(userId.toString())).thenReturn(user)
+        val user = User.register(hashedKey = "{noop}password", id = userId)
+        whenever(authenticatedUserService.loadUserByUsername(userId.toString())).thenReturn(AuthenticatedUser(user))
 
         // Basic здесь уже не принимается: цепочка выдачи токена слушает только новый путь.
         mockMvc.perform(get("/auth/login").with(httpBasic(userId.toString(), "password")))

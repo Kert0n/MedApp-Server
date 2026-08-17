@@ -1,24 +1,26 @@
-package org.kert0n.medappserver.domain.drug
+package org.kert0n.medappserver.db.store
 
-import java.util.UUID
-import org.kert0n.medappserver.db.model.MedKit
+import org.kert0n.medappserver.db.model.DrugData
+import org.kert0n.medappserver.db.model.MedKitData
+import org.kert0n.medappserver.db.model.TreatmentPlanData
 import org.kert0n.medappserver.db.model.TreatmentPlanKey
-import org.kert0n.medappserver.db.model.User
-import org.kert0n.medappserver.db.model.Drug as DrugEntity
-import org.kert0n.medappserver.db.model.TreatmentPlan as TreatmentPlanEntity
+import org.kert0n.medappserver.db.model.UserData
+import org.kert0n.medappserver.domain.drug.Drug
+import org.kert0n.medappserver.domain.drug.TreatmentPlan
+import java.util.UUID
 
 /**
- * Перенос состояния между доменом и отображением.
+ * Перенос состояния препарата между доменом и отображением.
  *
- * Здесь и только здесь два представления препарата встречаются. Цена разделения — вся эта
- * файловая единица: каждое поле упомянуто дважды, и забытая строка означает поле, которое
- * молча не сохранится.
+ * Живёт в слое хранения, а не в домене: знать про строки таблиц — работа persistence, и
+ * зависимость направлена только сюда. Цена разделения видна именно здесь — каждое поле
+ * названо дважды, и забытая строка означает поле, которое молча не сохранится.
  *
  * SQL по-прежнему делает Hibernate: обратная запись идёт в **управляемую** сущность, а
  * добавление, изменение и удаление планов выражаются через её коллекцию, за которой стоят
  * каскад и `orphanRemoval`.
  */
-fun DrugEntity.toDomain(): Drug = Drug.fromStored(
+internal fun DrugData.toDomain(): Drug = Drug.fromStored(
     id = id,
     medKitId = medKit.id,
     name = name,
@@ -29,20 +31,13 @@ fun DrugEntity.toDomain(): Drug = Drug.fromStored(
     manufacturer = manufacturer,
     country = country,
     description = description,
-    plans = treatmentPlans.map { TreatmentPlan(it.planKey.userId, it.plannedAmount) }
+    plans = treatmentPlans.map { TreatmentPlan(it.planKey.userId, it.planKey.drugId, it.plannedAmount) }
 )
 
-/**
- * Записывает состояние домена в сущность.
- *
- * Резолверы нужны потому, что домен знает только идентификаторы, а строкам планов нужен
- * `User`, и переезд требует `MedKit`. Достать их может лишь тот, у кого есть репозитории, —
- * поэтому загрузка приходит параметром, а не прячется внутри.
- */
-fun Drug.applyTo(
-    entity: DrugEntity,
-    resolveUser: (UUID) -> User,
-    resolveMedKit: (UUID) -> MedKit
+internal fun Drug.applyTo(
+    entity: DrugData,
+    resolveUser: (UUID) -> UserData,
+    resolveMedKit: (UUID) -> MedKitData
 ) {
     entity.name = name
     entity.quantity = quantity
@@ -63,7 +58,7 @@ fun Drug.applyTo(
  * Сводит коллекцию планов сущности к тому, что в домене: исчезнувшие удаляются, общие
  * получают новое количество, недостающие создаются.
  */
-private fun Drug.applyPlansTo(entity: DrugEntity, resolveUser: (UUID) -> User) {
+private fun Drug.applyPlansTo(entity: DrugData, resolveUser: (UUID) -> UserData) {
     val desired = plans.associateBy { it.userId }
 
     entity.treatmentPlans.removeIf { it.planKey.userId !in desired }
@@ -76,18 +71,18 @@ private fun Drug.applyPlansTo(entity: DrugEntity, resolveUser: (UUID) -> User) {
         .filter { it.userId !in stored }
         .forEach { plan ->
             entity.treatmentPlans.add(
-                TreatmentPlanEntity(
+                TreatmentPlanData(
                     planKey = TreatmentPlanKey(plan.userId, entity.id),
-                    user = resolveUser(plan.userId),
-                    drug = entity,
+                    userData = resolveUser(plan.userId),
+                    drugData = entity,
                     plannedAmount = plan.plannedAmount
                 )
             )
         }
 }
 
-/** Новая сущность под только что созданный препарат. Планов у него ещё нет. */
-fun Drug.toNewEntity(medKit: MedKit): DrugEntity = DrugEntity(
+/** Новая строка под только что заведённый препарат. Планов у него ещё нет. */
+internal fun Drug.toNewEntity(medKit: MedKitData): DrugData = DrugData(
     id = id,
     name = name,
     quantity = quantity,

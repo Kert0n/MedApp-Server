@@ -4,8 +4,10 @@ import com.sksamuel.aedile.core.Cache
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.testutil.ApiRoutes
-import org.kert0n.medappserver.db.model.User
+import org.kert0n.medappserver.domain.user.User
+import org.kert0n.medappserver.services.security.AuthenticatedUser
 import org.kert0n.medappserver.services.models.UserService
+import org.kert0n.medappserver.services.security.AuthenticatedUserService
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
@@ -17,7 +19,6 @@ import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfig
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
-import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
@@ -46,6 +47,9 @@ class LoginThrottleTest {
     @MockitoBean
     private lateinit var userService: UserService
 
+    @MockitoBean
+    private lateinit var authenticatedUserService: AuthenticatedUserService
+
     @BeforeEach
     fun setup() {
         mockMvc = MockMvcBuilders.webAppContextSetup(context)
@@ -59,8 +63,8 @@ class LoginThrottleTest {
     @Test
     fun `token requests are capped`() {
         val userId = UUID.randomUUID()
-        val user = User(id = userId, hashedKey = "{noop}password")
-        whenever(userService.loadUserByUsername(userId.toString())).thenReturn(user)
+        val user = AuthenticatedUser(User.register(hashedKey = "{noop}password", id = userId))
+        whenever(authenticatedUserService.loadUserByUsername(userId.toString())).thenReturn(user)
 
         repeat(3) {
             mockMvc.perform(post(ApiRoutes.TOKEN).with(httpBasic(userId.toString(), "password")))
@@ -76,8 +80,8 @@ class LoginThrottleTest {
     @Test
     fun `throttled request never reaches credential verification`() {
         val userId = UUID.randomUUID()
-        val user = User(id = userId, hashedKey = "{noop}password")
-        whenever(userService.loadUserByUsername(userId.toString())).thenReturn(user)
+        val user = AuthenticatedUser(User.register(hashedKey = "{noop}password", id = userId))
+        whenever(authenticatedUserService.loadUserByUsername(userId.toString())).thenReturn(user)
 
         // Burn the quota with requests carrying no credentials: the filter counts attempts
         // before Basic runs, so these consume the allowance too.
@@ -90,6 +94,6 @@ class LoginThrottleTest {
 
         // The decisive assertion: the user lookup, and therefore the bcrypt comparison
         // that follows it, was never invoked.
-        verify(userService, never()).loadUserByUsername(userId.toString())
+        verify(authenticatedUserService, never()).loadUserByUsername(userId.toString())
     }
 }

@@ -36,7 +36,7 @@ class UserController(
         logger.debug("GET /v1/users/me by user {}", authentication.userId)
         // Один запрос на все препараты вместо запроса на каждую аптечку: раньше число
         // обращений к базе росло вместе с числом аптечек пользователя.
-        val drugsByMedKit = drugService.viewsAccessibleTo(authentication.userId).groupBy { it.medKitId }
+        val drugsByMedKit = drugService.accessibleTo(authentication.userId).groupBy { it.medKitId }
         val medKits = medKitService.findAllByUser(authentication.userId)
             .map { medKit ->
                 MedKitDTO(

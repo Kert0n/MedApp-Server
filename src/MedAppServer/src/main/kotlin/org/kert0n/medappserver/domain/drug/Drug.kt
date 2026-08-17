@@ -65,7 +65,7 @@ data class Drug private constructor(
         if (planOf(userId) != null) throw TreatmentPlanAlreadyExists()
         if (planned > availableQuantity) throw PlannedAmountExceedsStock()
 
-        return copy(plans = plans + TreatmentPlan(userId, planned))
+        return copy(plans = plans + TreatmentPlan(userId, id, planned))
     }
 
     /** Меняет размер плана. Свой прежний размер план при проверке не занимает. */
@@ -256,9 +256,15 @@ data class Drug private constructor(
     }
 }
 
-/** План лечения: сколько препарата участник зарезервировал под себя. */
+/**
+ * План лечения: сколько препарата участник зарезервировал под себя.
+ *
+ * Идентификатор препарата хранится в самом плане, хотя внутри агрегата он и так известен:
+ * тот же тип отдаётся на запрос «мои планы по всем препаратам», а там без него не обойтись.
+ */
 data class TreatmentPlan(
     val userId: UUID,
+    val drugId: UUID,
     val plannedAmount: BigDecimal
 )
 

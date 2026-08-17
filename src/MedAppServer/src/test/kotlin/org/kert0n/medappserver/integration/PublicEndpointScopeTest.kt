@@ -3,8 +3,10 @@ package org.kert0n.medappserver.integration
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.testutil.ApiRoutes
-import org.kert0n.medappserver.db.model.User
+import org.kert0n.medappserver.domain.user.User
+import org.kert0n.medappserver.services.security.AuthenticatedUser
 import org.kert0n.medappserver.services.models.UserService
+import org.kert0n.medappserver.services.security.AuthenticatedUserService
 import org.mockito.kotlin.whenever
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -41,6 +43,9 @@ class PublicEndpointScopeTest {
     @MockitoBean
     private lateinit var userService: UserService
 
+    @MockitoBean
+    private lateinit var authenticatedUserService: AuthenticatedUserService
+
     @BeforeEach
     fun setup() {
         mockMvc = MockMvcBuilders.webAppContextSetup(context)
@@ -76,8 +81,8 @@ class PublicEndpointScopeTest {
     @Test
     fun `business endpoints reject HTTP Basic credentials`() {
         val userId = UUID.randomUUID()
-        val user = User(id = userId, hashedKey = "{noop}password")
-        whenever(userService.loadUserByUsername(userId.toString())).thenReturn(user)
+        val user = AuthenticatedUser(User.register(hashedKey = "{noop}password", id = userId))
+        whenever(authenticatedUserService.loadUserByUsername(userId.toString())).thenReturn(user)
 
         // Valid credentials, but Basic is not an accepted scheme outside token issuance.
         mockMvc.perform(
@@ -88,8 +93,8 @@ class PublicEndpointScopeTest {
     @Test
     fun `token issuance still accepts HTTP Basic`() {
         val userId = UUID.randomUUID()
-        val user = User(id = userId, hashedKey = "{noop}password")
-        whenever(userService.loadUserByUsername(userId.toString())).thenReturn(user)
+        val user = AuthenticatedUser(User.register(hashedKey = "{noop}password", id = userId))
+        whenever(authenticatedUserService.loadUserByUsername(userId.toString())).thenReturn(user)
 
         mockMvc.perform(
             post(ApiRoutes.TOKEN).with(httpBasic(userId.toString(), "password"))

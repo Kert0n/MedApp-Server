@@ -41,7 +41,7 @@ class FractionalQuantityTest {
     fun `приём третями расходует остаток без потерь`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 1.0)
+        val drug = dbHelper.freshDrug(kit.id, 1.0)
         drugService.createPlan(alice.id, drug.id, qty(1.0))
         dbHelper.flushAndClear()
 
@@ -76,7 +76,7 @@ class FractionalQuantityTest {
         val bob = dbHelper.freshUser("bob")
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
 
-        val drug = dbHelper.freshDrug(kit, 10.0)
+        val drug = dbHelper.freshDrug(kit.id, 10.0)
         drugService.createPlan(alice.id, drug.id, qty(7.0))
         drugService.createPlan(bob.id, drug.id, qty(3.0))
         dbHelper.flushAndClear()
@@ -107,14 +107,14 @@ class FractionalQuantityTest {
         val bob = dbHelper.freshUser("bob")
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
 
-        val drug = dbHelper.freshDrug(kit, 90.0)
+        val drug = dbHelper.freshDrug(kit.id, 90.0)
         drugService.createPlan(alice.id, drug.id, qty(30.0))
         drugService.createPlan(bob.id, drug.id, qty(60.0))
         dbHelper.flushAndClear()
 
         // Незапланированный расход: остаток падает до 60 при сумме планов 90, поэтому планы
         // сжимаются с коэффициентом 60/90. Доли обязаны стать ровно 20 и 40, а не 19.999999.
-        drugService.consumeDrug(drug.id, qty(30.0), alice.id)
+        drugService.consume(drug.id, qty(30.0), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(60.0, dbHelper.drugQuantity(drug.id))

@@ -40,15 +40,6 @@ import org.springframework.transaction.annotation.Transactional
 class PlannedQuantityTrackingTests {
 
     @Autowired
-    private lateinit var userRepository: UserRepository
-
-    @Autowired
-    private lateinit var drugRepository: DrugRepository
-
-    @Autowired
-    private lateinit var treatmentPlanRepository: TreatmentPlanRepository
-
-    @Autowired
     private lateinit var entityManager: EntityManager
 
     @Autowired
@@ -84,7 +75,7 @@ class PlannedQuantityTrackingTests {
         val kit = medKitService.createNew(alice.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
 
-        val drug = dbHelper.freshDrug(kit, 120.0)
+        val drug = dbHelper.freshDrug(kit.id, 120.0)
         dbHelper.flushAndClear()
 
         drugService.createPlan(alice.id, drug.id, qty(40.0))
@@ -147,7 +138,7 @@ class PlannedQuantityTrackingTests {
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), charlie.id)
 
-        val drug = dbHelper.freshDrug(kit, 90.0)
+        val drug = dbHelper.freshDrug(kit.id, 90.0)
         dbHelper.flushAndClear()
 
         drugService.createPlan(alice.id, drug.id, qty(30.0))
@@ -228,7 +219,7 @@ class PlannedQuantityTrackingTests {
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), charlie.id)
 
-        val drug = dbHelper.freshDrug(kit, 90.0)
+        val drug = dbHelper.freshDrug(kit.id, 90.0)
         dbHelper.flushAndClear()
 
         drugService.createPlan(alice.id, drug.id, qty(30.0))
@@ -237,7 +228,7 @@ class PlannedQuantityTrackingTests {
         dbHelper.flushAndClear()
 
         // Bob emergency-consumes 30 (ignores the plan system)
-        drugService.consumeDrug(drug.id, qty(30.0), bob.id)
+        drugService.consume(drug.id, qty(30.0), bob.id)
         dbHelper.flushAndClear()
 
         assertQty(60.0, dbHelper.drugQuantity(drug.id), "drug: 90-30=60")
@@ -289,7 +280,7 @@ class PlannedQuantityTrackingTests {
         val kit = medKitService.createNew(alice.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
 
-        val drug = dbHelper.freshDrug(kit, 120.0)
+        val drug = dbHelper.freshDrug(kit.id, 120.0)
         dbHelper.flushAndClear()
 
         drugService.createPlan(alice.id, drug.id, qty(40.0))
@@ -320,7 +311,7 @@ class PlannedQuantityTrackingTests {
         assertQty(60.0, dbHelper.totalPlanned(drug.id), "step2 total: 30+30=60")
 
         // ── Step 3: Emergency consume 60 ──
-        drugService.consumeDrug(drug.id, qty(60.0), alice.id)
+        drugService.consume(drug.id, qty(60.0), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(40.0, dbHelper.drugQuantity(drug.id), "step3 drug: 100-60=40")

@@ -3,7 +3,6 @@ package org.kert0n.medappserver.db.model
 import jakarta.persistence.*
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
-import org.hibernate.annotations.Formula
 import org.kert0n.medappserver.domain.quantity.QUANTITY_PRECISION
 import org.kert0n.medappserver.domain.quantity.QUANTITY_SCALE
 import org.kert0n.medappserver.domain.quantity.toQuantityScale
@@ -25,7 +24,7 @@ import java.util.*
         Index(name = "ix_user_drugs_med_kit_id", columnList = "med_kit_id")
     ]
 )
-class Drug(
+class DrugData(
     @Id
     @Column(name = "id", nullable = false)
     var id: UUID = UUID.randomUUID(),
@@ -74,7 +73,7 @@ class Drug(
                 "FOREIGN KEY (med_kit_id) REFERENCES med_kits (id) ON DELETE CASCADE"
         )
     )
-    var medKit: MedKit,
+    var medKit: MedKitData,
 
     /**
      * Строки планов этого препарата.
@@ -83,8 +82,8 @@ class Drug(
      * добавление в набор создаёт строку, удаление из набора её удаляет, удаление препарата
      * уносит планы с собой. Этим и пользуется обратная запись из домена.
      */
-    @OneToMany(mappedBy = "drug", fetch = FetchType.LAZY, cascade = [CascadeType.ALL], orphanRemoval = true)
-    var treatmentPlans: MutableSet<TreatmentPlan> = mutableSetOf()
+    @OneToMany(mappedBy = "drugData", fetch = FetchType.LAZY, cascade = [CascadeType.ALL], orphanRemoval = true)
+    var treatmentPlans: MutableSet<TreatmentPlanData> = mutableSetOf()
 
 ) {
 
@@ -96,21 +95,11 @@ class Drug(
             field = value.toQuantityScale()
         }
 
-    /**
-     * Сумма планов, посчитанная базой в том же SELECT, которым читается препарат.
-     *
-     * Существует только ради проекций чтения, где пишется как `d.storedPlannedTotal`: список
-     * препаратов приходит вместе с суммами одним запросом. Домен её не видит и видеть не
-     * должен — он считает сумму по своим планам.
-     */
-    @Formula("(SELECT COALESCE(SUM(u.planned_amount), 0) FROM usings u WHERE u.drug_id = id)")
-    var storedPlannedTotal: BigDecimal = BigDecimal.ZERO
-
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
 
-        other as Drug
+        other as DrugData
 
         return id == other.id
     }

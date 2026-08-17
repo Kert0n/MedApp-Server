@@ -145,6 +145,24 @@ class DrugAggregateTest {
         assertQty(100.0, drug.quantity)
     }
 
+    /**
+     * Состояние, где план больше остатка, через команды не собрать — его создаёт чужое
+     * списание, увиденное этой транзакцией уже после того, как план был прочитан. Домен
+     * восстанавливается из хранилища как есть, поэтому проверить такой случай можно только
+     * здесь.
+     */
+    @Test
+    fun `приём больше остатка отвергается, даже если план позволяет`() {
+        val stale = Drug.fromStored(
+            id = UUID.randomUUID(), medKitId = kit, name = "Aspirin", quantity = qty(2.0),
+            quantityUnit = "pills", formType = null, category = null, manufacturer = null,
+            country = null, description = null,
+            plans = listOf(TreatmentPlan(alice, UUID.randomUUID(), qty(10.0)))
+        )
+
+        assertFailsWith<InsufficientStock> { stale.applyIntake(alice, qty(5.0)) }
+    }
+
     @Test
     fun `приём без плана отвергается`() {
         assertFailsWith<NoSuchTreatmentPlan> { drug(100.0).applyIntake(alice, qty(1.0)) }

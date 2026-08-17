@@ -6,13 +6,13 @@ import org.kert0n.medappserver.domain.quantity.isZero
 import java.math.BigDecimal
 import kotlin.test.assertEquals
 
-/** Проверяет контракт `NUMERIC(19,6)`, реализованный сеттерами сущностей. */
+/** Проверяет контракт `NUMERIC(19,6)`, реализованный сеттерами отображения. */
 class QuantityScaleTest {
 
-    private fun drug(quantity: BigDecimal) = Drug(
+    private fun drug(quantity: BigDecimal) = DrugData(
         name = "Тест", quantity = quantity, quantityUnit = "таб",
         formType = null, category = null, manufacturer = null,
-        country = null, description = null, medKit = MedKit()
+        country = null, description = null, medKit = MedKitData()
     )
 
     @Test
@@ -35,9 +35,9 @@ class QuantityScaleTest {
 
     @Test
     fun `умножение не раздувает масштаб плана`() {
-        val plan = TreatmentPlan(
-            planKey = TreatmentPlanKey(), user = User(hashedKey = "k"),
-            drug = drug(BigDecimal("10")), plannedAmount = BigDecimal("7")
+        val plan = TreatmentPlanData(
+            planKey = TreatmentPlanKey(), userData = UserData(hashedKey = "k"),
+            drugData = drug(BigDecimal("10")), plannedAmount = BigDecimal("7")
         )
 
         plan.plannedAmount = plan.plannedAmount * BigDecimal("0.3333333333")

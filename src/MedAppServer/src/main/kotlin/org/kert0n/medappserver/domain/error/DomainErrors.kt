@@ -31,3 +31,12 @@ class TreatmentPlanAlreadyExists : DomainRuleViolated("Treatment plan already ex
 
 /** Плана нет. */
 class NoSuchTreatmentPlan : DomainRuleViolated("There is no such treatment plan")
+
+/** Пользователь не участник этой аптечки — или самой аптечки нет. */
+class NotAMember : DomainRuleViolated("Medicine kit is not accessible")
+
+/** Пользователь уже участник: вступать второй раз нечего. */
+class AlreadyMember : DomainRuleViolated("User is already a member of this medicine kit")
+
+/** Пользователь без ключа не существует. */
+class InvalidCredentials : DomainRuleViolated("Credentials must not be blank")
