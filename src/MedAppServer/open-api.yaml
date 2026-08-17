@@ -66,7 +66,7 @@ paths:
           description: Malformed If-Match
         "404":
           description: Drug or target kit is not accessible
-        "409":
+        "412":
           description: Drug has changed since the version supplied
         "428":
           description: If-Match is required
@@ -338,7 +338,7 @@ paths:
           description: "Amount exceeds the package, or malformed If-Match"
         "404":
           description: Package does not exist or is not accessible
-        "409":
+        "412":
           description: Package has changed since the version supplied
         "428":
           description: If-Match is required
@@ -447,7 +447,7 @@ paths:
           description: Malformed If-Match
         "404":
           description: No reservation on this package
-        "409":
+        "412":
           description: Reservation has changed since the version supplied
         "428":
           description: If-Match is required
@@ -492,7 +492,7 @@ paths:
           description: Invalid amount or malformed If-Match
         "404":
           description: No reservation on this package
-        "409":
+        "412":
           description: Reservation has changed since the version supplied
         "428":
           description: If-Match is required
@@ -552,7 +552,7 @@ paths:
           description: Malformed If-Match
         "404":
           description: Drug does not exist or is not accessible
-        "409":
+        "412":
           description: Drug has changed since the version supplied
         "428":
           description: If-Match is required
@@ -599,7 +599,7 @@ paths:
           description: Invalid request or malformed If-Match
         "404":
           description: Drug does not exist or is not accessible
-        "409":
+        "412":
           description: Drug has changed since the version supplied
         "428":
           description: If-Match is required
@@ -706,7 +706,7 @@ paths:
           description: Malformed If-Match
         "404":
           description: Kit does not exist or is not accessible
-        "409":
+        "412":
           description: Kit membership has changed since the version supplied
         "428":
           description: If-Match is required
@@ -825,7 +825,7 @@ paths:
           description: Malformed If-Match
         "404":
           description: Kit does not exist or is not accessible
-        "409":
+        "412":
           description: Kit membership has changed since the version supplied
         "428":
           description: If-Match is required
@@ -908,6 +908,7 @@ components:
           format: int64
           description: Package version the caller decided by
           example: 3
+          minimum: 0
         reservation:
           $ref: "#/components/schemas/SyncReservation"
           description: New reservation state; omit to leave the reservation alone
@@ -928,6 +929,7 @@ components:
           description: Reservation version the caller decided by; omit when creating
             it
           example: 7
+          minimum: 0
       required:
       - amount
     ReservationDTO:

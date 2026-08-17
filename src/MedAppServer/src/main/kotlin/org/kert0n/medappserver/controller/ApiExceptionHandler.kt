@@ -5,6 +5,7 @@ import org.kert0n.medappserver.domain.NoSuchReservation
 import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.ConflictingSync
 import org.kert0n.medappserver.domain.ReservationAlreadyExists
+import org.kert0n.medappserver.domain.StaleSyncVersion
 import org.kert0n.medappserver.domain.StaleAggregateVersion
 import org.springframework.http.HttpStatus
 import org.springframework.orm.ObjectOptimisticLockingFailureException
@@ -33,7 +34,9 @@ class ApiExceptionHandler {
      * модель про HTTP не знает, иначе её нельзя было бы проверить без веб-слоя.
      *
      * Отсутствие брони — 404: ресурса нет. Вторая бронь того же человека на ту же пачку — 409:
-     * ресурс есть, его надо менять. Остальное — 400: запрос сам по себе противоречив.
+     * ресурс есть, его надо менять. Устаревшая версия из `If-Match` — 412: предусловие
+     * предъявлено и не выполнено; та же устаревшая версия из тела синхронизации — 409, потому
+     * что предусловием запроса она не была. Остальное — 400: запрос противоречив сам по себе.
      */
     @ExceptionHandler(DomainRuleViolated::class)
     fun handleDomainRule(exception: DomainRuleViolated): ProblemDetail = problem(
@@ -43,8 +46,10 @@ class ApiExceptionHandler {
             // выдавал бы существование чужой.
             is NotAMember -> HttpStatus.NOT_FOUND
             is ReservationAlreadyExists -> HttpStatus.CONFLICT
-            // Клиент решал по устаревшему состоянию: ресурс есть, но не тот, который он видел.
-            is StaleAggregateVersion -> HttpStatus.CONFLICT
+            // Предъявленное предусловие не выполнено: ресурс есть, но не тот, который видел клиент.
+            is StaleAggregateVersion -> HttpStatus.PRECONDITION_FAILED
+            // Версии синхронизации приезжают телом, поэтому это конфликт, а не предусловие.
+            is StaleSyncVersion -> HttpStatus.CONFLICT
             // Тот же идентификатор синхронизации с другим содержимым: одно из двух не то.
             is ConflictingSync -> HttpStatus.CONFLICT
             else -> HttpStatus.BAD_REQUEST

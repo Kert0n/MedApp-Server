@@ -3,6 +3,7 @@ package org.kert0n.medappserver.api
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.Valid
 import jakarta.validation.constraints.DecimalMin
+import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotNull
 import java.math.BigDecimal
 
@@ -25,6 +26,7 @@ data class SyncRequest(
     val consumed: BigDecimal? = null,
 
     @field:NotNull
+    @field:Min(0)
     @Schema(description = "Package version the caller decided by", example = "3", required = true)
     val drugVersion: Long,
 
@@ -47,6 +49,7 @@ data class SyncReservation(
     val amount: BigDecimal,
 
     /** `null` — брони ещё нет, её заводит этот же запрос. */
+    @field:Min(0)
     @Schema(description = "Reservation version the caller decided by; omit when creating it", example = "7")
     val version: Long? = null
 )

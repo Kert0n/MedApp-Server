@@ -25,8 +25,20 @@ class NoSuchReservation : DomainRuleViolated("There is no such reservation")
  *
  * Повтора нет — сервер не знает, останется ли команда осмысленной по новому состоянию, и
  * решить это может только тот, кто её отправил.
+ *
+ * Наружу это 412: предусловие предъявлено и не выполнено. Тот же отказ, пришедший из **тела**
+ * запроса, а не из заголовка, переводится в [StaleSyncVersion] — см. синхронизацию.
  */
 class StaleAggregateVersion : DomainRuleViolated("Aggregate has changed since the version supplied")
+
+/**
+ * То же устаревшее состояние, но версия приехала телом, а не заголовком.
+ *
+ * Различие не косметическое: 412 отвечает на невыполненное **предусловие запроса**, а у
+ * синхронизации предусловий два и ни одно не в `If-Match`. Отказ по ним — обычный конфликт
+ * состояния, то есть 409.
+ */
+class StaleSyncVersion : DomainRuleViolated("A version in the synchronisation body is stale")
 
 /** Запрос, не просящий сделать ничего, командой не является. */
 class EmptySync : DomainRuleViolated("Synchronisation must carry an intake, a reservation, or both")

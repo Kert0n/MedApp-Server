@@ -82,7 +82,7 @@ class MedKitController(
     @ApiResponse(responseCode = "204", description = "Kit deleted for everyone")
     @ApiResponse(responseCode = "400", description = "Malformed If-Match", content = [Content()])
     @ApiResponse(responseCode = "404", description = "Kit does not exist or is not accessible", content = [Content()])
-    @ApiResponse(responseCode = "409", description = "Kit membership has changed since the version supplied", content = [Content()])
+    @ApiResponse(responseCode = "412", description = "Kit membership has changed since the version supplied", content = [Content()])
     @ApiResponse(responseCode = "428", description = "If-Match is required", content = [Content()])
     fun deleteMedKit(
         authentication: Authentication,
@@ -134,7 +134,7 @@ class MedKitMembershipController(
     @ApiResponse(responseCode = "204", description = "Left the kit")
     @ApiResponse(responseCode = "400", description = "Malformed If-Match", content = [Content()])
     @ApiResponse(responseCode = "404", description = "Kit does not exist or is not accessible", content = [Content()])
-    @ApiResponse(responseCode = "409", description = "Kit membership has changed since the version supplied", content = [Content()])
+    @ApiResponse(responseCode = "412", description = "Kit membership has changed since the version supplied", content = [Content()])
     @ApiResponse(responseCode = "428", description = "If-Match is required", content = [Content()])
     fun leaveMedKit(
         authentication: Authentication,

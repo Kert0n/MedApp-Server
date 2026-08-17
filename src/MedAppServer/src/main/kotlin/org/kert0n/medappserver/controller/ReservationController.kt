@@ -76,7 +76,7 @@ class ReservationController(
     @ApiResponse(responseCode = "200", description = "Reservation updated")
     @ApiResponse(responseCode = "400", description = "Invalid amount or malformed If-Match", content = [Content()])
     @ApiResponse(responseCode = "404", description = "No reservation on this package", content = [Content()])
-    @ApiResponse(responseCode = "409", description = "Reservation has changed since the version supplied", content = [Content()])
+    @ApiResponse(responseCode = "412", description = "Reservation has changed since the version supplied", content = [Content()])
     @ApiResponse(responseCode = "428", description = "If-Match is required", content = [Content()])
     fun patchReservation(
         authentication: Authentication,
@@ -102,7 +102,7 @@ class ReservationController(
     @ApiResponse(responseCode = "204", description = "Reservation cancelled")
     @ApiResponse(responseCode = "400", description = "Malformed If-Match", content = [Content()])
     @ApiResponse(responseCode = "404", description = "No reservation on this package", content = [Content()])
-    @ApiResponse(responseCode = "409", description = "Reservation has changed since the version supplied", content = [Content()])
+    @ApiResponse(responseCode = "412", description = "Reservation has changed since the version supplied", content = [Content()])
     @ApiResponse(responseCode = "428", description = "If-Match is required", content = [Content()])
     fun deleteReservation(
         authentication: Authentication,

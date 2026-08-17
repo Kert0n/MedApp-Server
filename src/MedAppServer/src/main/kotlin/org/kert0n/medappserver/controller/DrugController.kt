@@ -76,7 +76,7 @@ class DrugController(
     @ApiResponse(responseCode = "200", description = "Drug updated")
     @ApiResponse(responseCode = "400", description = "Invalid request or malformed If-Match", content = [Content()])
     @ApiResponse(responseCode = "404", description = "Drug does not exist or is not accessible", content = [Content()])
-    @ApiResponse(responseCode = "409", description = "Drug has changed since the version supplied", content = [Content()])
+    @ApiResponse(responseCode = "412", description = "Drug has changed since the version supplied", content = [Content()])
     @ApiResponse(responseCode = "428", description = "If-Match is required", content = [Content()])
     fun patchDrug(
         authentication: Authentication,
@@ -100,7 +100,7 @@ class DrugController(
     @ApiResponse(responseCode = "204", description = "Drug deleted")
     @ApiResponse(responseCode = "400", description = "Malformed If-Match", content = [Content()])
     @ApiResponse(responseCode = "404", description = "Drug does not exist or is not accessible", content = [Content()])
-    @ApiResponse(responseCode = "409", description = "Drug has changed since the version supplied", content = [Content()])
+    @ApiResponse(responseCode = "412", description = "Drug has changed since the version supplied", content = [Content()])
     @ApiResponse(responseCode = "428", description = "If-Match is required", content = [Content()])
     fun deleteDrug(
         authentication: Authentication,
@@ -127,7 +127,7 @@ class DrugController(
     @ApiResponse(responseCode = "204", description = "Package ran out and was destroyed", content = [Content()])
     @ApiResponse(responseCode = "400", description = "Amount exceeds the package, or malformed If-Match", content = [Content()])
     @ApiResponse(responseCode = "404", description = "Package does not exist or is not accessible", content = [Content()])
-    @ApiResponse(responseCode = "409", description = "Package has changed since the version supplied", content = [Content()])
+    @ApiResponse(responseCode = "412", description = "Package has changed since the version supplied", content = [Content()])
     @ApiResponse(responseCode = "428", description = "If-Match is required", content = [Content()])
     fun recordIntake(
         authentication: Authentication,
@@ -183,7 +183,7 @@ class DrugController(
     @ApiResponse(responseCode = "200", description = "Drug moved")
     @ApiResponse(responseCode = "400", description = "Malformed If-Match", content = [Content()])
     @ApiResponse(responseCode = "404", description = "Drug or target kit is not accessible", content = [Content()])
-    @ApiResponse(responseCode = "409", description = "Drug has changed since the version supplied", content = [Content()])
+    @ApiResponse(responseCode = "412", description = "Drug has changed since the version supplied", content = [Content()])
     @ApiResponse(responseCode = "428", description = "If-Match is required", content = [Content()])
     fun moveDrug(
         authentication: Authentication,

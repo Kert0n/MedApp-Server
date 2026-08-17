@@ -8,6 +8,8 @@ import org.kert0n.medappserver.domain.ConflictingSync
 import org.kert0n.medappserver.domain.Intake
 import org.kert0n.medappserver.domain.IntakeJournal
 import org.kert0n.medappserver.domain.Quantity
+import org.kert0n.medappserver.domain.StaleAggregateVersion
+import org.kert0n.medappserver.domain.StaleSyncVersion
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.ReservationService
 import org.slf4j.LoggerFactory
@@ -62,13 +64,17 @@ class DrugSyncOrchestrator(
             return currentState(drugId, userId)
         }
 
-        drug.requireVersion(request.drugVersion)
-        // Без приёма упаковка не записывается, и её версия сама себя не проверит: сравнение
-        // выше осталось бы украшением, а одновременный переезд или смена единицы прошли бы мимо.
-        if (request.consumed == null) drugService.requireUnchanged(drug)
+        // Версии синхронизации приехали телом, а не в `If-Match`, поэтому их несовпадение это
+        // конфликт состояния, а не невыполненное предусловие запроса: 409, а не 412.
+        asSyncConflict {
+            drug.requireVersion(request.drugVersion)
+            // Без приёма упаковка не записывается, и её версия сама себя не проверит: сравнение
+            // выше осталось бы украшением, а переезд или смена единицы прошли бы мимо.
+            if (request.consumed == null) drugService.requireUnchanged(drug)
+        }
 
-        val left = request.consumed?.let {
-            drugService.consume(drugId, it, userId, request.drugVersion)
+        val left = asSyncConflict {
+            request.consumed?.let { drugService.consume(drugId, it, userId, request.drugVersion) }
         }
 
         // Пачки не стало — брони на ней тоже: правку несуществующей брони применять некуда.
@@ -77,17 +83,32 @@ class DrugSyncOrchestrator(
             return null
         }
 
-        request.reservation?.let { wanted ->
-            if (wanted.version == null) {
-                medKitDrugOrchestrator.createReservation(userId, drugId, wanted.amount)
-            } else {
-                reservationService.changeTo(userId, drugId, wanted.amount, wanted.version)
+        asSyncConflict {
+            request.reservation?.let { wanted ->
+                if (wanted.version == null) {
+                    medKitDrugOrchestrator.createReservation(userId, drugId, wanted.amount)
+                } else {
+                    reservationService.changeTo(userId, drugId, wanted.amount, wanted.version)
+                }
             }
         }
 
         journal.record(requested)
         return currentState(drugId, userId)
     }
+
+    /**
+     * Устаревшая версия здесь не невыполненное предусловие, а конфликт: её предъявили телом.
+     *
+     * Перевод стоит в одном месте — там, где известен источник версии. Сервисы про это знать не
+     * должны: для них устаревшая версия остаётся устаревшей версией.
+     */
+    private fun <T> asSyncConflict(block: () -> T): T =
+        try {
+            block()
+        } catch (stale: StaleAggregateVersion) {
+            throw StaleSyncVersion().apply { initCause(stale) }
+        }
 
     /** Оба ресурса перечитываются после записи: до коммита новых версий никто не знает. */
     private fun currentState(drugId: UUID, userId: UUID): SyncResultDTO? {

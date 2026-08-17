@@ -65,7 +65,10 @@ class Preconditions {
         val value = ifMatch.trim()
         if (value.isEmpty() || value == "*" || value.startsWith("W/")) throw unparseable()
         if (!value.startsWith('"') || !value.endsWith('"') || value.length < 3) throw unparseable()
-        return value.substring(1, value.length - 1).toLongOrNull() ?: throw unparseable()
+        val version = value.substring(1, value.length - 1).toLongOrNull() ?: throw unparseable()
+        // Отрицательной версии не бывает ни у одной строки: такой тег сервер не выдавал.
+        if (version < 0) throw unparseable()
+        return version
     }
 
     private fun unparseable() =

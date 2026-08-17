@@ -81,7 +81,7 @@ class PreconditionMatrixTest {
     fun `нечитаемый If-Match отвергается 400`() {
         val world = world()
 
-        listOf("*", "W/\"0\"", "abc", "0", "\"\"", "  ").forEach { malformed ->
+        listOf("*", "W/\"0\"", "abc", "0", "\"\"", "  ", "\"-1\"").forEach { malformed ->
             mockMvc.perform(intake(world).header(HttpHeaders.IF_MATCH, malformed).content(TWO_TABLETS))
                 .andExpect(status().isBadRequest)
         }
@@ -91,8 +91,14 @@ class PreconditionMatrixTest {
 
     // ── Устаревшая и верная версия ───────────────────────────────────────────────
 
+    /**
+     * 412, а не 409: предусловие предъявлено и не выполнено.
+     *
+     * 409 остаётся тому, что выясняется при записи, — дублю брони и версиям из тела
+     * синхронизации, которые предусловием запроса не были.
+     */
     @Test
-    fun `устаревшая версия отвергается 409`() {
+    fun `устаревшая версия отвергается 412`() {
         val world = world()
         val stale = world.drugVersion()
 
@@ -101,7 +107,7 @@ class PreconditionMatrixTest {
 
         // Тот же тег во второй раз: клиент решал по состоянию, которого уже нет.
         mockMvc.perform(intake(world).header(HttpHeaders.IF_MATCH, tag(stale)).content(TWO_TABLETS))
-            .andExpect(status().isConflict)
+            .andExpect(status().isPreconditionFailed)
 
         assertEquals(qty(98.0), dbHelper.drugQuantity(world.drugId), "списание прошло ровно одно")
     }
