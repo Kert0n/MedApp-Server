@@ -36,7 +36,7 @@ class MedKitController(
     @ApiResponse(responseCode = "201", description = "Kit created")
     fun createMedKit(authentication: Authentication): MedKitCreatedDTO {
         logger.debug("POST /v1/med-kits by user {}", authentication.userId)
-        return MedKitCreatedDTO(medKitService.createNew(authentication.userId).id)
+        return MedKitCreatedDTO(medKitService.create(authentication.userId).id)
     }
 
     @GetMapping
@@ -72,7 +72,7 @@ class MedKitController(
         @Parameter(description = "Medicine kit identifier") @PathVariable medKitId: UUID
     ): InvitationDTO {
         logger.debug("POST /v1/med-kits/{}/invitations by user {}", medKitId, authentication.userId)
-        return InvitationDTO(medKitService.generateMedKitShareKey(medKitId, authentication.userId))
+        return InvitationDTO(medKitService.invite(medKitId, authentication.userId))
     }
 
     @DeleteMapping("/{medKitId}")
@@ -116,7 +116,7 @@ class MedKitMembershipController(
         @Valid @RequestBody request: MembershipCreateRequest
     ): MedKitDTO {
         logger.debug("POST /v1/med-kit-memberships by user {}", authentication.userId)
-        val joined = medKitService.joinMedKitByKey(request.key, authentication.userId)
+        val joined = medKitService.joinByInvitation(request.key, authentication.userId)
         return medKitDrugOrchestrator.medKitWithDrugs(joined.id, authentication.userId)
     }
 

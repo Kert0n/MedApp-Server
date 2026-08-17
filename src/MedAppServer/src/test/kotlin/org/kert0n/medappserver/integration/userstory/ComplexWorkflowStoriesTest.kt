@@ -68,9 +68,9 @@ class ComplexWorkflowStoriesTest {
         val bob = dbHelper.insert(User(id = UUID.randomUUID(), hashedKey = "bob_${UUID.randomUUID()}"))
         val charlie = dbHelper.insert(User(id = UUID.randomUUID(), hashedKey = "charlie_${UUID.randomUUID()}"))
 
-        val homeKit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(homeKit.id, alice.id), bob.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(homeKit.id, alice.id), charlie.id)
+        val homeKit = medKitService.create(alice.id)
+        medKitService.joinByInvitation(medKitService.invite(homeKit.id, alice.id), bob.id)
+        medKitService.joinByInvitation(medKitService.invite(homeKit.id, alice.id), charlie.id)
 
         val allergyMeds = dbHelper.insert(
             Drug(
@@ -131,7 +131,7 @@ class ComplexWorkflowStoriesTest {
         // PHASE 4: Single Drug Move (Security Audit)
         // ==========================================
         // Alice makes a private travel kit and takes the Painkillers.
-        val travelKit = medKitService.createNew(alice.id)
+        val travelKit = medKitService.create(alice.id)
 
         entityManager.flush()
         entityManager.clear()
@@ -152,8 +152,8 @@ class ComplexWorkflowStoriesTest {
         // PHASE 5: Kill & Migrate (The Final Boss)
         // ==========================================
         // Alice deletes Home Kit. She moves remaining Allergy Meds to a new "Duo Kit" with just Bob.
-        val duoKit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(duoKit.id, alice.id), bob.id)
+        val duoKit = medKitService.create(alice.id)
+        medKitService.joinByInvitation(medKitService.invite(duoKit.id, alice.id), bob.id)
 
         entityManager.flush()
         entityManager.clear()
@@ -196,7 +196,7 @@ class ComplexWorkflowStoriesTest {
 
         // Alice leaves Duo Kit. Because she is the last user, the kit should auto-delete.
         // (Using medKitService directly as medKitDrugOrchestrator might check for users first)
-        medKitService.removeUserFromMedKit(duoKitCheck1.id, alice.id)
+        medKitService.leave(duoKitCheck1.id, alice.id)
 
         entityManager.flush()
         entityManager.clear()
@@ -216,9 +216,9 @@ class ComplexWorkflowStoriesTest {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
 
-        val sourceKit = medKitService.createNew(alice.id)
-        val targetKit = medKitService.createNew(alice.id) // Only Alice has access to this one
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(sourceKit.id, alice.id), bob.id)
+        val sourceKit = medKitService.create(alice.id)
+        val targetKit = medKitService.create(alice.id) // Only Alice has access to this one
+        medKitService.joinByInvitation(medKitService.invite(sourceKit.id, alice.id), bob.id)
 
         // Alice adds 100 tablets to sourceKit
         val createDrugDto = DrugCreateRequest(
@@ -287,15 +287,15 @@ class ComplexWorkflowStoriesTest {
         val alice = createTestUser("alice")
         val bob = createTestUser("bob")
 
-        val kitA = medKitService.createNew(alice.id)
-        val shareKey = medKitService.generateMedKitShareKey(kitA.id, alice.id)
-        medKitService.joinMedKitByKey(shareKey, bob.id)
+        val kitA = medKitService.create(alice.id)
+        val shareKey = medKitService.invite(kitA.id, alice.id)
+        medKitService.joinByInvitation(shareKey, bob.id)
 
         // Alice creates a drug
         val drug = drugService.create(DrugCreateRequest("Shared Meds", qty(10.0), dbHelper.unit().id), kitA.id, alice.id)
 
         // Bob creates a private kit
-        val kitB = medKitService.createNew(bob.id)
+        val kitB = medKitService.create(bob.id)
 
         // ACT: Bob moves the drug to his private kit
         // This fails if the query uses an INNER JOIN on the 'usings' table
@@ -313,8 +313,8 @@ class ComplexWorkflowStoriesTest {
         // SETUP: Shared kit with Alice and Bob
         val alice = createTestUser("alice")
         val bob = createTestUser("bob")
-        val kitA = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kitA.id, alice.id), bob.id)
+        val kitA = medKitService.create(alice.id)
+        medKitService.joinByInvitation(medKitService.invite(kitA.id, alice.id), bob.id)
 
         val drug = drugService.create(DrugCreateRequest("Audit Meds", qty(10.0), dbHelper.unit().id), kitA.id, alice.id)
 
@@ -323,7 +323,7 @@ class ComplexWorkflowStoriesTest {
         drugService.createPlan(bob.id, drug.id, qty(2.0))
 
         // Alice has a private kit (Bob is NOT in this one)
-        val kitB = medKitService.createNew(alice.id)
+        val kitB = medKitService.create(alice.id)
         entityManager.flush()
         entityManager.clear()
         // ACT: Move drug to private kit
@@ -341,8 +341,8 @@ class ComplexWorkflowStoriesTest {
     fun `Verify drug migration during MedKit deletion`() {
         // SETUP: Alice has Kit A and Kit B
         val alice = createTestUser("alice")
-        val kitA = medKitService.createNew(alice.id)
-        val kitB = medKitService.createNew(alice.id)
+        val kitA = medKitService.create(alice.id)
+        val kitB = medKitService.create(alice.id)
         entityManager.flush()
         entityManager.clear()
         val drug =

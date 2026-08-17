@@ -226,7 +226,7 @@ class ResourceApiContractTest {
 
     @Test
     fun `аптечка создаётся и перечисляется`() {
-        whenever(medKitService.createNew(userId)).thenReturn(medKit)
+        whenever(medKitService.create(userId)).thenReturn(medKit)
         whenever(medKitService.overviews(userId)).thenReturn(listOf(MedKitOverview(medKitId, 2, 17)))
 
         mockMvc.perform(post(ApiRoutes.MED_KITS).with(asUser()))
@@ -241,7 +241,7 @@ class ResourceApiContractTest {
 
     @Test
     fun `приглашение возвращается объектом, а не строкой`() {
-        whenever(medKitService.generateMedKitShareKey(medKitId, userId)).thenReturn("invite-key")
+        whenever(medKitService.invite(medKitId, userId)).thenReturn("invite-key")
 
         mockMvc.perform(post(ApiRoutes.invitations(medKitId)).with(asUser()))
             .andExpect(status().isCreated)
@@ -252,7 +252,7 @@ class ResourceApiContractTest {
 
     @Test
     fun `членство создаётся и удаляется`() {
-        whenever(medKitService.joinMedKitByKey("invite-key", userId)).thenReturn(medKit)
+        whenever(medKitService.joinByInvitation("invite-key", userId)).thenReturn(medKit)
         whenever(medKitDrugOrchestrator.medKitWithDrugs(medKitId, userId))
             .thenReturn(org.kert0n.medappserver.api.MedKitDTO(medKitId, emptySet()))
         doNothing().whenever(medKitDrugOrchestrator).leaveMedKit(medKitId, userId)
@@ -283,7 +283,7 @@ class ResourceApiContractTest {
 
     @Test
     fun `снимок пользователя лежит по пути me`() {
-        whenever(medKitService.findAllByUser(userId)).thenReturn(listOf(medKit))
+        whenever(medKitService.idsOfUser(userId)).thenReturn(listOf(medKitId))
         whenever(drugService.accessibleTo(userId)).thenReturn(listOf(drug))
 
         mockMvc.perform(get(ApiRoutes.ME).with(asUser()))

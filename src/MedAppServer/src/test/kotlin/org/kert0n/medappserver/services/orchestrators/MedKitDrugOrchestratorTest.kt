@@ -47,7 +47,7 @@ class MedKitDrugOrchestratorTest {
     @Test
     fun `createDrugInMedKit creates drug in user medkit`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitService.create(alice.id)
         dbHelper.flushAndClear()
 
         val drug = medKitDrugOrchestrator.createDrugInMedKit(
@@ -64,7 +64,7 @@ class MedKitDrugOrchestratorTest {
     fun `createDrugInMedKit fails for unauthorized user`() {
         val alice = dbHelper.freshUser("alice")
         val eve = dbHelper.freshUser("eve")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitService.create(alice.id)
         dbHelper.flushAndClear()
 
         assertFailsWith<DomainRuleViolated> {
@@ -81,8 +81,8 @@ class MedKitDrugOrchestratorTest {
     @Test
     fun `moveDrug moves drug to target medkit`() {
         val alice = dbHelper.freshUser("alice")
-        val kit1 = medKitService.createNew(alice.id)
-        val kit2 = medKitService.createNew(alice.id)
+        val kit1 = medKitService.create(alice.id)
+        val kit2 = medKitService.create(alice.id)
         val drug = dbHelper.freshDrug(kit1.id, 50.0)
         dbHelper.flushAndClear()
 
@@ -94,10 +94,10 @@ class MedKitDrugOrchestratorTest {
     fun `moveDrug strips access from unauthorized users`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val sourceKit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(sourceKit.id, alice.id), bob.id)
+        val sourceKit = medKitService.create(alice.id)
+        medKitService.joinByInvitation(medKitService.invite(sourceKit.id, alice.id), bob.id)
 
-        val targetKit = medKitService.createNew(alice.id) // Only Alice
+        val targetKit = medKitService.create(alice.id) // Only Alice
         val drug = dbHelper.freshDrug(sourceKit.id, 50.0)
         dbHelper.flushAndClear()
 
@@ -116,13 +116,13 @@ class MedKitDrugOrchestratorTest {
     fun `moveDrug without personal treatment plan works`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kitA = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kitA.id, alice.id), bob.id)
+        val kitA = medKitService.create(alice.id)
+        medKitService.joinByInvitation(medKitService.invite(kitA.id, alice.id), bob.id)
 
         val drug = drugService.create(
             DrugCreateRequest("Shared Meds", qty(10.0), dbHelper.unit().id), kitA.id, alice.id
         )
-        val kitB = medKitService.createNew(bob.id)
+        val kitB = medKitService.create(bob.id)
         dbHelper.flushAndClear()
 
         assertDoesNotThrow {
@@ -135,7 +135,7 @@ class MedKitDrugOrchestratorTest {
     @Test
     fun `moveDrug throws when target medkit not found`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitService.create(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
@@ -150,8 +150,8 @@ class MedKitDrugOrchestratorTest {
     fun `removeUserFromMedKit removes user and their treatment plans`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.createNew(alice.id)
-        medKitService.addUserToMedKit(kit.id, bob.id)
+        val kit = medKitService.create(alice.id)
+        medKitService.join(kit.id, bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
@@ -172,7 +172,7 @@ class MedKitDrugOrchestratorTest {
     @Test
     fun `delete without transfer removes medkit`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitService.create(alice.id)
         dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
@@ -187,8 +187,8 @@ class MedKitDrugOrchestratorTest {
     @Test
     fun `delete with transfer migrates drugs to target medkit`() {
         val alice = dbHelper.freshUser("alice")
-        val kitA = medKitService.createNew(alice.id)
-        val kitB = medKitService.createNew(alice.id)
+        val kitA = medKitService.create(alice.id)
+        val kitB = medKitService.create(alice.id)
         val drug = medKitDrugOrchestrator.createDrugInMedKit(
             kitA.id, DrugCreateRequest("Migrating Drug", qty(10.0), dbHelper.unit().id), alice.id
         )
@@ -207,10 +207,10 @@ class MedKitDrugOrchestratorTest {
     fun `delete with transfer strips unauthorized treatment plans`() {
         val alice = dbHelper.freshUser("alice")
         val charlie = dbHelper.freshUser("charlie")
-        val oldKit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(oldKit.id, alice.id), charlie.id)
+        val oldKit = medKitService.create(alice.id)
+        medKitService.joinByInvitation(medKitService.invite(oldKit.id, alice.id), charlie.id)
 
-        val newKit = medKitService.createNew(alice.id) // Only Alice
+        val newKit = medKitService.create(alice.id) // Only Alice
 
         val drug = dbHelper.freshDrug(oldKit.id, 90.0)
         dbHelper.flushAndClear()
@@ -241,7 +241,7 @@ class MedKitDrugOrchestratorTest {
     @Test
     fun `toMedKitDTO returns correct DTO`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitService.create(alice.id)
         drugService.create(
             DrugCreateRequest(name = "Drug A", quantity = qty(50.0), quantityUnitId = dbHelper.unit().id),
             kit.id, alice.id

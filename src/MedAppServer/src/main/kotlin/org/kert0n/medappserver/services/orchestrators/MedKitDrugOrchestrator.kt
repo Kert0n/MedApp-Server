@@ -61,7 +61,7 @@ class MedKitDrugOrchestrator(
     @Transactional
     fun leaveMedKit(medKitId: UUID, userId: UUID) {
         logger.debug("Removing user {} from medkit {}", userId, medKitId)
-        val left = medKitService.removeUserFromMedKit(medKitId, userId)
+        val left = medKitService.leave(medKitId, userId)
         // Аптечки не стало — планы ушли вместе с препаратами по каскаду.
         if (left != null) {
             drugs.deletePlansOfUserInMedKit(userId, medKitId)
@@ -71,8 +71,10 @@ class MedKitDrugOrchestrator(
     /**
      * Удаление аптечки, при желании — с переносом препаратов.
      *
-     * Без переноса препараты уходят каскадом вместе с аптечкой. С переносом каждый препарат
-     * переезжает своим правилом: планы тех, кто целевую аптечку не видит, исчезают.
+     * Без переноса препараты уходят каскадом вместе с аптечкой. С переносом действует то же
+     * правило, что и при переезде одного препарата, — планы тех, кто целевую аптечку не
+     * видит, исчезают, — но выражено оно двумя запросами вместо команды на препарат: аптечка
+     * со ста препаратами не должна стоить ста загрузок с блокировкой.
      */
     @Transactional
     fun delete(medKitId: UUID, userId: UUID, transferToMedKitId: UUID? = null) {
@@ -81,12 +83,10 @@ class MedKitDrugOrchestrator(
 
         if (transferToMedKitId != null) {
             val target = medKitService.requireAccessible(transferToMedKitId, userId)
-            drugService.ofMedKit(medKitId).forEach { drug ->
-                drugService.moveTo(drug.id, target.id, target.members, userId)
-            }
+            drugs.moveAllToMedKit(medKitId, target.id, target.members)
         }
 
-        medKitService.delete(medKitId)
+        medKitService.delete(medKitId, userId)
     }
 
     /** Аптечка вместе с содержимым: сама аптечка знает участников, препараты — себя. */

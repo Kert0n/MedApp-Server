@@ -32,9 +32,9 @@ class MedKitServiceTest {
     // ── createNew ──
 
     @Test
-    fun `createNew creates medkit with user`() {
+    fun `create creates medkit with user`() {
         val alice = dbHelper.freshUser("alice")
-        val medKit = medKitService.createNew(alice.id)
+        val medKit = medKitService.create(alice.id)
         dbHelper.flushAndClear()
 
         assertNotNull(medKit.id)
@@ -44,19 +44,19 @@ class MedKitServiceTest {
     // ── findById ──
 
     @Test
-    fun `findById throws NOT_FOUND for non-existent medkit`() {
+    fun `requireById throws NOT_FOUND for non-existent medkit`() {
         assertThrows<DomainRuleViolated> {
-            medKitService.findById(UUID.randomUUID())
+            medKitService.requireById(UUID.randomUUID())
         }
     }
 
     // ── findByIdForUser ──
 
     @Test
-    fun `findByIdForUser throws when user has no access`() {
+    fun `requireAccessible throws when user has no access`() {
         val alice = dbHelper.freshUser("alice")
         val eve = dbHelper.freshUser("eve")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitService.create(alice.id)
         dbHelper.flushAndClear()
 
         assertFailsWith<DomainRuleViolated> {
@@ -64,24 +64,24 @@ class MedKitServiceTest {
         }
     }
 
-    // ── findAllByUser ──
+    // ── idsOfUser ──
 
     @Test
-    fun `findAllByUser returns medkits for user`() {
+    fun `idsOfUser returns medkits of user`() {
         val alice = dbHelper.freshUser("alice")
-        medKitService.createNew(alice.id)
-        medKitService.createNew(alice.id)
+        medKitService.create(alice.id)
+        medKitService.create(alice.id)
         dbHelper.flushAndClear()
 
-        assertEquals(2, medKitService.findAllByUser(alice.id).size)
+        assertEquals(2, medKitService.idsOfUser(alice.id).size)
     }
 
     // ── findMedKitSummaries ──
 
     @Test
-    fun `findMedKitSummaries returns summaries for user`() {
+    fun `overviews returns counters for user`() {
         val alice = dbHelper.freshUser("alice")
-        medKitService.createNew(alice.id)
+        medKitService.create(alice.id)
         dbHelper.flushAndClear()
 
         val summaries = medKitService.overviews(alice.id)
@@ -91,72 +91,72 @@ class MedKitServiceTest {
     // ── generateMedKitShareKey / joinMedKitByKey ──
 
     @Test
-    fun `joinMedKitByKey adds user and invalidates key`() {
+    fun `joinByInvitation adds user and invalidates key`() {
         val owner = dbHelper.freshUser("owner")
         val joiner = dbHelper.freshUser("joiner")
-        val kit = medKitService.createNew(owner.id)
+        val kit = medKitService.create(owner.id)
         dbHelper.flushAndClear()
 
-        val key = medKitService.generateMedKitShareKey(kit.id, owner.id)
-        medKitService.joinMedKitByKey(key, joiner.id)
+        val key = medKitService.invite(kit.id, owner.id)
+        medKitService.joinByInvitation(key, joiner.id)
         dbHelper.flushAndClear()
 
-        val joinerKits = medKitService.findAllByUser(joiner.id)
+        val joinerKits = medKitService.idsOfUser(joiner.id)
         assertEquals(1, joinerKits.size)
-        assertEquals(kit.id, joinerKits.first().id)
+        assertEquals(kit.id, joinerKits.first())
 
         // Key should be invalidated after use
         assertFailsWith<DomainRuleViolated> {
-            medKitService.joinMedKitByKey(key, joiner.id)
+            medKitService.joinByInvitation(key, joiner.id)
         }
     }
 
     @Test
-    fun `joinMedKitByKey fails for missing key`() {
+    fun `joinByInvitation fails for missing key`() {
         val user = dbHelper.freshUser("user")
 
         assertFailsWith<DomainRuleViolated> {
-            medKitService.joinMedKitByKey("missing-key", user.id)
+            medKitService.joinByInvitation("missing-key", user.id)
         }
     }
 
     // ── addUserToMedKit ──
 
     @Test
-    fun `addUserToMedKit adds second user`() {
+    fun `join adds second user`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitService.create(alice.id)
         dbHelper.flushAndClear()
 
-        medKitService.addUserToMedKit(kit.id, bob.id)
+        medKitService.join(kit.id, bob.id)
         dbHelper.flushAndClear()
 
-        assertEquals(1, medKitService.findAllByUser(bob.id).size)
+        assertEquals(1, medKitService.idsOfUser(bob.id).size)
     }
 
     @Test
-    fun `addUserToMedKit throws when user already exists`() {
+    fun `join throws when user is already a member`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitService.create(alice.id)
         dbHelper.flushAndClear()
 
         assertFailsWith<DomainRuleViolated> {
-            medKitService.addUserToMedKit(kit.id, alice.id)
+            medKitService.join(kit.id, alice.id)
         }
     }
 
     // ── removeUserFromMedKit ──
 
     @Test
-    fun `removeUserFromMedKit keeps medkit when other users remain`() {
+    fun `leave keeps medkit when other users remain`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.createNew(alice.id)
-        medKitService.addUserToMedKit(kit.id, bob.id)
+        val kit = medKitService.create(alice.id)
+        medKitService.join(kit.id, bob.id)
         dbHelper.flushAndClear()
 
-        medKitService.removeUserFromMedKit(kit.id, bob.id)
+        medKitService.leave(kit.id, bob.id)
         dbHelper.flushAndClear()
 
         assertNotNull(medKitService.requireAccessible(kit.id, alice.id))
@@ -166,12 +166,12 @@ class MedKitServiceTest {
     }
 
     @Test
-    fun `removeUserFromMedKit deletes medkit when last user leaves`() {
+    fun `leave deletes medkit when last user leaves`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitService.create(alice.id)
         dbHelper.flushAndClear()
 
-        medKitService.removeUserFromMedKit(kit.id, alice.id)
+        medKitService.leave(kit.id, alice.id)
         dbHelper.flushAndClear()
 
         assertNull(medKitStore.findById(kit.id))

@@ -28,29 +28,40 @@ class MedKitService(
     private val logger = LoggerFactory.getLogger(MedKitService::class.java)
 
     @Transactional
-    fun createNew(userId: UUID): MedKit {
+    fun create(userId: UUID): MedKit {
         logger.debug("Creating new medkit for user: {}", userId)
         val medKit = MedKit(members = setOf(userId))
         medKits.insert(medKit)
         return medKit
     }
 
+    /** Аптечка или `null`, если её нет. */
     @Transactional(readOnly = true)
-    fun findById(medKitId: UUID): MedKit = medKits.findById(medKitId) ?: throw NotAMember()
+    fun findById(medKitId: UUID): MedKit? = medKits.findById(medKitId)
+
+    /** Аптечка или 404. */
+    @Transactional(readOnly = true)
+    fun requireById(medKitId: UUID): MedKit = findById(medKitId) ?: throw NotAMember()
 
     /** Аптечка, доступная вызывающему, или 404 — недоступная и несуществующая неотличимы. */
     @Transactional(readOnly = true)
     fun requireAccessible(medKitId: UUID, userId: UUID): MedKit {
         logger.debug("Finding medkit {} for user {}", medKitId, userId)
-        val medKit = medKits.findById(medKitId) ?: throw NotAMember()
+        val medKit = requireById(medKitId)
         medKit.requireMember(userId)
         return medKit
     }
 
+    /**
+     * Идентификаторы аптечек участника.
+     *
+     * Только идентификаторы: состав аптечек не показывает ни один ответ, а раньше он всё
+     * равно поднимался — запросом на каждую аптечку.
+     */
     @Transactional(readOnly = true)
-    fun findAllByUser(userId: UUID): List<MedKit> {
+    fun idsOfUser(userId: UUID): List<UUID> {
         logger.debug("Finding all medkits for user: {}", userId)
-        return medKits.findAllOfUser(userId)
+        return medKits.findIdsOfUser(userId)
     }
 
     @Transactional(readOnly = true)
@@ -60,7 +71,7 @@ class MedKitService(
     }
 
     @Transactional(readOnly = true)
-    fun generateMedKitShareKey(medKitId: UUID, userId: UUID): String {
+    fun invite(medKitId: UUID, userId: UUID): String {
         logger.debug("Sharing medkit {} by user: {}", medKitId, userId)
         requireAccessible(medKitId, userId)
         val key = securityService.generateKey(16)
@@ -70,18 +81,18 @@ class MedKitService(
     }
 
     @Transactional
-    fun addUserToMedKit(medKitId: UUID, userId: UUID): MedKit {
+    fun join(medKitId: UUID, userId: UUID): MedKit {
         logger.debug("Adding user {} to medkit {}", userId, medKitId)
-        val joined = findById(medKitId).join(userId)
+        val joined = requireById(medKitId).join(userId)
         medKits.save(joined)
         return joined
     }
 
     @Transactional
-    fun joinMedKitByKey(key: String, userId: UUID): MedKit {
+    fun joinByInvitation(key: String, userId: UUID): MedKit {
         val medKitId = medKitTokenCache.getOrNull(securityService.hashToken(key))
             ?: throw NotAMember()
-        return addUserToMedKit(medKitId, userId)
+        return join(medKitId, userId)
     }
 
     /**
@@ -91,7 +102,7 @@ class MedKitService(
      * выходящего в препаратах этой аптечки — забота оркестратора, они лежат в чужом агрегате.
      */
     @Transactional
-    fun removeUserFromMedKit(medKitId: UUID, userId: UUID): MedKit? {
+    fun leave(medKitId: UUID, userId: UUID): MedKit? {
         logger.debug("Removing user {} from medkit {}", userId, medKitId)
         val left = requireAccessible(medKitId, userId).leave(userId)
 
@@ -103,8 +114,15 @@ class MedKitService(
         return left
     }
 
+    /**
+     * Удаление аптечки.
+     *
+     * Доступ проверяется здесь, а не только у вызывающего: команда, удаляющая аптечку по
+     * одному идентификатору, рано или поздно будет вызвана и без проверки.
+     */
     @Transactional
-    fun delete(medKitId: UUID) {
+    fun delete(medKitId: UUID, userId: UUID) {
+        requireAccessible(medKitId, userId)
         medKits.delete(medKitId)
     }
 }

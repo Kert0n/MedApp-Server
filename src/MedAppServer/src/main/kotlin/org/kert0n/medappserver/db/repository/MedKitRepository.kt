@@ -10,15 +10,21 @@ import org.springframework.data.repository.query.Param
 
 interface MedKitRepository : JpaRepository<MedKitData, UUID> {
 
+    /**
+     * Только идентификаторы аптечек участника.
+     *
+     * Снимку пользователя больше ничего и не нужно: препараты он берёт отдельным запросом, а
+     * участники аптечек в ответе не участвуют — поднимать их значило бы платить за то, чего
+     * никто не прочитает.
+     */
     @Query(
         """
-        SELECT mk FROM MedKitData mk
-        JOIN MedKitMembershipData m ON m.membershipKey.medKitId = mk.id
+        SELECT m.membershipKey.medKitId FROM MedKitMembershipData m
         WHERE m.membershipKey.userId = :userId
-        ORDER BY mk.id
+        ORDER BY m.membershipKey.medKitId
     """
     )
-    fun findAllOfUser(@Param("userId") userId: UUID): List<MedKitData>
+    fun findIdsOfUser(@Param("userId") userId: UUID): List<UUID>
 
     /**
      * Счётчики аптечек участника одним запросом.
@@ -45,6 +51,10 @@ interface MedKitMembershipRepository : JpaRepository<MedKitMembershipData, org.k
 
     @Query("SELECT m.membershipKey.userId FROM MedKitMembershipData m WHERE m.membershipKey.medKitId = :medKitId")
     fun findMemberIds(@Param("medKitId") medKitId: UUID): Set<UUID>
+
+    /** Строки членства аптечки: нужны, когда её удаляют. */
+    @Query("SELECT m FROM MedKitMembershipData m WHERE m.membershipKey.medKitId = :medKitId")
+    fun findAllOfMedKit(@Param("medKitId") medKitId: UUID): List<MedKitMembershipData>
 
     @Modifying
     @Query("DELETE FROM MedKitMembershipData m WHERE m.membershipKey.medKitId = :medKitId AND m.membershipKey.userId IN :userIds")

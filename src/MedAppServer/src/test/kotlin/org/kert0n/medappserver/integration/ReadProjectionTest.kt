@@ -34,9 +34,9 @@ class ReadProjectionTest {
     @Test
     fun `сумма планов складывается по всем участникам`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitService.create(alice.id)
         val bob = dbHelper.freshUser("bob")
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
+        medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
 
         drugService.createPlan(alice.id, drug.id, qty(30.0))
@@ -55,7 +55,7 @@ class ReadProjectionTest {
     @Test
     fun `препарат без планов отдаёт нулевую сумму, а не отсутствие строки`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitService.create(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 7.0)
         dbHelper.flushAndClear()
 
@@ -70,7 +70,7 @@ class ReadProjectionTest {
     fun `чужой препарат не читается`() {
         val alice = dbHelper.freshUser("alice")
         val eve = dbHelper.freshUser("eve")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitService.create(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
@@ -80,10 +80,10 @@ class ReadProjectionTest {
     @Test
     fun `снимок собирает препараты всех аптечек пользователя одним запросом`() {
         val alice = dbHelper.freshUser("alice")
-        val first = medKitService.createNew(alice.id)
-        val second = medKitService.createNew(alice.id)
+        val first = medKitService.create(alice.id)
+        val second = medKitService.create(alice.id)
         val outsider = dbHelper.freshUser("outsider")
-        val foreign = medKitService.createNew(outsider.id)
+        val foreign = medKitService.create(outsider.id)
 
         dbHelper.freshDrug(first.id, 1.0)
         dbHelper.freshDrug(first.id, 2.0)
@@ -102,9 +102,9 @@ class ReadProjectionTest {
     @Test
     fun `план читается только своим владельцем`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitService.create(alice.id)
         val bob = dbHelper.freshUser("bob")
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
+        medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         drugService.createPlan(alice.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
