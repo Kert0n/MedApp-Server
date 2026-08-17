@@ -21,7 +21,9 @@ import org.kert0n.medappserver.services.models.CatalogueService
 import org.kert0n.medappserver.services.models.userId
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
 import org.slf4j.LoggerFactory
+import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
+import org.springframework.http.ResponseEntity
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.server.ResponseStatusException
@@ -44,9 +46,10 @@ class DrugController(
     fun getDrug(
         authentication: Authentication,
         @Parameter(description = "Drug identifier") @PathVariable drugId: UUID
-    ): DrugDTO {
+    ): ResponseEntity<DrugDTO> {
         logger.debug("GET /v1/drugs/{} by user {}", drugId, authentication.userId)
-        return drugService.require(drugId, authentication.userId).toDto()
+        val drug = drugService.require(drugId, authentication.userId)
+        return Preconditions.withEtag(drug.version, drug.toDto())
     }
 
     /**
@@ -54,8 +57,14 @@ class DrugController(
      * Раньше она приходила полем тела, и запрос выглядел так, будто препарат можно создать
      * без неё.
      */
+    /**
+     * Предусловия здесь нет: создание ничего не перезаписывает.
+     *
+     * Версия аптечки тоже не требуется — препарат в неё добавляется, состав участников при
+     * этом не меняется, и потерянного обновления в этой команде не бывает. Доступ проверяется
+     * внутри транзакции, а не заголовком.
+     */
     @PostMapping("/med-kits/{medKitId}/drugs")
-    @ResponseStatus(HttpStatus.CREATED)
     @ApiResponse(responseCode = "201", description = "Drug created")
     @ApiResponse(responseCode = "400", description = "Invalid request", content = [Content()])
     @ApiResponse(responseCode = "404", description = "Medicine kit is not accessible", content = [Content()])
@@ -64,38 +73,51 @@ class DrugController(
         @Parameter(description = "Medicine kit identifier") @PathVariable medKitId: UUID,
         @SwaggerRequestBody(description = "Drug to create")
         @Valid @RequestBody request: DrugCreateRequest
-    ): DrugDTO {
+    ): ResponseEntity<DrugDTO> {
         logger.debug("POST /v1/med-kits/{}/drugs by user {}", medKitId, authentication.userId)
         val created = medKitDrugOrchestrator.createDrugInMedKit(medKitId, request, authentication.userId)
-        return drugService.require(created.id, authentication.userId).toDto()
+        val drug = drugService.require(created.id, authentication.userId)
+        return ResponseEntity.status(HttpStatus.CREATED)
+            .eTag(Preconditions.etag(drug.version))
+            .body(drug.toDto())
     }
 
     /** PATCH, а не PUT: тело описывает изменение части полей, а не препарат целиком. */
     @PatchMapping("/drugs/{drugId}")
     @ApiResponse(responseCode = "200", description = "Drug updated")
-    @ApiResponse(responseCode = "400", description = "Invalid request", content = [Content()])
+    @ApiResponse(responseCode = "400", description = "Invalid request or malformed If-Match", content = [Content()])
     @ApiResponse(responseCode = "404", description = "Drug does not exist or is not accessible", content = [Content()])
+    @ApiResponse(responseCode = "409", description = "Drug was changed by someone else", content = [Content()])
+    @ApiResponse(responseCode = "428", description = "If-Match is required", content = [Content()])
     fun patchDrug(
         authentication: Authentication,
         @Parameter(description = "Drug identifier") @PathVariable drugId: UUID,
+        @Parameter(description = IF_MATCH_DESCRIPTION)
+        @RequestHeader(HttpHeaders.IF_MATCH, required = false) ifMatch: String?,
         @SwaggerRequestBody(description = "Fields to change")
         @Valid @RequestBody request: DrugPatchRequest
-    ): DrugDTO {
+    ): ResponseEntity<DrugDTO> {
         logger.debug("PATCH /v1/drugs/{} by user {}", drugId, authentication.userId)
-        drugService.update(drugId, request, authentication.userId)
-        return drugService.require(drugId, authentication.userId).toDto()
+        val version = Preconditions.requiredVersion(ifMatch)
+        val updated = drugService.update(drugId, request, authentication.userId, version)
+        return Preconditions.withEtag(updated.version, updated.toDto())
     }
 
     @DeleteMapping("/drugs/{drugId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @ApiResponse(responseCode = "204", description = "Drug deleted")
+    @ApiResponse(responseCode = "400", description = "Malformed If-Match", content = [Content()])
     @ApiResponse(responseCode = "404", description = "Drug does not exist or is not accessible", content = [Content()])
+    @ApiResponse(responseCode = "409", description = "Drug was changed by someone else", content = [Content()])
+    @ApiResponse(responseCode = "428", description = "If-Match is required", content = [Content()])
     fun deleteDrug(
         authentication: Authentication,
-        @Parameter(description = "Drug identifier") @PathVariable drugId: UUID
+        @Parameter(description = "Drug identifier") @PathVariable drugId: UUID,
+        @Parameter(description = IF_MATCH_DESCRIPTION)
+        @RequestHeader(HttpHeaders.IF_MATCH, required = false) ifMatch: String?
     ) {
         logger.debug("DELETE /v1/drugs/{} by user {}", drugId, authentication.userId)
-        drugService.delete(drugId, authentication.userId)
+        drugService.delete(drugId, authentication.userId, Preconditions.requiredVersion(ifMatch))
     }
 
     /**
@@ -103,39 +125,58 @@ class DrugController(
      * препарат. Ответ отсутствует, когда расход исчерпал препарат и тот удалён.
      */
     @PostMapping("/drugs/{drugId}/consumptions")
-    @ApiResponse(responseCode = "200", description = "Stock reduced")
-    @ApiResponse(responseCode = "204", description = "Drug ran out and was removed", content = [Content()])
-    @ApiResponse(responseCode = "400", description = "Amount exceeds the stock", content = [Content()])
+    @ApiResponse(responseCode = "200", description = "Stock reduced; empty body when the drug ran out")
+    @ApiResponse(responseCode = "400", description = "Amount exceeds the stock or malformed If-Match", content = [Content()])
     @ApiResponse(responseCode = "404", description = "Drug does not exist or is not accessible", content = [Content()])
+    @ApiResponse(responseCode = "409", description = "Drug was changed by someone else", content = [Content()])
+    @ApiResponse(responseCode = "428", description = "If-Match is required", content = [Content()])
     fun consumeDrug(
         authentication: Authentication,
         @Parameter(description = "Drug identifier") @PathVariable drugId: UUID,
+        @Parameter(description = IF_MATCH_DESCRIPTION)
+        @RequestHeader(HttpHeaders.IF_MATCH, required = false) ifMatch: String?,
         @SwaggerRequestBody(description = "Amount consumed")
         @Valid @RequestBody request: ConsumptionRequest
-    ): DrugDTO? {
+    ): ResponseEntity<DrugDTO> {
         logger.debug("POST /v1/drugs/{}/consumptions by user {}", drugId, authentication.userId)
-        // null означает, что препарат кончился и удалён этим списанием.
-        drugService.consume(drugId, request.quantity, authentication.userId) ?: return null
-        return drugService.find(drugId, authentication.userId)?.toDto()
+        val version = Preconditions.requiredVersion(ifMatch)
+        // null означает, что препарат кончился и удалён этим списанием: тела нет, и тега тоже
+        // — представления, к которому он относился бы, больше не существует.
+        val left = drugService.consume(drugId, request.quantity, authentication.userId, version)
+            ?: return ResponseEntity.ok().build()
+        return Preconditions.withEtag(left.version, left.toDto())
     }
 
     /**
      * Перенос выражен как размещение препарата в целевой аптечке: PUT в тот путь, по
      * которому препарат окажется. Отдельного тела не нужно — обе стороны в пути.
+     *
+     * Предъявляется версия препарата, а не целевой аптечки: переезжает препарат, аптечка лишь
+     * называет, кто его после этого увидит.
      */
     @PutMapping("/med-kits/{targetMedKitId}/drugs/{drugId}")
     @ApiResponse(responseCode = "200", description = "Drug moved")
+    @ApiResponse(responseCode = "400", description = "Malformed If-Match", content = [Content()])
     @ApiResponse(responseCode = "404", description = "Drug or target kit is not accessible", content = [Content()])
+    @ApiResponse(responseCode = "409", description = "Drug was changed by someone else", content = [Content()])
+    @ApiResponse(responseCode = "428", description = "If-Match is required", content = [Content()])
     fun moveDrug(
         authentication: Authentication,
         @Parameter(description = "Target medicine kit identifier") @PathVariable targetMedKitId: UUID,
-        @Parameter(description = "Drug identifier") @PathVariable drugId: UUID
-    ): DrugDTO {
+        @Parameter(description = "Drug identifier") @PathVariable drugId: UUID,
+        @Parameter(description = IF_MATCH_DESCRIPTION)
+        @RequestHeader(HttpHeaders.IF_MATCH, required = false) ifMatch: String?
+    ): ResponseEntity<DrugDTO> {
         logger.debug("PUT /v1/med-kits/{}/drugs/{} by user {}", targetMedKitId, drugId, authentication.userId)
-        medKitDrugOrchestrator.moveDrug(drugId, targetMedKitId, authentication.userId)
-        return drugService.require(drugId, authentication.userId).toDto()
+        val version = Preconditions.requiredVersion(ifMatch)
+        val moved = medKitDrugOrchestrator.moveDrug(drugId, targetMedKitId, authentication.userId, version)
+        return Preconditions.withEtag(moved.version, moved.toDto())
     }
 }
+
+/** Один текст на все команды: он один и тот же, а повторять его в каждом параметре незачем. */
+const val IF_MATCH_DESCRIPTION: String =
+    "Strong entity tag of the aggregate being changed, as returned in `ETag` — for example `\"3\"`"
 
 @RestController
 @RequestMapping("/v1/drug-templates")

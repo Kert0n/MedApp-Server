@@ -15,7 +15,18 @@ import java.util.*
 class MedKitData(
     @Id
     @Column(name = "id", nullable = false)
-    var id: UUID = UUID.randomUUID()
+    var id: UUID = UUID.randomUUID(),
+
+    /**
+     * Токен оптимистичной блокировки.
+     *
+     * Своих изменяемых полей у аптечки нет, поэтому Hibernate сам эту версию не продвинет:
+     * состав участников лежит в других строках. Продвигает её команда членства, присваивая
+     * значение явно, — см. `MedKitStore.save`.
+     */
+    @Version
+    @Column(name = "version", nullable = false)
+    var version: Long = 0
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true

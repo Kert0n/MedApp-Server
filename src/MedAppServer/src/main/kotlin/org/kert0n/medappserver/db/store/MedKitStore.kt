@@ -9,6 +9,7 @@ import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.MedKitOverview
+import org.kert0n.medappserver.domain.MedKitRef
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Component
 
@@ -27,11 +28,11 @@ class MedKitStore(
 
     fun findById(medKitId: UUID): MedKit? {
         val row = medKits.findByIdOrNull(medKitId) ?: return null
-        return MedKit(row.id, memberships.findMemberIds(row.id))
+        return MedKit(row.id, memberships.findMemberIds(row.id), row.version)
     }
 
-    /** Идентификаторы аптечек участника: их состав вызывающему не нужен. */
-    fun findIdsOfUser(userId: UUID): List<UUID> = medKits.findIdsOfUser(userId)
+    /** Аптечки участника без состава: идентификатор и версия — всё, что нужно снимку. */
+    fun findRefsOfUser(userId: UUID): List<MedKitRef> = medKits.findRefsOfUser(userId)
 
     fun overviewsOf(userId: UUID): List<MedKitOverview> = medKits.findOverviewsOfUser(userId)
 
@@ -40,8 +41,21 @@ class MedKitStore(
         memberships.saveAll(medKit.members.map { membershipRow(row, it) })
     }
 
-    /** Сводит строки членства к тому, что в состоянии. Сама аптечка полей больше не имеет. */
-    fun save(medKit: MedKit) {
+    /**
+     * Сводит строки членства к тому, что в состоянии. Сама аптечка полей больше не имеет.
+     *
+     * Отсюда и явное присваивание версии: измениться строке `med_kits` нечем, состав живёт в
+     * другой таблице, и dirty checking о нём не знает. Без продвижения версии двум командам
+     * членства ничто не мешало бы разойтись, каждой по своему прочитанному составу, — а это и
+     * есть тот случай, ради которого версия у аптечки заведена: два последних участника,
+     * выходящих одновременно, оба решают «я не последний».
+     *
+     * `OPTIMISTIC_FORCE_INCREMENT` сюда не годится по двум измеренным причинам: он применяется
+     * только перед коммитом, поэтому новую версию нечем вернуть в ответе, и складывается с
+     * обычным инкрементом, давая два шага вместо одного.
+     */
+    fun save(medKit: MedKit): MedKit {
+        val row = medKits.findByIdOrNull(medKit.id) ?: error("Аптечка ${medKit.id} исчезла во время записи")
         val stored = memberships.findMemberIds(medKit.id)
 
         val gone = stored - medKit.members
@@ -49,9 +63,15 @@ class MedKitStore(
 
         val added = medKit.members - stored
         if (added.isNotEmpty()) {
-            val row = medKits.findByIdOrNull(medKit.id) ?: error("Аптечка ${medKit.id} исчезла во время записи")
             memberships.saveAll(added.map { membershipRow(row, it) })
         }
+
+        if (gone.isNotEmpty() || added.isNotEmpty()) {
+            row.version = row.version + 1
+        }
+
+        medKits.flush()
+        return medKit.copy(version = row.version)
     }
 
     /**
@@ -62,6 +82,9 @@ class MedKitStore(
      * этому моменту уже загружены и ссылаются на удаляемую аптечку: Hibernate увидел бы
      * ссылку на исчезнувшую запись и упал бы на ближайшем flush. Поэтому они удаляются явно,
      * а участников у аптечки столько, сколько людей ею пользуется, — обход дешёвый.
+     *
+     * Форсировать версию тут нечем и незачем: удаление и так идёт с предикатом по ней, и
+     * вступление, случившееся между чтением и удалением, отменит эту команду.
      */
     fun delete(medKitId: UUID) {
         val row = medKits.findByIdOrNull(medKitId) ?: return

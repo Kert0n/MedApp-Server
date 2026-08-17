@@ -6,6 +6,7 @@ import kotlin.test.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
+import org.kert0n.medappserver.controller.Preconditions
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.User
@@ -99,6 +100,9 @@ class ErrorResponseShapeTest {
         val body = mockMvc.perform(
             post(ApiRoutes.TREATMENT_PLANS)
                 .with(jwt().jwt { it.subject(user.id.toString()) })
+                // Предусловие обязательно у всех команд планов: без него ответ был бы 428, и
+                // проверка про утечку количеств до правила бы не дошла.
+                .header("If-Match", Preconditions.etag(0))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(TreatmentPlanCreateRequest(drug.id, qty(500.0))))
         )

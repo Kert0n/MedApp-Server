@@ -16,6 +16,7 @@ import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
+import org.kert0n.medappserver.testutil.*
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -74,7 +75,7 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
 
         // Create treatment plan for 30 tablets
-        val plan = drugService.createPlan(userId = userData.id, drugData.id, qty(30.0))
+        val plan = drugService.createPlanLatest(userId = userData.id, drugData.id, qty(30.0))
         assertNotNull(plan)
         entityManager.flush()
 
@@ -84,8 +85,8 @@ class TreatmentPlanStoriesTest {
         assertQty(30.0, createdPlan, "Planned amount should be 30")
 
         // Record some intakes
-        drugService.recordIntake(userData.id, drugData.id, qty(5.0))
-        drugService.recordIntake(userData.id, drugData.id, qty(5.0))
+        drugService.recordIntakeLatest(userData.id, drugData.id, qty(5.0))
+        drugService.recordIntakeLatest(userData.id, drugData.id, qty(5.0))
         entityManager.flush()
         entityManager.clear()
 
@@ -128,11 +129,11 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
 
         // Anna creates a treatment plan for 40 tablets
-        drugService.createPlan(anna.id, vitaminC.id, qty(40.0))
+        drugService.createPlanLatest(anna.id, vitaminC.id, qty(40.0))
         entityManager.flush()
 
         // Bob creates a treatment plan for 50 tablets (should succeed: 100 - 40 = 60 available)
-        drugService.createPlan(bob.id, vitaminC.id, qty(50.0))
+        drugService.createPlanLatest(bob.id, vitaminC.id, qty(50.0))
         entityManager.flush()
         entityManager.clear()
         // Total planned = 90, should match sumPlannedAmount
@@ -174,13 +175,13 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
 
         // Create plan for 80 tablets
-        drugService.createPlan(userData.id, drugData.id, qty(80.0))
+        drugService.createPlanLatest(userData.id, drugData.id, qty(80.0))
         entityManager.flush()
         entityManager.clear()
 
         // Consume 50 tablets (drug goes to 50, but plan is 80 > 50)
         // reconciliation should scale the plan down
-        drugService.consume(drugData.id, qty(50.0), userData.id)
+        drugService.consumeLatest(drugData.id, qty(50.0), userData.id)
         entityManager.flush()
         entityManager.clear()
 
@@ -222,11 +223,11 @@ class TreatmentPlanStoriesTest {
 
         // Try to create a plan for 60 tablets when only 50 available
         assertFailsWith<PlannedAmountExceedsStock> {
-            drugService.createPlan(userData.id, drugData.id, qty(60.0))
+            drugService.createPlanLatest(userData.id, drugData.id, qty(60.0))
         }
 
         // Create a plan for 30
-        drugService.createPlan(userData.id, drugData.id, qty(30.0))
+        drugService.createPlanLatest(userData.id, drugData.id, qty(30.0))
         entityManager.flush()
 
         // Another user tries to plan 25 (only 20 available: 50 - 30 = 20)
@@ -237,11 +238,11 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
         entityManager.clear()
         assertFailsWith<PlannedAmountExceedsStock> {
-            drugService.createPlan(userData2.id, drugData.id, qty(25.0))
+            drugService.createPlanLatest(userData2.id, drugData.id, qty(25.0))
         }
 
         // But 20 should work
-        drugService.createPlan(userData2.id, drugData.id, qty(20.0))
+        drugService.createPlanLatest(userData2.id, drugData.id, qty(20.0))
         entityManager.flush()
         entityManager.clear()
         assertQty(50.0, dbHelper.totalPlanned(drugData.id))
@@ -290,20 +291,20 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
 
         // Everyone gets treatment plans for vitamins: 30 each
-        drugService.createPlan(mom.id, vitamins.id, qty(30.0))
-        drugService.createPlan(dad.id, vitamins.id, qty(30.0))
-        drugService.createPlan(child.id, vitamins.id, qty(30.0))
+        drugService.createPlanLatest(mom.id, vitamins.id, qty(30.0))
+        drugService.createPlanLatest(dad.id, vitamins.id, qty(30.0))
+        drugService.createPlanLatest(child.id, vitamins.id, qty(30.0))
         entityManager.flush()
         entityManager.clear()
         // Total planned = 90 (full supply)
         assertQty(90.0, dbHelper.totalPlanned(vitamins.id))
 
         // Everyone takes their daily vitamin
-        drugService.recordIntake(mom.id, vitamins.id, qty(1.0))
+        drugService.recordIntakeLatest(mom.id, vitamins.id, qty(1.0))
         entityManager.flush()
-        drugService.recordIntake(dad.id, vitamins.id, qty(1.0))
+        drugService.recordIntakeLatest(dad.id, vitamins.id, qty(1.0))
         entityManager.flush()
-        drugService.recordIntake(child.id, vitamins.id, qty(1.0))
+        drugService.recordIntakeLatest(child.id, vitamins.id, qty(1.0))
         entityManager.flush()
         entityManager.clear()
 
@@ -318,7 +319,7 @@ class TreatmentPlanStoriesTest {
         assertEquals(3, medkit.members.size)
 
         // Child leaves the medkit
-        medKitDrugOrchestrator.leaveMedKit(familyKit.id, child.id)
+        medKitDrugOrchestrator.leaveMedKitLatest(medKitService, familyKit.id, child.id)
         entityManager.flush()
         entityManager.clear()
 

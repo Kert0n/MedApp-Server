@@ -90,5 +90,5 @@ class DatabaseTestHelper(
     // Проверки, существенные для privacy-by-default: `null` означает, что записи больше нет.
     fun drugQuantity(id: UUID): BigDecimal? = drugs.findById(id)?.quantity?.amount
     fun totalPlanned(id: UUID): BigDecimal? = drugs.findById(id)?.plannedTotal?.amount
-    fun userPlan(userId: UUID, drugId: UUID): BigDecimal? = drugs.findPlan(userId, drugId)?.plannedAmount?.amount
+    fun userPlan(userId: UUID, drugId: UUID): BigDecimal? = drugs.findPlan(userId, drugId)?.plan?.plannedAmount?.amount
 }

@@ -15,7 +15,9 @@ import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.userId
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
 import org.slf4j.LoggerFactory
+import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
+import org.springframework.http.ResponseEntity
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
 import java.util.*
@@ -32,13 +34,20 @@ class MedKitController(
     private val logger = LoggerFactory.getLogger(MedKitController::class.java)
 
     @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
     @ApiResponse(responseCode = "201", description = "Kit created")
-    fun createMedKit(authentication: Authentication): MedKitCreatedDTO {
+    fun createMedKit(authentication: Authentication): ResponseEntity<MedKitCreatedDTO> {
         logger.debug("POST /v1/med-kits by user {}", authentication.userId)
-        return MedKitCreatedDTO(medKitService.create(authentication.userId).id)
+        val created = medKitService.create(authentication.userId)
+        return ResponseEntity.status(HttpStatus.CREATED)
+            .eTag(Preconditions.etag(created.version))
+            .body(MedKitCreatedDTO(created.id, created.version))
     }
 
+    /**
+     * Общего тега у списка нет: он менялся бы от любой чужой аптечки, и предъявлять его было
+     * бы нечему. Версия каждой аптечки при этом в выдаче есть — с ней можно выйти или удалить,
+     * не читая аптечку отдельным запросом.
+     */
     @GetMapping
     @ApiResponse(responseCode = "200", description = "Kits returned")
     fun listMedKits(authentication: Authentication): Set<MedKitSummaryDTO> {
@@ -52,9 +61,10 @@ class MedKitController(
     fun getMedKit(
         authentication: Authentication,
         @Parameter(description = "Medicine kit identifier") @PathVariable medKitId: UUID
-    ): MedKitDTO {
+    ): ResponseEntity<MedKitDTO> {
         logger.debug("GET /v1/med-kits/{} by user {}", medKitId, authentication.userId)
-        return medKitDrugOrchestrator.medKitWithDrugs(medKitId, authentication.userId)
+        val medKit = medKitDrugOrchestrator.medKitWithDrugs(medKitId, authentication.userId)
+        return Preconditions.withEtag(medKit.version, medKit)
     }
 
     /**
@@ -78,15 +88,25 @@ class MedKitController(
     @DeleteMapping("/{medKitId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @ApiResponse(responseCode = "204", description = "Kit deleted for everyone")
+    @ApiResponse(responseCode = "400", description = "Malformed If-Match", content = [Content()])
     @ApiResponse(responseCode = "404", description = "Kit does not exist or is not accessible", content = [Content()])
+    @ApiResponse(responseCode = "409", description = "Membership changed while the request was in flight", content = [Content()])
+    @ApiResponse(responseCode = "428", description = "If-Match is required", content = [Content()])
     fun deleteMedKit(
         authentication: Authentication,
         @Parameter(description = "Medicine kit identifier") @PathVariable medKitId: UUID,
+        @Parameter(description = IF_MATCH_DESCRIPTION)
+        @RequestHeader(HttpHeaders.IF_MATCH, required = false) ifMatch: String?,
         @Parameter(description = "Kit to move the drugs into instead of discarding them")
         @RequestParam(required = false) targetMedKitId: UUID?
     ) {
         logger.debug("DELETE /v1/med-kits/{} by user {}, target {}", medKitId, authentication.userId, targetMedKitId)
-        medKitDrugOrchestrator.delete(medKitId, authentication.userId, targetMedKitId)
+        medKitDrugOrchestrator.delete(
+            medKitId = medKitId,
+            userId = authentication.userId,
+            expectedVersion = Preconditions.requiredVersion(ifMatch),
+            transferToMedKitId = targetMedKitId
+        )
     }
 }
 
@@ -106,29 +126,38 @@ class MedKitMembershipController(
 
     private val logger = LoggerFactory.getLogger(MedKitMembershipController::class.java)
 
+    /** Вступление предусловия не требует: оно ничего не перезаписывает, а добавляет себя. */
     @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
     @ApiResponse(responseCode = "201", description = "Joined")
     @ApiResponse(responseCode = "404", description = "Invitation expired or unknown", content = [Content()])
+    @ApiResponse(responseCode = "409", description = "Kit was deleted or changed while joining", content = [Content()])
     fun joinMedKit(
         authentication: Authentication,
         @SwaggerRequestBody(description = "Invitation key")
         @Valid @RequestBody request: MembershipCreateRequest
-    ): MedKitDTO {
+    ): ResponseEntity<MedKitDTO> {
         logger.debug("POST /v1/med-kit-memberships by user {}", authentication.userId)
         val joined = medKitService.joinByInvitation(request.key, authentication.userId)
-        return medKitDrugOrchestrator.medKitWithDrugs(joined.id, authentication.userId)
+        val medKit = medKitDrugOrchestrator.medKitWithDrugs(joined.id, authentication.userId)
+        return ResponseEntity.status(HttpStatus.CREATED)
+            .eTag(Preconditions.etag(medKit.version))
+            .body(medKit)
     }
 
     @DeleteMapping("/{medKitId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @ApiResponse(responseCode = "204", description = "Left the kit")
+    @ApiResponse(responseCode = "400", description = "Malformed If-Match", content = [Content()])
     @ApiResponse(responseCode = "404", description = "Kit does not exist or is not accessible", content = [Content()])
+    @ApiResponse(responseCode = "409", description = "Membership changed while the request was in flight", content = [Content()])
+    @ApiResponse(responseCode = "428", description = "If-Match is required", content = [Content()])
     fun leaveMedKit(
         authentication: Authentication,
-        @Parameter(description = "Medicine kit identifier") @PathVariable medKitId: UUID
+        @Parameter(description = "Medicine kit identifier") @PathVariable medKitId: UUID,
+        @Parameter(description = IF_MATCH_DESCRIPTION)
+        @RequestHeader(HttpHeaders.IF_MATCH, required = false) ifMatch: String?
     ) {
         logger.debug("DELETE /v1/med-kit-memberships/{} by user {}", medKitId, authentication.userId)
-        medKitDrugOrchestrator.leaveMedKit(medKitId, authentication.userId)
+        medKitDrugOrchestrator.leaveMedKit(medKitId, authentication.userId, Preconditions.requiredVersion(ifMatch))
     }
 }

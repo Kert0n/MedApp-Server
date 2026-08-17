@@ -16,6 +16,7 @@ class CacheService(
     @Value($$"${medkit.share.termInMinutes}") private val medKitShareTerm: Long,
     @Value($$"${registration.timeout.InSeconds}") private val registrationTimeOut: Long,
     @Value($$"${authentication.throttle.windowInSeconds:300}") private val loginThrottleWindow: Long,
+    @Value($$"${intake.idempotency.windowInMinutes:15}") private val intakeIdempotencyWindow: Long,
 ) {
     // Storage for medkit share tokens.
     //
@@ -43,4 +44,32 @@ class CacheService(
         .expireAfterWrite(loginThrottleWindow.seconds)
         .maximumSize(10_000)
         .asCache()
+
+    /**
+     * Результаты приёмов по идентификатору, который придумал клиент.
+     *
+     * Ограничения назвать прямо, потому что они видны наружу: хранилище живёт в памяти
+     * процесса, не переживает перезапуск и не работает при нескольких экземплярах — повтор,
+     * попавший на другой узел, будет выполнен заново. Окно тоже верхняя граница, а не
+     * гарантия: при достаточном потоке запись вытеснится по `maximumSize` раньше срока.
+     *
+     * От потерянного обновления это не защищает и защищать не должно — тем занята версия
+     * агрегата. Кеш отвечает ровно за одно: повтор того же запроса не списывает второй раз.
+     */
+    @Bean
+    fun intakeResultsCache(): Cache<UUID, IntakeReceipt> = Caffeine.newBuilder()
+        .expireAfterWrite(intakeIdempotencyWindow.minutes)
+        .maximumSize(10_000)
+        .asCache()
 }
+
+/**
+ * Что вернул первый приём с этим идентификатором.
+ *
+ * Отпечаток нужен, чтобы отличить повтор от подмены: тот же идентификатор с другим
+ * содержимым — не повтор, а вторая команда под чужим именем, и она отвергается.
+ */
+data class IntakeReceipt(
+    val fingerprint: String,
+    val outcome: org.kert0n.medappserver.domain.IntakeOutcome
+)

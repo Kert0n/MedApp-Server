@@ -11,6 +11,7 @@ import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.db.store.UserStore
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
+import org.kert0n.medappserver.testutil.*
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -43,7 +44,7 @@ class StoreIntegrationTest {
         val kit = medKitService.create(alice.id)
         val first = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.freshDrug(kit.id, 20.0)
-        drugService.createPlan(alice.id, first.id, qty(4.0))
+        drugService.createPlanLatest(alice.id, first.id, qty(4.0))
         dbHelper.flushAndClear()
 
         val loaded = drugs.findAllInMedKit(kit.id)
@@ -92,18 +93,28 @@ class StoreIntegrationTest {
         assertTrue(accessible.none { it.medKitId == foreign.id })
     }
 
+    /**
+     * Отдельной загрузки «под блокировку» больше нет: её место заняла версия, и команда
+     * читает препарат тем же запросом, что и чтение. Проверяется здесь то, ради чего замена
+     * делалась, — что версия доезжает из строки в доменное состояние и растёт от записи.
+     */
     @Test
-    fun `блокирующая загрузка отдаёт то же состояние, что и обычная`() {
+    fun `команда читает препарат вместе с версией`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.create(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 30.0)
-        drugService.createPlan(alice.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
-        val locked = drugs.lockAccessible(drug.id, alice.id)!!
+        val fresh = drugs.findAccessible(drug.id, alice.id)!!
+        assertEquals(0L, fresh.version, "новый препарат приходит с нулевой версией")
 
-        assertQty(30.0, locked.quantity)
-        assertQty(10.0, locked.plannedTotal)
+        drugService.createPlanLatest(alice.id, drug.id, qty(10.0))
+        dbHelper.flushAndClear()
+
+        val afterPlan = drugs.findAccessible(drug.id, alice.id)!!
+        assertQty(30.0, afterPlan.quantity)
+        assertQty(10.0, afterPlan.plannedTotal)
+        assertEquals(1L, afterPlan.version, "план — часть препарата, значит версия корня выросла")
     }
 
     // ── Планы ────────────────────────────────────────────────────────────────────
@@ -114,14 +125,14 @@ class StoreIntegrationTest {
         val kit = medKitService.create(alice.id)
         val first = dbHelper.freshDrug(kit.id, 50.0)
         val second = dbHelper.freshDrug(kit.id, 50.0)
-        drugService.createPlan(alice.id, first.id, qty(5.0))
-        drugService.createPlan(alice.id, second.id, qty(7.0))
+        drugService.createPlanLatest(alice.id, first.id, qty(5.0))
+        drugService.createPlanLatest(alice.id, second.id, qty(7.0))
         dbHelper.flushAndClear()
 
         val plans = drugs.findPlansOf(alice.id)
 
         assertEquals(2, plans.size)
-        assertQty(5.0, plans.single { it.drugId == first.id }.plannedAmount)
+        assertQty(5.0, plans.single { it.plan.drugId == first.id }.plan.plannedAmount)
     }
 
     @Test
@@ -131,10 +142,10 @@ class StoreIntegrationTest {
         val kit = medKitService.create(alice.id)
         medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 50.0)
-        drugService.createPlan(alice.id, drug.id, qty(5.0))
+        drugService.createPlanLatest(alice.id, drug.id, qty(5.0))
         dbHelper.flushAndClear()
 
-        assertQty(5.0, drugs.findPlan(alice.id, drug.id)?.plannedAmount)
+        assertQty(5.0, drugs.findPlan(alice.id, drug.id)?.plan?.plannedAmount)
         assertNull(drugs.findPlan(bob.id, drug.id), "у Боба плана нет")
     }
 
@@ -169,7 +180,7 @@ class StoreIntegrationTest {
         medKitService.create(outsider.id)
         dbHelper.flushAndClear()
 
-        assertEquals(listOf(mine.id), medKits.findIdsOfUser(alice.id))
+        assertEquals(listOf(mine.id), medKits.findRefsOfUser(alice.id).map { it.id })
     }
 
     @Test
@@ -201,7 +212,7 @@ class StoreIntegrationTest {
 
         assertNull(medKits.findById(kit.id))
         assertNull(drugs.findById(drug.id), "препараты не переживают свою аптечку")
-        assertTrue(medKits.findIdsOfUser(alice.id).isEmpty())
+        assertTrue(medKits.findRefsOfUser(alice.id).isEmpty())
     }
 
     // ── Пользователи ─────────────────────────────────────────────────────────────
@@ -214,7 +225,7 @@ class StoreIntegrationTest {
         medKitService.create(outsider.id)
         dbHelper.flushAndClear()
 
-        assertEquals(listOf(mine.id), medKits.findIdsOfUser(alice.id))
+        assertEquals(listOf(mine.id), medKits.findRefsOfUser(alice.id).map { it.id })
     }
 
     /**
@@ -231,8 +242,8 @@ class StoreIntegrationTest {
 
         val first = dbHelper.freshDrug(source.id, 50.0)
         val second = dbHelper.freshDrug(source.id, 30.0)
-        drugService.createPlan(alice.id, first.id, qty(10.0))
-        drugService.createPlan(bob.id, first.id, qty(20.0))
+        drugService.createPlanLatest(alice.id, first.id, qty(10.0))
+        drugService.createPlanLatest(bob.id, first.id, qty(20.0))
         dbHelper.flushAndClear()
 
         drugs.moveAllToMedKit(source.id, target.id, setOf(alice.id))

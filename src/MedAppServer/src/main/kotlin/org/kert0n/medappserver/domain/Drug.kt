@@ -25,7 +25,18 @@ data class Drug(
     val manufacturer: String? = null,
     val country: String? = null,
     val description: String? = null,
-    val plans: List<TreatmentPlan> = emptyList()
+    val plans: List<TreatmentPlan> = emptyList(),
+
+    /**
+     * Версия хранимого состояния — непрозрачный токен, а не поле препарата.
+     *
+     * Домен его не толкует и не меняет: команды возвращают состояние с той же версией, а
+     * продвигает её хранилище, когда изменение доходит до базы. Здесь версия нужна ровно для
+     * одного — чтобы агрегат мог отказать команде, собранной по устаревшему состоянию
+     * ([requireVersion]). В сравнении препаратов она не участвует по той же причине: два
+     * состояния с разными версиями — один и тот же препарат.
+     */
+    val version: Long = 0
 ) {
 
     init {
@@ -45,6 +56,17 @@ data class Drug(
     /** Остаток, не занятый ни одним планом. */
     val availableQuantity: Quantity
         get() = quantity - plannedTotal
+
+    /**
+     * Предусловие команды: клиент собрал её по тому состоянию, которое лежит в базе сейчас.
+     *
+     * Проверяется до применения правил, а не после: смысл предусловия в том, чтобы команда по
+     * устаревшему состоянию не выполнилась вовсе, даже если по новым данным она допустима.
+     */
+    fun requireVersion(expected: Long): Drug {
+        if (version != expected) throw StaleAggregateVersion()
+        return this
+    }
 
     fun planOf(userId: UUID): TreatmentPlan? = plans.find { it.userId == userId }
 
@@ -223,6 +245,19 @@ data class TreatmentPlan(
         if (!plannedAmount.isPositive) throw InvalidQuantity()
     }
 }
+
+/**
+ * План вместе с версией препарата, которому он принадлежит.
+ *
+ * Существует ради чтения «мои планы по всем препаратам»: такой ответ собирается не из
+ * агрегатов, а одним запросом по строкам планов, и версию корня взять больше неоткуда. В сам
+ * [TreatmentPlan] её класть нельзя — внутри агрегата у каждого плана оказалась бы своя копия
+ * общего числа, устаревающая при первой же записи.
+ */
+data class TreatmentPlanEntry(
+    val plan: TreatmentPlan,
+    val drugVersion: Long
+)
 
 /** Описательные поля препарата; `null` — «не менять». */
 data class DrugDetails(

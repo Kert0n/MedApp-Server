@@ -7,6 +7,7 @@ import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.db.repository.TreatmentPlanRepository
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
+import org.kert0n.medappserver.testutil.*
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -62,11 +63,11 @@ class QuantityReductionTests {
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        drugService.createPlan(alice.id, drug.id, qty(20.0))
-        drugService.createPlan(bob.id, drug.id, qty(20.0))
+        drugService.createPlanLatest(alice.id, drug.id, qty(20.0))
+        drugService.createPlanLatest(bob.id, drug.id, qty(20.0))
         dbHelper.flushAndClear()
 
-        drugService.consume(drug.id, qty(50.0), alice.id)
+        drugService.consumeLatest(drug.id, qty(50.0), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(50.0, dbHelper.drugQuantity(drug.id))
@@ -96,12 +97,12 @@ class QuantityReductionTests {
         val drug = dbHelper.freshDrug(kit.id, 90.0)
         dbHelper.flushAndClear()
 
-        drugService.createPlan(alice.id, drug.id, qty(30.0))
-        drugService.createPlan(bob.id, drug.id, qty(30.0))
-        drugService.createPlan(charlie.id, drug.id, qty(30.0))
+        drugService.createPlanLatest(alice.id, drug.id, qty(30.0))
+        drugService.createPlanLatest(bob.id, drug.id, qty(30.0))
+        drugService.createPlanLatest(charlie.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
-        drugService.consume(drug.id, qty(30.0), alice.id)
+        drugService.consumeLatest(drug.id, qty(30.0), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(60.0, dbHelper.drugQuantity(drug.id))
@@ -133,11 +134,11 @@ class QuantityReductionTests {
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        drugService.createPlan(alice.id, drug.id, qty(60.0))
-        drugService.createPlan(bob.id, drug.id, qty(40.0))
+        drugService.createPlanLatest(alice.id, drug.id, qty(60.0))
+        drugService.createPlanLatest(bob.id, drug.id, qty(40.0))
         dbHelper.flushAndClear()
 
-        drugService.consume(drug.id, qty(50.0), alice.id)
+        drugService.consumeLatest(drug.id, qty(50.0), alice.id)
         dbHelper.flushAndClear()
 
         val alicePlan = dbHelper.userPlan(alice.id, drug.id)!!
@@ -176,12 +177,12 @@ class QuantityReductionTests {
         val drug = dbHelper.freshDrug(kit.id, 80.0)
         dbHelper.flushAndClear()
 
-        drugService.createPlan(alice.id, drug.id, qty(40.0))
-        drugService.createPlan(bob.id, drug.id, qty(40.0))
+        drugService.createPlanLatest(alice.id, drug.id, qty(40.0))
+        drugService.createPlanLatest(bob.id, drug.id, qty(40.0))
         dbHelper.flushAndClear()
 
         // First reduction
-        drugService.consume(drug.id, qty(40.0), alice.id)
+        drugService.consumeLatest(drug.id, qty(40.0), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(40.0, dbHelper.drugQuantity(drug.id))
@@ -190,7 +191,7 @@ class QuantityReductionTests {
         assertQty(40.0, dbHelper.totalPlanned(drug.id)!!)
 
         // Second reduction
-        drugService.consume(drug.id, qty(20.0), alice.id)
+        drugService.consumeLatest(drug.id, qty(20.0), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(20.0, dbHelper.drugQuantity(drug.id))
@@ -221,11 +222,11 @@ class QuantityReductionTests {
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        drugService.createPlan(alice.id, drug.id, qty(50.0))
-        drugService.createPlan(bob.id, drug.id, qty(50.0))
+        drugService.createPlanLatest(alice.id, drug.id, qty(50.0))
+        drugService.createPlanLatest(bob.id, drug.id, qty(50.0))
         dbHelper.flushAndClear()
 
-        drugService.consume(drug.id, qty(75.0), alice.id)
+        drugService.consumeLatest(drug.id, qty(75.0), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(25.0, dbHelper.drugQuantity(drug.id))
@@ -261,16 +262,16 @@ class QuantityReductionTests {
         val drug = dbHelper.freshDrug(kit.id, 60.0)
         dbHelper.flushAndClear()
 
-        drugService.createPlan(alice.id, drug.id, qty(20.0))
-        drugService.createPlan(bob.id, drug.id, qty(20.0))
-        drugService.createPlan(charlie.id, drug.id, qty(20.0))
+        drugService.createPlanLatest(alice.id, drug.id, qty(20.0))
+        drugService.createPlanLatest(bob.id, drug.id, qty(20.0))
+        drugService.createPlanLatest(charlie.id, drug.id, qty(20.0))
         dbHelper.flushAndClear()
 
         // Sanity: Verify initial state
         assertEquals(3, (dbHelper.drug(drug.id)?.plans ?: emptyList()).size)
 
         // Action: Consume ALL 60 unplanned
-        drugService.consume(drug.id, qty(60.0), alice.id)
+        drugService.consumeLatest(drug.id, qty(60.0), alice.id)
         dbHelper.flushAndClear()
 
         // 1. Verify the Drug record is GONE (Privacy-by-Default)
@@ -302,13 +303,13 @@ class QuantityReductionTests {
         val drug = dbHelper.freshDrug(kit.id, 50.0)
         dbHelper.flushAndClear()
 
-        drugService.createPlan(alice.id, drug.id, qty(50.0))
+        drugService.createPlanLatest(alice.id, drug.id, qty(50.0))
         dbHelper.flushAndClear()
 
         assertEquals(1, (dbHelper.drug(drug.id)?.plans ?: emptyList()).size)
 
         // Action: Consume everything in one go
-        drugService.consume(drug.id, qty(50.0), alice.id)
+        drugService.consumeLatest(drug.id, qty(50.0), alice.id)
         dbHelper.flushAndClear()
 
         // 1. Verify Drug is PURGED
@@ -345,12 +346,12 @@ class QuantityReductionTests {
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
-        drugService.createPlan(alice.id, drug.id, qty(6.0))
-        drugService.createPlan(bob.id, drug.id, qty(4.0))
+        drugService.createPlanLatest(alice.id, drug.id, qty(6.0))
+        drugService.createPlanLatest(bob.id, drug.id, qty(4.0))
         dbHelper.flushAndClear()
 
         // --- Step 1: Halve everything ---
-        drugService.consume(drug.id, qty(5.0), alice.id)
+        drugService.consumeLatest(drug.id, qty(5.0), alice.id)
         dbHelper.flushAndClear()
 
         // Drug still exists here
@@ -360,7 +361,7 @@ class QuantityReductionTests {
         assertEquals(2, (dbHelper.drug(drug.id)?.plans ?: emptyList()).size, "Still 2 plans after partial reduction")
 
         // --- Step 2: Wipe everything ---
-        drugService.consume(drug.id, qty(5.0), alice.id)
+        drugService.consumeLatest(drug.id, qty(5.0), alice.id)
         dbHelper.flushAndClear()
 
         // 1. Verify Drug is PURGED (Privacy-by-Default)

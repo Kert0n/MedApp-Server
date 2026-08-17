@@ -55,3 +55,21 @@ class UnknownQuantityUnit : DomainRuleViolated("Unknown quantity unit")
 
 /** Формы выпуска с таким идентификатором в справочнике нет. */
 class UnknownFormType : DomainRuleViolated("Unknown dosage form")
+
+/**
+ * Команду собрали по состоянию, которого в базе уже нет.
+ *
+ * Отдельный отказ, а не разновидность «нельзя»: клиент не ошибся в запросе, он опоздал.
+ * Правильный ответ на него — перечитать состояние и решить заново, поэтому и код ответа
+ * другой.
+ */
+class StaleAggregateVersion : DomainRuleViolated("Aggregate was modified by someone else")
+
+/**
+ * Тот же идентификатор приёма прислан с другим содержимым.
+ *
+ * Идентификатор придумывает клиент, и он же обещает: один идентификатор — один приём.
+ * Выполнить второй под тем же именем значило бы списать дважды там, где клиент рассчитывал на
+ * повтор без последствий.
+ */
+class IntakeAlreadyRecorded : DomainRuleViolated("Intake with this identifier was already recorded")

@@ -38,11 +38,12 @@ class UserController(
         // приходят одним, аптечки — вторым. Состав аптечек не запрашивается вовсе, в ответе
         // его нет.
         val drugsByMedKit = drugService.accessibleTo(authentication.userId).groupBy { it.medKitId }
-        val medKits = medKitService.idsOfUser(authentication.userId)
-            .map { medKitId ->
+        val medKits = medKitService.refsOfUser(authentication.userId)
+            .map { ref ->
                 MedKitDTO(
-                    id = medKitId,
-                    drugs = drugsByMedKit[medKitId].orEmpty().map { it.toDto() }.toSet()
+                    id = ref.id,
+                    version = ref.version,
+                    drugs = drugsByMedKit[ref.id].orEmpty().map { it.toDto() }.toSet()
                 )
             }
             .toSet()

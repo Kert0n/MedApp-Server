@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.domain.DomainRuleViolated
+import org.kert0n.medappserver.testutil.*
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -64,16 +65,16 @@ class MedKitServiceTest {
         }
     }
 
-    // ── idsOfUser ──
+    // ── refsOfUser ──
 
     @Test
-    fun `idsOfUser returns medkits of user`() {
+    fun `refsOfUser returns medkits of user`() {
         val alice = dbHelper.freshUser("alice")
         medKitService.create(alice.id)
         medKitService.create(alice.id)
         dbHelper.flushAndClear()
 
-        assertEquals(2, medKitService.idsOfUser(alice.id).size)
+        assertEquals(2, medKitService.refsOfUser(alice.id).size)
     }
 
     // ── findMedKitSummaries ──
@@ -101,9 +102,9 @@ class MedKitServiceTest {
         medKitService.joinByInvitation(key, joiner.id)
         dbHelper.flushAndClear()
 
-        val joinerKits = medKitService.idsOfUser(joiner.id)
+        val joinerKits = medKitService.refsOfUser(joiner.id)
         assertEquals(1, joinerKits.size)
-        assertEquals(kit.id, joinerKits.first())
+        assertEquals(kit.id, joinerKits.first().id)
 
         // Key should be invalidated after use
         assertFailsWith<DomainRuleViolated> {
@@ -132,7 +133,7 @@ class MedKitServiceTest {
         medKitService.join(kit.id, bob.id)
         dbHelper.flushAndClear()
 
-        assertEquals(1, medKitService.idsOfUser(bob.id).size)
+        assertEquals(1, medKitService.refsOfUser(bob.id).size)
     }
 
     @Test
@@ -156,7 +157,7 @@ class MedKitServiceTest {
         medKitService.join(kit.id, bob.id)
         dbHelper.flushAndClear()
 
-        medKitService.leave(kit.id, bob.id)
+        medKitService.leaveLatest(kit.id, bob.id)
         dbHelper.flushAndClear()
 
         assertNotNull(medKitService.requireAccessible(kit.id, alice.id))
@@ -171,7 +172,7 @@ class MedKitServiceTest {
         val kit = medKitService.create(alice.id)
         dbHelper.flushAndClear()
 
-        medKitService.leave(kit.id, alice.id)
+        medKitService.leaveLatest(kit.id, alice.id)
         dbHelper.flushAndClear()
 
         assertNull(medKitStore.findById(kit.id))

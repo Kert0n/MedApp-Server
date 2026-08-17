@@ -26,9 +26,16 @@ CREATE TABLE users
 );
 
 -- У аптечки нет ни владельца, ни названия: участники равноправны.
+--
+-- version — токен оптимистичной блокировки. Своих полей у аптечки нет, и меняется она только
+-- составом участников, поэтому версию продвигает не изменение строки, а сама команда
+-- членства (OPTIMISTIC_FORCE_INCREMENT). Ради этого версия и заведена: два последних
+-- участника, выходящих одновременно, иначе оба решают «я не последний» и оставляют аптечку
+-- без людей, но с препаратами.
 CREATE TABLE med_kits
 (
-    id uuid NOT NULL,
+    id      uuid   NOT NULL,
+    version bigint NOT NULL DEFAULT 0,
 
     CONSTRAINT med_kits_pkey PRIMARY KEY (id)
 );
@@ -91,6 +98,9 @@ CREATE TABLE user_drugs
     country          varchar(100),
     description      text,
     med_kit_id       uuid           NOT NULL,
+    -- Токен оптимистичной блокировки препарата. Под ним идут все команды агрегата, включая
+    -- планы лечения: план — часть препарата, и его изменение продвигает версию корня.
+    version          bigint         NOT NULL DEFAULT 0,
 
     CONSTRAINT user_drugs_pkey PRIMARY KEY (id),
     CONSTRAINT user_drugs_med_kit_fkey FOREIGN KEY (med_kit_id) REFERENCES med_kits (id) ON DELETE CASCADE,

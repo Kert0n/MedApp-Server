@@ -11,6 +11,17 @@ import java.util.UUID
 data class DrugDTO(
     @Schema(description = "Drug identifier")
     val id: UUID,
+    /**
+     * То же значение, что в `ETag` ответа. Дублируется в теле сознательно: заголовок теряется
+     * при пересылке представления между слоями клиента, а предъявить его в `If-Match`
+     * обязательно.
+     */
+    @Schema(
+        description = "Aggregate version; send it back in `If-Match` when changing this drug " +
+            "or any treatment plan for it",
+        example = "3"
+    )
+    val version: Long,
     @Schema(description = "Drug name", example = "Aspirin")
     val name: String,
     @Schema(description = "Current stock", example = "100.000000")

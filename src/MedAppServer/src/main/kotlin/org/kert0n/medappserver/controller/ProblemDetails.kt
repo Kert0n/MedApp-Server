@@ -27,6 +27,7 @@ object ProblemDetails {
         HttpStatus.FORBIDDEN -> "Request is not allowed"
         HttpStatus.NOT_FOUND -> "Requested resource does not exist"
         HttpStatus.CONFLICT -> "Request conflicts with the current state"
+        HttpStatus.PRECONDITION_REQUIRED -> "If-Match is required for this operation"
         HttpStatus.TOO_MANY_REQUESTS -> "Too many requests"
         else -> status.reasonPhrase
     }

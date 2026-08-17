@@ -13,6 +13,7 @@ import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
+import org.kert0n.medappserver.testutil.*
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -64,11 +65,11 @@ class DrugMovementStoriesTest {
         entityManager.flush()
 
         // Create treatment plan
-        drugService.createPlan(userData.id, painkiller.id, qty(20.0))
+        drugService.createPlanLatest(userData.id, painkiller.id, qty(20.0))
         entityManager.flush()
 
         // Move drug to travel kit
-        medKitDrugOrchestrator.moveDrug(painkiller.id, travelKit.id, userData.id)
+        medKitDrugOrchestrator.moveDrugLatest(drugService, painkiller.id, travelKit.id, userData.id)
         entityManager.flush()
         entityManager.clear()
 
@@ -119,12 +120,12 @@ class DrugMovementStoriesTest {
         entityManager.flush()
 
         // Anna plans 40, Bob plans 30 (total 70, available 30)
-        drugService.createPlan(anna.id, drugData.id, qty(40.0))
-        drugService.createPlan(bob.id, drugData.id, qty(30.0))
+        drugService.createPlanLatest(anna.id, drugData.id, qty(40.0))
+        drugService.createPlanLatest(bob.id, drugData.id, qty(30.0))
         entityManager.flush()
 
         // Anna should be able to increase her plan to 70 (available for her = 100 - 30 (bob) = 70)
-        val updated = drugService.changePlan(anna.id, drugData.id, qty(70.0))
+        val updated = drugService.changePlanLatest(anna.id, drugData.id, qty(70.0))
         assertQty(70.0, updated.plannedAmount)
         entityManager.flush()
         entityManager.clear()
@@ -133,7 +134,7 @@ class DrugMovementStoriesTest {
 
         // Anna should NOT be able to increase to 71 (exceeds available)
         assertFailsWith<PlannedAmountExceedsStock> {
-            drugService.changePlan(anna.id, drugData.id, qty(71.0))
+            drugService.changePlanLatest(anna.id, drugData.id, qty(71.0))
         }
 
         println("✅ Story 12 passed: Treatment plan update correctly checks available quantity")
@@ -160,7 +161,7 @@ class DrugMovementStoriesTest {
         entityManager.flush()
 
         // Create treatment plan
-        drugService.createPlan(userData.id, drugData.id, qty(25.0))
+        drugService.createPlanLatest(userData.id, drugData.id, qty(25.0))
         entityManager.flush()
         entityManager.clear()
 
@@ -169,7 +170,7 @@ class DrugMovementStoriesTest {
         assertNotNull(plan)
 
         // Delete the drug
-        drugService.delete(drugData.id, userData.id)
+        drugService.deleteLatest(drugData.id, userData.id)
         entityManager.flush()
         entityManager.clear()
 
@@ -215,15 +216,15 @@ class DrugMovementStoriesTest {
         )
 
         // Everyone creates a plan for 30 pills
-        drugService.createPlan(anna.id, drugData.id, qty(30.0))
-        drugService.createPlan(bob.id, drugData.id, qty(30.0))
-        drugService.createPlan(charlie.id, drugData.id, qty(30.0))
+        drugService.createPlanLatest(anna.id, drugData.id, qty(30.0))
+        drugService.createPlanLatest(bob.id, drugData.id, qty(30.0))
+        drugService.createPlanLatest(charlie.id, drugData.id, qty(30.0))
 
         entityManager.flush()
         entityManager.clear()
 
         // Anna deletes the old kit and migrates to the new kit
-        medKitDrugOrchestrator.delete(oldKit.id, anna.id, newKit.id)
+        medKitDrugOrchestrator.deleteLatest(medKitService, oldKit.id, anna.id, newKit.id)
 
         entityManager.flush()
         entityManager.clear()
@@ -263,8 +264,8 @@ class DrugMovementStoriesTest {
         )
 
         // Anna plans 60, Bob plans 40. Total planned = 100.
-        drugService.createPlan(anna.id, drugData.id, qty(60.0))
-        drugService.createPlan(bob.id, drugData.id, qty(40.0))
+        drugService.createPlanLatest(anna.id, drugData.id, qty(60.0))
+        drugService.createPlanLatest(bob.id, drugData.id, qty(40.0))
 
         entityManager.flush()
         entityManager.clear()
@@ -272,7 +273,7 @@ class DrugMovementStoriesTest {
         // Bob consumes 50 pills (ignoring his plan limit for emergency)
         // Drug quantity drops to 50.
         // Factor should be: 50 / 100 = 0.5
-        drugService.consume(drugData.id, qty(50.0), bob.id)
+        drugService.consumeLatest(drugData.id, qty(50.0), bob.id)
 
         entityManager.flush()
         entityManager.clear()
@@ -322,7 +323,7 @@ class DrugMovementStoriesTest {
         entityManager.clear()
 
         // Move ONLY one drug
-        medKitDrugOrchestrator.moveDrug(drugDataToMove.id, targetKit.id, userData.id)
+        medKitDrugOrchestrator.moveDrugLatest(drugService, drugDataToMove.id, targetKit.id, userData.id)
 
         entityManager.flush()
         entityManager.clear()

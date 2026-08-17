@@ -1,11 +1,12 @@
 package org.kert0n.medappserver.api
 
+import java.util.UUID
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.DrugTemplate
 import org.kert0n.medappserver.domain.FormType
 import org.kert0n.medappserver.domain.MedKitOverview
 import org.kert0n.medappserver.domain.QuantityUnit
-import org.kert0n.medappserver.domain.TreatmentPlan
+import org.kert0n.medappserver.domain.TreatmentPlanEntry
 
 /**
  * Перевод доменных значений в публичный контракт.
@@ -20,6 +21,7 @@ import org.kert0n.medappserver.domain.TreatmentPlan
  */
 fun Drug.toDto(): DrugDTO = DrugDTO(
     id = id,
+    version = version,
     name = name,
     quantity = quantity.amount,
     plannedQuantity = plannedTotal.amount,
@@ -35,9 +37,22 @@ fun Drug.toDto(): DrugDTO = DrugDTO(
     medKitId = medKitId
 )
 
-fun TreatmentPlan.toDto(): TreatmentPlanDTO = TreatmentPlanDTO(
-    drugId = drugId,
-    plannedAmount = plannedAmount.amount
+fun TreatmentPlanEntry.toDto(): TreatmentPlanDTO = TreatmentPlanDTO(
+    drugId = plan.drugId,
+    plannedAmount = plan.plannedAmount.amount,
+    drugVersion = drugVersion
+)
+
+/**
+ * План в ответе команды берётся из препарата, а не читается заново.
+ *
+ * Команда уже вернула агрегат, и в нём есть и план, и новая версия. Второй запрос за тем же
+ * самым дал бы клиенту план и версию из двух разных моментов времени.
+ */
+fun Drug.planDtoOf(userId: UUID): TreatmentPlanDTO = TreatmentPlanDTO(
+    drugId = id,
+    plannedAmount = requirePlanOf(userId).plannedAmount.amount,
+    drugVersion = version
 )
 
 fun DrugTemplate.toDto(): DrugTemplateDTO = DrugTemplateDTO(
@@ -61,6 +76,7 @@ fun FormType.toDto(): VocabularyEntryDTO = VocabularyEntryDTO(id = id, name = na
 
 fun MedKitOverview.toDto(): MedKitSummaryDTO = MedKitSummaryDTO(
     id = id,
+    version = version,
     userCount = memberCount,
     drugCount = drugCount
 )

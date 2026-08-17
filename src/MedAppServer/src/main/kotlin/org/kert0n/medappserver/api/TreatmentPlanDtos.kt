@@ -17,7 +17,18 @@ data class TreatmentPlanDTO(
     @Schema(description = "Drug the plan belongs to")
     val drugId: UUID,
     @Schema(description = "Planned amount for the course", example = "20.000000")
-    val plannedAmount: BigDecimal
+    val plannedAmount: BigDecimal,
+    /**
+     * Версия принадлежит препарату, а не плану: план — часть его агрегата, и собственной
+     * версии у части не бывает. Отдельно её показывать всё равно нужно — предъявлять в
+     * `If-Match` при изменении плана будут именно это число.
+     */
+    @Schema(
+        description = "Version of the drug this plan belongs to; send it back in `If-Match` " +
+            "when changing or deleting the plan",
+        example = "3"
+    )
+    val drugVersion: Long
 )
 
 @Schema(description = "Request to reserve an amount of a drug")

@@ -17,6 +17,7 @@ import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.QuantityUnit
 import org.kert0n.medappserver.domain.TreatmentPlan
+import org.kert0n.medappserver.domain.TreatmentPlanEntry
 import org.kert0n.medappserver.domain.UnknownFormType
 import org.kert0n.medappserver.domain.UnknownQuantityUnit
 import org.springframework.data.repository.findByIdOrNull
@@ -52,15 +53,11 @@ class DrugStore(
 
     fun findById(drugId: UUID): Drug? = drugs.findByIdWithPlans(drugId)?.toDomain()
 
-    fun findPlansOf(userId: UUID): List<TreatmentPlan> = plans.findPlansOfUser(userId).map { it.toDomain() }
+    fun findPlansOf(userId: UUID): List<TreatmentPlanEntry> = plans.findPlansOfUser(userId).map { it.toDomain() }
 
-    fun findPlan(userId: UUID, drugId: UUID): TreatmentPlan? = plans.findPlan(userId, drugId)?.toDomain()
+    fun findPlan(userId: UUID, drugId: UUID): TreatmentPlanEntry? = plans.findPlan(userId, drugId)?.toDomain()
 
     // ── Команды ──────────────────────────────────────────────────────────────────
-
-    /** Загрузка под блокировкой строки: с неё начинается любая команда над препаратом. */
-    fun lockAccessible(drugId: UUID, userId: UUID): Drug? =
-        drugs.lockAccessible(drugId, userId)?.toDomain()
 
     fun insert(drug: Drug) {
         drugs.save(
@@ -77,18 +74,42 @@ class DrugStore(
      *
      * Лишнего запроса тут нет: внутри той же транзакции сущность лежит в persistence context,
      * и поиск по идентификатору берёт её оттуда.
+     *
+     * Версия продвигается ровно тогда, когда что-то изменилось, — и продвигается явно.
+     * Полагаться на dirty checking нельзя: изменение только планов корень грязным не делает,
+     * и версия осталась бы прежней. Присваивание сохраняет предикат `WHERE version = ?` по
+     * прочитанному значению, поэтому оптимистичная блокировка работает как обычно; проверено
+     * замером и тестами гонок.
+     *
+     * Второе следствие того же присваивания — новую версию видно сразу после flush, тогда как
+     * `OPTIMISTIC_FORCE_INCREMENT` откладывает её до коммита и складывается с обычным
+     * инкрементом в два шага вместо одного. Ответ команды несёт версию, поэтому «сразу» здесь
+     * обязательно.
      */
-    fun save(drug: Drug) {
+    fun save(drug: Drug): Drug {
         val entity = managed(drug.id)
-        drug.applyTo(entity, ::resolveUser, ::resolveMedKit, ::resolveUnit, ::resolveForm)
-        drugs.save(entity)
+        if (drug.applyTo(entity, ::resolveUser, ::resolveMedKit, ::resolveUnit, ::resolveForm)) {
+            entity.version = entity.version + 1
+        }
+        // Запись выталкивается сразу, а не на коммите: заодно конфликт всплывает здесь же, а
+        // не при закрытии транзакции, где его уже некому объяснить.
+        drugs.saveAndFlush(entity)
+        return drug.copy(version = entity.version)
     }
 
     fun delete(drugId: UUID) {
         drugs.findByIdOrNull(drugId)?.let { drugs.delete(it) }
     }
 
+    /**
+     * Планы участника во всех препаратах аптечки — путь выхода из неё.
+     *
+     * Версии затронутых препаратов продвигаются до удаления: план — часть препарата, значит
+     * его исчезновение обязано отменить команды, собранные по прежнему состоянию. После
+     * удаления выбирать было бы уже нечего — строк планов нет.
+     */
     fun deletePlansOfUserInMedKit(userId: UUID, medKitId: UUID) {
+        drugs.bumpVersionsPlannedBy(medKitId, userId)
         plans.deleteByUserIdAndMedKitId(userId, medKitId)
     }
 
@@ -98,6 +119,10 @@ class DrugStore(
      * Тот же исход, что дал бы поштучный `Drug.moveTo`, но постоянным числом запросов.
      * Порядок важен: планы удаляются до переезда, пока препараты ещё привязаны к исходной
      * аптечке и их можно выбрать одним условием.
+     *
+     * Отдельного продвижения версий удаление планов здесь не требует: следом идёт переезд, а
+     * он двигает версию каждого препарата аптечки — включая те, у которых планы только что
+     * исчезли.
      */
     fun moveAllToMedKit(sourceMedKitId: UUID, targetMedKitId: UUID, accessibleUserIds: Set<UUID>) {
         plans.deleteInMedKitExcept(sourceMedKitId, accessibleUserIds)
@@ -105,8 +130,10 @@ class DrugStore(
     }
 
     /** Строка плана несёт единицу своего препарата — из неё и собирается величина. */
-    private fun TreatmentPlanRow.toDomain() =
-        TreatmentPlan(userId, drugId, Quantity(plannedAmount, QuantityUnit(unitId, unitName)))
+    private fun TreatmentPlanRow.toDomain() = TreatmentPlanEntry(
+        plan = TreatmentPlan(userId, drugId, Quantity(plannedAmount, QuantityUnit(unitId, unitName))),
+        drugVersion = drugVersion
+    )
 
     private fun managed(drugId: UUID): DrugData =
         drugs.findByIdOrNull(drugId) ?: error("Drug $drugId disappeared while it was locked")

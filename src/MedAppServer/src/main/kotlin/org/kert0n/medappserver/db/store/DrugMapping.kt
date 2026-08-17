@@ -43,46 +43,62 @@ internal fun DrugData.toDomain(): Drug {
         description = description,
         plans = treatmentPlans.map {
             TreatmentPlan(it.planKey.userId, it.planKey.drugId, Quantity(it.plannedAmount, unit))
-        }
+        },
+        version = version
     )
 }
 
+/**
+ * Переносит состояние в строку и отвечает, изменилось ли хоть что-нибудь.
+ *
+ * Ответ нужен ради версии, и именно поэтому каждое поле сначала сравнивается, а потом
+ * присваивается. Hibernate сам различает изменившееся и нет, но только по своей строке: планы
+ * лежат в другой таблице, и добавление плана корень грязным не делает — измерено, версия при
+ * этом оставалась прежней. А продвигать её обязательно: план — часть препарата, и команда,
+ * собранная до появления плана, не должна выполниться после.
+ */
 internal fun Drug.applyTo(
     entity: DrugData,
     resolveUser: (UUID) -> UserData,
     resolveMedKit: (UUID) -> MedKitData,
     resolveUnit: (UUID) -> QuantityUnitData,
     resolveForm: (UUID) -> FormTypeData
-) {
-    entity.name = name
-    entity.quantity = quantity.amount
+): Boolean {
+    var changed = false
+
+    if (entity.name != name) { entity.name = name; changed = true }
+    if (entity.quantity.compareTo(quantity.amount) != 0) { entity.quantity = quantity.amount; changed = true }
     if (entity.quantityUnit.id != quantity.unit.id) {
         entity.quantityUnit = resolveUnit(quantity.unit.id)
+        changed = true
     }
     if (entity.formType?.id != formType?.id) {
         entity.formType = formType?.let { resolveForm(it.id) }
+        changed = true
     }
-    entity.category = category
-    entity.manufacturer = manufacturer
-    entity.country = country
-    entity.description = description
-    if (entity.medKit.id != medKitId) {
-        entity.medKit = resolveMedKit(medKitId)
-    }
+    if (entity.category != category) { entity.category = category; changed = true }
+    if (entity.manufacturer != manufacturer) { entity.manufacturer = manufacturer; changed = true }
+    if (entity.country != country) { entity.country = country; changed = true }
+    if (entity.description != description) { entity.description = description; changed = true }
+    if (entity.medKit.id != medKitId) { entity.medKit = resolveMedKit(medKitId); changed = true }
 
-    applyPlansTo(entity, resolveUser)
+    return applyPlansTo(entity, resolveUser) || changed
 }
 
 /**
  * Сводит коллекцию планов сущности к тому, что в домене: исчезнувшие удаляются, общие
- * получают новое количество, недостающие создаются.
+ * получают новое количество, недостающие создаются. Отвечает, тронул ли хоть одну строку.
  */
-private fun Drug.applyPlansTo(entity: DrugData, resolveUser: (UUID) -> UserData) {
+private fun Drug.applyPlansTo(entity: DrugData, resolveUser: (UUID) -> UserData): Boolean {
     val desired = plans.associateBy { it.userId }
+    var changed = entity.treatmentPlans.removeIf { it.planKey.userId !in desired }
 
-    entity.treatmentPlans.removeIf { it.planKey.userId !in desired }
     entity.treatmentPlans.forEach { row ->
-        desired[row.planKey.userId]?.let { row.plannedAmount = it.plannedAmount.amount }
+        val wanted = desired[row.planKey.userId] ?: return@forEach
+        if (row.plannedAmount.compareTo(wanted.plannedAmount.amount) != 0) {
+            row.plannedAmount = wanted.plannedAmount.amount
+            changed = true
+        }
     }
 
     val stored = entity.treatmentPlans.map { it.planKey.userId }.toSet()
@@ -97,7 +113,10 @@ private fun Drug.applyPlansTo(entity: DrugData, resolveUser: (UUID) -> UserData)
                     plannedAmount = plan.plannedAmount.amount
                 )
             )
+            changed = true
         }
+
+    return changed
 }
 
 /** Новая строка под только что заведённый препарат. Планов у него ещё нет. */

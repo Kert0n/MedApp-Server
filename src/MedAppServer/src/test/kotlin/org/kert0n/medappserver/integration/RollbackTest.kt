@@ -11,6 +11,7 @@ import org.kert0n.medappserver.domain.PlannedAmountExceedsStock
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
+import org.kert0n.medappserver.testutil.*
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -38,7 +39,7 @@ class RollbackTest {
         val drug = dbHelper.freshDrug(kit.id, 10.0)
 
         assertFailsWith<PlannedAmountExceedsStock> {
-            drugService.createPlan(alice.id, drug.id, qty(11.0))
+            drugService.createPlanLatest(alice.id, drug.id, qty(11.0))
         }
 
         assertQty(10.0, dbHelper.drugQuantity(drug.id))
@@ -56,9 +57,9 @@ class RollbackTest {
         val kit = medKitService.create(alice.id)
         val foreign = medKitService.create(eve.id)
         val drug = dbHelper.freshDrug(kit.id, 10.0)
-        drugService.createPlan(alice.id, drug.id, qty(4.0))
+        drugService.createPlanLatest(alice.id, drug.id, qty(4.0))
 
-        assertFailsWith<NotAMember> { orchestrator.moveDrug(drug.id, foreign.id, alice.id) }
+        assertFailsWith<NotAMember> { orchestrator.moveDrugLatest(drugService, drug.id, foreign.id, alice.id) }
 
         val stored = dbHelper.requireDrug(drug.id)
         assertEquals(kit.id, stored.medKitId, "препарат остался в своей аптечке")
@@ -72,7 +73,7 @@ class RollbackTest {
         val kit = medKitService.create(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 10.0)
 
-        assertFailsWith<NotAMember> { orchestrator.delete(kit.id, eve.id) }
+        assertFailsWith<NotAMember> { orchestrator.deleteLatest(medKitService, kit.id, eve.id) }
 
         assertNotNull(medKitService.findById(kit.id), "аптечка на месте")
         assertNotNull(dbHelper.drug(drug.id), "препарат на месте")
@@ -83,6 +84,6 @@ class RollbackTest {
         val alice = dbHelper.freshUser("alice")
         medKitService.create(alice.id)
 
-        assertFailsWith<NotAMember> { drugService.consume(UUID.randomUUID(), qty(1.0), alice.id) }
+        assertFailsWith<NotAMember> { drugService.consumeLatest(UUID.randomUUID(), qty(1.0), alice.id) }
     }
 }

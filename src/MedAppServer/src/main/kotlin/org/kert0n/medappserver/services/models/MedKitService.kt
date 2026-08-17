@@ -5,6 +5,7 @@ import java.util.UUID
 import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.MedKitOverview
+import org.kert0n.medappserver.domain.MedKitRef
 import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.services.security.SecurityService
 import org.slf4j.LoggerFactory
@@ -53,15 +54,15 @@ class MedKitService(
     }
 
     /**
-     * Идентификаторы аптечек участника.
+     * Аптечки участника — имя и версия, без состава.
      *
-     * Только идентификаторы: состав аптечек не показывает ни один ответ, а раньше он всё
-     * равно поднимался — запросом на каждую аптечку.
+     * Состав не показывает ни один ответ, а раньше он всё равно поднимался — запросом на
+     * каждую аптечку. Версия нужна: с ней снимок сразу годится как основа для выхода.
      */
     @Transactional(readOnly = true)
-    fun idsOfUser(userId: UUID): List<UUID> {
+    fun refsOfUser(userId: UUID): List<MedKitRef> {
         logger.debug("Finding all medkits for user: {}", userId)
-        return medKits.findIdsOfUser(userId)
+        return medKits.findRefsOfUser(userId)
     }
 
     @Transactional(readOnly = true)
@@ -80,12 +81,18 @@ class MedKitService(
         return key
     }
 
+    /**
+     * Вступление предусловия не требует.
+     *
+     * Терять здесь нечего: команда не переписывает прочитанное состояние, а добавляет к нему
+     * себя, и чужое вступление, случившееся между чтением и записью, ничему не мешает. Версия
+     * аптечки при этом всё равно продвигается — иначе чужой выход, решавшийся по составу без
+     * новичка, прошёл бы как ни в чём не бывало.
+     */
     @Transactional
     fun join(medKitId: UUID, userId: UUID): MedKit {
         logger.debug("Adding user {} to medkit {}", userId, medKitId)
-        val joined = requireById(medKitId).join(userId)
-        medKits.save(joined)
-        return joined
+        return medKits.save(requireById(medKitId).join(userId))
     }
 
     @Transactional
@@ -100,18 +107,22 @@ class MedKitService(
      *
      * Возвращает `null`, когда вышел последний: аптечка удалена вместе с содержимым. Планы
      * выходящего в препаратах этой аптечки — забота оркестратора, они лежат в чужом агрегате.
+     *
+     * Предусловие обязательно, и здесь оно не формальность: решение «я последний» принимается
+     * по составу, который клиент прочитал, а вместе с этим решением уходит вся аптечка с
+     * содержимым. Версия — единственное, что отличает «последний» от «последним только
+     * казался».
      */
     @Transactional
-    fun leave(medKitId: UUID, userId: UUID): MedKit? {
+    fun leave(medKitId: UUID, userId: UUID, expectedVersion: Long): MedKit? {
         logger.debug("Removing user {} from medkit {}", userId, medKitId)
-        val left = requireAccessible(medKitId, userId).leave(userId)
+        val left = requireAccessible(medKitId, userId).requireVersion(expectedVersion).leave(userId)
 
         if (left == null) {
             medKits.delete(medKitId)
             return null
         }
-        medKits.save(left)
-        return left
+        return medKits.save(left)
     }
 
     /**
@@ -121,8 +132,8 @@ class MedKitService(
      * одному идентификатору, рано или поздно будет вызвана и без проверки.
      */
     @Transactional
-    fun delete(medKitId: UUID, userId: UUID) {
-        requireAccessible(medKitId, userId)
+    fun delete(medKitId: UUID, userId: UUID, expectedVersion: Long) {
+        requireAccessible(medKitId, userId).requireVersion(expectedVersion)
         medKits.delete(medKitId)
     }
 }

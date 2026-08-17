@@ -22,7 +22,9 @@ data class TreatmentPlanRow(
     val drugId: UUID,
     val plannedAmount: BigDecimal,
     val unitId: UUID,
-    val unitName: String
+    val unitName: String,
+    /** Версия препарата: её клиент предъявит, когда захочет этот план изменить. */
+    val drugVersion: Long
 )
 
 /** Строки планов лечения. Через этот интерфейс идут только те чтения, что не про один препарат. */
@@ -31,7 +33,7 @@ interface TreatmentPlanRepository : JpaRepository<TreatmentPlanData, TreatmentPl
     @Query(
         """
         SELECT new org.kert0n.medappserver.db.repository.TreatmentPlanRow(
-            p.planKey.userId, p.planKey.drugId, p.plannedAmount, u.id, u.name)
+            p.planKey.userId, p.planKey.drugId, p.plannedAmount, u.id, u.name, d.version)
         FROM TreatmentPlanData p
         JOIN p.drugData d
         JOIN d.quantityUnit u
@@ -44,7 +46,7 @@ interface TreatmentPlanRepository : JpaRepository<TreatmentPlanData, TreatmentPl
     @Query(
         """
         SELECT new org.kert0n.medappserver.db.repository.TreatmentPlanRow(
-            p.planKey.userId, p.planKey.drugId, p.plannedAmount, u.id, u.name)
+            p.planKey.userId, p.planKey.drugId, p.plannedAmount, u.id, u.name, d.version)
         FROM TreatmentPlanData p
         JOIN p.drugData d
         JOIN d.quantityUnit u

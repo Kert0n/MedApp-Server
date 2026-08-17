@@ -11,7 +11,10 @@ import java.util.UUID
  */
 data class MedKit(
     val id: UUID = UUID.randomUUID(),
-    val members: Set<UUID>
+    val members: Set<UUID>,
+
+    /** Непрозрачный токен хранимого состояния — как у препарата, см. `Drug.version`. */
+    val version: Long = 0
 ) {
 
     init {
@@ -19,6 +22,12 @@ data class MedKit(
     }
 
     fun isMember(userId: UUID): Boolean = userId in members
+
+    /** Предусловие команды: состав участников не менялся с тех пор, как клиент его прочитал. */
+    fun requireVersion(expected: Long): MedKit {
+        if (version != expected) throw StaleAggregateVersion()
+        return this
+    }
 
     /**
      * Доступ есть только у участника.
@@ -56,6 +65,19 @@ data class MedKit(
 }
 
 /**
+ * Аптечка, названная по имени: идентификатор и версия, без состава и без счётчиков.
+ *
+ * Столько и нужно снимку пользователя: участники в ответе не показываются, препараты приходят
+ * своим запросом, а версия обязана быть настоящей — по ней клиент выйдет из аптечки, не
+ * перечитывая её отдельно. Считать ради этого участников и препараты значило бы платить за то,
+ * чего никто не прочитает.
+ */
+data class MedKitRef(
+    val id: UUID,
+    val version: Long
+)
+
+/**
  * Счётчики аптечки для списка.
  *
  * Отдельное значение, а не сам агрегат: чтобы показать «участников 3, препаратов 12», не
@@ -64,6 +86,7 @@ data class MedKit(
  */
 data class MedKitOverview(
     val id: UUID,
+    val version: Long,
     val memberCount: Long,
     val drugCount: Long
 )

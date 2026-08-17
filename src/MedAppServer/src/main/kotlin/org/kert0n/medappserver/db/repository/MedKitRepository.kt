@@ -11,20 +11,23 @@ import org.springframework.data.repository.query.Param
 interface MedKitRepository : JpaRepository<MedKitData, UUID> {
 
     /**
-     * Только идентификаторы аптечек участника.
+     * Аптечки участника — идентификатор и версия, без состава.
      *
      * Снимку пользователя больше ничего и не нужно: препараты он берёт отдельным запросом, а
      * участники аптечек в ответе не участвуют — поднимать их значило бы платить за то, чего
-     * никто не прочитает.
+     * никто не прочитает. Версия при этом обязана быть: без неё выход из аптечки требовал бы
+     * второго запроса за тем, что снимок уже держал в руках.
      */
     @Query(
         """
-        SELECT m.membershipKey.medKitId FROM MedKitMembershipData m
+        SELECT new org.kert0n.medappserver.domain.MedKitRef(mk.id, mk.version)
+        FROM MedKitData mk
+        JOIN MedKitMembershipData m ON m.membershipKey.medKitId = mk.id
         WHERE m.membershipKey.userId = :userId
-        ORDER BY m.membershipKey.medKitId
+        ORDER BY mk.id
     """
     )
-    fun findIdsOfUser(@Param("userId") userId: UUID): List<UUID>
+    fun findRefsOfUser(@Param("userId") userId: UUID): List<org.kert0n.medappserver.domain.MedKitRef>
 
     /**
      * Счётчики аптечек участника одним запросом.
@@ -36,6 +39,7 @@ interface MedKitRepository : JpaRepository<MedKitData, UUID> {
         """
         SELECT new org.kert0n.medappserver.domain.MedKitOverview(
             mk.id,
+            mk.version,
             (SELECT COUNT(m2) FROM MedKitMembershipData m2 WHERE m2.membershipKey.medKitId = mk.id),
             (SELECT COUNT(d) FROM DrugData d WHERE d.medKit = mk))
         FROM MedKitData mk

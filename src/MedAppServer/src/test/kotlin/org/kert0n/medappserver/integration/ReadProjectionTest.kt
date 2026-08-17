@@ -8,6 +8,7 @@ import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.TreatmentPlanService
+import org.kert0n.medappserver.testutil.*
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -39,8 +40,8 @@ class ReadProjectionTest {
         medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
 
-        drugService.createPlan(alice.id, drug.id, qty(30.0))
-        drugService.createPlan(bob.id, drug.id, qty(20.0))
+        drugService.createPlanLatest(alice.id, drug.id, qty(30.0))
+        drugService.createPlanLatest(bob.id, drug.id, qty(20.0))
         dbHelper.flushAndClear()
 
         val view = drugService.require(drug.id, alice.id)
@@ -106,10 +107,10 @@ class ReadProjectionTest {
         val bob = dbHelper.freshUser("bob")
         medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
-        drugService.createPlan(alice.id, drug.id, qty(30.0))
+        drugService.createPlanLatest(alice.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
-        assertQty(30.0, treatmentPlanService.requirePlan(alice.id, drug.id).plannedAmount)
+        assertQty(30.0, treatmentPlanService.requirePlan(alice.id, drug.id).plan.plannedAmount)
         // Препарат общий, план — личный: Боб видит препарат, но не чужой план.
         assertNull(treatmentPlanService.findPlan(bob.id, drug.id), "чужой план не читается")
     }

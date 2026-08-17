@@ -7,9 +7,9 @@ import org.kert0n.medappserver.api.DrugPatchRequest
 import org.kert0n.medappserver.db.store.DrugStore
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.DrugDetails
+import org.kert0n.medappserver.domain.IntakeOutcome
 import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.Quantity
-import org.kert0n.medappserver.domain.TreatmentPlan
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -17,9 +17,13 @@ import org.springframework.transaction.annotation.Transactional
 /**
  * Единственный вход к агрегату препарата — вместе с его планами лечения.
  *
- * Каждая команда устроена одинаково: взять состояние под блокировкой, вызвать метод домена,
- * отдать результат хранилищу. Правил здесь нет — они в `domain.Drug`; строк и запросов
+ * Каждая команда устроена одинаково: взять состояние, проверить предусловие, вызвать метод
+ * домена, отдать результат хранилищу. Правил здесь нет — они в `domain.Drug`; строк и запросов
  * тоже нет — они за `DrugStore`.
+ *
+ * `expectedVersion` — версия, которую клиент предъявил заголовком `If-Match`. Совпадение
+ * проверяется до применения правил: команда, собранная по устаревшему состоянию, не должна
+ * выполниться даже тогда, когда по новым данным она допустима.
  */
 @Service
 class DrugService(
@@ -61,8 +65,15 @@ class DrugService(
      */
     private fun notFound() = NotAMember()
 
-    private fun lock(drugId: UUID, userId: UUID): Drug =
-        drugs.lockAccessible(drugId, userId) ?: throw notFound()
+    /**
+     * Состояние, по которому команда будет собрана, вместе с проверкой предусловия.
+     *
+     * Блокировки здесь больше нет: конкуренцию держит версия. Порядок проверок — доступ,
+     * потом версия: несуществующий и недоступный препарат обязаны отвечать одинаково, и
+     * узнать по коду ответа, что чужой препарат существует, нельзя даже угадав его версию.
+     */
+    private fun loadForCommand(drugId: UUID, userId: UUID, expectedVersion: Long): Drug =
+        (drugs.findAccessible(drugId, userId) ?: throw notFound()).requireVersion(expectedVersion)
 
     // ── Команды препарата ────────────────────────────────────────────────────────
 
@@ -86,10 +97,10 @@ class DrugService(
     }
 
     @Transactional
-    fun update(drugId: UUID, request: DrugPatchRequest, userId: UUID): Drug {
+    fun update(drugId: UUID, request: DrugPatchRequest, userId: UUID, expectedVersion: Long): Drug {
         logger.debug("Updating drug: {}", drugId)
 
-        var drug = lock(drugId, userId)
+        var drug = loadForCommand(drugId, userId, expectedVersion)
         // Единица перевешивается первой: количество ниже собирается уже в ней.
         request.quantityUnitId?.let { drug = drug.relabelUnitTo(catalogue.requireQuantityUnit(it)) }
         request.quantity?.let { drug = drug.changeQuantityTo(Quantity(it, drug.quantity.unit)) }
@@ -104,15 +115,14 @@ class DrugService(
             )
         )
 
-        drugs.save(drug)
-        return drug
+        return drugs.save(drug)
     }
 
     @Transactional
-    fun delete(drugId: UUID, userId: UUID) {
+    fun delete(drugId: UUID, userId: UUID, expectedVersion: Long) {
         logger.debug("Deleting drug: {}", drugId)
 
-        val drug = require(drugId, userId)
+        val drug = loadForCommand(drugId, userId, expectedVersion)
         drugs.delete(drug.id)
     }
 
@@ -123,76 +133,83 @@ class DrugService(
      * недоступный препарат отвергается 404 ещё до списания.
      */
     @Transactional
-    fun consume(drugId: UUID, quantity: BigDecimal, userId: UUID): Drug? {
+    fun consume(drugId: UUID, quantity: BigDecimal, userId: UUID, expectedVersion: Long): Drug? {
         logger.debug("Consuming {} of drug {}", quantity, drugId)
 
-        val drug = lock(drugId, userId)
+        val drug = loadForCommand(drugId, userId, expectedVersion)
         val left = drug.consume(Quantity(quantity, drug.quantity.unit))
         if (left == null) {
             drugs.delete(drugId)
             return null
         }
-        drugs.save(left)
-        return left
+        return drugs.save(left)
     }
 
     /** Переезд препарата в другую аптечку вместе с судьбой планов. */
     @Transactional
-    fun moveTo(drugId: UUID, targetMedKitId: UUID, accessibleUserIds: Set<UUID>, userId: UUID): Drug {
+    fun moveTo(
+        drugId: UUID,
+        targetMedKitId: UUID,
+        accessibleUserIds: Set<UUID>,
+        userId: UUID,
+        expectedVersion: Long
+    ): Drug {
         logger.debug("Moving drug {} to medkit {}", drugId, targetMedKitId)
 
-        val moved = lock(drugId, userId).moveTo(targetMedKitId, accessibleUserIds)
-        drugs.save(moved)
-        return moved
+        val moved = loadForCommand(drugId, userId, expectedVersion).moveTo(targetMedKitId, accessibleUserIds)
+        return drugs.save(moved)
     }
 
     // ── Команды планов лечения ───────────────────────────────────────────────────
 
+    /**
+     * Команды планов возвращают препарат, а не план.
+     *
+     * План — часть агрегата, и меняется вместе с ним: и версия, которую клиент предъявит в
+     * следующий раз, и остаток после резервирования принадлежат препарату. Отдав один план,
+     * пришлось бы вторым запросом добирать то, что уже посчитано.
+     */
     @Transactional
-    fun createPlan(userId: UUID, drugId: UUID, plannedAmount: BigDecimal): TreatmentPlan {
+    fun createPlan(userId: UUID, drugId: UUID, plannedAmount: BigDecimal, expectedVersion: Long): Drug {
         logger.debug("Creating treatment plan for user {} and drug {}", userId, drugId)
 
-        val loaded = lock(drugId, userId)
-        val drug = loaded.createPlan(userId, Quantity(plannedAmount, loaded.quantity.unit))
-        drugs.save(drug)
-        return drug.requirePlanOf(userId)
+        val loaded = loadForCommand(drugId, userId, expectedVersion)
+        return drugs.save(loaded.createPlan(userId, Quantity(plannedAmount, loaded.quantity.unit)))
     }
 
     @Transactional
-    fun changePlan(userId: UUID, drugId: UUID, plannedAmount: BigDecimal): TreatmentPlan {
+    fun changePlan(userId: UUID, drugId: UUID, plannedAmount: BigDecimal, expectedVersion: Long): Drug {
         logger.debug("Updating treatment plan for user {} and drug {}", userId, drugId)
 
-        val loaded = lock(drugId, userId)
-        val drug = loaded.changePlan(userId, Quantity(plannedAmount, loaded.quantity.unit))
-        drugs.save(drug)
-        return drug.requirePlanOf(userId)
+        val loaded = loadForCommand(drugId, userId, expectedVersion)
+        return drugs.save(loaded.changePlan(userId, Quantity(plannedAmount, loaded.quantity.unit)))
     }
 
     @Transactional
-    fun cancelPlan(userId: UUID, drugId: UUID) {
+    fun cancelPlan(userId: UUID, drugId: UUID, expectedVersion: Long) {
         logger.debug("Deleting treatment plan for user {} and drug {}", userId, drugId)
 
-        drugs.save(lock(drugId, userId).cancelPlan(userId))
+        drugs.save(loadForCommand(drugId, userId, expectedVersion).cancelPlan(userId))
     }
 
     /**
      * Списывает приём с плана и с остатка препарата.
      *
-     * `null` означает «план исчерпан» либо «препарат кончился», а не «план не найден»:
+     * В исходе оба поля обнуляемы: `plan == null` — план исчерпан, `drug == null` — кончился
+     * сам препарат и удалён этим приёмом. Ни то ни другое не означает «не найдено»:
      * отсутствующий план отвергается 404 ещё до списания.
      */
     @Transactional
-    fun recordIntake(userId: UUID, drugId: UUID, quantityConsumed: BigDecimal): TreatmentPlan? {
+    fun recordIntake(userId: UUID, drugId: UUID, quantityConsumed: BigDecimal, expectedVersion: Long): IntakeOutcome {
         logger.debug("Recording intake for user {} and drug {}, quantity: {}", userId, drugId, quantityConsumed)
 
-        val loaded = lock(drugId, userId)
+        val loaded = loadForCommand(drugId, userId, expectedVersion)
         val outcome = loaded.applyIntake(userId, Quantity(quantityConsumed, loaded.quantity.unit))
         val left = outcome.drug
         if (left == null) {
             drugs.delete(drugId)
-            return null
+            return outcome
         }
-        drugs.save(left)
-        return outcome.plan
+        return outcome.copy(drug = drugs.save(left))
     }
 }

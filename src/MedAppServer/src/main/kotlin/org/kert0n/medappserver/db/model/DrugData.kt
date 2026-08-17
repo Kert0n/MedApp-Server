@@ -43,9 +43,7 @@ class DrugData(
      * Единица измерения — строка общего справочника, а не свободный текст.
      *
      * `EAGER`: единица нужна всегда, потому что без неё количество не имеет смысла. При
-     * загрузке сущности Hibernate забирает её тем же запросом; отдельный SELECT остаётся
-     * только у команд, которые берут строку под блокировкой — там fetch join несовместим с
-     * `FOR UPDATE`.
+     * загрузке сущности Hibernate забирает её тем же запросом.
      */
     @NotNull
     @ManyToOne(fetch = FetchType.EAGER)
@@ -98,7 +96,18 @@ class DrugData(
      * уносит планы с собой. Этим и пользуется обратная запись из домена.
      */
     @OneToMany(mappedBy = "drugData", fetch = FetchType.LAZY, cascade = [CascadeType.ALL], orphanRemoval = true)
-    var treatmentPlans: MutableSet<TreatmentPlanData> = mutableSetOf()
+    var treatmentPlans: MutableSet<TreatmentPlanData> = mutableSetOf(),
+
+    /**
+     * Токен оптимистичной блокировки препарата.
+     *
+     * Изменение скаляров продвигает его само; изменение планов — через ту же строку, потому
+     * что план принадлежит препарату и меняется только вместе с ним. Массовые операции
+     * продвигают версию явным `version = version + 1`: dirty checking их не видит.
+     */
+    @Version
+    @Column(name = "version", nullable = false)
+    var version: Long = 0
 
 ) {
 

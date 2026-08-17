@@ -17,6 +17,7 @@ import org.kert0n.medappserver.domain.InvalidQuantity
 import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.PlannedAmountExceedsStock
 import org.kert0n.medappserver.domain.TreatmentPlanAlreadyExists
+import org.kert0n.medappserver.testutil.*
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -100,7 +101,7 @@ class DrugServiceTest {
 
         assertEquals(0, treatmentPlanService.plansOf(alice.id).size)
 
-        drugService.createPlan(alice.id, drug.id, qty(10.0))
+        drugService.createPlanLatest(alice.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
         assertEquals(1, treatmentPlanService.plansOf(alice.id).size)
@@ -135,7 +136,7 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         val emptyUpdate = DrugPatchRequest(null, null, null, null, null, null, null, null)
-        drugService.update(drug.id, emptyUpdate, alice.id)
+        drugService.updateLatest(drug.id, emptyUpdate, alice.id)
         dbHelper.flushAndClear()
 
         assertQty(10.0, dbHelper.requireDrug(drug.id).quantity)
@@ -152,7 +153,7 @@ class DrugServiceTest {
             name = "New Name", quantity = qty(100.0), category = "cat", manufacturer = "man",
             country = "co", description = "desc"
         )
-        drugService.update(drug.id, fullUpdate, alice.id)
+        drugService.updateLatest(drug.id, fullUpdate, alice.id)
         dbHelper.flushAndClear()
 
         val updated = dbHelper.requireDrug(drug.id)
@@ -171,7 +172,7 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
-        drugService.update(drug.id, DrugPatchRequest(quantity = qty(20.0)), alice.id)
+        drugService.updateLatest(drug.id, DrugPatchRequest(quantity = qty(20.0)), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(20.0, dbHelper.drugQuantity(drug.id))
@@ -189,11 +190,11 @@ class DrugServiceTest {
         val kit = medKitService.create(alice.id)
         medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
-        drugService.createPlan(alice.id, drug.id, qty(60.0))
-        drugService.createPlan(bob.id, drug.id, qty(40.0))
+        drugService.createPlanLatest(alice.id, drug.id, qty(60.0))
+        drugService.createPlanLatest(bob.id, drug.id, qty(40.0))
         dbHelper.flushAndClear()
 
-        drugService.update(drug.id, DrugPatchRequest(quantity = qty(50.0)), alice.id)
+        drugService.updateLatest(drug.id, DrugPatchRequest(quantity = qty(50.0)), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(50.0, dbHelper.drugQuantity(drug.id)!!)
@@ -209,7 +210,7 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         assertThrows<InvalidQuantity> {
-            drugService.update(drug.id, DrugPatchRequest(quantity = qty(0.0)), alice.id)
+            drugService.updateLatest(drug.id, DrugPatchRequest(quantity = qty(0.0)), alice.id)
         }
     }
 
@@ -222,7 +223,7 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 50.0)
         dbHelper.flushAndClear()
 
-        drugService.delete(drug.id, alice.id)
+        drugService.deleteLatest(drug.id, alice.id)
         dbHelper.flushAndClear()
 
         assertNull(dbHelper.drug(drug.id))
@@ -237,7 +238,7 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        val consumed = drugService.consume(drug.id, qty(30.0), alice.id)
+        val consumed = drugService.consumeLatest(drug.id, qty(30.0), alice.id)
         assertQty(70.0, consumed?.quantity)
     }
 
@@ -249,7 +250,7 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         assertThrows<InsufficientStock> {
-            drugService.consume(drug.id, qty(20.0), alice.id)
+            drugService.consumeLatest(drug.id, qty(20.0), alice.id)
         }
     }
 
@@ -263,7 +264,7 @@ class DrugServiceTest {
             DrugCreateRequest(name = "Drug", quantity = qty(100.0), quantityUnitId = dbHelper.unit().id),
             kit.id, alice.id
         )
-        drugService.createPlan(alice.id, drug.id, qty(25.0))
+        drugService.createPlanLatest(alice.id, drug.id, qty(25.0))
         dbHelper.flushAndClear()
 
         // DTO собирается только из формы чтения: сумма планов приходит из запроса, а не из
@@ -283,7 +284,7 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        val plan = drugService.createPlan(alice.id, drug.id, qty(30.0))
+        val plan = drugService.createPlanLatest(alice.id, drug.id, qty(30.0))
 
         assertQty(30.0, plan.plannedAmount)
         assertEquals(alice.id, plan.userId)
@@ -297,11 +298,11 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        drugService.createPlan(alice.id, drug.id, qty(30.0))
+        drugService.createPlanLatest(alice.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
         assertThrows<TreatmentPlanAlreadyExists> {
-            drugService.createPlan(alice.id, drug.id, qty(20.0))
+            drugService.createPlanLatest(alice.id, drug.id, qty(20.0))
         }
     }
 
@@ -313,7 +314,7 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         assertThrows<PlannedAmountExceedsStock> {
-            drugService.createPlan(alice.id, drug.id, qty(100.0))
+            drugService.createPlanLatest(alice.id, drug.id, qty(100.0))
         }
     }
 
@@ -324,10 +325,10 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        drugService.createPlan(alice.id, drug.id, qty(30.0))
+        drugService.createPlanLatest(alice.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
-        assertQty(50.0, drugService.changePlan(alice.id, drug.id, qty(50.0)).plannedAmount)
+        assertQty(50.0, drugService.changePlanLatest(alice.id, drug.id, qty(50.0)).plannedAmount)
     }
 
     @Test
@@ -339,16 +340,16 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        drugService.createPlan(alice.id, drug.id, qty(50.0))
-        drugService.createPlan(bob.id, drug.id, qty(30.0))
+        drugService.createPlanLatest(alice.id, drug.id, qty(50.0))
+        drugService.createPlanLatest(bob.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
         // Своё прежнее значение Бобу не мешает: 100 - 50 Алисы = 50 доступно ему.
-        assertQty(50.0, drugService.changePlan(bob.id, drug.id, qty(50.0)).plannedAmount)
+        assertQty(50.0, drugService.changePlanLatest(bob.id, drug.id, qty(50.0)).plannedAmount)
         dbHelper.flushAndClear()
 
         assertThrows<PlannedAmountExceedsStock> {
-            drugService.changePlan(bob.id, drug.id, qty(60.0))
+            drugService.changePlanLatest(bob.id, drug.id, qty(60.0))
         }
     }
 
@@ -359,10 +360,10 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        drugService.createPlan(alice.id, drug.id, qty(30.0))
+        drugService.createPlanLatest(alice.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
-        drugService.cancelPlan(alice.id, drug.id)
+        drugService.cancelPlanLatest(alice.id, drug.id)
         dbHelper.flushAndClear()
 
         assertNull(dbHelper.userPlan(alice.id, drug.id))
@@ -377,10 +378,10 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        drugService.createPlan(alice.id, drug.id, qty(30.0))
+        drugService.createPlanLatest(alice.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
-        val remaining = drugService.recordIntake(alice.id, drug.id, qty(10.0))
+        val remaining = drugService.recordIntakeLatest(alice.id, drug.id, qty(10.0))
 
         assertNotNull(remaining)
         assertQty(20.0, remaining.plannedAmount)
@@ -394,11 +395,11 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        drugService.createPlan(alice.id, drug.id, qty(10.0))
+        drugService.createPlanLatest(alice.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
         assertThrows<IntakeExceedsPlan> {
-            drugService.recordIntake(alice.id, drug.id, qty(15.0))
+            drugService.recordIntakeLatest(alice.id, drug.id, qty(15.0))
         }
     }
 
@@ -409,10 +410,10 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 20.0)
         dbHelper.flushAndClear()
 
-        drugService.createPlan(alice.id, drug.id, qty(10.0))
+        drugService.createPlanLatest(alice.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
-        val remaining = drugService.recordIntake(alice.id, drug.id, qty(10.0))
+        val remaining = drugService.recordIntakeLatest(alice.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
         assertNull(remaining)

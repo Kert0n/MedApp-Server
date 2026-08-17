@@ -5,6 +5,7 @@ import kotlin.test.assertFailsWith
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.domain.DomainRuleViolated
+import org.kert0n.medappserver.testutil.*
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -41,7 +42,7 @@ class TreatmentPlanServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        drugService.createPlan(alice.id, drug.id, qty(10.0))
+        drugService.createPlanLatest(alice.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
         assertEquals(1, treatmentPlanService.plansOf(alice.id).size)
@@ -54,7 +55,7 @@ class TreatmentPlanServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        drugService.createPlan(alice.id, drug.id, qty(10.0))
+        drugService.createPlanLatest(alice.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
         assertEquals(1, drugService.require(drug.id, alice.id).plans.size)
@@ -79,7 +80,7 @@ class TreatmentPlanServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        drugService.createPlan(alice.id, drug.id, qty(30.0))
+        drugService.createPlanLatest(alice.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
         val dto = treatmentPlanService.requirePlan(alice.id, drug.id).toDto()

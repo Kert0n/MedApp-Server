@@ -1,9 +1,12 @@
 package org.kert0n.medappserver.controller
 
 import org.kert0n.medappserver.domain.DomainRuleViolated
+import org.kert0n.medappserver.domain.IntakeAlreadyRecorded
 import org.kert0n.medappserver.domain.NoSuchTreatmentPlan
 import org.kert0n.medappserver.domain.NotAMember
+import org.kert0n.medappserver.domain.StaleAggregateVersion
 import org.kert0n.medappserver.domain.TreatmentPlanAlreadyExists
+import org.springframework.dao.OptimisticLockingFailureException
 import org.springframework.http.HttpStatus
 import org.springframework.http.ProblemDetail
 import org.springframework.web.bind.MethodArgumentNotValidException
@@ -42,9 +45,30 @@ class ApiExceptionHandler {
             // можно было бы узнать, что чужая аптечка существует.
             is NotAMember -> HttpStatus.NOT_FOUND
             is TreatmentPlanAlreadyExists -> HttpStatus.CONFLICT
+            is IntakeAlreadyRecorded -> HttpStatus.CONFLICT
+            // Клиент не ошибся в запросе — он опоздал: состояние сменилось между чтением и
+            // командой. Починка другая (перечитать и решить заново), поэтому и код другой.
+            is StaleAggregateVersion -> HttpStatus.CONFLICT
             else -> HttpStatus.BAD_REQUEST
         }
     )
+
+    /**
+     * Конфликт, обнаруженный уже на записи.
+     *
+     * Предусловие `If-Match` ловит устаревшую команду до работы, но между чтением состояния и
+     * коммитом остаётся окно: две команды могут пройти проверку с одной и той же версией.
+     * Закрывает его сама база — `UPDATE ... WHERE version = ?` не находит строки, — и сюда
+     * это приходит уже как отказ Hibernate. Ответ тот же 409: для клиента оба случая
+     * означают «перечитай и повтори решение».
+     *
+     * Автоповтора нет намеренно: сервер не знает, останется ли команда осмысленной по новому
+     * состоянию. Списать вторую таблетку из остатка, который тем временем стал нулевым, —
+     * не то, чего хотел клиент.
+     */
+    @ExceptionHandler(OptimisticLockingFailureException::class)
+    fun handleOptimisticLock(exception: OptimisticLockingFailureException): ProblemDetail =
+        problem(HttpStatus.CONFLICT)
 
     /**
      * Request body validation. Field names and the constraint that failed are part of the

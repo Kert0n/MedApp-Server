@@ -11,11 +11,15 @@ import org.kert0n.medappserver.api.TreatmentPlanPatchRequest
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.MedKitOverview
+import org.kert0n.medappserver.domain.MedKitRef
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.QuantityUnit
+import org.kert0n.medappserver.domain.IntakeOutcome
 import org.kert0n.medappserver.domain.TreatmentPlan
+import org.kert0n.medappserver.domain.TreatmentPlanEntry
 import org.kert0n.medappserver.services.models.CatalogueService
 import org.kert0n.medappserver.services.models.DrugService
+import org.kert0n.medappserver.services.models.IntakeService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.TreatmentPlanService
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
@@ -59,6 +63,7 @@ class ResourceApiContractTest {
     @MockitoBean private lateinit var medKitService: MedKitService
     @MockitoBean private lateinit var medKitDrugOrchestrator: MedKitDrugOrchestrator
     @MockitoBean private lateinit var catalogueService: CatalogueService
+    @MockitoBean private lateinit var intakeService: IntakeService
 
     private lateinit var mockMvc: MockMvc
 
@@ -70,8 +75,18 @@ class ResourceApiContractTest {
     private val unit = QuantityUnit(UUID.randomUUID(), "mg")
     private val drug = Drug(
         id = drugId, medKitId = medKitId, name = "Aspirin",
-        quantity = Quantity(qty(100.0), unit)
+        quantity = Quantity(qty(100.0), unit), version = VERSION
     )
+    private val plan = TreatmentPlan(userId = userId, drugId = drugId, plannedAmount = Quantity(qty(20.0), unit))
+    private val plannedDrug = drug.copy(plans = listOf(plan))
+
+    /**
+     * Версия, которую предъявляют команды.
+     *
+     * Значение произвольно и намеренно не ноль: тест обязан упасть, если версия перестанет
+     * доезжать до сервиса и там окажется значение по умолчанию.
+     */
+    private fun ifMatch() = Preconditions.etag(VERSION)
 
     @BeforeEach
     fun setup() {
@@ -81,6 +96,10 @@ class ResourceApiContractTest {
     }
 
     private fun asUser() = jwt().jwt { it.subject(userId.toString()) }
+
+    private companion object {
+        const val VERSION = 7L
+    }
 
     // ── Препараты ────────────────────────────────────────────────────────────────
 
@@ -126,10 +145,11 @@ class ResourceApiContractTest {
 
     @Test
     fun `расход создаётся подчинённым ресурсом`() {
-        whenever(drugService.consume(eq(drugId), any(), eq(userId))).thenReturn(drug)
+        whenever(drugService.consume(eq(drugId), any(), eq(userId), eq(VERSION))).thenReturn(drug)
 
         mockMvc.perform(
             post(ApiRoutes.consumptions(drugId)).with(asUser())
+                .header("If-Match", ifMatch())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"quantity":2.0}""")
         )
@@ -139,18 +159,17 @@ class ResourceApiContractTest {
     @Test
     fun `перенос выражен размещением препарата в целевой аптечке`() {
         val target = UUID.randomUUID()
-        whenever(medKitDrugOrchestrator.moveDrug(drugId, target, userId)).thenReturn(drug)
-        whenever(drugService.require(drugId, userId)).thenReturn(drug)
+        whenever(medKitDrugOrchestrator.moveDrug(drugId, target, userId, VERSION)).thenReturn(drug)
 
-        mockMvc.perform(put(ApiRoutes.drugIn(target, drugId)).with(asUser()))
+        mockMvc.perform(put(ApiRoutes.drugIn(target, drugId)).with(asUser()).header("If-Match", ifMatch()))
             .andExpect(status().isOk)
     }
 
     @Test
     fun `препарат удаляется`() {
-        doNothing().whenever(drugService).delete(drugId, userId)
+        doNothing().whenever(drugService).delete(drugId, userId, VERSION)
 
-        mockMvc.perform(delete(ApiRoutes.drug(drugId)).with(asUser()))
+        mockMvc.perform(delete(ApiRoutes.drug(drugId)).with(asUser()).header("If-Match", ifMatch()))
             .andExpect(status().isNoContent)
     }
 
@@ -176,13 +195,13 @@ class ResourceApiContractTest {
 
     @Test
     fun `план лечения создаётся и меняется`() {
-        val plan = TreatmentPlan(userId = userId, drugId = drugId, plannedAmount = Quantity(qty(20.0), unit))
-        whenever(drugService.createPlan(eq(userId), eq(drugId), any())).thenReturn(plan)
-        whenever(drugService.changePlan(eq(userId), eq(drugId), any())).thenReturn(plan)
-        whenever(treatmentPlanService.requirePlan(userId, drugId)).thenReturn(plan)
+        whenever(drugService.createPlan(eq(userId), eq(drugId), any(), eq(VERSION))).thenReturn(plannedDrug)
+        whenever(drugService.changePlan(eq(userId), eq(drugId), any(), eq(VERSION))).thenReturn(plannedDrug)
+        whenever(treatmentPlanService.requirePlan(userId, drugId)).thenReturn(TreatmentPlanEntry(plan, VERSION))
 
         mockMvc.perform(
             post(ApiRoutes.TREATMENT_PLANS).with(asUser())
+                .header("If-Match", ifMatch())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(TreatmentPlanCreateRequest(drugId, qty(20.0))))
         )
@@ -194,6 +213,7 @@ class ResourceApiContractTest {
 
         mockMvc.perform(
             patch(ApiRoutes.treatmentPlan(drugId)).with(asUser())
+                .header("If-Match", ifMatch())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(TreatmentPlanPatchRequest(qty(15.0))))
         )
@@ -202,24 +222,30 @@ class ResourceApiContractTest {
 
     @Test
     fun `план лечения удаляется`() {
-        doNothing().whenever(drugService).cancelPlan(userId, drugId)
+        doNothing().whenever(drugService).cancelPlan(userId, drugId, VERSION)
 
-        mockMvc.perform(delete(ApiRoutes.treatmentPlan(drugId)).with(asUser()))
+        mockMvc.perform(delete(ApiRoutes.treatmentPlan(drugId)).with(asUser()).header("If-Match", ifMatch()))
             .andExpect(status().isNoContent)
     }
 
     // ── Приём ────────────────────────────────────────────────────────────────────
 
+    /** Маршрут был опубликован под 501 с самого начала цепочки; здесь он наконец работает. */
     @Test
-    fun `приём опубликован, но пока не включён`() {
-        // Форма маршрута финальная, механизм идемпотентности приезжает вместе с
-        // версионностью. 501 честнее, чем PUT, который обещает идемпотентность и не даёт её.
+    fun `приём применяется по своему пути`() {
+        val intakeId = UUID.randomUUID()
+        whenever(intakeService.record(eq(intakeId), eq(userId), eq(drugId), any(), eq(VERSION)))
+            .thenReturn(IntakeOutcome(plannedDrug, plan))
+
         mockMvc.perform(
-            put(ApiRoutes.intake(UUID.randomUUID())).with(asUser())
+            put(ApiRoutes.intake(intakeId)).with(asUser())
+                .header("If-Match", ifMatch())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(IntakeRequest(drugId, qty(1.0))))
         )
-            .andExpect(status().isNotImplemented)
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.drug.id").value(drugId.toString()))
+            .andExpect(jsonPath("$.treatmentPlan.drugId").value(drugId.toString()))
     }
 
     // ── Аптечки и членство ───────────────────────────────────────────────────────
@@ -227,7 +253,7 @@ class ResourceApiContractTest {
     @Test
     fun `аптечка создаётся и перечисляется`() {
         whenever(medKitService.create(userId)).thenReturn(medKit)
-        whenever(medKitService.overviews(userId)).thenReturn(listOf(MedKitOverview(medKitId, 2, 17)))
+        whenever(medKitService.overviews(userId)).thenReturn(listOf(MedKitOverview(medKitId, 0, 2, 17)))
 
         mockMvc.perform(post(ApiRoutes.MED_KITS).with(asUser()))
             .andExpect(status().isCreated)
@@ -254,8 +280,8 @@ class ResourceApiContractTest {
     fun `членство создаётся и удаляется`() {
         whenever(medKitService.joinByInvitation("invite-key", userId)).thenReturn(medKit)
         whenever(medKitDrugOrchestrator.medKitWithDrugs(medKitId, userId))
-            .thenReturn(org.kert0n.medappserver.api.MedKitDTO(medKitId, emptySet()))
-        doNothing().whenever(medKitDrugOrchestrator).leaveMedKit(medKitId, userId)
+            .thenReturn(org.kert0n.medappserver.api.MedKitDTO(medKitId, 0, emptySet()))
+        doNothing().whenever(medKitDrugOrchestrator).leaveMedKit(medKitId, userId, VERSION)
 
         mockMvc.perform(
             post(ApiRoutes.MEMBERSHIPS).with(asUser())
@@ -264,17 +290,20 @@ class ResourceApiContractTest {
         )
             .andExpect(status().isCreated)
 
-        mockMvc.perform(delete(ApiRoutes.membership(medKitId)).with(asUser()))
+        mockMvc.perform(delete(ApiRoutes.membership(medKitId)).with(asUser()).header("If-Match", ifMatch()))
             .andExpect(status().isNoContent)
     }
 
     @Test
     fun `удаление аптечки принимает целевую параметром запроса`() {
         val target = UUID.randomUUID()
-        doNothing().whenever(medKitDrugOrchestrator).delete(medKitId, userId, target)
+        doNothing().whenever(medKitDrugOrchestrator).delete(medKitId, userId, VERSION, target)
 
         mockMvc.perform(
-            delete(ApiRoutes.medKit(medKitId)).param("targetMedKitId", target.toString()).with(asUser())
+            delete(ApiRoutes.medKit(medKitId))
+                .param("targetMedKitId", target.toString())
+                .header("If-Match", ifMatch())
+                .with(asUser())
         )
             .andExpect(status().isNoContent)
     }
@@ -283,7 +312,7 @@ class ResourceApiContractTest {
 
     @Test
     fun `снимок пользователя лежит по пути me`() {
-        whenever(medKitService.idsOfUser(userId)).thenReturn(listOf(medKitId))
+        whenever(medKitService.refsOfUser(userId)).thenReturn(listOf(MedKitRef(medKitId, 0)))
         whenever(drugService.accessibleTo(userId)).thenReturn(listOf(drug))
 
         mockMvc.perform(get(ApiRoutes.ME).with(asUser()))

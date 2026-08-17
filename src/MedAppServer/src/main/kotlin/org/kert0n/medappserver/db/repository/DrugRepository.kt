@@ -1,11 +1,9 @@
 package org.kert0n.medappserver.db.repository
 
-import jakarta.persistence.LockModeType
 import java.util.*
 import org.kert0n.medappserver.db.model.DrugData
 import org.kert0n.medappserver.db.model.MedKitData
 import org.springframework.data.jpa.repository.JpaRepository
-import org.springframework.data.jpa.repository.Lock
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
@@ -16,6 +14,11 @@ import org.springframework.data.repository.query.Param
  * Читающие запросы забирают препарат вместе с его планами: сумму запланированного считает
  * домен по собственной коллекции, поэтому отдельного вычисляемого столбца больше нет.
  * Доступ проверяется соединением с членством, а не коллекцией участников внутри аптечки.
+ *
+ * Отдельной загрузки «под блокировку» здесь больше нет. Пока команды держал
+ * `FOR UPDATE`, корень приходилось брать без планов — совмещать блокировку с внешним fetch
+ * join нельзя, — и коллекция догружалась вторым запросом. С `@Version` блокировка не нужна, и
+ * команда загружает агрегат тем же одним запросом, что и чтение.
  */
 interface DrugRepository : JpaRepository<DrugData, UUID> {
 
@@ -66,28 +69,34 @@ interface DrugRepository : JpaRepository<DrugData, UUID> {
      * Перевод всех препаратов аптечки в другую — одним запросом.
      *
      * Поштучный переезд через агрегат честнее по слоям, но стоит команды на препарат: сотня
-     * препаратов — сотня загрузок с блокировкой. Здесь важнее постоянное число запросов,
-     * поэтому правило переезда продублировано в SQL; парная половина — `Drug.moveTo`, и
-     * менять их надо вместе.
+     * препаратов — сотня загрузок. Здесь важнее постоянное число запросов, поэтому правило
+     * переезда продублировано в SQL; парная половина — `Drug.moveTo`, и менять их надо вместе.
+     *
+     * Версию приходится двигать руками: массовый `UPDATE` идёт мимо dirty checking, и
+     * `@Version` о нём не узнает. Не двинув её, мы бы позволили команде, собранной до
+     * переезда, выполниться после него.
      */
-    @Modifying
-    @Query("UPDATE DrugData d SET d.medKit = :target WHERE d.medKit.id = :sourceMedKitId")
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE DrugData d SET d.medKit = :target, d.version = d.version + 1 WHERE d.medKit.id = :sourceMedKitId")
     fun moveAllToMedKit(@Param("sourceMedKitId") sourceMedKitId: UUID, @Param("target") target: MedKitData)
 
     /**
-     * Загрузка под блокировкой строки.
+     * Продвигает версию тех препаратов аптечки, в которых у участника есть план.
      *
-     * Планы здесь не забираются: совмещать `FOR UPDATE` с внешним fetch join нельзя, поэтому
-     * коллекция подтягивается вторым запросом, когда команда её касается.
+     * Пара к массовому удалению планов при выходе из аптечки: план — часть препарата, значит
+     * его исчезновение меняет препарат, и версия обязана это отразить. Условие сужено до
+     * препаратов с планом, чтобы выход одного участника не отменял чужие команды над
+     * препаратами, которых он не касался. Вызывать до удаления — после него выбирать уже
+     * нечего.
      */
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(
         """
-        SELECT d FROM DrugData d
-        WHERE d.id = :drugId
-          AND EXISTS (SELECT 1 FROM MedKitMembershipData m
-                      WHERE m.membershipKey.medKitId = d.medKit.id AND m.membershipKey.userId = :userId)
+        UPDATE DrugData d SET d.version = d.version + 1
+        WHERE d.medKit.id = :medKitId
+          AND EXISTS (SELECT 1 FROM TreatmentPlanData p
+                      WHERE p.planKey.drugId = d.id AND p.planKey.userId = :userId)
     """
     )
-    fun lockAccessible(@Param("drugId") drugId: UUID, @Param("userId") userId: UUID): DrugData?
+    fun bumpVersionsPlannedBy(@Param("medKitId") medKitId: UUID, @Param("userId") userId: UUID)
 }

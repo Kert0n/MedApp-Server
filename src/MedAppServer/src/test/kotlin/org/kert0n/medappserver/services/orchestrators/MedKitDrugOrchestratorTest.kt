@@ -14,6 +14,7 @@ import org.kert0n.medappserver.domain.DomainRuleViolated
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.TreatmentPlanService
+import org.kert0n.medappserver.testutil.*
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
@@ -86,7 +87,7 @@ class MedKitDrugOrchestratorTest {
         val drug = dbHelper.freshDrug(kit1.id, 50.0)
         dbHelper.flushAndClear()
 
-        val moved = medKitDrugOrchestrator.moveDrug(drug.id, kit2.id, alice.id)
+        val moved = medKitDrugOrchestrator.moveDrugLatest(drugService, drug.id, kit2.id, alice.id)
         assertEquals(kit2.id, moved.medKitId)
     }
 
@@ -101,11 +102,11 @@ class MedKitDrugOrchestratorTest {
         val drug = dbHelper.freshDrug(sourceKit.id, 50.0)
         dbHelper.flushAndClear()
 
-        drugService.createPlan(alice.id, drug.id, qty(10.0))
-        drugService.createPlan(bob.id, drug.id, qty(10.0))
+        drugService.createPlanLatest(alice.id, drug.id, qty(10.0))
+        drugService.createPlanLatest(bob.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
-        medKitDrugOrchestrator.moveDrug(drug.id, targetKit.id, alice.id)
+        medKitDrugOrchestrator.moveDrugLatest(drugService, drug.id, targetKit.id, alice.id)
         dbHelper.flushAndClear()
 
         assertNull(dbHelper.userPlan(bob.id, drug.id))
@@ -126,7 +127,7 @@ class MedKitDrugOrchestratorTest {
         dbHelper.flushAndClear()
 
         assertDoesNotThrow {
-            medKitDrugOrchestrator.moveDrug(drug.id, kitB.id, bob.id)
+            medKitDrugOrchestrator.moveDrugLatest(drugService, drug.id, kitB.id, bob.id)
         }
 
         assertEquals(kitB.id, dbHelper.requireDrug(drug.id).medKitId)
@@ -140,7 +141,7 @@ class MedKitDrugOrchestratorTest {
         dbHelper.flushAndClear()
 
         assertThrows<DomainRuleViolated> {
-            medKitDrugOrchestrator.moveDrug(drug.id, UUID.randomUUID(), alice.id)
+            medKitDrugOrchestrator.moveDrugLatest(drugService, drug.id, UUID.randomUUID(), alice.id)
         }
     }
 
@@ -155,10 +156,10 @@ class MedKitDrugOrchestratorTest {
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        drugService.createPlan(bob.id, drug.id, qty(10.0))
+        drugService.createPlanLatest(bob.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
-        medKitDrugOrchestrator.leaveMedKit(kit.id, bob.id)
+        medKitDrugOrchestrator.leaveMedKitLatest(medKitService, kit.id, bob.id)
         dbHelper.flushAndClear()
 
         assertNotNull(medKitService.requireAccessible(kit.id, alice.id))
@@ -176,7 +177,7 @@ class MedKitDrugOrchestratorTest {
         dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
-        medKitDrugOrchestrator.delete(kit.id, alice.id, null)
+        medKitDrugOrchestrator.deleteLatest(medKitService, kit.id, alice.id, null)
         dbHelper.flushAndClear()
 
         assertThrows<DomainRuleViolated> {
@@ -194,7 +195,7 @@ class MedKitDrugOrchestratorTest {
         )
         dbHelper.flushAndClear()
 
-        medKitDrugOrchestrator.delete(kitA.id, alice.id, kitB.id)
+        medKitDrugOrchestrator.deleteLatest(medKitService, kitA.id, alice.id, kitB.id)
         dbHelper.flushAndClear()
 
         assertNull(medKitStore.findById(kitA.id))
@@ -215,11 +216,11 @@ class MedKitDrugOrchestratorTest {
         val drug = dbHelper.freshDrug(oldKit.id, 90.0)
         dbHelper.flushAndClear()
 
-        drugService.createPlan(alice.id, drug.id, qty(30.0))
-        drugService.createPlan(charlie.id, drug.id, qty(30.0))
+        drugService.createPlanLatest(alice.id, drug.id, qty(30.0))
+        drugService.createPlanLatest(charlie.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
-        medKitDrugOrchestrator.delete(oldKit.id, alice.id, newKit.id)
+        medKitDrugOrchestrator.deleteLatest(medKitService, oldKit.id, alice.id, newKit.id)
         dbHelper.flushAndClear()
 
         assertNotNull(dbHelper.userPlan(alice.id, drug.id))
@@ -232,7 +233,7 @@ class MedKitDrugOrchestratorTest {
         dbHelper.flushAndClear()
 
         assertThrows<DomainRuleViolated> {
-            medKitDrugOrchestrator.delete(UUID.randomUUID(), alice.id, null)
+            medKitDrugOrchestrator.deleteLatest(medKitService, UUID.randomUUID(), alice.id, null)
         }
     }
 

@@ -15,6 +15,7 @@ import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
+import org.kert0n.medappserver.testutil.*
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -93,7 +94,7 @@ class BasicWorkflowStoriesTest {
         entityManager.flush()
 
         // Anna takes 2 tablets of Aspirin
-        drugService.consume(aspirin.id, qty(2.0), anna.id)
+        drugService.consumeLatest(aspirin.id, qty(2.0), anna.id)
         entityManager.flush()
         entityManager.clear()
 
@@ -145,12 +146,12 @@ class BasicWorkflowStoriesTest {
         entityManager.clear()
 
         // Both can see it
-        val annaMedkits = medKitService.idsOfUser(anna.id)
-        val bobMedkits = medKitService.idsOfUser(bob.id)
+        val annaMedkits = medKitService.refsOfUser(anna.id)
+        val bobMedkits = medKitService.refsOfUser(bob.id)
 
         assertEquals(1, annaMedkits.size)
         assertEquals(1, bobMedkits.size)
-        assertEquals(annaMedkits[0], bobMedkits[0], "Should be the same medkit")
+        assertEquals(annaMedkits[0].id, bobMedkits[0].id, "Should be the same medkit")
 
         // Verify the medkit has 2 users
         val sharedMedkit = medKitStore.findById(medkit.id)
@@ -196,7 +197,7 @@ class BasicWorkflowStoriesTest {
         assertEquals(2, loadedMedkit.members.size)
 
         // Bob leaves (drugs stay)
-        medKitDrugOrchestrator.leaveMedKit(medkit.id, bob.id)
+        medKitDrugOrchestrator.leaveMedKitLatest(medKitService, medkit.id, bob.id)
         entityManager.flush()
         entityManager.clear()
 
@@ -255,10 +256,10 @@ class BasicWorkflowStoriesTest {
         entityManager.clear()
 
         // Verify user has 2 medkits
-        assertEquals(2, medKitService.idsOfUser(userData.id).size)
+        assertEquals(2, medKitService.refsOfUser(userData.id).size)
 
         // Delete old medkit and move drugs
-        medKitDrugOrchestrator.delete(oldMedkit.id, userData.id, newMedkit.id)
+        medKitDrugOrchestrator.deleteLatest(medKitService, oldMedkit.id, userData.id, newMedkit.id)
         entityManager.flush()
         entityManager.clear()
 
@@ -274,7 +275,7 @@ class BasicWorkflowStoriesTest {
         assertNull(oldMedkitCheck, "Old medkit should be deleted")
 
         // User should have only 1 medkit now
-        assertEquals(1, medKitService.idsOfUser(userData.id).size)
+        assertEquals(1, medKitService.refsOfUser(userData.id).size)
 
         println("✅ Story 4 passed: Drugs successfully migrated to new medkit")
     }
@@ -304,9 +305,9 @@ class BasicWorkflowStoriesTest {
         entityManager.flush()
 
         // Consume all in steps
-        drugService.consume(drugData.id, qty(10.0), userData.id)
-        drugService.consume(drugData.id, qty(10.0), userData.id)
-        drugService.consume(drugData.id, qty(10.0), userData.id)
+        drugService.consumeLatest(drugData.id, qty(10.0), userData.id)
+        drugService.consumeLatest(drugData.id, qty(10.0), userData.id)
+        drugService.consumeLatest(drugData.id, qty(10.0), userData.id)
         entityManager.flush()
         entityManager.clear()
 
