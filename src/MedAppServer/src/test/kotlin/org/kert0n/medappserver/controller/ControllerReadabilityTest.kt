@@ -1,11 +1,11 @@
 package org.kert0n.medappserver.controller
 
-import org.junit.jupiter.api.Test
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.name
 import kotlin.streams.asSequence
 import kotlin.test.assertTrue
+import org.junit.jupiter.api.Test
 
 /**
  * Контроллеры остаются читаемыми.

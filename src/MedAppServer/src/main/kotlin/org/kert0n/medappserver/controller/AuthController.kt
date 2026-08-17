@@ -1,15 +1,16 @@
 package org.kert0n.medappserver.controller
 
 import io.swagger.v3.oas.annotations.Operation
-import io.swagger.v3.oas.annotations.security.SecurityRequirement
-import org.kert0n.medappserver.services.OpenApiConfiguration
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
+import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.servlet.http.HttpServletRequest
+import java.util.*
 import org.kert0n.medappserver.domain.User
+import org.kert0n.medappserver.services.OpenApiConfiguration
 import org.kert0n.medappserver.services.models.UserService
 import org.kert0n.medappserver.services.security.RegistrationSecret
 import org.kert0n.medappserver.services.security.SecurityService
@@ -17,7 +18,6 @@ import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.server.ResponseStatusException
-import java.util.*
 
 @RestController
 @RequestMapping("/v1/auth")

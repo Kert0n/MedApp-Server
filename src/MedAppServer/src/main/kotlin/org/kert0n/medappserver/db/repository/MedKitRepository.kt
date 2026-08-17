@@ -1,12 +1,12 @@
 package org.kert0n.medappserver.db.repository
 
+import java.util.*
 import org.kert0n.medappserver.db.model.MedKitData
 import org.kert0n.medappserver.db.model.MedKitMembershipData
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
-import java.util.*
 
 interface MedKitRepository : JpaRepository<MedKitData, UUID> {
 

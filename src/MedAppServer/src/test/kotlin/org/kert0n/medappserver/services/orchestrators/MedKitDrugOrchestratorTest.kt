@@ -1,6 +1,5 @@
 package org.kert0n.medappserver.services.orchestrators
 
-import org.kert0n.medappserver.db.store.MedKitStore
 import java.util.*
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -10,8 +9,8 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertDoesNotThrow
 import org.junit.jupiter.api.assertThrows
 import org.kert0n.medappserver.api.DrugCreateRequest
-import org.kert0n.medappserver.db.repository.DrugRepository
-import org.kert0n.medappserver.db.repository.MedKitRepository
+import org.kert0n.medappserver.db.store.MedKitStore
+import org.kert0n.medappserver.domain.DomainRuleViolated
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.TreatmentPlanService
@@ -21,7 +20,6 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.transaction.annotation.Transactional
-import org.kert0n.medappserver.domain.DomainRuleViolated
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -42,8 +40,6 @@ class MedKitDrugOrchestratorTest {
     @Autowired
     private lateinit var treatmentPlanService: TreatmentPlanService
     @Autowired
-    private lateinit var drugRepository: DrugRepository
-    @Autowired
     private lateinit var dbHelper: DatabaseTestHelper
 
     // ── createDrugInMedKit ──
@@ -56,7 +52,7 @@ class MedKitDrugOrchestratorTest {
 
         val drug = medKitDrugOrchestrator.createDrugInMedKit(
             kit.id,
-            DrugCreateRequest(name = "Aspirin", quantity = qty(100.0), quantityUnit = "mg"),
+            DrugCreateRequest(name = "Aspirin", quantity = qty(100.0), quantityUnitId = dbHelper.unit().id),
             alice.id
         )
 
@@ -74,7 +70,7 @@ class MedKitDrugOrchestratorTest {
         assertFailsWith<DomainRuleViolated> {
             medKitDrugOrchestrator.createDrugInMedKit(
                 kit.id,
-                DrugCreateRequest(name = "Drug", quantity = qty(10.0), quantityUnit = "mg"),
+                DrugCreateRequest(name = "Drug", quantity = qty(10.0), quantityUnitId = dbHelper.unit().id),
                 eve.id
             )
         }
@@ -124,7 +120,7 @@ class MedKitDrugOrchestratorTest {
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kitA.id, alice.id), bob.id)
 
         val drug = drugService.create(
-            DrugCreateRequest("Shared Meds", qty(10.0), "pcs"), kitA.id, alice.id
+            DrugCreateRequest("Shared Meds", qty(10.0), dbHelper.unit().id), kitA.id, alice.id
         )
         val kitB = medKitService.createNew(bob.id)
         dbHelper.flushAndClear()
@@ -133,7 +129,7 @@ class MedKitDrugOrchestratorTest {
             medKitDrugOrchestrator.moveDrug(drug.id, kitB.id, bob.id)
         }
 
-        assertEquals(kitB.id, drugService.requireById(drug.id).medKitId)
+        assertEquals(kitB.id, dbHelper.requireDrug(drug.id).medKitId)
     }
 
     @Test
@@ -194,7 +190,7 @@ class MedKitDrugOrchestratorTest {
         val kitA = medKitService.createNew(alice.id)
         val kitB = medKitService.createNew(alice.id)
         val drug = medKitDrugOrchestrator.createDrugInMedKit(
-            kitA.id, DrugCreateRequest("Migrating Drug", qty(10.0), "pcs"), alice.id
+            kitA.id, DrugCreateRequest("Migrating Drug", qty(10.0), dbHelper.unit().id), alice.id
         )
         dbHelper.flushAndClear()
 
@@ -202,7 +198,7 @@ class MedKitDrugOrchestratorTest {
         dbHelper.flushAndClear()
 
         assertNull(medKitStore.findById(kitA.id))
-        val survivingDrug = drugService.findById(drug.id)
+        val survivingDrug = dbHelper.drug(drug.id)
         assertNotNull(survivingDrug)
         assertEquals(kitB.id, survivingDrug.medKitId)
     }
@@ -247,11 +243,11 @@ class MedKitDrugOrchestratorTest {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
         drugService.create(
-            DrugCreateRequest(name = "Drug A", quantity = qty(50.0), quantityUnit = "mg"),
+            DrugCreateRequest(name = "Drug A", quantity = qty(50.0), quantityUnitId = dbHelper.unit().id),
             kit.id, alice.id
         )
         drugService.create(
-            DrugCreateRequest(name = "Drug B", quantity = qty(30.0), quantityUnit = "tablets"),
+            DrugCreateRequest(name = "Drug B", quantity = qty(30.0), quantityUnitId = dbHelper.unit().id),
             kit.id, alice.id
         )
         dbHelper.flushAndClear()

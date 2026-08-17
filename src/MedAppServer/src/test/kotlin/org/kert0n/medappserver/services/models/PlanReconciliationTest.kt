@@ -3,14 +3,11 @@ package org.kert0n.medappserver.services.models
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import org.junit.jupiter.api.Test
-import org.kert0n.medappserver.db.repository.DrugRepository
-import org.kert0n.medappserver.db.repository.TreatmentPlanRepository
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.data.repository.findByIdOrNull
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.transaction.annotation.Transactional
 
@@ -30,10 +27,6 @@ class PlanReconciliationTest {
     @Autowired
     private lateinit var medKitService: MedKitService
     @Autowired
-    private lateinit var treatmentPlanService: TreatmentPlanService
-    @Autowired
-    private lateinit var treatmentPlanRepository: TreatmentPlanRepository
-    @Autowired
     private lateinit var dbHelper: DatabaseTestHelper
 
     // ── остаток дошёл до нуля: препарат удаляется вместе с планами ──
@@ -51,8 +44,8 @@ class PlanReconciliationTest {
         drugService.consume(drug.id, qty(50.0), alice.id)
         dbHelper.flushAndClear()
 
-        assertNull(drugService.findById(drug.id))
-        assertEquals(0, treatmentPlanRepository.findAllByPlanKeyDrugId(drug.id).size)
+        assertNull(dbHelper.drug(drug.id))
+        assertEquals(0, (dbHelper.drug(drug.id)?.plans ?: emptyList()).size)
     }
 
     // ── сумма планов укладывается в остаток: пересчёта нет ──

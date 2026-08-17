@@ -3,9 +3,13 @@ package org.kert0n.medappserver.testutil
 import jakarta.persistence.EntityManager
 import java.math.BigDecimal
 import java.util.*
+import org.kert0n.medappserver.db.model.parsed.QuantityUnitData
+import org.kert0n.medappserver.db.repository.QuantityUnitRepository
 import org.kert0n.medappserver.db.store.DrugStore
 import org.kert0n.medappserver.db.store.UserStore
 import org.kert0n.medappserver.domain.Drug
+import org.kert0n.medappserver.domain.Quantity
+import org.kert0n.medappserver.domain.QuantityUnit
 import org.kert0n.medappserver.domain.User
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
@@ -14,12 +18,14 @@ import org.springframework.transaction.annotation.Transactional
  * Подготовка данных и точечные проверки состояния.
  *
  * Ходит через хранилища, а не через репозитории: тест обязан пользоваться той же границей,
- * что и приложение, иначе он проверяет не то, что работает в проде.
+ * что и приложение. Исключение — словарь единиц измерения: его наполняет импорт каталога, а
+ * тесту нужна хотя бы одна запись, чтобы препарат было в чём измерять.
  */
 @Component
 class DatabaseTestHelper(
     private val users: UserStore,
     private val drugs: DrugStore,
+    private val quantityUnits: QuantityUnitRepository,
     private val entityManager: EntityManager
 ) {
     @Transactional
@@ -29,14 +35,20 @@ class DatabaseTestHelper(
         return user
     }
 
+    /** Единица измерения из словаря; заводится один раз и переиспользуется. */
+    @Transactional
+    fun unit(name: String = "mg"): QuantityUnit {
+        val stored = quantityUnits.findAll().find { it.name == name }
+            ?: quantityUnits.save(QuantityUnitData(name = name))
+        return QuantityUnit(stored.id, stored.name)
+    }
+
     @Transactional
     fun freshDrug(medKitId: UUID, quantity: Double): Drug {
         val drug = Drug(
             medKitId = medKitId,
             name = "Drug_${UUID.randomUUID()}",
-            quantity = qty(quantity),
-            quantityUnit = "mg",
-            formType = "tablet",
+            quantity = Quantity(qty(quantity), unit()),
             category = "painkiller",
             manufacturer = "Test Pharma",
             country = "TestLand",
@@ -65,8 +77,18 @@ class DatabaseTestHelper(
         entityManager.clear()
     }
 
+    /**
+     * Препарат без проверки доступа.
+     *
+     * В приложении такого чтения нет — там доступ проверяется всегда; тесту же нужно
+     * убедиться, что строки не стало, безотносительно того, кто спрашивает.
+     */
+    fun drug(id: UUID): Drug? = drugs.findById(id)
+
+    fun requireDrug(id: UUID): Drug = drug(id) ?: error("Препарат $id не найден")
+
     // Проверки, существенные для privacy-by-default: `null` означает, что записи больше нет.
-    fun drugQuantity(id: UUID): BigDecimal? = drugs.findById(id)?.quantity
-    fun totalPlanned(id: UUID): BigDecimal? = drugs.findById(id)?.let { drugs.plannedTotalOf(id) }
-    fun userPlan(userId: UUID, drugId: UUID): BigDecimal? = drugs.findPlan(userId, drugId)?.plannedAmount
+    fun drugQuantity(id: UUID): BigDecimal? = drugs.findById(id)?.quantity?.amount
+    fun totalPlanned(id: UUID): BigDecimal? = drugs.findById(id)?.plannedTotal?.amount
+    fun userPlan(userId: UUID, drugId: UUID): BigDecimal? = drugs.findPlan(userId, drugId)?.plannedAmount?.amount
 }

@@ -1,20 +1,16 @@
 package org.kert0n.medappserver.integration
 
-import org.kert0n.medappserver.testutil.DatabaseTestHelper
-import org.kert0n.medappserver.domain.Drug
-import org.kert0n.medappserver.domain.User
-import org.kert0n.medappserver.testutil.ApiRoutes
 import java.util.UUID
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
-import org.kert0n.medappserver.db.model.DrugData
-import org.kert0n.medappserver.db.model.UserData
-import org.kert0n.medappserver.db.repository.DrugRepository
-import org.kert0n.medappserver.db.repository.MedKitRepository
-import org.kert0n.medappserver.db.repository.UserRepository
+import org.kert0n.medappserver.domain.Drug
+import org.kert0n.medappserver.domain.Quantity
+import org.kert0n.medappserver.domain.User
+import org.kert0n.medappserver.testutil.ApiRoutes
+import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -56,8 +52,6 @@ class ErrorResponseShapeTest {
     @Autowired
     private lateinit var context: WebApplicationContext
 
-    @Autowired
-    private lateinit var medKitRepository: MedKitRepository
 
     @Autowired
     private lateinit var objectMapper: ObjectMapper
@@ -98,7 +92,7 @@ class ErrorResponseShapeTest {
         val medKit = medKitService.createNew(user.id)
         val drug = dbHelper.insert(
             Drug(
-                medKitId = medKit.id, name = "Aspirin", quantity = qty(5.0), quantityUnit = "tab"
+                medKitId = medKit.id, name = "Aspirin", quantity = Quantity(qty(5.0), dbHelper.unit()),
             )
         )
 

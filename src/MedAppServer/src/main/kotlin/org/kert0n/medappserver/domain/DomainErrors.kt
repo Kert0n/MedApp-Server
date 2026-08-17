@@ -40,3 +40,18 @@ class InvalidCredentials : DomainRuleViolated("Credentials must not be blank")
 
 /** Аптечки без участников не бывает: последний выходящий забирает её с собой. */
 class MedKitWithoutMembers : DomainRuleViolated("Medicine kit must have at least one member")
+
+/** Количество не бывает отрицательным. */
+class NegativeQuantity : DomainRuleViolated("Quantity must not be negative")
+
+/** Величины в разных единицах измерения несравнимы и не складываются. */
+class QuantityUnitMismatch : DomainRuleViolated("Quantities must share the same unit")
+
+/** План принадлежит другому препарату. */
+class ForeignTreatmentPlan : DomainRuleViolated("Treatment plan belongs to another drug")
+
+/** Единицы измерения с таким идентификатором в справочнике нет. */
+class UnknownQuantityUnit : DomainRuleViolated("Unknown quantity unit")
+
+/** Формы выпуска с таким идентификатором в справочнике нет. */
+class UnknownFormType : DomainRuleViolated("Unknown dosage form")

@@ -3,8 +3,8 @@ package org.kert0n.medappserver.db.model.parsed
 import jakarta.persistence.*
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
-import org.hibernate.annotations.GeneratedColumn
 import java.util.*
+import org.hibernate.annotations.GeneratedColumn
 
 /**
  * Каталог препаратов, по которому ищет приложение.
@@ -32,7 +32,7 @@ import java.util.*
             columnList = "quantity_unit_id"
         )]
 )
-class VidalDrug(
+class DrugTemplateData(
     @Id
     @Column(name = "id", nullable = false) var id: UUID = UUID.randomUUID(),
 
@@ -45,12 +45,12 @@ class VidalDrug(
     @Column(name = "name_lat", length = 300) var nameLat: String? = null,
 
     @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "form_type_id") var formType: FormType? = null,
+    @JoinColumn(name = "form_type_id") var formType: FormTypeData? = null,
 
     @Column(name = "quantity") var quantity: Int? = null,
 
     @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "quantity_unit_id") var quantityUnit: QuantityUnit? = null,
+    @JoinColumn(name = "quantity_unit_id") var quantityUnit: QuantityUnitData? = null,
 
     @Size(max = 300)
     @Column(name = "active_substance", length = 300) var activeSubstance: String? = null,
@@ -89,7 +89,7 @@ class VidalDrug(
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
 
-        other as VidalDrug
+        other as DrugTemplateData
 
         return id == other.id
     }

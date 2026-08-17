@@ -1,12 +1,13 @@
 package org.kert0n.medappserver.integration
 
 import com.sksamuel.aedile.core.Cache
+import java.util.UUID
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.kert0n.medappserver.testutil.ApiRoutes
 import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.models.UserService
 import org.kert0n.medappserver.services.security.AuthenticatedUserService
+import org.kert0n.medappserver.testutil.ApiRoutes
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
@@ -23,7 +24,6 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
-import java.util.UUID
 
 /**
  * Every token request costs a bcrypt verification, so an unauthenticated caller could

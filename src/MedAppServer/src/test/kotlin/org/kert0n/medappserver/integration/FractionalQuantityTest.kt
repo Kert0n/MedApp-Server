@@ -1,5 +1,9 @@
 package org.kert0n.medappserver.integration
 
+import java.math.BigDecimal
+import java.math.RoundingMode
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.db.repository.DrugRepository
@@ -12,10 +16,6 @@ import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.transaction.annotation.Transactional
-import java.math.BigDecimal
-import java.math.RoundingMode
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 /**
  * Арифметика дробных количеств на настоящем PostgreSQL.
@@ -64,7 +64,7 @@ class FractionalQuantityTest {
             "препарат с нулевым остатком должен быть удалён"
         )
         assertTrue(
-            treatmentPlanRepository.findAllByPlanKeyDrugId(drug.id).isEmpty(),
+            (dbHelper.drug(drug.id)?.plans ?: emptyList()).isEmpty(),
             "планов не должно остаться"
         )
     }
@@ -86,8 +86,7 @@ class FractionalQuantityTest {
         dbHelper.flushAndClear()
 
         val remaining = dbHelper.drugQuantity(drug.id)!!
-        val plansTotal = treatmentPlanRepository.findAllByPlanKeyDrugId(drug.id)
-            .fold(BigDecimal.ZERO) { sum, plan -> sum + plan.plannedAmount }
+        val plansTotal = dbHelper.requireDrug(drug.id).plannedTotal.amount
 
         assertTrue(
             plansTotal <= remaining,

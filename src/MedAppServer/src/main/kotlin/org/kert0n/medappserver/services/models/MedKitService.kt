@@ -3,9 +3,9 @@ package org.kert0n.medappserver.services.models
 import com.sksamuel.aedile.core.Cache
 import java.util.UUID
 import org.kert0n.medappserver.db.store.MedKitStore
-import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.MedKitOverview
+import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.services.security.SecurityService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service

@@ -15,25 +15,25 @@ import java.util.*
 @org.hibernate.annotations.BatchSize(size = 64)
 @Entity
 @Table(
-    name = "quantity_units", uniqueConstraints = [UniqueConstraint(
-        name = "quantity_units_name_key",
+    name = "form_types", uniqueConstraints = [UniqueConstraint(
+        name = "form_types_name_key",
         columnNames = ["name"]
     )]
 )
-class QuantityUnit(
+class FormTypeData(
     @Id
     @Column(name = "id", nullable = false) var id: UUID = UUID.randomUUID(),
 
-    @Size(max = 30)
+    @Size(max = 100)
     @NotNull
-    @Column(name = "name", nullable = false, length = 30) var name: String
+    @Column(name = "name", nullable = false, length = 100) var name: String
 
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
 
-        other as QuantityUnit
+        other as FormTypeData
 
         return id == other.id
     }

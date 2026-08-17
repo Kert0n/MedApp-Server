@@ -1,12 +1,12 @@
 package org.kert0n.medappserver.db.repository
 
 import jakarta.persistence.LockModeType
+import java.util.*
 import org.kert0n.medappserver.db.model.DrugData
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Lock
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
-import java.util.*
 
 /**
  * Строки препаратов. Наружу этот интерфейс не выходит — им пользуется только `DrugStore`.
@@ -49,8 +49,6 @@ interface DrugRepository : JpaRepository<DrugData, UUID> {
     """
     )
     fun findAllAccessibleWithPlans(@Param("userId") userId: UUID): List<DrugData>
-
-    fun findAllByMedKitId(medKitId: UUID): List<DrugData>
 
     /**
      * Загрузка под блокировкой строки.

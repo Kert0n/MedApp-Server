@@ -3,16 +3,17 @@ package org.kert0n.medappserver.db.model
 import jakarta.persistence.*
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
-import org.kert0n.medappserver.domain.QUANTITY_PRECISION
-import org.kert0n.medappserver.domain.QUANTITY_SCALE
-import org.kert0n.medappserver.domain.toQuantityScale
 import java.math.BigDecimal
 import java.util.*
+import org.kert0n.medappserver.db.model.parsed.FormTypeData
+import org.kert0n.medappserver.db.model.parsed.QuantityUnitData
+import org.kert0n.medappserver.domain.QUANTITY_PRECISION
+import org.kert0n.medappserver.domain.QUANTITY_SCALE
 
 /**
  * Отображение препарата на таблицу `user_drugs`. Правил здесь нет.
  *
- * Всё, что препарат решает, решает `domain.drug.Drug`; сюда состояние переносится
+ * Всё, что препарат решает, решает `domain.Drug`; сюда состояние переносится
  * маппером, а SQL из этого делает Hibernate. Поэтому `var` у свойств никого не смущает:
  * этот класс существует ровно затем, чтобы его поля заполняли снаружи.
  */
@@ -34,16 +35,30 @@ class DrugData(
     @Column(name = "name", nullable = false, length = 300)
     var name: String,
 
-    quantity: BigDecimal,
-
     @NotNull
-    @Size(max = 50)
-    @Column(name = "quantity_unit", nullable = false, length = 50)
-    var quantityUnit: String,
+    @Column(name = "quantity", nullable = false, precision = QUANTITY_PRECISION, scale = QUANTITY_SCALE)
+    var quantity: BigDecimal,
 
-    @Size(max = 100)
-    @Column(name = "form_type", length = 100)
-    var formType: String?,
+    /**
+     * Единица измерения — строка общего справочника, а не свободный текст.
+     *
+     * `EAGER`: единица нужна всегда, потому что без неё количество не имеет смысла. При
+     * загрузке сущности Hibernate забирает её тем же запросом; отдельный SELECT остаётся
+     * только у команд, которые берут строку под блокировкой — там fetch join несовместим с
+     * `FOR UPDATE`.
+     */
+    @NotNull
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(
+        name = "quantity_unit_id",
+        nullable = false,
+        foreignKey = ForeignKey(name = "user_drugs_quantity_unit_fkey")
+    )
+    var quantityUnit: QuantityUnitData,
+
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "form_type_id", foreignKey = ForeignKey(name = "user_drugs_form_type_fkey"))
+    var formType: FormTypeData?,
 
     @Size(max = 200)
     @Column(name = "category", length = 200)
@@ -86,14 +101,6 @@ class DrugData(
     var treatmentPlans: MutableSet<TreatmentPlanData> = mutableSetOf()
 
 ) {
-
-    /** Остаток препарата, нормализованный до масштаба колонки `NUMERIC(19,6)`. */
-    @NotNull
-    @Column(name = "quantity", nullable = false, precision = QUANTITY_PRECISION, scale = QUANTITY_SCALE)
-    var quantity: BigDecimal = quantity.toQuantityScale()
-        set(value) {
-            field = value.toQuantityScale()
-        }
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true

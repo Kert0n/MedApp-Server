@@ -1,6 +1,5 @@
 package org.kert0n.medappserver.services.models
 
-import org.kert0n.medappserver.api.toDto
 import java.util.*
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -9,12 +8,15 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.api.DrugPatchRequest
+import org.kert0n.medappserver.api.toDto
+import org.kert0n.medappserver.db.repository.DrugRepository
+import org.kert0n.medappserver.domain.DomainRuleViolated
 import org.kert0n.medappserver.domain.InsufficientStock
-import org.kert0n.medappserver.domain.InvalidQuantity
 import org.kert0n.medappserver.domain.IntakeExceedsPlan
+import org.kert0n.medappserver.domain.InvalidQuantity
+import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.PlannedAmountExceedsStock
 import org.kert0n.medappserver.domain.TreatmentPlanAlreadyExists
-import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -22,7 +24,6 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.transaction.annotation.Transactional
-import org.kert0n.medappserver.domain.DomainRuleViolated
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -43,10 +44,10 @@ class DrugServiceTest {
     // ── findById ──
 
     @Test
-    fun `findById throws NOT_FOUND for non-existent drug`() {
-        assertThrows<DomainRuleViolated> {
-            drugService.requireById(UUID.randomUUID())
-        }
+    fun `несуществующий препарат неотличим от недоступного`() {
+        val alice = dbHelper.freshUser("alice")
+
+        assertThrows<NotAMember> { drugService.require(UUID.randomUUID(), alice.id) }
     }
 
     // ── findByIdForUser / findByIdForUserForUpdate ──
@@ -114,7 +115,7 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         val drug = drugService.create(
-            DrugCreateRequest(name = "Aspirin", quantity = qty(100.0), quantityUnit = "mg"),
+            DrugCreateRequest(name = "Aspirin", quantity = qty(100.0), quantityUnitId = dbHelper.unit().id),
             kit.id, alice.id
         )
 
@@ -137,7 +138,7 @@ class DrugServiceTest {
         drugService.update(drug.id, emptyUpdate, alice.id)
         dbHelper.flushAndClear()
 
-        assertQty(10.0, drugService.requireById(drug.id).quantity)
+        assertQty(10.0, dbHelper.requireDrug(drug.id).quantity)
     }
 
     @Test
@@ -148,18 +149,15 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         val fullUpdate = DrugPatchRequest(
-            name = "New Name", quantity = qty(100.0), quantityUnit = "ml",
-            formType = "liquid", category = "cat", manufacturer = "man",
+            name = "New Name", quantity = qty(100.0), category = "cat", manufacturer = "man",
             country = "co", description = "desc"
         )
         drugService.update(drug.id, fullUpdate, alice.id)
         dbHelper.flushAndClear()
 
-        val updated = drugService.requireById(drug.id)
+        val updated = dbHelper.requireDrug(drug.id)
         assertEquals("New Name", updated.name)
         assertQty(100.0, updated.quantity)
-        assertEquals("ml", updated.quantityUnit)
-        assertEquals("liquid", updated.formType)
         assertEquals("cat", updated.category)
         assertEquals("man", updated.manufacturer)
         assertEquals("co", updated.country)
@@ -227,9 +225,7 @@ class DrugServiceTest {
         drugService.delete(drug.id, alice.id)
         dbHelper.flushAndClear()
 
-        assertThrows<DomainRuleViolated> {
-            drugService.requireById(drug.id)
-        }
+        assertNull(dbHelper.drug(drug.id))
     }
 
     // ── consumeDrug ──
@@ -264,7 +260,7 @@ class DrugServiceTest {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
         val drug = drugService.create(
-            DrugCreateRequest(name = "Drug", quantity = qty(100.0), quantityUnit = "mg"),
+            DrugCreateRequest(name = "Drug", quantity = qty(100.0), quantityUnitId = dbHelper.unit().id),
             kit.id, alice.id
         )
         drugService.createPlan(alice.id, drug.id, qty(25.0))
@@ -388,7 +384,7 @@ class DrugServiceTest {
 
         assertNotNull(remaining)
         assertQty(20.0, remaining.plannedAmount)
-        assertQty(90.0, drugService.requireById(drug.id).quantity)
+        assertQty(90.0, dbHelper.requireDrug(drug.id).quantity)
     }
 
     @Test

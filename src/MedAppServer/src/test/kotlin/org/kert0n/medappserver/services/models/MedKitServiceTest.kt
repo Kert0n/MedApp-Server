@@ -1,17 +1,16 @@
 package org.kert0n.medappserver.services.models
 
-import org.kert0n.medappserver.db.store.MedKitStore
+import java.util.*
+import kotlin.test.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
-import org.kert0n.medappserver.db.repository.MedKitRepository
+import org.kert0n.medappserver.db.store.MedKitStore
+import org.kert0n.medappserver.domain.DomainRuleViolated
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.transaction.annotation.Transactional
-import org.kert0n.medappserver.domain.DomainRuleViolated
-import java.util.*
-import kotlin.test.*
 
 @SpringBootTest
 @ActiveProfiles("test")

@@ -2,7 +2,9 @@ package org.kert0n.medappserver.services.models
 
 import java.util.UUID
 import org.kert0n.medappserver.db.store.CatalogueStore
-import org.kert0n.medappserver.db.model.parsed.VidalDrug
+import org.kert0n.medappserver.domain.DrugTemplate
+import org.kert0n.medappserver.domain.FormType
+import org.kert0n.medappserver.domain.QuantityUnit
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -16,7 +18,7 @@ class CatalogueService(private val catalogue: CatalogueStore) {
      * сырой термин, иначе обратные слэши попали бы в сам искомый текст.
      */
     @Transactional(readOnly = true)
-    fun fuzzySearch(searchTerm: String, limit: Int = DEFAULT_LIMIT): List<VidalDrug> {
+    fun fuzzySearch(searchTerm: String, limit: Int = DEFAULT_LIMIT): List<DrugTemplate> {
         val term = searchTerm.trim()
         if (term.isBlank()) {
             return emptyList()
@@ -26,12 +28,30 @@ class CatalogueService(private val catalogue: CatalogueStore) {
             .replace("\\", "\\\\")
             .replace("%", "\\%")
             .replace("_", "\\_")
-        return catalogue.search(term, likeTerm, clampLimit(limit))
+        return catalogue.searchTemplates(term, likeTerm, clampLimit(limit))
     }
 
     /** Карточка справочника или `null`: отсутствие обрабатывает вызывающий. */
     @Transactional(readOnly = true)
-    fun find(id: UUID): VidalDrug? = catalogue.findById(id)
+    fun find(id: UUID): DrugTemplate? = catalogue.findTemplate(id)
+
+    /**
+     * Словари, из которых клиент выбирает единицу и форму.
+     *
+     * Без них идентификатор взять неоткуда: препарат теперь ссылается на общий справочник, а
+     * не носит свободный текст.
+     */
+    @Transactional(readOnly = true)
+    fun quantityUnits(): List<QuantityUnit> = catalogue.quantityUnits()
+
+    @Transactional(readOnly = true)
+    fun formTypes(): List<FormType> = catalogue.formTypes()
+
+    @Transactional(readOnly = true)
+    fun requireQuantityUnit(id: UUID): QuantityUnit = catalogue.requireQuantityUnit(id)
+
+    @Transactional(readOnly = true)
+    fun requireFormType(id: UUID): FormType = catalogue.requireFormType(id)
 
     /**
      * Границы лимита проверяет и контроллер, но полагаться только на него нельзя: `LIMIT -1`

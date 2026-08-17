@@ -1,32 +1,25 @@
 package org.kert0n.medappserver.integration.userstory
 
-import org.kert0n.medappserver.testutil.DatabaseTestHelper
-import org.kert0n.medappserver.db.store.MedKitStore
-import org.kert0n.medappserver.domain.Drug
-import org.kert0n.medappserver.domain.User
 import jakarta.persistence.EntityManager
 import java.util.*
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
-import org.kert0n.medappserver.domain.PlannedAmountExceedsStock
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
-import org.kert0n.medappserver.db.model.DrugData
-import org.kert0n.medappserver.db.model.UserData
-import org.kert0n.medappserver.db.repository.DrugRepository
-import org.kert0n.medappserver.db.repository.MedKitRepository
-import org.kert0n.medappserver.db.repository.TreatmentPlanRepository
-import org.kert0n.medappserver.db.repository.UserRepository
+import org.kert0n.medappserver.db.store.MedKitStore
+import org.kert0n.medappserver.domain.Drug
+import org.kert0n.medappserver.domain.PlannedAmountExceedsStock
+import org.kert0n.medappserver.domain.Quantity
+import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.models.TreatmentPlanService
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
+import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.data.repository.findByIdOrNull
 import org.springframework.transaction.annotation.Transactional
 
 @PostgresIntegrationTest
@@ -44,9 +37,6 @@ class TreatmentPlanStoriesTest {
 
 
     @Autowired
-    private lateinit var drugRepository: DrugRepository
-
-    @Autowired
     private lateinit var entityManager: EntityManager
 
     @Autowired
@@ -58,8 +48,6 @@ class TreatmentPlanStoriesTest {
     @Autowired
     private lateinit var medKitDrugOrchestrator: MedKitDrugOrchestrator
 
-    @Autowired
-    private lateinit var treatmentPlanService: TreatmentPlanService
 
     /**
      * Story 6: Complex workflow with treatment plans
@@ -75,9 +63,7 @@ class TreatmentPlanStoriesTest {
         val drugData = Drug(
             id = UUID.randomUUID(),
             name = "Treatment Drug",
-            quantity = qty(100.0),
-            quantityUnit = "tablets",
-            formType = null,
+            quantity = Quantity(qty(100.0), dbHelper.unit()),
             category = null,
             manufacturer = null,
             country = null,
@@ -104,7 +90,7 @@ class TreatmentPlanStoriesTest {
         entityManager.clear()
 
         // Verify drug quantity decreased
-        val updatedDrug = drugService.findById(drugData.id)
+        val updatedDrug = dbHelper.drug(drugData.id)
         assertNotNull(updatedDrug)
         assertQty(90.0, updatedDrug.quantity, "Drug quantity should be 90 after 10 consumed")
 
@@ -131,9 +117,7 @@ class TreatmentPlanStoriesTest {
         val vitaminC = Drug(
             id = UUID.randomUUID(),
             name = "Vitamin C",
-            quantity = qty(100.0),
-            quantityUnit = "tablets",
-            formType = "tablet",
+            quantity = Quantity(qty(100.0), dbHelper.unit()),
             category = null,
             manufacturer = null,
             country = null,
@@ -179,9 +163,7 @@ class TreatmentPlanStoriesTest {
         val drugData = Drug(
             id = UUID.randomUUID(),
             name = "Paracetamol",
-            quantity = qty(100.0),
-            quantityUnit = "tablets",
-            formType = null,
+            quantity = Quantity(qty(100.0), dbHelper.unit()),
             category = null,
             manufacturer = null,
             country = null,
@@ -202,7 +184,7 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
         entityManager.clear()
 
-        val updatedDrug = drugService.findById(drugData.id)
+        val updatedDrug = dbHelper.drug(drugData.id)
         assertNotNull(updatedDrug)
         assertQty(50.0, updatedDrug.quantity)
 
@@ -228,9 +210,7 @@ class TreatmentPlanStoriesTest {
         val drugData = Drug(
             id = UUID.randomUUID(),
             name = "Ibuprofen",
-            quantity = qty(50.0),
-            quantityUnit = "tablets",
-            formType = null,
+            quantity = Quantity(qty(50.0), dbHelper.unit()),
             category = null,
             manufacturer = null,
             country = null,
@@ -295,13 +275,13 @@ class TreatmentPlanStoriesTest {
         // Add family medications
         val aspirin = Drug(
             id = UUID.randomUUID(), name = "Children's Aspirin",
-            quantity = qty(200.0), quantityUnit = "tablets", formType = "chewable",
+            quantity = Quantity(qty(200.0), dbHelper.unit()),
             category = "painkiller", manufacturer = null, country = null,
             description = null, medKitId = familyKit.id
         )
         val vitamins = Drug(
             id = UUID.randomUUID(), name = "Multivitamins",
-            quantity = qty(90.0), quantityUnit = "tablets", formType = "tablet",
+            quantity = Quantity(qty(90.0), dbHelper.unit()),
             category = "supplement", manufacturer = null, country = null,
             description = null, medKitId = familyKit.id
         )
@@ -328,7 +308,7 @@ class TreatmentPlanStoriesTest {
         entityManager.clear()
 
         // Check vitamins after 1 day
-        val updatedVitamins = drugService.findById(vitamins.id)
+        val updatedVitamins = dbHelper.drug(vitamins.id)
         assertNotNull(updatedVitamins)
         assertQty(87.0, updatedVitamins.quantity, "Should be 90 - 3 = 87")
 

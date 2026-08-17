@@ -1,21 +1,16 @@
 package org.kert0n.medappserver.integration
 
-import jakarta.persistence.EntityManager
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
-import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.TreatmentPlanRepository
-import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.models.TreatmentPlanService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.data.repository.findByIdOrNull
 import org.springframework.transaction.annotation.Transactional
 
 /**
@@ -37,8 +32,6 @@ class QuantityReductionTests {
     @Autowired
     private lateinit var treatmentPlanRepository: TreatmentPlanRepository
 
-    @Autowired
-    private lateinit var entityManager: EntityManager
 
     @Autowired
     private lateinit var drugService: DrugService
@@ -46,8 +39,6 @@ class QuantityReductionTests {
     @Autowired
     private lateinit var medKitService: MedKitService
 
-    @Autowired
-    private lateinit var treatmentPlanService: TreatmentPlanService
 
     @Autowired
     private lateinit var dbHelper: DatabaseTestHelper
@@ -276,18 +267,18 @@ class QuantityReductionTests {
         dbHelper.flushAndClear()
 
         // Sanity: Verify initial state
-        assertEquals(3, (drugService.findById(drug.id)?.plans ?: emptyList()).size)
+        assertEquals(3, (dbHelper.drug(drug.id)?.plans ?: emptyList()).size)
 
         // Action: Consume ALL 60 unplanned
         drugService.consume(drug.id, qty(60.0), alice.id)
         dbHelper.flushAndClear()
 
         // 1. Verify the Drug record is GONE (Privacy-by-Default)
-        val deletedDrug = drugService.findById(drug.id)
+        val deletedDrug = dbHelper.drug(drug.id)
         assertNull(deletedDrug, "Drug record must be deleted from the database when quantity reaches zero")
 
         // 2. Verify all bridge records (treatment plans) are GONE
-        val remainingPlans = treatmentPlanRepository.findAllByPlanKeyDrugId(drug.id)
+        val remainingPlans = (dbHelper.drug(drug.id)?.plans ?: emptyList())
         assertEquals(0, remainingPlans.size, "All treatment plans must be deleted to prevent ghost records")
 
         // 3. Individual lookups must return null
@@ -314,18 +305,18 @@ class QuantityReductionTests {
         drugService.createPlan(alice.id, drug.id, qty(50.0))
         dbHelper.flushAndClear()
 
-        assertEquals(1, (drugService.findById(drug.id)?.plans ?: emptyList()).size)
+        assertEquals(1, (dbHelper.drug(drug.id)?.plans ?: emptyList()).size)
 
         // Action: Consume everything in one go
         drugService.consume(drug.id, qty(50.0), alice.id)
         dbHelper.flushAndClear()
 
         // 1. Verify Drug is PURGED
-        val remainingDrug = drugService.findById(drug.id)
+        val remainingDrug = dbHelper.drug(drug.id)
         assertNull(remainingDrug, "Drug record must be deleted to maintain privacy-by-default")
 
         // 2. Verify Plan is PURGED
-        val remainingPlans = (drugService.findById(drug.id)?.plans ?: emptyList())
+        val remainingPlans = (dbHelper.drug(drug.id)?.plans ?: emptyList())
         assertEquals(0, remainingPlans.size, "Associated treatment plan must be purged")
 
         // 3. Direct lookup should fail
@@ -366,18 +357,18 @@ class QuantityReductionTests {
         assertQty(5.0, dbHelper.drugQuantity(drug.id))
         assertQty(3.0, dbHelper.userPlan(alice.id, drug.id)!!)
         assertQty(2.0, dbHelper.userPlan(bob.id, drug.id)!!)
-        assertEquals(2, (drugService.findById(drug.id)?.plans ?: emptyList()).size, "Still 2 plans after partial reduction")
+        assertEquals(2, (dbHelper.drug(drug.id)?.plans ?: emptyList()).size, "Still 2 plans after partial reduction")
 
         // --- Step 2: Wipe everything ---
         drugService.consume(drug.id, qty(5.0), alice.id)
         dbHelper.flushAndClear()
 
         // 1. Verify Drug is PURGED (Privacy-by-Default)
-        val remainingDrug = drugService.findById(drug.id)
+        val remainingDrug = dbHelper.drug(drug.id)
         assertNull(remainingDrug, "Drug record must be deleted when quantity reaches zero")
 
         // 2. Verify Plans are PURGED
-        val remainingPlans = (drugService.findById(drug.id)?.plans ?: emptyList())
+        val remainingPlans = (dbHelper.drug(drug.id)?.plans ?: emptyList())
         assertEquals(0, remainingPlans.size, "All plans must be deleted on final step")
 
         assertNull(dbHelper.userPlan(alice.id, drug.id), "Alice's plan must be null")

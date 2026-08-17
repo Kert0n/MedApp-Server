@@ -1,19 +1,20 @@
 package org.kert0n.medappserver.testutil
 
-import org.kert0n.medappserver.domain.toQuantityScale
 import java.math.BigDecimal
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import org.kert0n.medappserver.domain.QUANTITY_ROUNDING
+import org.kert0n.medappserver.domain.QUANTITY_SCALE
 
 /**
  * Количество из литерала теста. Через [BigDecimal.valueOf], а не через конструктор: `BigDecimal(0.1)`
  * даёт 0.1000000000000000055511151231257827, то есть ровно ту двоичную ошибку, ради ухода от
  * которой количества и переведены на numeric.
  */
-fun qty(value: Double): BigDecimal = BigDecimal.valueOf(value).toQuantityScale()
+fun qty(value: Double): BigDecimal = BigDecimal.valueOf(value).setScale(QUANTITY_SCALE, QUANTITY_ROUNDING)
 
 /** Количество из точной строки — для значений, которые не выражаются double без потерь. */
-fun qty(value: String): BigDecimal = BigDecimal(value).toQuantityScale()
+fun qty(value: String): BigDecimal = BigDecimal(value).setScale(QUANTITY_SCALE, QUANTITY_ROUNDING)
 
 /**
  * Сравнение количеств по значению. `assertEquals` здесь не годится: у BigDecimal он учитывает
@@ -29,3 +30,13 @@ fun assertQty(expected: BigDecimal, actual: BigDecimal?, message: String? = null
 
 fun assertQty(expected: Double, actual: BigDecimal?, message: String? = null) =
     assertQty(qty(expected), actual, message)
+
+/**
+ * То же сравнение для величины: сопоставляются числа, единица проверяется отдельно там, где
+ * она существенна.
+ */
+fun assertQty(expected: java.math.BigDecimal, actual: org.kert0n.medappserver.domain.Quantity?, message: String? = null) =
+    assertQty(expected, actual?.amount, message)
+
+fun assertQty(expected: Double, actual: org.kert0n.medappserver.domain.Quantity?, message: String? = null) =
+    assertQty(qty(expected), actual?.amount, message)

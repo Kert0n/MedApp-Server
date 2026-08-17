@@ -1,5 +1,6 @@
 package org.kert0n.medappserver.controller
 
+import java.util.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.api.DrugCreateRequest
@@ -8,13 +9,15 @@ import org.kert0n.medappserver.api.MembershipCreateRequest
 import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
 import org.kert0n.medappserver.api.TreatmentPlanPatchRequest
 import org.kert0n.medappserver.domain.Drug
-import org.kert0n.medappserver.domain.TreatmentPlan
 import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.MedKitOverview
+import org.kert0n.medappserver.domain.Quantity
+import org.kert0n.medappserver.domain.QuantityUnit
+import org.kert0n.medappserver.domain.TreatmentPlan
+import org.kert0n.medappserver.services.models.CatalogueService
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.TreatmentPlanService
-import org.kert0n.medappserver.services.models.CatalogueService
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
 import org.kert0n.medappserver.testutil.ApiRoutes
 import org.kert0n.medappserver.testutil.qty
@@ -36,7 +39,6 @@ import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
 import tools.jackson.databind.ObjectMapper
-import java.util.*
 
 /**
  * Опубликованная поверхность API.
@@ -65,9 +67,10 @@ class ResourceApiContractTest {
     private val drugId: UUID = UUID.randomUUID()
 
     private val medKit = MedKit(medKitId, setOf(userId))
+    private val unit = QuantityUnit(UUID.randomUUID(), "mg")
     private val drug = Drug(
         id = drugId, medKitId = medKitId, name = "Aspirin",
-        quantity = qty(100.0), quantityUnit = "mg"
+        quantity = Quantity(qty(100.0), unit)
     )
 
     @BeforeEach
@@ -98,7 +101,7 @@ class ResourceApiContractTest {
     fun `препарат создаётся в аптечке из пути`() {
         whenever(medKitDrugOrchestrator.createDrugInMedKit(eq(medKitId), any(), eq(userId))).thenReturn(drug)
         whenever(drugService.require(drugId, userId)).thenReturn(drug)
-        val body = DrugCreateRequest(name = "Aspirin", quantity = qty(100.0), quantityUnit = "mg")
+        val body = DrugCreateRequest(name = "Aspirin", quantity = qty(100.0), quantityUnitId = unit.id)
 
         mockMvc.perform(
             post(ApiRoutes.drugsOf(medKitId)).with(asUser())
@@ -111,7 +114,7 @@ class ResourceApiContractTest {
 
     @Test
     fun `нулевое количество при создании отвергается`() {
-        val body = DrugCreateRequest(name = "Aspirin", quantity = qty(0.0), quantityUnit = "mg")
+        val body = DrugCreateRequest(name = "Aspirin", quantity = qty(0.0), quantityUnitId = unit.id)
 
         mockMvc.perform(
             post(ApiRoutes.drugsOf(medKitId)).with(asUser())
@@ -173,7 +176,7 @@ class ResourceApiContractTest {
 
     @Test
     fun `план лечения создаётся и меняется`() {
-        val plan = TreatmentPlan(userId = userId, drugId = drugId, plannedAmount = qty(20.0))
+        val plan = TreatmentPlan(userId = userId, drugId = drugId, plannedAmount = Quantity(qty(20.0), unit))
         whenever(drugService.createPlan(eq(userId), eq(drugId), any())).thenReturn(plan)
         whenever(drugService.changePlan(eq(userId), eq(drugId), any())).thenReturn(plan)
         whenever(treatmentPlanService.requirePlan(userId, drugId)).thenReturn(plan)

@@ -1,28 +1,22 @@
 package org.kert0n.medappserver.integration.userstory
 
-import org.kert0n.medappserver.testutil.DatabaseTestHelper
-import org.kert0n.medappserver.domain.MedKit
-import org.kert0n.medappserver.domain.Drug
-import org.kert0n.medappserver.domain.User
 import jakarta.persistence.EntityManager
 import java.util.*
 import kotlin.test.*
-import org.kert0n.medappserver.domain.PlannedAmountExceedsStock
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
-import org.kert0n.medappserver.db.model.DrugData
-import org.kert0n.medappserver.db.model.UserData
-import org.kert0n.medappserver.db.repository.DrugRepository
-import org.kert0n.medappserver.db.repository.TreatmentPlanRepository
-import org.kert0n.medappserver.db.repository.UserRepository
+import org.kert0n.medappserver.domain.Drug
+import org.kert0n.medappserver.domain.MedKit
+import org.kert0n.medappserver.domain.PlannedAmountExceedsStock
+import org.kert0n.medappserver.domain.Quantity
+import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.models.TreatmentPlanService
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
+import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.data.repository.findByIdOrNull
 import org.springframework.transaction.annotation.Transactional
 
 @PostgresIntegrationTest
@@ -33,9 +27,6 @@ class DrugMovementStoriesTest {
 
     private lateinit var dbHelper: DatabaseTestHelper
 
-
-    @Autowired
-    private lateinit var drugRepository: DrugRepository
 
     @Autowired
     private lateinit var entityManager: EntityManager
@@ -49,8 +40,6 @@ class DrugMovementStoriesTest {
     @Autowired
     private lateinit var medKitDrugOrchestrator: MedKitDrugOrchestrator
 
-    @Autowired
-    private lateinit var treatmentPlanService: TreatmentPlanService
 
     /**
      * Story 11: Moving drugs between medkits preserves treatment plans
@@ -67,7 +56,7 @@ class DrugMovementStoriesTest {
 
         val painkiller = Drug(
             id = UUID.randomUUID(), name = "Ibuprofen",
-            quantity = qty(60.0), quantityUnit = "tablets", formType = "tablet",
+            quantity = Quantity(qty(60.0), dbHelper.unit()),
             category = "painkiller", manufacturer = null, country = null,
             description = null, medKitId = homeKit.id
         )
@@ -84,16 +73,16 @@ class DrugMovementStoriesTest {
         entityManager.clear()
 
         // Drug is in travel kit
-        val movedDrug = drugService.findById(painkiller.id)
+        val movedDrug = dbHelper.drug(painkiller.id)
         assertNotNull(movedDrug)
         assertEquals(travelKit.id, movedDrug.medKitId)
 
         // Home kit is empty
-        val homeKitDrugs = drugRepository.findAllByMedKitId(homeKit.id)
+        val homeKitDrugs = drugService.ofMedKit(homeKit.id)
         assertTrue(homeKitDrugs.isEmpty())
 
         // Travel kit has the drug
-        val travelKitDrugs = drugRepository.findAllByMedKitId(travelKit.id)
+        val travelKitDrugs = drugService.ofMedKit(travelKit.id)
         assertEquals(1, travelKitDrugs.size)
 
         // Treatment plan still exists
@@ -122,7 +111,7 @@ class DrugMovementStoriesTest {
 
         val drugData = Drug(
             id = UUID.randomUUID(), name = "Medicine X",
-            quantity = qty(100.0), quantityUnit = "ml", formType = "liquid",
+            quantity = Quantity(qty(100.0), dbHelper.unit()),
             category = null, manufacturer = null, country = null,
             description = null, medKitId = medkit.id
         )
@@ -163,7 +152,7 @@ class DrugMovementStoriesTest {
         val medkit = medKitService.createNew(userData.id)
         val drugData = Drug(
             id = UUID.randomUUID(), name = "Expired Drug",
-            quantity = qty(50.0), quantityUnit = "tablets", formType = null,
+            quantity = Quantity(qty(50.0), dbHelper.unit()), formType = null,
             category = null, manufacturer = null, country = null,
             description = null, medKitId = medkit.id
         )
@@ -185,7 +174,7 @@ class DrugMovementStoriesTest {
         entityManager.clear()
 
         // Drug should be gone
-        val deletedDrug = drugService.findById(drugData.id)
+        val deletedDrug = dbHelper.drug(drugData.id)
         assertNull(deletedDrug)
 
         // Treatment plan should also be gone (cascade)
@@ -217,8 +206,7 @@ class DrugMovementStoriesTest {
         // Add drug to old kit
         val drugData = dbHelper.insert(
             Drug(
-                id = UUID.randomUUID(), name = "Special Meds", quantity = qty(90.0),
-                quantityUnit = "pills", medKitId = oldKit.id, formType = null,
+                id = UUID.randomUUID(), name = "Special Meds", quantity = Quantity(qty(90.0), dbHelper.unit()), medKitId = oldKit.id, formType = null,
                 category = null,
                 manufacturer = null,
                 country = null,
@@ -266,8 +254,7 @@ class DrugMovementStoriesTest {
         // Drug has 100 total
         val drugData = dbHelper.insert(
             Drug(
-                id = UUID.randomUUID(), name = "Shared Vitamins", quantity = qty(100.0),
-                quantityUnit = "pills", medKitId = kit.id, formType = null,
+                id = UUID.randomUUID(), name = "Shared Vitamins", quantity = Quantity(qty(100.0), dbHelper.unit()), medKitId = kit.id, formType = null,
                 category = null,
                 manufacturer = null,
                 country = null,
@@ -313,8 +300,7 @@ class DrugMovementStoriesTest {
 
         val drugDataToMove = dbHelper.insert(
             Drug(
-                id = UUID.randomUUID(), name = "Moving Pill", quantity = qty(10.0),
-                quantityUnit = "pills", medKitId = sourceKit.id, formType = null,
+                id = UUID.randomUUID(), name = "Moving Pill", quantity = Quantity(qty(10.0), dbHelper.unit()), medKitId = sourceKit.id, formType = null,
                 category = null,
                 manufacturer = null,
                 country = null,
@@ -324,8 +310,7 @@ class DrugMovementStoriesTest {
 
         val drugDataToStay = dbHelper.insert(
             Drug(
-                id = UUID.randomUUID(), name = "Staying Pill", quantity = qty(10.0),
-                quantityUnit = "pills", medKitId = sourceKit.id, formType = null,
+                id = UUID.randomUUID(), name = "Staying Pill", quantity = Quantity(qty(10.0), dbHelper.unit()), medKitId = sourceKit.id, formType = null,
                 category = null,
                 manufacturer = null,
                 country = null,
@@ -343,11 +328,11 @@ class DrugMovementStoriesTest {
         entityManager.clear()
 
         // Verify it wasn't deleted by orphan removal during the move
-        val movedDrug = drugService.findById(drugDataToMove.id)
+        val movedDrug = dbHelper.drug(drugDataToMove.id)
         assertNotNull(movedDrug, "Moved drug must not be deleted")
         assertEquals(targetKit.id, movedDrug.medKitId, "Drug should point to new kit")
 
-        val stayingDrug = drugService.findById(drugDataToStay.id)
+        val stayingDrug = dbHelper.drug(drugDataToStay.id)
         assertNotNull(stayingDrug, "Staying drug must not be affected")
         assertEquals(sourceKit.id, stayingDrug.medKitId)
 

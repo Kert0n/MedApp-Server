@@ -13,6 +13,8 @@ tags:
   description: Participation of the caller in shared kits
 - name: User
   description: The authenticated user
+- name: Vocabularies
+  description: Shared quantity units and dosage forms
 - name: Drug catalogue
   description: Reference catalogue used when adding a drug
 - name: Treatment plans
@@ -522,6 +524,25 @@ paths:
                 $ref: "#/components/schemas/UserSnapshotDTO"
         "401":
           description: Authentication is required
+  /v1/quantity-units:
+    get:
+      tags:
+      - Vocabularies
+      summary: List quantity units
+      description: "Shared vocabulary of quantity units. A drug references a unit\
+        \ by identifier, so this list is where the identifier comes from."
+      operationId: listQuantityUnits
+      responses:
+        "200":
+          description: Units returned
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VocabularyEntryDTO"
+        "401":
+          description: Authentication is required
   /v1/med-kits/{medKitId}:
     get:
       tags:
@@ -578,6 +599,25 @@ paths:
           description: Kit deleted for everyone
         "404":
           description: Kit does not exist or is not accessible
+        "401":
+          description: Authentication is required
+  /v1/form-types:
+    get:
+      tags:
+      - Vocabularies
+      summary: List dosage forms
+      description: "Shared vocabulary of dosage forms, used the same way as quantity\
+        \ units."
+      operationId: listFormTypes
+      responses:
+        "200":
+          description: Dosage forms returned
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VocabularyEntryDTO"
         "401":
           description: Authentication is required
   /v1/drug-templates:
@@ -693,13 +733,21 @@ components:
           type: number
           description: Stock not reserved by treatment plans
           example: 70.0
+        quantityUnitId:
+          type: string
+          format: uuid
+          description: Quantity unit identifier
         quantityUnit:
           type: string
-          description: Quantity unit
+          description: Quantity unit name
           example: mg
+        formTypeId:
+          type: string
+          format: uuid
+          description: Dosage form identifier
         formType:
           type: string
-          description: Dosage form
+          description: Dosage form name
           example: tablet
         category:
           type: string
@@ -795,18 +843,14 @@ components:
           description: "Initial stock, greater than zero"
           example: 100.0
           minimum: 0.0
-        quantityUnit:
+        quantityUnitId:
           type: string
-          description: Quantity unit
-          example: mg
-          maxLength: 50
-          minLength: 1
-        formType:
+          format: uuid
+          description: Quantity unit identifier from the shared vocabulary
+        formTypeId:
           type: string
-          description: Dosage form
-          example: tablet
-          maxLength: 100
-          minLength: 0
+          format: uuid
+          description: Dosage form identifier from the shared vocabulary
         category:
           type: string
           description: Category
@@ -833,7 +877,7 @@ components:
       required:
       - name
       - quantity
-      - quantityUnit
+      - quantityUnitId
     MembershipCreateRequest:
       type: object
       description: Request to join a medicine kit by invitation
@@ -915,18 +959,14 @@ components:
             \ down to fit."
           example: 120.0
           minimum: 0.0
-        quantityUnit:
+        quantityUnitId:
           type: string
-          description: Quantity unit
-          example: mg
-          maxLength: 50
-          minLength: 1
-        formType:
+          format: uuid
+          description: Quantity unit identifier from the shared vocabulary
+        formTypeId:
           type: string
-          description: Dosage form
-          example: tablet
-          maxLength: 100
-          minLength: 0
+          format: uuid
+          description: Dosage form identifier from the shared vocabulary
         category:
           type: string
           description: Category
@@ -964,6 +1004,18 @@ components:
           items:
             $ref: "#/components/schemas/MedKitDTO"
           uniqueItems: true
+    VocabularyEntryDTO:
+      type: object
+      description: Shared vocabulary entry
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Identifier
+        name:
+          type: string
+          description: Display name
+          example: mg
     MedKitSummaryDTO:
       type: object
       description: Medicine kit counters without loading its contents
@@ -1002,16 +1054,24 @@ components:
           type: string
           description: Active substance
           example: Acetylsalicylic acid
+        formTypeId:
+          type: string
+          format: uuid
+          description: Dosage form identifier
         formType:
           type: string
-          description: Dosage form
+          description: Dosage form name
           example: таблетки
         category:
           type: string
           description: Category
+        quantityUnitId:
+          type: string
+          format: uuid
+          description: Quantity unit identifier
         quantityUnit:
           type: string
-          description: Quantity unit
+          description: Quantity unit name
           example: шт
         manufacturer:
           type: string

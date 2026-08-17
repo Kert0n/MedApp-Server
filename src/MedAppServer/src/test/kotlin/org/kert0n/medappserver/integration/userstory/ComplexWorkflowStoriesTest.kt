@@ -1,8 +1,5 @@
 package org.kert0n.medappserver.integration.userstory
 
-import org.kert0n.medappserver.db.store.MedKitStore
-import org.kert0n.medappserver.domain.Drug
-import org.kert0n.medappserver.domain.User
 import jakarta.persistence.EntityManager
 import java.util.*
 import kotlin.test.assertEquals
@@ -12,21 +9,17 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertDoesNotThrow
 import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.api.DrugCreateRequest
-import org.kert0n.medappserver.db.model.DrugData
-import org.kert0n.medappserver.db.model.UserData
-import org.kert0n.medappserver.db.repository.DrugRepository
-import org.kert0n.medappserver.db.repository.MedKitRepository
-import org.kert0n.medappserver.db.repository.TreatmentPlanRepository
-import org.kert0n.medappserver.db.repository.UserRepository
+import org.kert0n.medappserver.db.store.MedKitStore
+import org.kert0n.medappserver.domain.Drug
+import org.kert0n.medappserver.domain.Quantity
+import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.models.TreatmentPlanService
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.data.repository.findByIdOrNull
 import org.springframework.transaction.annotation.Transactional
 
 @PostgresIntegrationTest
@@ -41,14 +34,6 @@ class ComplexWorkflowStoriesTest {
     @Autowired
     private lateinit var dbHelper: DatabaseTestHelper
 
-    @Autowired
-    private lateinit var userRepository: UserRepository
-
-    @Autowired
-    private lateinit var drugRepository: DrugRepository
-
-    @Autowired
-    private lateinit var treatmentPlanRepository: TreatmentPlanRepository
 
     @Autowired
     private lateinit var entityManager: EntityManager
@@ -62,8 +47,6 @@ class ComplexWorkflowStoriesTest {
     @Autowired
     private lateinit var medKitDrugOrchestrator: MedKitDrugOrchestrator
 
-    @Autowired
-    private lateinit var treatmentPlanService: TreatmentPlanService
 
     /**
      * Story 17: The Roommate Saga (The Ultimate Stress Test)
@@ -91,8 +74,7 @@ class ComplexWorkflowStoriesTest {
 
         val allergyMeds = dbHelper.insert(
             Drug(
-                id = UUID.randomUUID(), name = "Allergy Meds", quantity = qty(60.0),
-                quantityUnit = "pills", medKitId = homeKit.id, formType = null,
+                id = UUID.randomUUID(), name = "Allergy Meds", quantity = Quantity(qty(60.0), dbHelper.unit()), medKitId = homeKit.id, formType = null,
                 category = null,
                 manufacturer = null,
                 country = null,
@@ -101,8 +83,7 @@ class ComplexWorkflowStoriesTest {
         )
         val painkillers = dbHelper.insert(
             Drug(
-                id = UUID.randomUUID(), name = "Painkillers", quantity = qty(100.0),
-                quantityUnit = "pills", medKitId = homeKit.id, formType = null,
+                id = UUID.randomUUID(), name = "Painkillers", quantity = Quantity(qty(100.0), dbHelper.unit()), medKitId = homeKit.id, formType = null,
                 category = null,
                 manufacturer = null,
                 country = null,
@@ -140,7 +121,7 @@ class ComplexWorkflowStoriesTest {
         entityManager.flush()
         entityManager.clear()
 
-        val updatedAllergyMeds = drugService.requireById(allergyMeds.id)
+        val updatedAllergyMeds = dbHelper.requireDrug(allergyMeds.id)
         assertQty(30.0, updatedAllergyMeds.quantity, "Stock should be 30")
 
         val aliceAllergyPlan = dbHelper.userPlan(alice.id, allergyMeds.id)!!
@@ -164,7 +145,7 @@ class ComplexWorkflowStoriesTest {
         assertNull(dbHelper.userPlan(bob.id, painkillers.id), "Bob's plan must be deleted")
         assertNull(dbHelper.userPlan(charlie.id, painkillers.id), "Charlie's plan must be deleted")
 
-        val movedPainkillers = drugService.requireById(painkillers.id)
+        val movedPainkillers = dbHelper.requireDrug(painkillers.id)
         assertEquals(travelKit.id, movedPainkillers.medKitId, "Drug successfully moved")
 
         // ==========================================
@@ -187,7 +168,7 @@ class ComplexWorkflowStoriesTest {
         assertNull(medKitStore.findById(homeKit.id), "Home kit must be completely deleted")
 
         // Verify Allergy Meds moved safely without orphan removal
-        val migratedAllergyMeds = drugService.findById(allergyMeds.id)
+        val migratedAllergyMeds = dbHelper.drug(allergyMeds.id)
         assertNotNull(migratedAllergyMeds, "Allergy meds must survive the migration")
         assertEquals(duoKit.id, migratedAllergyMeds.medKitId, "Allergy meds are in Duo Kit")
 
@@ -222,7 +203,7 @@ class ComplexWorkflowStoriesTest {
 
         assertNull(medKitStore.findById(duoKit.id), "Duo kit must auto-delete when last user leaves")
         assertNull(
-            drugService.findById(allergyMeds.id),
+            dbHelper.drug(allergyMeds.id),
             "Cascade should kill the drugs inside the abandoned kit"
         )
 
@@ -241,9 +222,8 @@ class ComplexWorkflowStoriesTest {
 
         // Alice adds 100 tablets to sourceKit
         val createDrugDto = DrugCreateRequest(
-            name = "LifePill", quantity = qty(100.0), quantityUnit = "tablets", formType = null, category = null,
-            manufacturer = null, country = null, description = null
-        )
+            name = "LifePill", quantity = qty(100.0), quantityUnitId = dbHelper.unit().id
+            )
         val drug = medKitDrugOrchestrator.createDrugInMedKit(sourceKit.id, createDrugDto, alice.id)
         dbHelper.flushAndClear()
 
@@ -277,7 +257,7 @@ class ComplexWorkflowStoriesTest {
         medKitDrugOrchestrator.moveDrug(drug.id, targetKit.id, alice.id)
         dbHelper.flushAndClear()
 
-        val movedDrug = drugService.requireById(drug.id)
+        val movedDrug = dbHelper.requireDrug(drug.id)
         assertEquals(targetKit.id, movedDrug.medKitId, "Drug successfully moved to targetKit")
 
         // The ultimate security check: Bob's plan must be gone
@@ -312,7 +292,7 @@ class ComplexWorkflowStoriesTest {
         medKitService.joinMedKitByKey(shareKey, bob.id)
 
         // Alice creates a drug
-        val drug = drugService.create(DrugCreateRequest("Shared Meds", qty(10.0), "pcs"), kitA.id, alice.id)
+        val drug = drugService.create(DrugCreateRequest("Shared Meds", qty(10.0), dbHelper.unit().id), kitA.id, alice.id)
 
         // Bob creates a private kit
         val kitB = medKitService.createNew(bob.id)
@@ -324,7 +304,7 @@ class ComplexWorkflowStoriesTest {
         }
 
         // VERIFY: Drug moved
-        val updatedDrug = drugService.requireById(drug.id)
+        val updatedDrug = dbHelper.requireDrug(drug.id)
         assertEquals(kitB.id, updatedDrug.medKitId)
     }
 
@@ -336,7 +316,7 @@ class ComplexWorkflowStoriesTest {
         val kitA = medKitService.createNew(alice.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kitA.id, alice.id), bob.id)
 
-        val drug = drugService.create(DrugCreateRequest("Audit Meds", qty(10.0), "pcs"), kitA.id, alice.id)
+        val drug = drugService.create(DrugCreateRequest("Audit Meds", qty(10.0), dbHelper.unit().id), kitA.id, alice.id)
 
         // Both have plans
         drugService.createPlan(alice.id, drug.id, qty(5.0))
@@ -366,7 +346,7 @@ class ComplexWorkflowStoriesTest {
         entityManager.flush()
         entityManager.clear()
         val drug =
-            medKitDrugOrchestrator.createDrugInMedKit(kitA.id, DrugCreateRequest("Migrating Meds", qty(10.0), "pcs"), alice.id)
+            medKitDrugOrchestrator.createDrugInMedKit(kitA.id, DrugCreateRequest("Migrating Meds", qty(10.0), dbHelper.unit().id), alice.id)
 
         // ACT: Delete Kit A and migrate drugs to Kit B
         entityManager.flush()
@@ -375,7 +355,7 @@ class ComplexWorkflowStoriesTest {
         entityManager.flush()
         entityManager.clear()
         // VERIFY: Kit A is gone, but the drug survives in Kit B
-        val survivingDrug = drugService.findById(drug.id)
+        val survivingDrug = dbHelper.drug(drug.id)
 
         assertNotNull(survivingDrug, "Drug should not have been deleted")
         assertEquals(kitB.id, survivingDrug.medKitId, "Drug should be re-parented to Kit B")

@@ -1,16 +1,11 @@
 package org.kert0n.medappserver.integration
 
-import jakarta.persistence.EntityManager
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
-import org.kert0n.medappserver.db.repository.DrugRepository
-import org.kert0n.medappserver.db.repository.TreatmentPlanRepository
-import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.models.TreatmentPlanService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -40,16 +35,11 @@ import org.springframework.transaction.annotation.Transactional
 class PlannedQuantityTrackingTests {
 
     @Autowired
-    private lateinit var entityManager: EntityManager
-
-    @Autowired
     private lateinit var drugService: DrugService
 
     @Autowired
     private lateinit var medKitService: MedKitService
 
-    @Autowired
-    private lateinit var treatmentPlanService: TreatmentPlanService
 
     @Autowired
     private lateinit var dbHelper: DatabaseTestHelper

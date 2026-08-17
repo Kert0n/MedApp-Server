@@ -1,12 +1,12 @@
 package org.kert0n.medappserver.db.repository
 
-import org.kert0n.medappserver.db.model.parsed.VidalDrug
+import java.util.*
+import org.kert0n.medappserver.db.model.parsed.DrugTemplateData
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
-import java.util.*
 
-interface VidalDrugRepository : JpaRepository<VidalDrug, UUID> {
+interface VidalDrugRepository : JpaRepository<DrugTemplateData, UUID> {
 
     /**
      * Карточка справочника с уже развёрнутыми названиями формы и единицы.
@@ -64,5 +64,11 @@ interface VidalDrugRepository : JpaRepository<VidalDrug, UUID> {
         @Param("term") term: String,
         @Param("likeTerm") likeTerm: String,
         @Param("limit") limit: Int
-    ): List<VidalDrug>
+    ): List<DrugTemplateData>
 }
+
+/** Общий словарь единиц измерения: тот же, которым пользуется каталог. */
+interface QuantityUnitRepository : JpaRepository<org.kert0n.medappserver.db.model.parsed.QuantityUnitData, UUID>
+
+/** Общий словарь форм выпуска. */
+interface FormTypeRepository : JpaRepository<org.kert0n.medappserver.db.model.parsed.FormTypeData, UUID>

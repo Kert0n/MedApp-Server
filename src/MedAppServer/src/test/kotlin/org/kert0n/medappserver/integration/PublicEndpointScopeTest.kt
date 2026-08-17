@@ -1,11 +1,12 @@
 package org.kert0n.medappserver.integration
 
+import java.util.UUID
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.kert0n.medappserver.testutil.ApiRoutes
 import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.models.UserService
 import org.kert0n.medappserver.services.security.AuthenticatedUserService
+import org.kert0n.medappserver.testutil.ApiRoutes
 import org.mockito.kotlin.whenever
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -20,7 +21,6 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
-import java.util.UUID
 
 /**
  * Pins down which endpoints are reachable without a token, and that HTTP Basic is

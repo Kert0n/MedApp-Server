@@ -1,11 +1,11 @@
 package org.kert0n.medappserver.integration
 
 import jakarta.persistence.EntityManager
+import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.transaction.annotation.Transactional
-import kotlin.test.assertTrue
 
 /**
  * Триграммы обязаны работать с кириллицей.
