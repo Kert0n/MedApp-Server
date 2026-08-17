@@ -8,6 +8,7 @@ import org.kert0n.medappserver.api.IntakeRequest
 import org.kert0n.medappserver.api.MembershipCreateRequest
 import org.kert0n.medappserver.api.ReservationCreateRequest
 import org.kert0n.medappserver.api.ReservationPatchRequest
+import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.Quantity
@@ -71,6 +72,7 @@ class ResourceApiContractTest {
         id = drugId, medKitId = medKitId, name = "Aspirin",
         quantity = Quantity(qty(100.0), unit)
     )
+    private val drugDto = drug.toDto(emptyList())
 
     @BeforeEach
     fun setup() {
@@ -85,14 +87,13 @@ class ResourceApiContractTest {
 
     @Test
     fun `препарат читается по своему пути`() {
-        whenever(drugService.require(drugId, userId)).thenReturn(drug)
+        whenever(medKitDrugOrchestrator.drug(drugId, userId)).thenReturn(drugDto)
 
         mockMvc.perform(get(ApiRoutes.drug(drugId)).with(asUser()))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.id").value(drugId.toString()))
             .andExpect(jsonPath("$.medKitId").value(medKitId.toString()))
-            // Заявленное бронями показывается справкой и может превышать остаток; понятия
-            // «доступный остаток» больше нет.
+            // Заявленное бронями — справка, и она может превышать остаток.
             .andExpect(jsonPath("$.reservedQuantity").exists())
             .andExpect(jsonPath("$.availableQuantity").doesNotExist())
     }
@@ -100,7 +101,7 @@ class ResourceApiContractTest {
     @Test
     fun `препарат создаётся в аптечке из пути`() {
         whenever(medKitDrugOrchestrator.createDrugInMedKit(eq(medKitId), any(), eq(userId))).thenReturn(drug)
-        whenever(drugService.require(drugId, userId)).thenReturn(drug)
+        whenever(medKitDrugOrchestrator.drug(drugId, userId)).thenReturn(drugDto)
         val body = DrugCreateRequest(name = "Aspirin", quantity = qty(100.0), quantityUnitId = unit.id)
 
         mockMvc.perform(
@@ -127,7 +128,7 @@ class ResourceApiContractTest {
     @Test
     fun `приём создаётся подчинённым ресурсом упаковки`() {
         whenever(drugService.consume(eq(drugId), any(), eq(userId))).thenReturn(drug)
-        whenever(drugService.require(drugId, userId)).thenReturn(drug)
+        whenever(medKitDrugOrchestrator.drug(drugId, userId)).thenReturn(drugDto)
 
         mockMvc.perform(
             post(ApiRoutes.intakes(drugId)).with(asUser())
@@ -135,16 +136,18 @@ class ResourceApiContractTest {
                 .content("""{"quantity":2.0}""")
         )
             .andExpect(status().isOk)
+            .andExpect(jsonPath("$.id").value(drugId.toString()))
     }
 
     @Test
     fun `перенос выражен размещением препарата в целевой аптечке`() {
         val target = UUID.randomUUID()
         whenever(medKitDrugOrchestrator.moveDrug(drugId, target, userId)).thenReturn(drug)
-        whenever(drugService.require(drugId, userId)).thenReturn(drug)
+        whenever(medKitDrugOrchestrator.drug(drugId, userId)).thenReturn(drugDto)
 
         mockMvc.perform(put(ApiRoutes.drugIn(target, drugId)).with(asUser()))
             .andExpect(status().isOk)
+            .andExpect(jsonPath("$.id").value(drugId.toString()))
     }
 
     @Test
@@ -173,7 +176,7 @@ class ResourceApiContractTest {
             .andExpect(status().isBadRequest)
     }
 
-    // ── Планы лечения ────────────────────────────────────────────────────────────
+    // ── Брони ────────────────────────────────────────────────────────────────────
 
     @Test
     fun `план лечения создаётся и меняется`() {
@@ -189,7 +192,7 @@ class ResourceApiContractTest {
         )
             .andExpect(status().isCreated)
             .andExpect(jsonPath("$.drugId").value(drugId.toString()))
-            // Времени создания и изменения в контракте больше нет.
+            // Отметок времени в контракте нет.
             .andExpect(jsonPath("$.createdAt").doesNotExist())
             .andExpect(jsonPath("$.lastModified").doesNotExist())
 
@@ -233,8 +236,7 @@ class ResourceApiContractTest {
 
         mockMvc.perform(post(ApiRoutes.invitations(medKitId)).with(asUser()))
             .andExpect(status().isCreated)
-            // Строка в теле не оставляет места ничему рядом: добавить срок жизни позже
-            // можно только сломав контракт.
+            // Объектом, а не строкой: рядом со строкой срок жизни добавить было бы некуда.
             .andExpect(jsonPath("$.key").value("invite-key"))
     }
 

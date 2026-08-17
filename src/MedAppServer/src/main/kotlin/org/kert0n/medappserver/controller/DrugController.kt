@@ -17,7 +17,6 @@ import org.kert0n.medappserver.api.DrugTemplateDTO
 import org.kert0n.medappserver.api.VocabularyEntryDTO
 import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.services.models.DrugService
-import org.kert0n.medappserver.services.models.ReservationService
 import org.kert0n.medappserver.services.models.CatalogueService
 import org.kert0n.medappserver.services.models.userId
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
@@ -34,16 +33,10 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBod
 @Tag(name = "Drugs", description = "Drugs stored in medicine kits")
 class DrugController(
     private val drugService: DrugService,
-    // Заявленное на пачку живёт в своём агрегате, поэтому ответ собирается из двух чтений.
-    // Промежуточного типа между доменом и DTO для этого не нужно: брони передаются как есть.
-    private val reservationService: ReservationService,
     private val medKitDrugOrchestrator: MedKitDrugOrchestrator
 ) {
 
     private val logger = LoggerFactory.getLogger(DrugController::class.java)
-
-    private fun view(drugId: UUID, userId: UUID): DrugDTO =
-        drugService.require(drugId, userId).toDto(reservationService.onDrug(drugId))
 
     @GetMapping("/drugs/{drugId}")
     @ApiResponse(responseCode = "200", description = "Drug found")
@@ -53,14 +46,10 @@ class DrugController(
         @Parameter(description = "Drug identifier") @PathVariable drugId: UUID
     ): DrugDTO {
         logger.debug("GET /v1/drugs/{} by user {}", drugId, authentication.userId)
-        return view(drugId, authentication.userId)
+        return medKitDrugOrchestrator.drug(drugId, authentication.userId)
     }
 
-    /**
-     * Аптечка задаётся путём: препарат не существует сам по себе, он всегда лежит в аптечке.
-     * Раньше она приходила полем тела, и запрос выглядел так, будто препарат можно создать
-     * без неё.
-     */
+    /** Аптечка задаётся путём: упаковка не существует сама по себе, она всегда в аптечке. */
     @PostMapping("/med-kits/{medKitId}/drugs")
     @ResponseStatus(HttpStatus.CREATED)
     @ApiResponse(responseCode = "201", description = "Drug created")
@@ -74,7 +63,7 @@ class DrugController(
     ): DrugDTO {
         logger.debug("POST /v1/med-kits/{}/drugs by user {}", medKitId, authentication.userId)
         val created = medKitDrugOrchestrator.createDrugInMedKit(medKitId, request, authentication.userId)
-        return view(created.id, authentication.userId)
+        return medKitDrugOrchestrator.drug(created.id, authentication.userId)
     }
 
     /** PATCH, а не PUT: тело описывает изменение части полей, а не препарат целиком. */
@@ -90,7 +79,7 @@ class DrugController(
     ): DrugDTO {
         logger.debug("PATCH /v1/drugs/{} by user {}", drugId, authentication.userId)
         drugService.update(drugId, request, authentication.userId)
-        return view(drugId, authentication.userId)
+        return medKitDrugOrchestrator.drug(drugId, authentication.userId)
     }
 
     @DeleteMapping("/drugs/{drugId}")
@@ -106,11 +95,10 @@ class DrugController(
     }
 
     /**
-     * Приём — это запись о съеденном, поэтому POST в подчинённый ресурс, а не PUT в упаковку.
+     * Приём — запись о съеденном, поэтому POST в подчинённый ресурс, а не PUT в упаковку.
      *
-     * Единственный способ уменьшить пачку. Различия «приём по плану» и «расход вне плана»
-     * больше нет: съеденное уменьшает упаковку, а бронь её владелец правит отдельно. Ответа
-     * нет, когда приём опустошил пачку и та уничтожена.
+     * Единственный способ уменьшить пачку; бронь её владелец правит отдельно. Ответа нет, когда
+     * приём опустошил пачку и та уничтожена.
      */
     @PostMapping("/drugs/{drugId}/intakes")
     @ApiResponse(responseCode = "200", description = "Package reduced")
@@ -126,7 +114,7 @@ class DrugController(
         logger.debug("POST /v1/drugs/{}/intakes by user {}", drugId, authentication.userId)
         // null означает, что пачка кончилась и уничтожена этим списанием.
         drugService.consume(drugId, request.quantity, authentication.userId) ?: return null
-        return view(drugId, authentication.userId)
+        return medKitDrugOrchestrator.drug(drugId, authentication.userId)
     }
 
     /**
@@ -143,7 +131,7 @@ class DrugController(
     ): DrugDTO {
         logger.debug("PUT /v1/med-kits/{}/drugs/{} by user {}", targetMedKitId, drugId, authentication.userId)
         medKitDrugOrchestrator.moveDrug(drugId, targetMedKitId, authentication.userId)
-        return view(drugId, authentication.userId)
+        return medKitDrugOrchestrator.drug(drugId, authentication.userId)
     }
 }
 
@@ -163,9 +151,8 @@ class DrugTemplateController(
         authentication: Authentication,
         @Parameter(description = "Search query")
         @RequestParam @Size(min = 1, max = 200) query: String,
-        // Границы указаны дважды намеренно. Проверяют их @Min/@Max, но springdoc не
-        // переносит их в схему параметра запроса, и без явной схемы опубликованный контракт
-        // умалчивал бы о пределе. Держать в согласии.
+        // Границы указаны дважды намеренно: проверяют их @Min/@Max, но springdoc не переносит
+        // их в схему параметра, и контракт умалчивал бы о пределе. Держать в согласии.
         @Parameter(
             description = "Maximum number of results",
             schema = Schema(type = "integer", format = "int32", minimum = "1", maximum = "50")
@@ -192,9 +179,8 @@ class DrugTemplateController(
 /**
  * Общие словари: единицы измерения и формы выпуска.
  *
- * Препарат ссылается на них идентификатором, поэтому клиенту нужен список — иначе взять
- * идентификатор неоткуда. Словари одни и те же и для каталога, и для заведённого руками
- * препарата.
+ * Упаковка ссылается на них идентификатором, поэтому клиенту нужен список. Словари одни и те же
+ * и для каталога, и для заведённой руками пачки.
  */
 @RestController
 @RequestMapping("/v1")

@@ -176,9 +176,8 @@ class DrugServiceTest {
     }
 
     /**
-     * Пересчёт учёта вниз: пользователь пересчитал упаковку и увидел меньше, чем числилось.
-     * Брони при этом не двигаются ни на сколько. Раньше сервер ужимал их пропорционально, и
-     * это было решением за владельца: сколько из своей брони оставить, решает он.
+     * Пересчёт учёта вниз: в пачке оказалось меньше, чем числилось. Брони не двигаются ни на
+     * сколько — сколько из своей оставить, решает её владелец.
      */
     @Test
     fun `update decreasing quantity leaves reservations alone`() {
@@ -267,7 +266,7 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         // Заявленное приходит извне упаковки: сама она про брони не знает.
-        val dto = drugService.require(drug.id, alice.id).toDto(reservationService.onDrug(drug.id))
+        val dto = drugService.require(drug.id, alice.id).toDto(reservationService.onDrugs(listOf(drug.id)))
         assertQty(100.0, dto.quantity)
         assertQty(25.0, dto.reservedQuantity)
     }
