@@ -1,25 +1,33 @@
 package org.kert0n.medappserver.api
 
-import org.kert0n.medappserver.db.repository.DrugTemplateView
-import org.kert0n.medappserver.db.repository.DrugView
-import org.kert0n.medappserver.db.repository.MedKitSummary
-import org.kert0n.medappserver.db.repository.TreatmentPlanView
+import org.kert0n.medappserver.domain.Drug
+import org.kert0n.medappserver.domain.DrugTemplate
+import org.kert0n.medappserver.domain.FormType
+import org.kert0n.medappserver.domain.MedKitOverview
+import org.kert0n.medappserver.domain.QuantityUnit
+import org.kert0n.medappserver.domain.TreatmentPlan
 
 /**
- * Перевод форм чтения в публичный контракт.
+ * Перевод доменных значений в публичный контракт.
  *
- * DTO собирается только из проекций, и другого пути нет. Пока их было два — из сущности и из
- * запроса, — доступный остаток считался в каждом отдельно, и такие пары рано или поздно
- * расходятся.
+ * Отдельных форм чтения нет: DTO собирается из того же состояния, по которому агрегат
+ * принимает решения, поэтому разойтись «сколько запланировано в ответе» и «сколько
+ * запланировано в проверке» уже не могут.
+ *
+ * Единица измерения и форма отдаются парой «идентификатор и имя»: первый нужен, чтобы
+ * прислать его обратно при следующей правке, второе — чтобы нарисовать карточку без второго
+ * запроса.
  */
-fun DrugView.toDto(): DrugDTO = DrugDTO(
+fun Drug.toDto(): DrugDTO = DrugDTO(
     id = id,
     name = name,
-    quantity = quantity,
-    plannedQuantity = plannedQuantity,
-    availableQuantity = availableQuantity,
-    quantityUnit = quantityUnit,
-    formType = formType,
+    quantity = quantity.amount,
+    plannedQuantity = plannedTotal.amount,
+    availableQuantity = availableQuantity.amount,
+    quantityUnitId = quantity.unit.id,
+    quantityUnit = quantity.unit.name,
+    formTypeId = formType?.id,
+    formType = formType?.name,
     category = category,
     manufacturer = manufacturer,
     country = country,
@@ -27,26 +35,32 @@ fun DrugView.toDto(): DrugDTO = DrugDTO(
     medKitId = medKitId
 )
 
-fun TreatmentPlanView.toDto(): TreatmentPlanDTO = TreatmentPlanDTO(
+fun TreatmentPlan.toDto(): TreatmentPlanDTO = TreatmentPlanDTO(
     drugId = drugId,
-    plannedAmount = plannedAmount
+    plannedAmount = plannedAmount.amount
 )
 
-fun DrugTemplateView.toDto(): DrugTemplateDTO = DrugTemplateDTO(
+fun DrugTemplate.toDto(): DrugTemplateDTO = DrugTemplateDTO(
     id = id,
     name = name,
     nameLat = nameLat,
     activeSubstance = activeSubstance,
-    formType = formType,
+    formTypeId = formType?.id,
+    formType = formType?.name,
     category = category,
-    quantityUnit = quantityUnit,
+    quantityUnitId = quantityUnit?.id,
+    quantityUnit = quantityUnit?.name,
     manufacturer = manufacturer,
     country = country,
     description = description
 )
 
-fun MedKitSummary.toDto(): MedKitSummaryDTO = MedKitSummaryDTO(
+fun QuantityUnit.toDto(): VocabularyEntryDTO = VocabularyEntryDTO(id = id, name = name)
+
+fun FormType.toDto(): VocabularyEntryDTO = VocabularyEntryDTO(id = id, name = name)
+
+fun MedKitOverview.toDto(): MedKitSummaryDTO = MedKitSummaryDTO(
     id = id,
-    userCount = userCount,
+    userCount = memberCount,
     drugCount = drugCount
 )

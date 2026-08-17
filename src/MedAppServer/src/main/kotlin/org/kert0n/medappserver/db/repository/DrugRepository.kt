@@ -1,95 +1,69 @@
-@file:Suppress("FunctionName")
-
 package org.kert0n.medappserver.db.repository
 
 import jakarta.persistence.LockModeType
-import org.kert0n.medappserver.db.model.Drug
-import org.springframework.data.jpa.repository.EntityGraph
+import java.util.*
+import org.kert0n.medappserver.db.model.DrugData
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Lock
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
-import java.util.*
 
-interface DrugRepository : JpaRepository<Drug, UUID> {
-
-    // ── Чтение: проекции ─────────────────────────────────────────────────────────
-    //
-    // Сумма планов берётся как Drug.totalPlannedAmount, то есть через ту же @Formula, что и
-    // при загрузке сущности. Повторять здесь SUM нельзя: определений станет по одному на
-    // каждый запрос плюс формула, и при изменении смысла «запланировано» их пришлось бы
-    // править синхронно.
+/**
+ * Строки препаратов. Наружу этот интерфейс не выходит — им пользуется только `DrugStore`.
+ *
+ * Читающие запросы забирают препарат вместе с его планами: сумму запланированного считает
+ * домен по собственной коллекции, поэтому отдельного вычисляемого столбца больше нет.
+ * Доступ проверяется соединением с членством, а не коллекцией участников внутри аптечки.
+ */
+interface DrugRepository : JpaRepository<DrugData, UUID> {
 
     @Query(
         """
-        SELECT new org.kert0n.medappserver.db.repository.DrugView(
-            d.id, d.name, d.quantity, d.totalPlannedAmount,
-            d.quantityUnit, d.formType, d.category, d.manufacturer, d.country, d.description, mk.id)
-        FROM Drug d
-        JOIN d.medKit mk
-        WHERE d.id = :drugId AND EXISTS (SELECT 1 FROM MedKit m JOIN m.users mu WHERE m = mk AND mu.id = :userId)
-        """
+        SELECT DISTINCT d FROM DrugData d
+        LEFT JOIN FETCH d.treatmentPlans
+        WHERE d.id = :drugId
+          AND EXISTS (SELECT 1 FROM MedKitMembershipData m
+                      WHERE m.membershipKey.medKitId = d.medKit.id AND m.membershipKey.userId = :userId)
+    """
     )
-    fun findViewAccessible(@Param("drugId") drugId: UUID, @Param("userId") userId: UUID): DrugView?
+    fun findAccessibleWithPlans(@Param("drugId") drugId: UUID, @Param("userId") userId: UUID): DrugData?
 
     @Query(
         """
-        SELECT new org.kert0n.medappserver.db.repository.DrugView(
-            d.id, d.name, d.quantity, d.totalPlannedAmount,
-            d.quantityUnit, d.formType, d.category, d.manufacturer, d.country, d.description, mk.id)
-        FROM Drug d
-        JOIN d.medKit mk
-        WHERE mk.id = :medKitId
+        SELECT DISTINCT d FROM DrugData d
+        LEFT JOIN FETCH d.treatmentPlans
+        WHERE d.medKit.id = :medKitId
         ORDER BY d.name
-        """
+    """
     )
-    fun findViewsByMedKit(@Param("medKitId") medKitId: UUID): List<DrugView>
+    fun findAllInMedKitWithPlans(@Param("medKitId") medKitId: UUID): List<DrugData>
+
+    /** Все препараты всех аптечек участника — одним запросом, для снимка. */
+    @Query(
+        """
+        SELECT DISTINCT d FROM DrugData d
+        LEFT JOIN FETCH d.treatmentPlans
+        WHERE EXISTS (SELECT 1 FROM MedKitMembershipData m
+                      WHERE m.membershipKey.medKitId = d.medKit.id AND m.membershipKey.userId = :userId)
+        ORDER BY d.name
+    """
+    )
+    fun findAllAccessibleWithPlans(@Param("userId") userId: UUID): List<DrugData>
 
     /**
-     * Все препараты во всех аптечках пользователя — одним запросом.
+     * Загрузка под блокировкой строки.
      *
-     * Снимок раньше собирался по аптечке за раз, то есть числом запросов, растущим вместе с
-     * числом аптечек.
+     * Планы здесь не забираются: совмещать `FOR UPDATE` с внешним fetch join нельзя, поэтому
+     * коллекция подтягивается вторым запросом, когда команда её касается.
      */
-    @Query(
-        """
-        SELECT new org.kert0n.medappserver.db.repository.DrugView(
-            d.id, d.name, d.quantity, d.totalPlannedAmount,
-            d.quantityUnit, d.formType, d.category, d.manufacturer, d.country, d.description, mk.id)
-        FROM Drug d
-        JOIN d.medKit mk
-        WHERE EXISTS (SELECT 1 FROM MedKit m JOIN m.users mu WHERE m = mk AND mu.id = :userId)
-        ORDER BY d.name
-        """
-    )
-    fun findViewsAccessibleTo(@Param("userId") userId: UUID): List<DrugView>
-
-    // ── Команды: сущность целиком ────────────────────────────────────────────────
-
-    fun findAllByMedKitId(@Param("medKitId") medKitId: UUID): List<Drug>
-
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query(
         """
-        SELECT d FROM Drug d
-        JOIN d.medKit mk
-        JOIN mk.users u
-        WHERE d.id = :drugId AND u.id = :userId
+        SELECT d FROM DrugData d
+        WHERE d.id = :drugId
+          AND EXISTS (SELECT 1 FROM MedKitMembershipData m
+                      WHERE m.membershipKey.medKitId = d.medKit.id AND m.membershipKey.userId = :userId)
     """
     )
-    fun lockAccessible(@Param("drugId") drugId: UUID, @Param("userId") userId: UUID): Drug?
-
-    @Query(
-        """
-        SELECT d FROM Drug d
-        JOIN d.medKit mk
-        JOIN mk.users u
-        WHERE d.id = :drugId AND u.id = :userId
-    """
-    )
-    fun findAccessible(@Param("drugId") drugId: UUID, @Param("userId") userId: UUID): Drug?
-
-    /** Команде выхода из аптечки нужны сами планы: она их удаляет через коллекцию. */
-    @EntityGraph(attributePaths = ["treatmentPlans"])
-    fun findAllWithTreatmentPlansByMedKitId(medKitId: UUID): List<Drug>
+    fun lockAccessible(@Param("drugId") drugId: UUID, @Param("userId") userId: UUID): DrugData?
 }

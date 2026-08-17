@@ -1,11 +1,11 @@
 package org.kert0n.medappserver.integration
 
-import org.junit.jupiter.api.Test
-import org.kert0n.medappserver.PostgresIntegrationTest
-import org.springframework.beans.factory.annotation.Autowired
 import javax.sql.DataSource
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import org.junit.jupiter.api.Test
+import org.kert0n.medappserver.PostgresIntegrationTest
+import org.springframework.beans.factory.annotation.Autowired
 
 /**
  * Страховка от ложно-зелёного прогона.

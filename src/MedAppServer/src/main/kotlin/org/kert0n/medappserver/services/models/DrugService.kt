@@ -1,171 +1,198 @@
 package org.kert0n.medappserver.services.models
 
+import java.math.BigDecimal
+import java.util.UUID
 import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.api.DrugPatchRequest
-import org.kert0n.medappserver.db.model.Drug
-import org.kert0n.medappserver.db.model.MedKit
-import org.kert0n.medappserver.db.repository.DrugRepository
-import org.kert0n.medappserver.db.repository.DrugView
-import org.kert0n.medappserver.services.orchestrators.QuantityReductionService
+import org.kert0n.medappserver.db.store.DrugStore
+import org.kert0n.medappserver.domain.Drug
+import org.kert0n.medappserver.domain.DrugDetails
+import org.kert0n.medappserver.domain.NotAMember
+import org.kert0n.medappserver.domain.Quantity
+import org.kert0n.medappserver.domain.TreatmentPlan
 import org.slf4j.LoggerFactory
-import org.springframework.data.repository.findByIdOrNull
-import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.web.server.ResponseStatusException
-import java.math.BigDecimal
-import java.util.*
 
+/**
+ * Единственный вход к агрегату препарата — вместе с его планами лечения.
+ *
+ * Каждая команда устроена одинаково: взять состояние под блокировкой, вызвать метод домена,
+ * отдать результат хранилищу. Правил здесь нет — они в `domain.Drug`; строк и запросов
+ * тоже нет — они за `DrugStore`.
+ */
 @Service
 class DrugService(
-    private val drugRepository: DrugRepository,
-    private val quantityReductionService: QuantityReductionService
+    private val drugs: DrugStore,
+    private val catalogue: CatalogueService
 ) {
 
     private val logger = LoggerFactory.getLogger(DrugService::class.java)
 
-    // ── Чтение: проекции, суммы планов считает база ──────────────────────────────
+    // ── Чтение ───────────────────────────────────────────────────────────────────
 
-    /** Препарат для показа или `null`, если его нет или он недоступен вызывающему. */
+    /** Препарат или `null`, если его нет или он недоступен вызывающему. */
     @Transactional(readOnly = true)
-    fun findView(drugId: UUID, userId: UUID): DrugView? {
+    fun find(drugId: UUID, userId: UUID): Drug? {
         logger.debug("Reading drug {} for user {}", drugId, userId)
-        return drugRepository.findViewAccessible(drugId, userId)
+        return drugs.findAccessible(drugId, userId)
     }
 
-    /** Препарат для показа или 404. */
+    /** Препарат или 404. */
     @Transactional(readOnly = true)
-    fun requireView(drugId: UUID, userId: UUID): DrugView =
-        findView(drugId, userId) ?: throw notFound()
+    fun require(drugId: UUID, userId: UUID): Drug = find(drugId, userId) ?: throw notFound()
 
     @Transactional(readOnly = true)
-    fun viewsOfMedKit(medKitId: UUID): List<DrugView> {
+    fun ofMedKit(medKitId: UUID): List<Drug> {
         logger.debug("Reading drugs of medkit {}", medKitId)
-        return drugRepository.findViewsByMedKit(medKitId)
+        return drugs.findAllInMedKit(medKitId)
     }
 
-    /** Препараты всех аптечек пользователя — одним запросом, для снимка. */
+    /** Препараты всех аптечек участника — одним запросом, для снимка. */
     @Transactional(readOnly = true)
-    fun viewsAccessibleTo(userId: UUID): List<DrugView> {
+    fun accessibleTo(userId: UUID): List<Drug> {
         logger.debug("Reading all drugs available to user {}", userId)
-        return drugRepository.findViewsAccessibleTo(userId)
-    }
-
-    // ── Поиск сущности для команд ────────────────────────────────────────────────
-    //
-    // Имена говорят о поведении: `find` может не найти и возвращает `null`, `require`
-    // считает отсутствие ошибкой вызывающего и даёт 404, `lock` вдобавок берёт блокировку
-    // строки. Раньше все три назывались `find…`, и по имени нельзя было понять, что
-    // вызываешь.
-
-    @Transactional(readOnly = true)
-    fun findById(drugId: UUID): Drug? = drugRepository.findByIdOrNull(drugId)
-
-    @Transactional(readOnly = true)
-    fun requireById(drugId: UUID): Drug = findById(drugId) ?: throw notFound()
-
-    @Transactional(readOnly = true)
-    fun findAccessible(drugId: UUID, userId: UUID): Drug? =
-        drugRepository.findAccessible(drugId, userId)
-
-    @Transactional(readOnly = true)
-    fun requireAccessible(drugId: UUID, userId: UUID): Drug =
-        findAccessible(drugId, userId) ?: throw notFound()
-
-    /** То же плюс блокировка строки на время транзакции. */
-    @Transactional(readOnly = true)
-    fun lockAccessible(drugId: UUID, userId: UUID): Drug =
-        drugRepository.lockAccessible(drugId, userId) ?: throw notFound()
-
-    @Transactional(readOnly = true)
-    fun findAllByMedKit(medKitId: UUID): List<Drug> {
-        logger.debug("Finding all drugs for medkit: {}", medKitId)
-        return drugRepository.findAllByMedKitId(medKitId)
+        return drugs.findAllAccessibleTo(userId)
     }
 
     /**
      * Недоступный препарат и несуществующий отвечают одинаково: иначе по коду ответа можно
      * было бы узнать, что такой препарат существует в чужой аптечке.
      */
-    private fun notFound() = ResponseStatusException(HttpStatus.NOT_FOUND, "Drug not found or access denied")
+    private fun notFound() = NotAMember()
 
+    private fun lock(drugId: UUID, userId: UUID): Drug =
+        drugs.lockAccessible(drugId, userId) ?: throw notFound()
+
+    // ── Команды препарата ────────────────────────────────────────────────────────
 
     @Transactional
-    fun create(createDTO: DrugCreateRequest, medKit: MedKit, userId: UUID): Drug {
-        logger.debug("Creating drug: {} for user: {}", createDTO.name, userId)
+    fun create(request: DrugCreateRequest, medKitId: UUID, userId: UUID): Drug {
+        logger.debug("Creating drug: {} for user: {}", request.name, userId)
 
         val drug = Drug(
-            name = createDTO.name,
-            quantity = createDTO.quantity,
-            quantityUnit = createDTO.quantityUnit,
-            formType = createDTO.formType,
-            category = createDTO.category,
-            manufacturer = createDTO.manufacturer,
-            country = createDTO.country,
-            description = createDTO.description,
-            medKit = medKit
+            medKitId = medKitId,
+            name = request.name,
+            quantity = Quantity(request.quantity, catalogue.requireQuantityUnit(request.quantityUnitId)),
+            formType = request.formTypeId?.let { catalogue.requireFormType(it) },
+            category = request.category,
+            manufacturer = request.manufacturer,
+            country = request.country,
+            description = request.description
         )
 
-        return drugRepository.save(drug)
+        drugs.insert(drug)
+        return drug
     }
 
     @Transactional
-    fun update(drugId: UUID, updateDTO: DrugPatchRequest, userId: UUID): Drug {
+    fun update(drugId: UUID, request: DrugPatchRequest, userId: UUID): Drug {
         logger.debug("Updating drug: {}", drugId)
 
-        val drug = lockAccessible(drugId, userId)
+        var drug = lock(drugId, userId)
+        // Единица перевешивается первой: количество ниже собирается уже в ней.
+        request.quantityUnitId?.let { drug = drug.relabelUnitTo(catalogue.requireQuantityUnit(it)) }
+        request.quantity?.let { drug = drug.changeQuantityTo(Quantity(it, drug.quantity.unit)) }
+        drug = drug.describe(
+            DrugDetails(
+                name = request.name,
+                formType = request.formTypeId?.let { catalogue.requireFormType(it) },
+                category = request.category,
+                manufacturer = request.manufacturer,
+                country = request.country,
+                description = request.description
+            )
+        )
 
-        updateDTO.name?.let { drug.name = it }
-        updateDTO.quantity?.let {
-            val oldQuantity = drug.quantity
-            drug.quantity = it
-            // Handle quantity reduction - may need to adjust treatment plans
-            if (it < oldQuantity) {
-                quantityReductionService.handleQuantityReduction(drug)
-            }
-        }
-        updateDTO.quantityUnit?.let { drug.quantityUnit = it }
-        updateDTO.formType?.let { drug.formType = it }
-        updateDTO.category?.let { drug.category = it }
-        updateDTO.manufacturer?.let { drug.manufacturer = it }
-        updateDTO.country?.let { drug.country = it }
-        updateDTO.description?.let { drug.description = it }
-
-        return drugRepository.save(drug)
+        drugs.save(drug)
+        return drug
     }
 
     @Transactional
     fun delete(drugId: UUID, userId: UUID) {
         logger.debug("Deleting drug: {}", drugId)
 
-        val drug = requireAccessible(drugId, userId)
-        drugRepository.delete(drug)
+        val drug = require(drugId, userId)
+        drugs.delete(drug.id)
     }
-
 
     /**
      * Списывает количество вне плана лечения.
      *
-     * `null` здесь означает «препарат кончился и удалён этим списанием», а не «не найден»:
+     * `null` означает «препарат кончился и удалён этим списанием», а не «не найден»:
      * недоступный препарат отвергается 404 ещё до списания.
      */
     @Transactional
-    fun consumeDrug(drugId: UUID, quantity: BigDecimal, userId: UUID): Drug? {
+    fun consume(drugId: UUID, quantity: BigDecimal, userId: UUID): Drug? {
         logger.debug("Consuming {} of drug {}", quantity, drugId)
 
-        val drug = lockAccessible(drugId, userId)
-
-        if (quantity > drug.quantity) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Insufficient quantity available")
+        val drug = lock(drugId, userId)
+        val left = drug.consume(Quantity(quantity, drug.quantity.unit))
+        if (left == null) {
+            drugs.delete(drugId)
+            return null
         }
-
-        drug.quantity -= quantity
-        drugRepository.save(drug)
-        return quantityReductionService.handleQuantityReduction(drug)
-
+        drugs.save(left)
+        return left
     }
 
+    /** Переезд препарата в другую аптечку вместе с судьбой планов. */
+    @Transactional
+    fun moveTo(drugId: UUID, targetMedKitId: UUID, accessibleUserIds: Set<UUID>, userId: UUID): Drug {
+        logger.debug("Moving drug {} to medkit {}", drugId, targetMedKitId)
 
+        val moved = lock(drugId, userId).moveTo(targetMedKitId, accessibleUserIds)
+        drugs.save(moved)
+        return moved
+    }
 
+    // ── Команды планов лечения ───────────────────────────────────────────────────
 
+    @Transactional
+    fun createPlan(userId: UUID, drugId: UUID, plannedAmount: BigDecimal): TreatmentPlan {
+        logger.debug("Creating treatment plan for user {} and drug {}", userId, drugId)
+
+        val loaded = lock(drugId, userId)
+        val drug = loaded.createPlan(userId, Quantity(plannedAmount, loaded.quantity.unit))
+        drugs.save(drug)
+        return drug.requirePlanOf(userId)
+    }
+
+    @Transactional
+    fun changePlan(userId: UUID, drugId: UUID, plannedAmount: BigDecimal): TreatmentPlan {
+        logger.debug("Updating treatment plan for user {} and drug {}", userId, drugId)
+
+        val loaded = lock(drugId, userId)
+        val drug = loaded.changePlan(userId, Quantity(plannedAmount, loaded.quantity.unit))
+        drugs.save(drug)
+        return drug.requirePlanOf(userId)
+    }
+
+    @Transactional
+    fun cancelPlan(userId: UUID, drugId: UUID) {
+        logger.debug("Deleting treatment plan for user {} and drug {}", userId, drugId)
+
+        drugs.save(lock(drugId, userId).cancelPlan(userId))
+    }
+
+    /**
+     * Списывает приём с плана и с остатка препарата.
+     *
+     * `null` означает «план исчерпан» либо «препарат кончился», а не «план не найден»:
+     * отсутствующий план отвергается 404 ещё до списания.
+     */
+    @Transactional
+    fun recordIntake(userId: UUID, drugId: UUID, quantityConsumed: BigDecimal): TreatmentPlan? {
+        logger.debug("Recording intake for user {} and drug {}, quantity: {}", userId, drugId, quantityConsumed)
+
+        val loaded = lock(drugId, userId)
+        val outcome = loaded.applyIntake(userId, Quantity(quantityConsumed, loaded.quantity.unit))
+        val left = outcome.drug
+        if (left == null) {
+            drugs.delete(drugId)
+            return null
+        }
+        drugs.save(left)
+        return outcome.plan
+    }
 }

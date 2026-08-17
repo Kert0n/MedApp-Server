@@ -1,9 +1,10 @@
 package org.kert0n.medappserver.integration
 
-import org.kert0n.medappserver.testutil.ApiRoutes
+import java.util.UUID
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.kert0n.medappserver.services.models.VidalDrugService
+import org.kert0n.medappserver.services.models.CatalogueService
+import org.kert0n.medappserver.testutil.ApiRoutes
 import org.mockito.kotlin.any
 import org.mockito.kotlin.whenever
 import org.springframework.beans.factory.annotation.Autowired
@@ -20,7 +21,6 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
-import java.util.UUID
 
 /**
  * Bounds on what a single authenticated request can ask for.
@@ -29,7 +29,7 @@ import java.util.UUID
  * and a large value was an out-of-memory lever. `description` had no length constraint at
  * all, with the column declared as Integer.MAX_VALUE.
  *
- * VidalDrugService is mocked so this stays a test of the validation boundary: the real
+ * CatalogueService is mocked so this stays a test of the validation boundary: the real
  * query calls pg_trgm's similarity(), which does not exist on the H2 test database.
  */
 @SpringBootTest
@@ -40,7 +40,7 @@ class InputSizeLimitsTest {
     private lateinit var context: WebApplicationContext
 
     @MockitoBean
-    private lateinit var vidalDrugService: VidalDrugService
+    private lateinit var catalogueService: CatalogueService
 
     private lateinit var mockMvc: MockMvc
 
@@ -51,7 +51,7 @@ class InputSizeLimitsTest {
         mockMvc = MockMvcBuilders.webAppContextSetup(context)
             .apply<DefaultMockMvcBuilder>(SecurityMockMvcConfigurers.springSecurity())
             .build()
-        whenever(vidalDrugService.fuzzySearch(any(), any())).thenReturn(emptyList())
+        whenever(catalogueService.fuzzySearch(any(), any())).thenReturn(emptyList())
     }
 
     private fun search(limit: String) = mockMvc.perform(

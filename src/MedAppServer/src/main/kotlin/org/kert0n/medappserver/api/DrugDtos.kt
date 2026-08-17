@@ -24,9 +24,13 @@ data class DrugDTO(
      */
     @Schema(description = "Stock not reserved by treatment plans", example = "70.000000")
     val availableQuantity: BigDecimal,
-    @Schema(description = "Quantity unit", example = "mg")
+    @Schema(description = "Quantity unit identifier")
+    val quantityUnitId: UUID,
+    @Schema(description = "Quantity unit name", example = "mg")
     val quantityUnit: String,
-    @Schema(description = "Dosage form", example = "tablet")
+    @Schema(description = "Dosage form identifier", nullable = true)
+    val formTypeId: UUID?,
+    @Schema(description = "Dosage form name", example = "tablet")
     val formType: String?,
     @Schema(description = "Category", example = "painkiller")
     val category: String?,
@@ -54,13 +58,11 @@ data class DrugCreateRequest(
     val quantity: BigDecimal,
 
     @field:NotNull
-    @field:Size(min = 1, max = 50)
-    @Schema(description = "Quantity unit", example = "mg", required = true)
-    val quantityUnit: String,
+    @Schema(description = "Quantity unit identifier from the shared vocabulary", required = true)
+    val quantityUnitId: UUID,
 
-    @field:Size(max = 100)
-    @Schema(description = "Dosage form", example = "tablet")
-    val formType: String? = null,
+    @Schema(description = "Dosage form identifier from the shared vocabulary")
+    val formTypeId: UUID? = null,
 
     @field:Size(max = 200)
     @Schema(description = "Category", example = "painkiller")
@@ -92,16 +94,18 @@ data class DrugPatchRequest(
     val name: String? = null,
 
     @field:DecimalMin(value = "0.0", inclusive = false)
-    @Schema(description = "New stock; may only increase. Use consumptions to reduce it.", example = "120.0")
+    @Schema(
+        description = "Corrected stock. Raising it adds to the shelf; lowering it means a recount " +
+            "found less than recorded, and treatment plans are scaled down to fit.",
+        example = "120.0"
+    )
     val quantity: BigDecimal? = null,
 
-    @field:Size(min = 1, max = 50)
-    @Schema(description = "Quantity unit", example = "mg")
-    val quantityUnit: String? = null,
+    @Schema(description = "Quantity unit identifier from the shared vocabulary")
+    val quantityUnitId: UUID? = null,
 
-    @field:Size(max = 100)
-    @Schema(description = "Dosage form", example = "tablet")
-    val formType: String? = null,
+    @Schema(description = "Dosage form identifier from the shared vocabulary")
+    val formTypeId: UUID? = null,
 
     @field:Size(max = 200)
     @Schema(description = "Category", example = "painkiller")
@@ -140,11 +144,15 @@ data class DrugTemplateDTO(
     val nameLat: String?,
     @Schema(description = "Active substance", example = "Acetylsalicylic acid")
     val activeSubstance: String?,
-    @Schema(description = "Dosage form", example = "таблетки")
+    @Schema(description = "Dosage form identifier", nullable = true)
+    val formTypeId: UUID?,
+    @Schema(description = "Dosage form name", example = "таблетки")
     val formType: String?,
     @Schema(description = "Category")
     val category: String?,
-    @Schema(description = "Quantity unit", example = "шт")
+    @Schema(description = "Quantity unit identifier", nullable = true)
+    val quantityUnitId: UUID?,
+    @Schema(description = "Quantity unit name", example = "шт")
     val quantityUnit: String?,
     @Schema(description = "Manufacturer", example = "Bayer")
     val manufacturer: String?,
@@ -152,4 +160,18 @@ data class DrugTemplateDTO(
     val country: String?,
     @Schema(description = "Description")
     val description: String?
+)
+
+/**
+ * Запись общего словаря — единица измерения или форма выпуска.
+ *
+ * Клиент выбирает из списка и присылает идентификатор: имя у одной и той же единицы должно
+ * быть одно на всю систему, а не столько, сколько её написали руками.
+ */
+@Schema(description = "Shared vocabulary entry")
+data class VocabularyEntryDTO(
+    @Schema(description = "Identifier")
+    val id: UUID,
+    @Schema(description = "Display name", example = "mg")
+    val name: String
 )

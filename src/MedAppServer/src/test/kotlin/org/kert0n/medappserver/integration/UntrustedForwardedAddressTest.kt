@@ -1,14 +1,14 @@
 package org.kert0n.medappserver.integration
 
-import org.junit.jupiter.api.Test
-import org.springframework.beans.factory.annotation.Value
-import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.test.context.ActiveProfiles
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import kotlin.test.assertEquals
+import org.junit.jupiter.api.Test
+import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.test.context.ActiveProfiles
 
 /**
  * Вторая половина доверия к X-Forwarded-For, без которой первая опасна.

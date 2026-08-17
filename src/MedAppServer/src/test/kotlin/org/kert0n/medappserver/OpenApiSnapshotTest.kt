@@ -1,5 +1,8 @@
 package org.kert0n.medappserver
 
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.test.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -12,9 +15,6 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
-import java.nio.file.Files
-import java.nio.file.Path
-import kotlin.test.assertEquals
 
 /**
  * Keeps the committed API contract honest.

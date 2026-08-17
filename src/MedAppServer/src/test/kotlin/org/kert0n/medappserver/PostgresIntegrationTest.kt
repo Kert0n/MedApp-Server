@@ -10,7 +10,7 @@ import org.springframework.test.context.TestPropertySource
  *
  * Нужен там, где поведение зависит от СУБД, а H2 в режиме совместимости его не
  * воспроизводит:
- *  - `@Formula` у `Drug.totalPlannedAmount` — коррелированный подзапрос;
+ *  - `@Formula` у `Drug.storedPlannedTotal` — коррелированный подзапрос;
  *  - `FOR UPDATE` по запросу с join (какие именно строки блокируются);
  *  - `similarity()` из pg_trgm и экранирование `ILIKE`;
  *  - точность `NUMERIC` по scale — H2 и Postgres округляют по-разному.

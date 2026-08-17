@@ -1,16 +1,16 @@
 package org.kert0n.medappserver.services.models
 
+import java.util.*
+import kotlin.test.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
-import org.kert0n.medappserver.db.repository.MedKitRepository
+import org.kert0n.medappserver.db.store.MedKitStore
+import org.kert0n.medappserver.domain.DomainRuleViolated
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.web.server.ResponseStatusException
-import java.util.*
-import kotlin.test.*
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -18,9 +18,12 @@ import kotlin.test.*
 class MedKitServiceTest {
 
     @Autowired
-    private lateinit var medKitService: MedKitService
+
+    private lateinit var medKitStore: MedKitStore
+
+
     @Autowired
-    private lateinit var medKitRepository: MedKitRepository
+    private lateinit var medKitService: MedKitService
     @Autowired
     private lateinit var userService: UserService
     @Autowired
@@ -35,14 +38,14 @@ class MedKitServiceTest {
         dbHelper.flushAndClear()
 
         assertNotNull(medKit.id)
-        assertTrue(medKit.users.any { it.id == alice.id })
+        assertTrue(medKit.members.contains(alice.id))
     }
 
     // ── findById ──
 
     @Test
     fun `findById throws NOT_FOUND for non-existent medkit`() {
-        assertThrows<ResponseStatusException> {
+        assertThrows<DomainRuleViolated> {
             medKitService.findById(UUID.randomUUID())
         }
     }
@@ -56,8 +59,8 @@ class MedKitServiceTest {
         val kit = medKitService.createNew(alice.id)
         dbHelper.flushAndClear()
 
-        assertFailsWith<ResponseStatusException> {
-            medKitService.findByIdForUser(kit.id, eve.id)
+        assertFailsWith<DomainRuleViolated> {
+            medKitService.requireAccessible(kit.id, eve.id)
         }
     }
 
@@ -81,7 +84,7 @@ class MedKitServiceTest {
         medKitService.createNew(alice.id)
         dbHelper.flushAndClear()
 
-        val summaries = medKitService.findMedKitSummaries(alice.id)
+        val summaries = medKitService.overviews(alice.id)
         assertEquals(1, summaries.size)
     }
 
@@ -103,7 +106,7 @@ class MedKitServiceTest {
         assertEquals(kit.id, joinerKits.first().id)
 
         // Key should be invalidated after use
-        assertFailsWith<ResponseStatusException> {
+        assertFailsWith<DomainRuleViolated> {
             medKitService.joinMedKitByKey(key, joiner.id)
         }
     }
@@ -112,7 +115,7 @@ class MedKitServiceTest {
     fun `joinMedKitByKey fails for missing key`() {
         val user = dbHelper.freshUser("user")
 
-        assertFailsWith<ResponseStatusException> {
+        assertFailsWith<DomainRuleViolated> {
             medKitService.joinMedKitByKey("missing-key", user.id)
         }
     }
@@ -138,7 +141,7 @@ class MedKitServiceTest {
         val kit = medKitService.createNew(alice.id)
         dbHelper.flushAndClear()
 
-        assertFailsWith<ResponseStatusException> {
+        assertFailsWith<DomainRuleViolated> {
             medKitService.addUserToMedKit(kit.id, alice.id)
         }
     }
@@ -153,14 +156,12 @@ class MedKitServiceTest {
         medKitService.addUserToMedKit(kit.id, bob.id)
         dbHelper.flushAndClear()
 
-        val loadedKit = medKitService.findById(kit.id)
-        val loadedBob = userService.findById(bob.id)
-        medKitService.removeUserFromMedKit(loadedKit, loadedBob)
+        medKitService.removeUserFromMedKit(kit.id, bob.id)
         dbHelper.flushAndClear()
 
-        assertNotNull(medKitService.findByIdForUser(kit.id, alice.id))
-        assertFailsWith<ResponseStatusException> {
-            medKitService.findByIdForUser(kit.id, bob.id)
+        assertNotNull(medKitService.requireAccessible(kit.id, alice.id))
+        assertFailsWith<DomainRuleViolated> {
+            medKitService.requireAccessible(kit.id, bob.id)
         }
     }
 
@@ -170,11 +171,9 @@ class MedKitServiceTest {
         val kit = medKitService.createNew(alice.id)
         dbHelper.flushAndClear()
 
-        val loadedKit = medKitService.findById(kit.id)
-        val loadedAlice = userService.findById(alice.id)
-        medKitService.removeUserFromMedKit(loadedKit, loadedAlice)
+        medKitService.removeUserFromMedKit(kit.id, alice.id)
         dbHelper.flushAndClear()
 
-        assertNull(medKitRepository.findById(kit.id).orElse(null))
+        assertNull(medKitStore.findById(kit.id))
     }
 }

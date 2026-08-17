@@ -1,17 +1,11 @@
 package org.kert0n.medappserver.integration
 
-import jakarta.persistence.EntityManager
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
-import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
-import org.kert0n.medappserver.db.repository.DrugRepository
-import org.kert0n.medappserver.db.repository.TreatmentPlanRepository
-import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.models.TreatmentPlanService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -22,35 +16,23 @@ import org.springframework.transaction.annotation.Transactional
  * Tracks planned quantity precisely through every operation.
  *
  * Core invariant that must always hold:
- *   drug.dbHelper.totalPlannedAmount <= drug.quantity
+ *   drug.dbHelper.storedPlannedTotal <= drug.quantity
  *
  * After a PLANNED intake (recordIntake):
  *   - The consuming user's plan shrinks by exactly quantityConsumed
  *   - Every other user's plan is UNCHANGED
  *   - drug.quantity shrinks by exactly quantityConsumed
- *   - dbHelper.totalPlannedAmount shrinks by exactly quantityConsumed
+ *   - dbHelper.storedPlannedTotal shrinks by exactly quantityConsumed
  *   - The invariant is preserved trivially (no emergency scaling needed)
  *
  * After an EMERGENCY consumption (consumeDrug directly, bypassing a plan):
  *   - drug.quantity shrinks by quantityConsumed
- *   - If dbHelper.totalPlannedAmount now exceeds quantity, ALL plans scale down proportionally
- *   - dbHelper.totalPlannedAmount == drug.quantity after scaling
+ *   - If dbHelper.storedPlannedTotal now exceeds quantity, ALL plans scale down proportionally
+ *   - dbHelper.storedPlannedTotal == drug.quantity after scaling
  */
 @PostgresIntegrationTest
 @Transactional
 class PlannedQuantityTrackingTests {
-
-    @Autowired
-    private lateinit var userRepository: UserRepository
-
-    @Autowired
-    private lateinit var drugRepository: DrugRepository
-
-    @Autowired
-    private lateinit var treatmentPlanRepository: TreatmentPlanRepository
-
-    @Autowired
-    private lateinit var entityManager: EntityManager
 
     @Autowired
     private lateinit var drugService: DrugService
@@ -58,8 +40,6 @@ class PlannedQuantityTrackingTests {
     @Autowired
     private lateinit var medKitService: MedKitService
 
-    @Autowired
-    private lateinit var treatmentPlanService: TreatmentPlanService
 
     @Autowired
     private lateinit var dbHelper: DatabaseTestHelper
@@ -72,7 +52,7 @@ class PlannedQuantityTrackingTests {
      * Setup: drug=120, alice=40, bob=30 → total=70, slack=50
      *
      * Because quantity > dbHelper.totalPlanned at every point,
-     * handleQuantityReduction must NEVER fire.
+     * plan reconciliation must NEVER fire.
      *
      * After alice takes 10:  alice=30, bob=30, drug=110, total=60
      * After bob  takes  5:  alice=30, bob=25, drug=105, total=55
@@ -85,11 +65,11 @@ class PlannedQuantityTrackingTests {
         val kit = medKitService.createNew(alice.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
 
-        val drug = dbHelper.freshDrug(kit, 120.0)
+        val drug = dbHelper.freshDrug(kit.id, 120.0)
         dbHelper.flushAndClear()
 
-        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(40.0)))
-        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
+        drugService.createPlan(alice.id, drug.id, qty(40.0))
+        drugService.createPlan(bob.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
         // Sanity: initial state
@@ -99,7 +79,7 @@ class PlannedQuantityTrackingTests {
         assertQty(30.0, dbHelper.userPlan(bob.id, drug.id))
 
         // ── Alice takes 10 (within her plan of 40) ──
-        treatmentPlanService.recordIntake(alice.id, drug.id, qty(10.0))
+        drugService.recordIntake(alice.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
         assertQty(110.0, dbHelper.drugQuantity(drug.id), "drug: 120-10=110")
@@ -108,7 +88,7 @@ class PlannedQuantityTrackingTests {
         assertQty(60.0, dbHelper.totalPlanned(drug.id), "total: 30+30=60")
 
         // ── Bob takes 5 (within his plan of 30) ──
-        treatmentPlanService.recordIntake(bob.id, drug.id, qty(5.0))
+        drugService.recordIntake(bob.id, drug.id, qty(5.0))
         dbHelper.flushAndClear()
 
         assertQty(105.0, dbHelper.drugQuantity(drug.id), "drug: 110-5=105")
@@ -148,12 +128,12 @@ class PlannedQuantityTrackingTests {
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), charlie.id)
 
-        val drug = dbHelper.freshDrug(kit, 90.0)
+        val drug = dbHelper.freshDrug(kit.id, 90.0)
         dbHelper.flushAndClear()
 
-        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
-        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
-        treatmentPlanService.createTreatmentPlan(charlie.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
+        drugService.createPlan(alice.id, drug.id, qty(30.0))
+        drugService.createPlan(bob.id, drug.id, qty(30.0))
+        drugService.createPlan(charlie.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
         // Initial state: zero slack
@@ -164,7 +144,7 @@ class PlannedQuantityTrackingTests {
         assertQty(30.0, dbHelper.userPlan(charlie.id, drug.id))
 
         // ── Alice takes 1 ──
-        treatmentPlanService.recordIntake(alice.id, drug.id, qty(1.0))
+        drugService.recordIntake(alice.id, drug.id, qty(1.0))
         dbHelper.flushAndClear()
 
         assertQty(89.0, dbHelper.drugQuantity(drug.id), "drug: 90-1=89")
@@ -174,7 +154,7 @@ class PlannedQuantityTrackingTests {
         assertQty(89.0, dbHelper.totalPlanned(drug.id), "total: 29+30+30=89")
 
         // ── Bob takes 1 ──
-        treatmentPlanService.recordIntake(bob.id, drug.id, qty(1.0))
+        drugService.recordIntake(bob.id, drug.id, qty(1.0))
         dbHelper.flushAndClear()
 
         assertQty(88.0, dbHelper.drugQuantity(drug.id), "drug: 89-1=88")
@@ -184,7 +164,7 @@ class PlannedQuantityTrackingTests {
         assertQty(88.0, dbHelper.totalPlanned(drug.id), "total: 29+29+30=88")
 
         // ── Charlie takes 1 ──
-        treatmentPlanService.recordIntake(charlie.id, drug.id, qty(1.0))
+        drugService.recordIntake(charlie.id, drug.id, qty(1.0))
         dbHelper.flushAndClear()
 
         assertQty(87.0, dbHelper.drugQuantity(drug.id), "drug: 88-1=87")
@@ -229,16 +209,16 @@ class PlannedQuantityTrackingTests {
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), charlie.id)
 
-        val drug = dbHelper.freshDrug(kit, 90.0)
+        val drug = dbHelper.freshDrug(kit.id, 90.0)
         dbHelper.flushAndClear()
 
-        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
-        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
-        treatmentPlanService.createTreatmentPlan(charlie.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
+        drugService.createPlan(alice.id, drug.id, qty(30.0))
+        drugService.createPlan(bob.id, drug.id, qty(30.0))
+        drugService.createPlan(charlie.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
         // Bob emergency-consumes 30 (ignores the plan system)
-        drugService.consumeDrug(drug.id, qty(30.0), bob.id)
+        drugService.consume(drug.id, qty(30.0), bob.id)
         dbHelper.flushAndClear()
 
         assertQty(60.0, dbHelper.drugQuantity(drug.id), "drug: 90-30=60")
@@ -290,11 +270,11 @@ class PlannedQuantityTrackingTests {
         val kit = medKitService.createNew(alice.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
 
-        val drug = dbHelper.freshDrug(kit, 120.0)
+        val drug = dbHelper.freshDrug(kit.id, 120.0)
         dbHelper.flushAndClear()
 
-        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(40.0)))
-        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(40.0)))
+        drugService.createPlan(alice.id, drug.id, qty(40.0))
+        drugService.createPlan(bob.id, drug.id, qty(40.0))
         dbHelper.flushAndClear()
 
         assertQty(120.0, dbHelper.drugQuantity(drug.id))
@@ -303,7 +283,7 @@ class PlannedQuantityTrackingTests {
         assertQty(40.0, dbHelper.userPlan(bob.id, drug.id))
 
         // ── Step 1: Alice takes 10 ──
-        treatmentPlanService.recordIntake(alice.id, drug.id, qty(10.0))
+        drugService.recordIntake(alice.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
         assertQty(110.0, dbHelper.drugQuantity(drug.id), "step1 drug")
@@ -312,7 +292,7 @@ class PlannedQuantityTrackingTests {
         assertQty(70.0, dbHelper.totalPlanned(drug.id), "step1 total: 30+40=70")
 
         // ── Step 2: Bob takes 10 ──
-        treatmentPlanService.recordIntake(bob.id, drug.id, qty(10.0))
+        drugService.recordIntake(bob.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
         assertQty(100.0, dbHelper.drugQuantity(drug.id), "step2 drug")
@@ -321,7 +301,7 @@ class PlannedQuantityTrackingTests {
         assertQty(60.0, dbHelper.totalPlanned(drug.id), "step2 total: 30+30=60")
 
         // ── Step 3: Emergency consume 60 ──
-        drugService.consumeDrug(drug.id, qty(60.0), alice.id)
+        drugService.consume(drug.id, qty(60.0), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(40.0, dbHelper.drugQuantity(drug.id), "step3 drug: 100-60=40")
@@ -331,7 +311,7 @@ class PlannedQuantityTrackingTests {
         assertQty(40.0, dbHelper.totalPlanned(drug.id)!!, "step3 total=40=drug.quantity")
 
         // ── Step 4: Alice takes 5 of her new plan of 20 ──
-        treatmentPlanService.recordIntake(alice.id, drug.id, qty(5.0))
+        drugService.recordIntake(alice.id, drug.id, qty(5.0))
         dbHelper.flushAndClear()
 
         assertQty(35.0, dbHelper.drugQuantity(drug.id), "step4 drug: 40-5=35")

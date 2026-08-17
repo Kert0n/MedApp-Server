@@ -11,6 +11,7 @@ import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
 import org.kert0n.medappserver.api.TreatmentPlanDTO
 import org.kert0n.medappserver.api.TreatmentPlanPatchRequest
 import org.kert0n.medappserver.api.toDto
+import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.TreatmentPlanService
 import org.kert0n.medappserver.services.models.userId
 import org.slf4j.LoggerFactory
@@ -30,7 +31,10 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBod
 @RequestMapping("/v1/treatment-plans")
 @Tag(name = "Treatment plans", description = "How much of a drug the user reserved for themselves")
 class TreatmentPlanController(
-    private val treatmentPlanService: TreatmentPlanService
+    private val treatmentPlanService: TreatmentPlanService,
+    // Планы читаются своим сервисом, а меняются через корень агрегата: остаток препарата и
+    // все планы на него видны только там.
+    private val drugService: DrugService
 ) {
 
     private val logger = LoggerFactory.getLogger(TreatmentPlanController::class.java)
@@ -39,7 +43,7 @@ class TreatmentPlanController(
     @ApiResponse(responseCode = "200", description = "Plans returned")
     fun listTreatmentPlans(authentication: Authentication): List<TreatmentPlanDTO> {
         logger.debug("GET /v1/treatment-plans by user {}", authentication.userId)
-        return treatmentPlanService.viewsOf(authentication.userId).map { it.toDto() }
+        return treatmentPlanService.plansOf(authentication.userId).map { it.toDto() }
     }
 
     @GetMapping("/{drugId}")
@@ -50,7 +54,7 @@ class TreatmentPlanController(
         @Parameter(description = "Drug identifier") @PathVariable drugId: UUID
     ): TreatmentPlanDTO {
         logger.debug("GET /v1/treatment-plans/{} by user {}", drugId, authentication.userId)
-        return treatmentPlanService.requireView(authentication.userId, drugId).toDto()
+        return treatmentPlanService.requirePlan(authentication.userId, drugId).toDto()
     }
 
     @PostMapping
@@ -65,8 +69,8 @@ class TreatmentPlanController(
         @Valid @RequestBody request: TreatmentPlanCreateRequest
     ): TreatmentPlanDTO {
         logger.debug("POST /v1/treatment-plans by user {} for drug {}", authentication.userId, request.drugId)
-        treatmentPlanService.createTreatmentPlan(authentication.userId, request)
-        return treatmentPlanService.requireView(authentication.userId, request.drugId).toDto()
+        drugService.createPlan(authentication.userId, request.drugId, request.plannedAmount)
+        return treatmentPlanService.requirePlan(authentication.userId, request.drugId).toDto()
     }
 
     @PatchMapping("/{drugId}")
@@ -80,8 +84,8 @@ class TreatmentPlanController(
         @Valid @RequestBody request: TreatmentPlanPatchRequest
     ): TreatmentPlanDTO {
         logger.debug("PATCH /v1/treatment-plans/{} by user {}", drugId, authentication.userId)
-        treatmentPlanService.updateTreatmentPlan(authentication.userId, drugId, request)
-        return treatmentPlanService.requireView(authentication.userId, drugId).toDto()
+        drugService.changePlan(authentication.userId, drugId, request.plannedAmount)
+        return treatmentPlanService.requirePlan(authentication.userId, drugId).toDto()
     }
 
     @DeleteMapping("/{drugId}")
@@ -93,7 +97,7 @@ class TreatmentPlanController(
         @Parameter(description = "Drug identifier") @PathVariable drugId: UUID
     ) {
         logger.debug("DELETE /v1/treatment-plans/{} by user {}", drugId, authentication.userId)
-        treatmentPlanService.deleteTreatmentPlan(authentication.userId, drugId)
+        drugService.cancelPlan(authentication.userId, drugId)
     }
 }
 

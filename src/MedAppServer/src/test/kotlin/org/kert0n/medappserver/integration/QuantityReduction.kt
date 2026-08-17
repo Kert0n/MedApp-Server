@@ -1,30 +1,24 @@
 package org.kert0n.medappserver.integration
 
-import jakarta.persistence.EntityManager
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
-import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
-import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.TreatmentPlanRepository
-import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.models.TreatmentPlanService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.data.repository.findByIdOrNull
 import org.springframework.transaction.annotation.Transactional
 
 /**
- * Tests for handleQuantityReduction — the logic that fires when unplanned
- * consumption causes drug.quantity to fall below dbHelper.totalPlannedAmount.
+ * Tests for plan reconciliation — the rule that fires when unplanned
+ * consumption causes drug.quantity to fall below dbHelper.storedPlannedTotal.
  *
  * Invariant under test:
- *   After any unplanned consumption, dbHelper.totalPlannedAmount == drug.quantity
+ *   After any unplanned consumption, dbHelper.storedPlannedTotal == drug.quantity
  *   (because plans are scaled by factor = newQuantity / olddbHelper.totalPlanned)
  *
  * Critical edge case:
@@ -36,16 +30,8 @@ import org.springframework.transaction.annotation.Transactional
 class QuantityReductionTests {
 
     @Autowired
-    private lateinit var userRepository: UserRepository
-
-    @Autowired
-    private lateinit var drugRepository: DrugRepository
-
-    @Autowired
     private lateinit var treatmentPlanRepository: TreatmentPlanRepository
 
-    @Autowired
-    private lateinit var entityManager: EntityManager
 
     @Autowired
     private lateinit var drugService: DrugService
@@ -53,8 +39,6 @@ class QuantityReductionTests {
     @Autowired
     private lateinit var medKitService: MedKitService
 
-    @Autowired
-    private lateinit var treatmentPlanService: TreatmentPlanService
 
     @Autowired
     private lateinit var dbHelper: DatabaseTestHelper
@@ -75,14 +59,14 @@ class QuantityReductionTests {
         val bob = dbHelper.freshUser("bob")
         val kit = medKitService.createNew(alice.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(20.0)))
-        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(20.0)))
+        drugService.createPlan(alice.id, drug.id, qty(20.0))
+        drugService.createPlan(bob.id, drug.id, qty(20.0))
         dbHelper.flushAndClear()
 
-        drugService.consumeDrug(drug.id, qty(50.0), alice.id)
+        drugService.consume(drug.id, qty(50.0), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(50.0, dbHelper.drugQuantity(drug.id))
@@ -109,15 +93,15 @@ class QuantityReductionTests {
         val kit = medKitService.createNew(alice.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), charlie.id)
-        val drug = dbHelper.freshDrug(kit, 90.0)
+        val drug = dbHelper.freshDrug(kit.id, 90.0)
         dbHelper.flushAndClear()
 
-        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
-        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
-        treatmentPlanService.createTreatmentPlan(charlie.id, TreatmentPlanCreateRequest(drug.id, qty(30.0)))
+        drugService.createPlan(alice.id, drug.id, qty(30.0))
+        drugService.createPlan(bob.id, drug.id, qty(30.0))
+        drugService.createPlan(charlie.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
-        drugService.consumeDrug(drug.id, qty(30.0), alice.id)
+        drugService.consume(drug.id, qty(30.0), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(60.0, dbHelper.drugQuantity(drug.id))
@@ -146,14 +130,14 @@ class QuantityReductionTests {
         val bob = dbHelper.freshUser("bob")
         val kit = medKitService.createNew(alice.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(60.0)))
-        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(40.0)))
+        drugService.createPlan(alice.id, drug.id, qty(60.0))
+        drugService.createPlan(bob.id, drug.id, qty(40.0))
         dbHelper.flushAndClear()
 
-        drugService.consumeDrug(drug.id, qty(50.0), alice.id)
+        drugService.consume(drug.id, qty(50.0), alice.id)
         dbHelper.flushAndClear()
 
         val alicePlan = dbHelper.userPlan(alice.id, drug.id)!!
@@ -189,15 +173,15 @@ class QuantityReductionTests {
         val bob = dbHelper.freshUser("bob")
         val kit = medKitService.createNew(alice.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
-        val drug = dbHelper.freshDrug(kit, 80.0)
+        val drug = dbHelper.freshDrug(kit.id, 80.0)
         dbHelper.flushAndClear()
 
-        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(40.0)))
-        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(40.0)))
+        drugService.createPlan(alice.id, drug.id, qty(40.0))
+        drugService.createPlan(bob.id, drug.id, qty(40.0))
         dbHelper.flushAndClear()
 
         // First reduction
-        drugService.consumeDrug(drug.id, qty(40.0), alice.id)
+        drugService.consume(drug.id, qty(40.0), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(40.0, dbHelper.drugQuantity(drug.id))
@@ -206,7 +190,7 @@ class QuantityReductionTests {
         assertQty(40.0, dbHelper.totalPlanned(drug.id)!!)
 
         // Second reduction
-        drugService.consumeDrug(drug.id, qty(20.0), alice.id)
+        drugService.consume(drug.id, qty(20.0), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(20.0, dbHelper.drugQuantity(drug.id))
@@ -234,14 +218,14 @@ class QuantityReductionTests {
         val bob = dbHelper.freshUser("bob")
         val kit = medKitService.createNew(alice.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(50.0)))
-        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(50.0)))
+        drugService.createPlan(alice.id, drug.id, qty(50.0))
+        drugService.createPlan(bob.id, drug.id, qty(50.0))
         dbHelper.flushAndClear()
 
-        drugService.consumeDrug(drug.id, qty(75.0), alice.id)
+        drugService.consume(drug.id, qty(75.0), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(25.0, dbHelper.drugQuantity(drug.id))
@@ -258,7 +242,7 @@ class QuantityReductionTests {
      * When drug.quantity reaches 0, factor = 0/dbHelper.totalPlanned = 0.
      * Every plannedAmount becomes 0.0.
      * Plans with plannedAmount == 0 MUST be deleted — ghost rows with 0
-     * would corrupt every availability check and dbHelper.totalPlannedAmount formula.
+     * would corrupt every availability check and dbHelper.storedPlannedTotal formula.
      *
      * Setup: drug=60, alice=20, bob=20, charlie=20 → total=60
      * Consume ALL 60 unplanned:
@@ -274,27 +258,27 @@ class QuantityReductionTests {
         val kit = medKitService.createNew(alice.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), charlie.id)
-        val drug = dbHelper.freshDrug(kit, 60.0)
+        val drug = dbHelper.freshDrug(kit.id, 60.0)
         dbHelper.flushAndClear()
 
-        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(20.0)))
-        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(20.0)))
-        treatmentPlanService.createTreatmentPlan(charlie.id, TreatmentPlanCreateRequest(drug.id, qty(20.0)))
+        drugService.createPlan(alice.id, drug.id, qty(20.0))
+        drugService.createPlan(bob.id, drug.id, qty(20.0))
+        drugService.createPlan(charlie.id, drug.id, qty(20.0))
         dbHelper.flushAndClear()
 
         // Sanity: Verify initial state
-        assertEquals(3, treatmentPlanService.findAllByDrug(drug.id).size)
+        assertEquals(3, (dbHelper.drug(drug.id)?.plans ?: emptyList()).size)
 
         // Action: Consume ALL 60 unplanned
-        drugService.consumeDrug(drug.id, qty(60.0), alice.id)
+        drugService.consume(drug.id, qty(60.0), alice.id)
         dbHelper.flushAndClear()
 
         // 1. Verify the Drug record is GONE (Privacy-by-Default)
-        val deletedDrug = drugRepository.findByIdOrNull(drug.id)
+        val deletedDrug = dbHelper.drug(drug.id)
         assertNull(deletedDrug, "Drug record must be deleted from the database when quantity reaches zero")
 
         // 2. Verify all bridge records (treatment plans) are GONE
-        val remainingPlans = treatmentPlanRepository.findAllByPlanKeyDrugId(drug.id)
+        val remainingPlans = (dbHelper.drug(drug.id)?.plans ?: emptyList())
         assertEquals(0, remainingPlans.size, "All treatment plans must be deleted to prevent ghost records")
 
         // 3. Individual lookups must return null
@@ -315,24 +299,24 @@ class QuantityReductionTests {
     fun `Consuming entire stock with single plan deletes drug and plan`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 50.0)
+        val drug = dbHelper.freshDrug(kit.id, 50.0)
         dbHelper.flushAndClear()
 
-        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(50.0)))
+        drugService.createPlan(alice.id, drug.id, qty(50.0))
         dbHelper.flushAndClear()
 
-        assertEquals(1, treatmentPlanService.findAllByDrug(drug.id).size)
+        assertEquals(1, (dbHelper.drug(drug.id)?.plans ?: emptyList()).size)
 
         // Action: Consume everything in one go
-        drugService.consumeDrug(drug.id, qty(50.0), alice.id)
+        drugService.consume(drug.id, qty(50.0), alice.id)
         dbHelper.flushAndClear()
 
         // 1. Verify Drug is PURGED
-        val remainingDrug = drugRepository.findByIdOrNull(drug.id)
+        val remainingDrug = dbHelper.drug(drug.id)
         assertNull(remainingDrug, "Drug record must be deleted to maintain privacy-by-default")
 
         // 2. Verify Plan is PURGED
-        val remainingPlans = treatmentPlanService.findAllByDrug(drug.id)
+        val remainingPlans = (dbHelper.drug(drug.id)?.plans ?: emptyList())
         assertEquals(0, remainingPlans.size, "Associated treatment plan must be purged")
 
         // 3. Direct lookup should fail
@@ -358,33 +342,33 @@ class QuantityReductionTests {
         val bob = dbHelper.freshUser("bob")
         val kit = medKitService.createNew(alice.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
-        val drug = dbHelper.freshDrug(kit, 10.0)
+        val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
-        treatmentPlanService.createTreatmentPlan(alice.id, TreatmentPlanCreateRequest(drug.id, qty(6.0)))
-        treatmentPlanService.createTreatmentPlan(bob.id, TreatmentPlanCreateRequest(drug.id, qty(4.0)))
+        drugService.createPlan(alice.id, drug.id, qty(6.0))
+        drugService.createPlan(bob.id, drug.id, qty(4.0))
         dbHelper.flushAndClear()
 
         // --- Step 1: Halve everything ---
-        drugService.consumeDrug(drug.id, qty(5.0), alice.id)
+        drugService.consume(drug.id, qty(5.0), alice.id)
         dbHelper.flushAndClear()
 
         // Drug still exists here
         assertQty(5.0, dbHelper.drugQuantity(drug.id))
         assertQty(3.0, dbHelper.userPlan(alice.id, drug.id)!!)
         assertQty(2.0, dbHelper.userPlan(bob.id, drug.id)!!)
-        assertEquals(2, treatmentPlanService.findAllByDrug(drug.id).size, "Still 2 plans after partial reduction")
+        assertEquals(2, (dbHelper.drug(drug.id)?.plans ?: emptyList()).size, "Still 2 plans after partial reduction")
 
         // --- Step 2: Wipe everything ---
-        drugService.consumeDrug(drug.id, qty(5.0), alice.id)
+        drugService.consume(drug.id, qty(5.0), alice.id)
         dbHelper.flushAndClear()
 
         // 1. Verify Drug is PURGED (Privacy-by-Default)
-        val remainingDrug = drugRepository.findByIdOrNull(drug.id)
+        val remainingDrug = dbHelper.drug(drug.id)
         assertNull(remainingDrug, "Drug record must be deleted when quantity reaches zero")
 
         // 2. Verify Plans are PURGED
-        val remainingPlans = treatmentPlanService.findAllByDrug(drug.id)
+        val remainingPlans = (dbHelper.drug(drug.id)?.plans ?: emptyList())
         assertEquals(0, remainingPlans.size, "All plans must be deleted on final step")
 
         assertNull(dbHelper.userPlan(alice.id, drug.id), "Alice's plan must be null")
