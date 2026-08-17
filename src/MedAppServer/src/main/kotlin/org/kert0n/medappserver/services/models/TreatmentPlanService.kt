@@ -2,8 +2,8 @@ package org.kert0n.medappserver.services.models
 
 import java.util.UUID
 import org.kert0n.medappserver.db.store.DrugStore
-import org.kert0n.medappserver.domain.drug.TreatmentPlan
-import org.kert0n.medappserver.domain.error.NoSuchTreatmentPlan
+import org.kert0n.medappserver.domain.TreatmentPlan
+import org.kert0n.medappserver.domain.NoSuchTreatmentPlan
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional

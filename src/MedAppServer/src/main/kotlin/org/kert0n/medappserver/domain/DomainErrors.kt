@@ -1,4 +1,4 @@
-package org.kert0n.medappserver.domain.error
+package org.kert0n.medappserver.domain
 
 /**
  * Отказы агрегата.
@@ -16,9 +16,6 @@ class InvalidQuantity : DomainRuleViolated("Quantity must be greater than zero")
 
 /** Списать больше, чем есть, нельзя. */
 class InsufficientStock : DomainRuleViolated("Amount exceeds the stock")
-
-/** Запас можно только пополнить; расход выражается списанием. */
-class QuantityNotIncreased : DomainRuleViolated("New quantity must be greater than the current one")
 
 /** Сумма планов не может превысить остаток. */
 class PlannedAmountExceedsStock : DomainRuleViolated("Planned amount exceeds the available stock")
@@ -40,3 +37,6 @@ class AlreadyMember : DomainRuleViolated("User is already a member of this medic
 
 /** Пользователь без ключа не существует. */
 class InvalidCredentials : DomainRuleViolated("Credentials must not be blank")
+
+/** Аптечки без участников не бывает: последний выходящий забирает её с собой. */
+class MedKitWithoutMembers : DomainRuleViolated("Medicine kit must have at least one member")

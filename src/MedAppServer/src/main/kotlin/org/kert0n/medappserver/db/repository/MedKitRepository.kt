@@ -28,7 +28,7 @@ interface MedKitRepository : JpaRepository<MedKitData, UUID> {
      */
     @Query(
         """
-        SELECT new org.kert0n.medappserver.domain.medkit.MedKitOverview(
+        SELECT new org.kert0n.medappserver.domain.MedKitOverview(
             mk.id,
             (SELECT COUNT(m2) FROM MedKitMembershipData m2 WHERE m2.membershipKey.medKitId = mk.id),
             (SELECT COUNT(d) FROM DrugData d WHERE d.medKit = mk))
@@ -38,7 +38,7 @@ interface MedKitRepository : JpaRepository<MedKitData, UUID> {
         ORDER BY mk.id
     """
     )
-    fun findOverviewsOfUser(@Param("userId") userId: UUID): List<org.kert0n.medappserver.domain.medkit.MedKitOverview>
+    fun findOverviewsOfUser(@Param("userId") userId: UUID): List<org.kert0n.medappserver.domain.MedKitOverview>
 }
 
 interface MedKitMembershipRepository : JpaRepository<MedKitMembershipData, org.kert0n.medappserver.db.model.MedKitMembershipKey> {

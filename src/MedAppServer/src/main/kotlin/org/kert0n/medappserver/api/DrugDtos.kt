@@ -92,7 +92,11 @@ data class DrugPatchRequest(
     val name: String? = null,
 
     @field:DecimalMin(value = "0.0", inclusive = false)
-    @Schema(description = "New stock; may only increase. Use consumptions to reduce it.", example = "120.0")
+    @Schema(
+        description = "Corrected stock. Raising it adds to the shelf; lowering it means a recount " +
+            "found less than recorded, and treatment plans are scaled down to fit.",
+        example = "120.0"
+    )
     val quantity: BigDecimal? = null,
 
     @field:Size(min = 1, max = 50)

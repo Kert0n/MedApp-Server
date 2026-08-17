@@ -9,7 +9,7 @@ import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.servlet.http.HttpServletRequest
-import org.kert0n.medappserver.services.security.AuthenticatedUser
+import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.models.UserService
 import org.kert0n.medappserver.services.security.RegistrationSecret
 import org.kert0n.medappserver.services.security.SecurityService
@@ -94,5 +94,5 @@ class AuthController(
     @ApiResponse(responseCode = "401", description = "Invalid credentials", content = [Content()])
     @ApiResponse(responseCode = "429", description = "Too many token requests", content = [Content()])
     fun token(authentication: Authentication): TokenResponse =
-        TokenResponse(securityService.generateToken((authentication.principal as AuthenticatedUser).user))
+        TokenResponse(securityService.generateToken(authentication.principal as User))
 }

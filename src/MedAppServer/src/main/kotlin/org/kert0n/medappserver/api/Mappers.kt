@@ -1,9 +1,9 @@
 package org.kert0n.medappserver.api
 
-import org.kert0n.medappserver.domain.catalogue.DrugTemplate
-import org.kert0n.medappserver.domain.drug.Drug
-import org.kert0n.medappserver.domain.drug.TreatmentPlan
-import org.kert0n.medappserver.domain.medkit.MedKitOverview
+import org.kert0n.medappserver.db.model.parsed.VidalDrug
+import org.kert0n.medappserver.domain.Drug
+import org.kert0n.medappserver.domain.TreatmentPlan
+import org.kert0n.medappserver.domain.MedKitOverview
 
 /**
  * Перевод доменных значений в публичный контракт.
@@ -32,14 +32,19 @@ fun TreatmentPlan.toDto(): TreatmentPlanDTO = TreatmentPlanDTO(
     plannedAmount = plannedAmount
 )
 
-fun DrugTemplate.toDto(): DrugTemplateDTO = DrugTemplateDTO(
+/**
+ * Карточка справочника отдаётся сущностью — заводить для неё доменный тип не за что, правил
+ * у неё нет. Названия формы и единицы разворачиваются здесь: до этого места они остаются
+ * собой, а не строками.
+ */
+fun VidalDrug.toDto(): DrugTemplateDTO = DrugTemplateDTO(
     id = id,
     name = name,
     nameLat = nameLat,
     activeSubstance = activeSubstance,
-    formType = formType,
+    formType = formType?.name,
     category = category,
-    quantityUnit = quantityUnit,
+    quantityUnit = quantityUnit?.name,
     manufacturer = manufacturer,
     country = country,
     description = description

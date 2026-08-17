@@ -2,15 +2,15 @@ package org.kert0n.medappserver.integration.userstory
 
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.db.store.MedKitStore
-import org.kert0n.medappserver.domain.drug.Drug
-import org.kert0n.medappserver.domain.user.User
+import org.kert0n.medappserver.domain.Drug
+import org.kert0n.medappserver.domain.User
 import jakarta.persistence.EntityManager
 import java.util.*
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
-import org.kert0n.medappserver.domain.error.PlannedAmountExceedsStock
+import org.kert0n.medappserver.domain.PlannedAmountExceedsStock
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.db.model.DrugData
@@ -68,11 +68,11 @@ class TreatmentPlanStoriesTest {
      */
     @Test
     fun `Story 6 - User creates treatment plan and records intakes`() {
-        val userData = User.register(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
+        val userData = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
         dbHelper.insert(userData)
 
         val medkit = medKitService.createNew(userData.id)
-        val drugData = Drug.create(
+        val drugData = Drug(
             id = UUID.randomUUID(),
             name = "Treatment Drug",
             quantity = qty(100.0),
@@ -119,8 +119,8 @@ class TreatmentPlanStoriesTest {
     @Test
     fun `Story 7 - Multiple users create treatment plans on shared drug`() {
         // Setup: Anna and Bob share a medkit with 100 tablets of Vitamin C
-        val anna = User.register(id = UUID.randomUUID(), hashedKey = "anna_${UUID.randomUUID()}")
-        val bob = User.register(id = UUID.randomUUID(), hashedKey = "bob_${UUID.randomUUID()}")
+        val anna = User(id = UUID.randomUUID(), hashedKey = "anna_${UUID.randomUUID()}")
+        val bob = User(id = UUID.randomUUID(), hashedKey = "bob_${UUID.randomUUID()}")
         dbHelper.insert(anna)
         dbHelper.insert(bob)
 
@@ -128,7 +128,7 @@ class TreatmentPlanStoriesTest {
         val shareKey = medKitService.generateMedKitShareKey(medkit.id, anna.id)
         medKitService.joinMedKitByKey(shareKey, bob.id)
 
-        val vitaminC = Drug.create(
+        val vitaminC = Drug(
             id = UUID.randomUUID(),
             name = "Vitamin C",
             quantity = qty(100.0),
@@ -172,11 +172,11 @@ class TreatmentPlanStoriesTest {
      */
     @Test
     fun `Story 8 - Reducing drug quantity adjusts treatment plans proportionally`() {
-        val userData = User.register(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
+        val userData = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
         dbHelper.insert(userData)
         val medkit = medKitService.createNew(userData.id)
 
-        val drugData = Drug.create(
+        val drugData = Drug(
             id = UUID.randomUUID(),
             name = "Paracetamol",
             quantity = qty(100.0),
@@ -221,11 +221,11 @@ class TreatmentPlanStoriesTest {
      */
     @Test
     fun `Story 9 - Cannot over-plan drug quantity`() {
-        val userData = User.register(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
+        val userData = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
         dbHelper.insert(userData)
         val medkit = medKitService.createNew(userData.id)
 
-        val drugData = Drug.create(
+        val drugData = Drug(
             id = UUID.randomUUID(),
             name = "Ibuprofen",
             quantity = qty(50.0),
@@ -250,7 +250,7 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
 
         // Another user tries to plan 25 (only 20 available: 50 - 30 = 20)
-        val userData2 = User.register(id = UUID.randomUUID(), hashedKey = "user2_${UUID.randomUUID()}")
+        val userData2 = User(id = UUID.randomUUID(), hashedKey = "user2_${UUID.randomUUID()}")
         dbHelper.insert(userData2)
         val shareKey = medKitService.generateMedKitShareKey(medkit.id, userData.id)
         medKitService.joinMedKitByKey(shareKey, userData2.id)
@@ -277,9 +277,9 @@ class TreatmentPlanStoriesTest {
     @Test
     fun `Story 10 - Complete family medkit lifecycle`() {
         // Mom creates a family medkit
-        val mom = User.register(id = UUID.randomUUID(), hashedKey = "mom_${UUID.randomUUID()}")
-        val dad = User.register(id = UUID.randomUUID(), hashedKey = "dad_${UUID.randomUUID()}")
-        val child = User.register(id = UUID.randomUUID(), hashedKey = "child_${UUID.randomUUID()}")
+        val mom = User(id = UUID.randomUUID(), hashedKey = "mom_${UUID.randomUUID()}")
+        val dad = User(id = UUID.randomUUID(), hashedKey = "dad_${UUID.randomUUID()}")
+        val child = User(id = UUID.randomUUID(), hashedKey = "child_${UUID.randomUUID()}")
         dbHelper.insert(mom)
         dbHelper.insert(dad)
         dbHelper.insert(child)
@@ -293,13 +293,13 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
 
         // Add family medications
-        val aspirin = Drug.create(
+        val aspirin = Drug(
             id = UUID.randomUUID(), name = "Children's Aspirin",
             quantity = qty(200.0), quantityUnit = "tablets", formType = "chewable",
             category = "painkiller", manufacturer = null, country = null,
             description = null, medKitId = familyKit.id
         )
-        val vitamins = Drug.create(
+        val vitamins = Drug(
             id = UUID.randomUUID(), name = "Multivitamins",
             quantity = qty(90.0), quantityUnit = "tablets", formType = "tablet",
             category = "supplement", manufacturer = null, country = null,

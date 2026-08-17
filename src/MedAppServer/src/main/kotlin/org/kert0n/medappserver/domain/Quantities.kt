@@ -1,4 +1,4 @@
-package org.kert0n.medappserver.domain.quantity
+package org.kert0n.medappserver.domain
 
 import java.math.BigDecimal
 import java.math.RoundingMode

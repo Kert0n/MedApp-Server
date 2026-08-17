@@ -3,7 +3,7 @@ package org.kert0n.medappserver.testutil
 import java.util.*
 import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.api.DrugPatchRequest
-import org.kert0n.medappserver.domain.drug.Drug
+import org.kert0n.medappserver.domain.Drug
 
 /** Сборщики тестовых данных. Строятся доменные значения — сущностей тест не видит. */
 
@@ -28,7 +28,7 @@ class DrugBuilder(private val medKitId: UUID) {
     fun withCountry(country: String?) = apply { this.country = country }
     fun withDescription(description: String?) = apply { this.description = description }
 
-    fun build(): Drug = Drug.create(
+    fun build(): Drug = Drug(
         id = id,
         medKitId = medKitId,
         name = name,

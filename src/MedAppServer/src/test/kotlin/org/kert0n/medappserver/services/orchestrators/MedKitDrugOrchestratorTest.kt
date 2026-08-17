@@ -21,7 +21,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.transaction.annotation.Transactional
-import org.kert0n.medappserver.domain.error.DomainRuleViolated
+import org.kert0n.medappserver.domain.DomainRuleViolated
 
 @SpringBootTest
 @ActiveProfiles("test")

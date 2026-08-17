@@ -1,8 +1,8 @@
 package org.kert0n.medappserver.integration.userstory
 
 import org.kert0n.medappserver.db.store.MedKitStore
-import org.kert0n.medappserver.domain.drug.Drug
-import org.kert0n.medappserver.domain.user.User
+import org.kert0n.medappserver.domain.Drug
+import org.kert0n.medappserver.domain.User
 import jakarta.persistence.EntityManager
 import java.util.*
 import kotlin.test.assertEquals
@@ -81,16 +81,16 @@ class ComplexWorkflowStoriesTest {
         // ==========================================
         // PHASE 1: Setup and Sharing
         // ==========================================
-        val alice = dbHelper.insert(User.register(id = UUID.randomUUID(), hashedKey = "alice_${UUID.randomUUID()}"))
-        val bob = dbHelper.insert(User.register(id = UUID.randomUUID(), hashedKey = "bob_${UUID.randomUUID()}"))
-        val charlie = dbHelper.insert(User.register(id = UUID.randomUUID(), hashedKey = "charlie_${UUID.randomUUID()}"))
+        val alice = dbHelper.insert(User(id = UUID.randomUUID(), hashedKey = "alice_${UUID.randomUUID()}"))
+        val bob = dbHelper.insert(User(id = UUID.randomUUID(), hashedKey = "bob_${UUID.randomUUID()}"))
+        val charlie = dbHelper.insert(User(id = UUID.randomUUID(), hashedKey = "charlie_${UUID.randomUUID()}"))
 
         val homeKit = medKitService.createNew(alice.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(homeKit.id, alice.id), bob.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(homeKit.id, alice.id), charlie.id)
 
         val allergyMeds = dbHelper.insert(
-            Drug.create(
+            Drug(
                 id = UUID.randomUUID(), name = "Allergy Meds", quantity = qty(60.0),
                 quantityUnit = "pills", medKitId = homeKit.id, formType = null,
                 category = null,
@@ -100,7 +100,7 @@ class ComplexWorkflowStoriesTest {
             )
         )
         val painkillers = dbHelper.insert(
-            Drug.create(
+            Drug(
                 id = UUID.randomUUID(), name = "Painkillers", quantity = qty(100.0),
                 quantityUnit = "pills", medKitId = homeKit.id, formType = null,
                 category = null,
@@ -298,7 +298,7 @@ class ComplexWorkflowStoriesTest {
 
     private fun createTestUser(name: String): User {
         // Using repository directly to bypass any complex auth logic in UserService if necessary
-        return dbHelper.insert(User.register(id = UUID.randomUUID(), hashedKey = name))
+        return dbHelper.insert(User(id = UUID.randomUUID(), hashedKey = name))
     }
 
     @Test

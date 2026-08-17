@@ -5,8 +5,8 @@ import org.kert0n.medappserver.db.model.MedKitData
 import org.kert0n.medappserver.db.model.TreatmentPlanData
 import org.kert0n.medappserver.db.model.TreatmentPlanKey
 import org.kert0n.medappserver.db.model.UserData
-import org.kert0n.medappserver.domain.drug.Drug
-import org.kert0n.medappserver.domain.drug.TreatmentPlan
+import org.kert0n.medappserver.domain.Drug
+import org.kert0n.medappserver.domain.TreatmentPlan
 import java.util.UUID
 
 /**
@@ -20,7 +20,7 @@ import java.util.UUID
  * добавление, изменение и удаление планов выражаются через её коллекцию, за которой стоят
  * каскад и `orphanRemoval`.
  */
-internal fun DrugData.toDomain(): Drug = Drug.fromStored(
+internal fun DrugData.toDomain(): Drug = Drug(
     id = id,
     medKitId = medKit.id,
     name = name,

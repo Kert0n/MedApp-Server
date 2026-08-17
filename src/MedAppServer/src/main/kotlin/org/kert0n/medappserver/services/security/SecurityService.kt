@@ -1,7 +1,7 @@
 package org.kert0n.medappserver.services.security
 
 import com.sksamuel.aedile.core.Cache
-import org.kert0n.medappserver.domain.user.User
+import org.kert0n.medappserver.domain.User
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.security.crypto.password.PasswordEncoder

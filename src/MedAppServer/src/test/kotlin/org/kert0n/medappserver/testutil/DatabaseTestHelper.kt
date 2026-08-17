@@ -5,8 +5,8 @@ import java.math.BigDecimal
 import java.util.*
 import org.kert0n.medappserver.db.store.DrugStore
 import org.kert0n.medappserver.db.store.UserStore
-import org.kert0n.medappserver.domain.drug.Drug
-import org.kert0n.medappserver.domain.user.User
+import org.kert0n.medappserver.domain.Drug
+import org.kert0n.medappserver.domain.User
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
 
@@ -24,14 +24,14 @@ class DatabaseTestHelper(
 ) {
     @Transactional
     fun freshUser(tag: String): User {
-        val user = User.register(hashedKey = "${tag}_${UUID.randomUUID()}")
+        val user = User(hashedKey = "${tag}_${UUID.randomUUID()}")
         users.insert(user)
         return user
     }
 
     @Transactional
     fun freshDrug(medKitId: UUID, quantity: Double): Drug {
-        val drug = Drug.create(
+        val drug = Drug(
             medKitId = medKitId,
             name = "Drug_${UUID.randomUUID()}",
             quantity = qty(quantity),

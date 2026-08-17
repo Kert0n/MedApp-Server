@@ -1,8 +1,8 @@
 package org.kert0n.medappserver.integration
 
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
-import org.kert0n.medappserver.domain.drug.Drug
-import org.kert0n.medappserver.domain.user.User
+import org.kert0n.medappserver.domain.Drug
+import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.testutil.ApiRoutes
 import java.util.UUID
 import kotlin.test.assertFalse
@@ -94,10 +94,10 @@ class ErrorResponseShapeTest {
     @Test
     fun `insufficient quantity does not disclose amounts`() {
         // A real drug with 5 units in stock; ask for a plan of 500.
-        val user = dbHelper.insert(User.register(hashedKey = "{noop}k"))
+        val user = dbHelper.insert(User(hashedKey = "{noop}k"))
         val medKit = medKitService.createNew(user.id)
         val drug = dbHelper.insert(
-            Drug.create(
+            Drug(
                 medKitId = medKit.id, name = "Aspirin", quantity = qty(5.0), quantityUnit = "tab"
             )
         )

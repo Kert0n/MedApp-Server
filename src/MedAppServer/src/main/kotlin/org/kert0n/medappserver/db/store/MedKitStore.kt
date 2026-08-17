@@ -7,8 +7,8 @@ import org.kert0n.medappserver.db.model.MedKitMembershipKey
 import org.kert0n.medappserver.db.repository.MedKitMembershipRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.UserRepository
-import org.kert0n.medappserver.domain.medkit.MedKit
-import org.kert0n.medappserver.domain.medkit.MedKitOverview
+import org.kert0n.medappserver.domain.MedKit
+import org.kert0n.medappserver.domain.MedKitOverview
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Component
 
@@ -27,11 +27,11 @@ class MedKitStore(
 
     fun findById(medKitId: UUID): MedKit? {
         val row = medKits.findByIdOrNull(medKitId) ?: return null
-        return MedKit.fromStored(row.id, memberships.findMemberIds(row.id))
+        return MedKit(row.id, memberships.findMemberIds(row.id))
     }
 
     fun findAllOfUser(userId: UUID): List<MedKit> =
-        medKits.findAllOfUser(userId).map { MedKit.fromStored(it.id, memberships.findMemberIds(it.id)) }
+        medKits.findAllOfUser(userId).map { MedKit(it.id, memberships.findMemberIds(it.id)) }
 
     fun overviewsOf(userId: UUID): List<MedKitOverview> = medKits.findOverviewsOfUser(userId)
 

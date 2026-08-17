@@ -3,9 +3,9 @@ package org.kert0n.medappserver.services.models
 import com.sksamuel.aedile.core.Cache
 import java.util.UUID
 import org.kert0n.medappserver.db.store.MedKitStore
-import org.kert0n.medappserver.domain.error.NotAMember
-import org.kert0n.medappserver.domain.medkit.MedKit
-import org.kert0n.medappserver.domain.medkit.MedKitOverview
+import org.kert0n.medappserver.domain.NotAMember
+import org.kert0n.medappserver.domain.MedKit
+import org.kert0n.medappserver.domain.MedKitOverview
 import org.kert0n.medappserver.services.security.SecurityService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -30,7 +30,7 @@ class MedKitService(
     @Transactional
     fun createNew(userId: UUID): MedKit {
         logger.debug("Creating new medkit for user: {}", userId)
-        val medKit = MedKit.create(userId)
+        val medKit = MedKit(members = setOf(userId))
         medKits.insert(medKit)
         return medKit
     }
@@ -93,14 +93,14 @@ class MedKitService(
     @Transactional
     fun removeUserFromMedKit(medKitId: UUID, userId: UUID): MedKit? {
         logger.debug("Removing user {} from medkit {}", userId, medKitId)
-        val outcome = requireAccessible(medKitId, userId).leave(userId)
+        val left = requireAccessible(medKitId, userId).leave(userId)
 
-        if (outcome.becameEmpty) {
+        if (left == null) {
             medKits.delete(medKitId)
             return null
         }
-        medKits.save(outcome.medKit)
-        return outcome.medKit
+        medKits.save(left)
+        return left
     }
 
     @Transactional

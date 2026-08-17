@@ -5,7 +5,7 @@ import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.api.MedKitDTO
 import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.db.store.DrugStore
-import org.kert0n.medappserver.domain.drug.Drug
+import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.slf4j.LoggerFactory

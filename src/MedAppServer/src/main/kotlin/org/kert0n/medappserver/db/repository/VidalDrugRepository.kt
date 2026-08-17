@@ -1,7 +1,6 @@
 package org.kert0n.medappserver.db.repository
 
 import org.kert0n.medappserver.db.model.parsed.VidalDrug
-import org.kert0n.medappserver.domain.catalogue.DrugTemplate
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
@@ -15,18 +14,6 @@ interface VidalDrugRepository : JpaRepository<VidalDrug, UUID> {
      * Джойн вместо EAGER-связей: поиск — нативный запрос, join fetch к нему не приделать, и
      * каждая строка выдачи тянула за собой отдельную загрузку справочников.
      */
-    @Query(
-        """
-        SELECT new org.kert0n.medappserver.domain.catalogue.DrugTemplate(
-            v.id, v.name, v.nameLat, v.activeSubstance, f.name, v.category, q.name,
-            v.manufacturer, v.country, v.description)
-        FROM VidalDrug v
-        LEFT JOIN v.formType f
-        LEFT JOIN v.quantityUnit q
-        WHERE v.id = :id
-        """
-    )
-    fun findViewById(@Param("id") id: UUID): DrugTemplate?
 
 
     /**

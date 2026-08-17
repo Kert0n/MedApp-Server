@@ -7,10 +7,10 @@ import org.kert0n.medappserver.api.IntakeRequest
 import org.kert0n.medappserver.api.MembershipCreateRequest
 import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
 import org.kert0n.medappserver.api.TreatmentPlanPatchRequest
-import org.kert0n.medappserver.domain.drug.Drug
-import org.kert0n.medappserver.domain.drug.TreatmentPlan
-import org.kert0n.medappserver.domain.medkit.MedKit
-import org.kert0n.medappserver.domain.medkit.MedKitOverview
+import org.kert0n.medappserver.domain.Drug
+import org.kert0n.medappserver.domain.TreatmentPlan
+import org.kert0n.medappserver.domain.MedKit
+import org.kert0n.medappserver.domain.MedKitOverview
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.TreatmentPlanService
@@ -64,8 +64,8 @@ class ResourceApiContractTest {
     private val medKitId: UUID = UUID.randomUUID()
     private val drugId: UUID = UUID.randomUUID()
 
-    private val medKit = MedKit.fromStored(medKitId, setOf(userId))
-    private val drug = Drug.create(
+    private val medKit = MedKit(medKitId, setOf(userId))
+    private val drug = Drug(
         id = drugId, medKitId = medKitId, name = "Aspirin",
         quantity = qty(100.0), quantityUnit = "mg"
     )

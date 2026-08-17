@@ -13,24 +13,24 @@ interface TreatmentPlanRepository : JpaRepository<TreatmentPlanData, TreatmentPl
 
     @Query(
         """
-        SELECT new org.kert0n.medappserver.domain.drug.TreatmentPlan(
+        SELECT new org.kert0n.medappserver.domain.TreatmentPlan(
             p.planKey.userId, p.planKey.drugId, p.plannedAmount)
         FROM TreatmentPlanData p
         WHERE p.planKey.userId = :userId
         ORDER BY p.drugData.name
     """
     )
-    fun findPlansOfUser(@Param("userId") userId: UUID): List<org.kert0n.medappserver.domain.drug.TreatmentPlan>
+    fun findPlansOfUser(@Param("userId") userId: UUID): List<org.kert0n.medappserver.domain.TreatmentPlan>
 
     @Query(
         """
-        SELECT new org.kert0n.medappserver.domain.drug.TreatmentPlan(
+        SELECT new org.kert0n.medappserver.domain.TreatmentPlan(
             p.planKey.userId, p.planKey.drugId, p.plannedAmount)
         FROM TreatmentPlanData p
         WHERE p.planKey.userId = :userId AND p.planKey.drugId = :drugId
     """
     )
-    fun findPlan(@Param("userId") userId: UUID, @Param("drugId") drugId: UUID): org.kert0n.medappserver.domain.drug.TreatmentPlan?
+    fun findPlan(@Param("userId") userId: UUID, @Param("drugId") drugId: UUID): org.kert0n.medappserver.domain.TreatmentPlan?
 
     fun findAllByPlanKeyDrugId(drugId: UUID): List<TreatmentPlanData>
 

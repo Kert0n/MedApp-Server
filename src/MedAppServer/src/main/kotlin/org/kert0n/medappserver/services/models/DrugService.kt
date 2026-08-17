@@ -5,10 +5,10 @@ import java.util.UUID
 import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.api.DrugPatchRequest
 import org.kert0n.medappserver.db.store.DrugStore
-import org.kert0n.medappserver.domain.drug.Drug
-import org.kert0n.medappserver.domain.drug.DrugDetails
-import org.kert0n.medappserver.domain.drug.TreatmentPlan
-import org.kert0n.medappserver.domain.error.NotAMember
+import org.kert0n.medappserver.domain.Drug
+import org.kert0n.medappserver.domain.DrugDetails
+import org.kert0n.medappserver.domain.TreatmentPlan
+import org.kert0n.medappserver.domain.NotAMember
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -72,7 +72,7 @@ class DrugService(private val drugs: DrugStore) {
     fun create(request: DrugCreateRequest, medKitId: UUID, userId: UUID): Drug {
         logger.debug("Creating drug: {} for user: {}", request.name, userId)
 
-        val drug = Drug.create(
+        val drug = Drug(
             medKitId = medKitId,
             name = request.name,
             quantity = request.quantity,
@@ -93,7 +93,7 @@ class DrugService(private val drugs: DrugStore) {
         logger.debug("Updating drug: {}", drugId)
 
         var drug = lock(drugId, userId)
-        request.quantity?.let { drug = drug.increaseQuantityTo(it) }
+        request.quantity?.let { drug = drug.changeQuantityTo(it) }
         drug = drug.describe(
             DrugDetails(
                 name = request.name,
@@ -128,13 +128,13 @@ class DrugService(private val drugs: DrugStore) {
     fun consume(drugId: UUID, quantity: BigDecimal, userId: UUID): Drug? {
         logger.debug("Consuming {} of drug {}", quantity, drugId)
 
-        val outcome = lock(drugId, userId).consume(quantity)
-        if (outcome.exhausted) {
+        val left = lock(drugId, userId).consume(quantity)
+        if (left == null) {
             drugs.delete(drugId)
             return null
         }
-        drugs.save(outcome.drug)
-        return outcome.drug
+        drugs.save(left)
+        return left
     }
 
     /** Переезд препарата в другую аптечку вместе с судьбой планов. */
@@ -185,11 +185,12 @@ class DrugService(private val drugs: DrugStore) {
         logger.debug("Recording intake for user {} and drug {}, quantity: {}", userId, drugId, quantityConsumed)
 
         val outcome = lock(drugId, userId).applyIntake(userId, quantityConsumed)
-        if (outcome.drugExhausted) {
+        val left = outcome.drug
+        if (left == null) {
             drugs.delete(drugId)
             return null
         }
-        drugs.save(outcome.drug)
+        drugs.save(left)
         return outcome.plan
     }
 }

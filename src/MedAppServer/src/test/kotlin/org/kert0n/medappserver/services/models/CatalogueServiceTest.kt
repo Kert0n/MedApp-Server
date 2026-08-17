@@ -2,7 +2,6 @@ package org.kert0n.medappserver.services.models
 
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.db.model.parsed.VidalDrug
-import org.kert0n.medappserver.domain.catalogue.DrugTemplate
 import org.kert0n.medappserver.db.store.CatalogueStore
 import org.mockito.kotlin.*
 import java.util.*
@@ -55,9 +54,7 @@ class CatalogueServiceTest {
 
     @Test
     fun `fuzzySearch returns repository results`() {
-        val template = DrugTemplate(
-            UUID.randomUUID(), "Аспирин", null, null, null, null, null, "Байер", null, null
-        )
+        val template = VidalDrug(name = "Аспирин", manufacturer = "Байер", otc = true)
         whenever(catalogueStore.search("аспир", "аспир", 10)).thenReturn(listOf(template))
 
         val result = catalogueService.fuzzySearch("аспир", 10)
@@ -91,9 +88,7 @@ class CatalogueServiceTest {
     fun `findView returns entry when found`() {
         val id = UUID.randomUUID()
         val drug = VidalDrug(id = id, name = "Test", manufacturer = "Pharma", otc = true)
-        whenever(catalogueStore.findById(id)).thenReturn(
-            DrugTemplate(id, "Test", null, null, null, null, null, "Pharma", null, null)
-        )
+        whenever(catalogueStore.findById(id)).thenReturn(drug)
 
         val result = catalogueService.find(id)
         assertNotNull(result)

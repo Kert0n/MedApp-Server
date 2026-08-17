@@ -9,8 +9,8 @@ import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.TreatmentPlanRepository
 import org.kert0n.medappserver.db.repository.UserRepository
-import org.kert0n.medappserver.domain.drug.Drug
-import org.kert0n.medappserver.domain.drug.TreatmentPlan
+import org.kert0n.medappserver.domain.Drug
+import org.kert0n.medappserver.domain.TreatmentPlan
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Component
 

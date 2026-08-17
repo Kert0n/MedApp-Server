@@ -1,44 +1,42 @@
-package org.kert0n.medappserver.domain.drug
+package org.kert0n.medappserver.domain
 
 import java.math.BigDecimal
 import java.util.UUID
-import org.kert0n.medappserver.domain.quantity.QUANTITY_ROUNDING
-import org.kert0n.medappserver.domain.quantity.QUANTITY_SCALE
-import org.kert0n.medappserver.domain.quantity.isPositive
-import org.kert0n.medappserver.domain.quantity.isZero
-import org.kert0n.medappserver.domain.quantity.toQuantityScale
-import org.kert0n.medappserver.domain.error.InsufficientStock
-import org.kert0n.medappserver.domain.error.IntakeExceedsPlan
-import org.kert0n.medappserver.domain.error.InvalidQuantity
-import org.kert0n.medappserver.domain.error.NoSuchTreatmentPlan
-import org.kert0n.medappserver.domain.error.PlannedAmountExceedsStock
-import org.kert0n.medappserver.domain.error.QuantityNotIncreased
-import org.kert0n.medappserver.domain.error.TreatmentPlanAlreadyExists
 
 /**
  * Препарат вместе со своими планами лечения — корень агрегата.
  *
  * Состояние неизменяемо: команда не меняет объект, а возвращает следующее состояние. Поэтому
  * тут нет ни `var`, ни присваиваний снаружи — правило «менять препарат можно только его
- * методами» держит компилятор, а не договорённость.
+ * методами» держит компилятор.
  *
- * Отображением занимается `db.model.Drug`; здесь про базу не известно ничего, а связи с
- * другими агрегатами выражены идентификаторами.
+ * Отображением занимается `db.model.DrugData`; здесь про базу не известно ничего, а связь с
+ * аптечкой выражена идентификатором.
+ *
+ * Проверки входа стоят в [init], а не в фабрике: конструктор и так возвращает препарат, и
+ * второй способ его получить ничего не добавлял. Состояний, которые этим проверкам
+ * противоречат, команды не строят — исчерпание возвращает `null`, а не препарат с нулём.
  */
-@ConsistentCopyVisibility
-data class Drug private constructor(
-    val id: UUID,
+data class Drug(
+    val id: UUID = UUID.randomUUID(),
     val medKitId: UUID,
     val name: String,
     val quantity: BigDecimal,
+    // TODO: единица измерения и форма — свободный текст, тогда как в справочнике те же
+    //  величины уже ссылки на quantity_units и form_types. Перевод на сильные типы задевает
+    //  схему и публичный контракт и делается отдельным PR.
     val quantityUnit: String,
-    val formType: String?,
-    val category: String?,
-    val manufacturer: String?,
-    val country: String?,
-    val description: String?,
-    val plans: List<TreatmentPlan>
+    val formType: String? = null,
+    val category: String? = null,
+    val manufacturer: String? = null,
+    val country: String? = null,
+    val description: String? = null,
+    val plans: List<TreatmentPlan> = emptyList()
 ) {
+
+    init {
+        if (!quantity.isPositive()) throw InvalidQuantity()
+    }
 
     /** Сколько препарата разобрано планами. */
     val plannedTotal: BigDecimal
@@ -105,29 +103,33 @@ data class Drug private constructor(
     )
 
     /**
-     * Пополнение запаса.
+     * Новое значение остатка — в любую сторону.
      *
-     * Уменьшать остаток этим методом нельзя: расход выражается списанием, и только оно
-     * говорит, сколько именно ушло. Присвоение меньшего числа под конкурентным доступом
-     * теряет чужие списания, случившиеся между чтением и записью, а планы пришлось бы
-     * пересчитывать по неизвестно чему.
+     * Вверх это пополнение, вниз — исправление учёта: пользователь пересчитал упаковку и
+     * увидел меньше, чем числилось. Планы при уменьшении сжимаются тем же правилом, что и
+     * при списании, поэтому отдельного запрета тут не нужно: агрегат загружен целиком, и
+     * решение принимается по всем планам сразу.
      */
-    fun increaseQuantityTo(newQuantity: BigDecimal): Drug {
-        val increased = requirePositive(newQuantity)
-        if (increased <= quantity) throw QuantityNotIncreased()
-        return copy(quantity = increased)
+    fun changeQuantityTo(newQuantity: BigDecimal): Drug {
+        val changed = requirePositive(newQuantity)
+        return copy(quantity = changed).reconcilePlansToStock()
     }
 
-    /** Списание вне плана лечения. */
-    fun consume(amount: BigDecimal): ConsumptionOutcome {
+    /**
+     * Списание вне плана лечения.
+     *
+     * `null` означает, что препарат кончился: строку удаляет вызывающий, потому что удаление
+     * — работа хранилища. Препарат с нулевым остатком не собирается вовсе: такого состояния
+     * не бывает, и конструктор его не пропустит.
+     */
+    fun consume(amount: BigDecimal): Drug? {
         val consumed = requirePositive(amount)
         if (consumed > quantity) throw InsufficientStock()
 
         val left = (quantity - consumed).toQuantityScale()
-        if (left.isZero()) {
-            return ConsumptionOutcome(copy(quantity = left, plans = emptyList()), exhausted = true)
-        }
-        return ConsumptionOutcome(copy(quantity = left).reconcilePlansToStock(), exhausted = false)
+        if (left.isZero()) return null
+
+        return copy(quantity = left).reconcilePlansToStock()
     }
 
     /**
@@ -143,20 +145,20 @@ data class Drug private constructor(
         if (consumed > quantity) throw InsufficientStock()
 
         val left = (quantity - consumed).toQuantityScale()
-        val reducedPlan = plan.copy(plannedAmount = (plan.plannedAmount - consumed).toQuantityScale())
+        if (left.isZero()) return IntakeOutcome(drug = null, plan = null)
 
-        if (left.isZero()) {
-            return IntakeOutcome(copy(quantity = left, plans = emptyList()), plan = null, drugExhausted = true)
+        // Остаток плана считается числом, а не планом: исчерпанного плана не существует, и
+        // собрать его нечем — то же правило, по которому не собирается препарат с нулём.
+        val leftInPlan = (plan.plannedAmount - consumed).toQuantityScale()
+        if (leftInPlan.isZero()) {
+            return IntakeOutcome(copy(quantity = left, plans = plans.filterNot { it.userId == userId }), null)
         }
-        if (reducedPlan.plannedAmount.isZero()) {
-            val without = copy(quantity = left, plans = plans.filterNot { it.userId == userId })
-            return IntakeOutcome(without, plan = null, drugExhausted = false)
-        }
-        val updated = copy(
-            quantity = left,
-            plans = plans.map { if (it.userId == userId) reducedPlan else it }
+
+        val reduced = plan.copy(plannedAmount = leftInPlan)
+        return IntakeOutcome(
+            drug = copy(quantity = left, plans = plans.map { if (it.userId == userId) reduced else it }),
+            plan = reduced
         )
-        return IntakeOutcome(updated, plan = reducedPlan, drugExhausted = false)
     }
 
     /**
@@ -195,65 +197,20 @@ data class Drug private constructor(
         )
     }
 
-    companion object {
-        /**
-         * Новый препарат: количество проверяется здесь, поэтому препарата с нулевым или
-         * отрицательным остатком не бывает.
-         */
-        fun create(
-            medKitId: UUID,
-            name: String,
-            quantity: BigDecimal,
-            quantityUnit: String,
-            formType: String? = null,
-            category: String? = null,
-            manufacturer: String? = null,
-            country: String? = null,
-            description: String? = null,
-            id: UUID = UUID.randomUUID()
-        ): Drug = Drug(
-            id = id,
-            medKitId = medKitId,
-            name = name,
-            quantity = requirePositive(quantity),
-            quantityUnit = quantityUnit,
-            formType = formType,
-            category = category,
-            manufacturer = manufacturer,
-            country = country,
-            description = description,
-            plans = emptyList()
-        )
-
-        /**
-         * Восстановление уже существующего препарата из хранилища.
-         *
-         * Отдельно от [create] и намеренно без проверок: сохранённое состояние не обязано
-         * проходить входной контроль заново, а требование «остаток строго положителен»
-         * относится к заведению препарата, а не к его чтению.
-         */
-        fun fromStored(
-            id: UUID,
-            medKitId: UUID,
-            name: String,
-            quantity: BigDecimal,
-            quantityUnit: String,
-            formType: String?,
-            category: String?,
-            manufacturer: String?,
-            country: String?,
-            description: String?,
-            plans: List<TreatmentPlan>
-        ): Drug = Drug(
-            id, medKitId, name, quantity, quantityUnit,
-            formType, category, manufacturer, country, description, plans
-        )
-
-        private fun requirePositive(amount: BigDecimal): BigDecimal {
-            if (!amount.isPositive()) throw InvalidQuantity()
-            return amount.toQuantityScale()
-        }
+    private fun requirePositive(amount: BigDecimal): BigDecimal {
+        if (!amount.isPositive()) throw InvalidQuantity()
+        return amount.toQuantityScale()
     }
+
+    /**
+     * Препарат — сущность, а не значение: два его состояния с разными остатками остаются
+     * одним и тем же препаратом. Поэтому сравнение по идентификатору, а не по всем полям, —
+     * иначе версия, которая появится вместе с оптимистичной блокировкой, начнёт делать
+     * агрегат «другим» после каждой записи.
+     */
+    override fun equals(other: Any?): Boolean = this === other || (other is Drug && id == other.id)
+
+    override fun hashCode(): Int = id.hashCode()
 }
 
 /**
@@ -266,7 +223,11 @@ data class TreatmentPlan(
     val userId: UUID,
     val drugId: UUID,
     val plannedAmount: BigDecimal
-)
+) {
+    init {
+        if (!plannedAmount.isPositive()) throw InvalidQuantity()
+    }
+}
 
 /** Описательные поля препарата; `null` — «не менять». */
 data class DrugDetails(
@@ -279,22 +240,13 @@ data class DrugDetails(
     val description: String? = null
 )
 
-/** Чем закончилось списание. `exhausted` — препарат кончился и подлежит удалению. */
-data class ConsumptionOutcome(
-    val drug: Drug,
-    val exhausted: Boolean
-)
-
 /**
  * Чем закончился приём.
  *
- * Оба исхода наблюдаемы снаружи: приём может исчерпать план, а может исчерпать и сам
- * препарат, и это разные события.
+ * Оба поля обнуляемые, и это не случайность: приём может исчерпать план, а может исчерпать
+ * и сам препарат. `drug == null` означает, что препарата больше нет и строку надо удалить.
  */
 data class IntakeOutcome(
-    val drug: Drug,
-    /** Оставшийся план или `null`, если приём его исчерпал. */
-    val plan: TreatmentPlan?,
-    /** Препарат кончился этим приёмом; строку удаляет вызывающий. */
-    val drugExhausted: Boolean
+    val drug: Drug?,
+    val plan: TreatmentPlan?
 )

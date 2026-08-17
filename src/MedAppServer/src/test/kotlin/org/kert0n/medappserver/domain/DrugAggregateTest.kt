@@ -1,19 +1,13 @@
-package org.kert0n.medappserver.domain.drug
+package org.kert0n.medappserver.domain
 
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
-import org.kert0n.medappserver.domain.error.InsufficientStock
-import org.kert0n.medappserver.domain.error.IntakeExceedsPlan
-import org.kert0n.medappserver.domain.error.InvalidQuantity
-import org.kert0n.medappserver.domain.error.NoSuchTreatmentPlan
-import org.kert0n.medappserver.domain.error.PlannedAmountExceedsStock
-import org.kert0n.medappserver.domain.error.QuantityNotIncreased
-import org.kert0n.medappserver.domain.error.TreatmentPlanAlreadyExists
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
 
@@ -31,7 +25,7 @@ class DrugAggregateTest {
     private val bob = UUID.randomUUID()
 
     private fun drug(quantity: Double): Drug =
-        Drug.create(medKitId = kit, name = "Aspirin", quantity = qty(quantity), quantityUnit = "pills")
+        Drug(medKitId = kit, name = "Aspirin", quantity = qty(quantity), quantityUnit = "pills")
 
     // ── Создание ─────────────────────────────────────────────────────────────────
 
@@ -48,12 +42,34 @@ class DrugAggregateTest {
     // ── Остаток ──────────────────────────────────────────────────────────────────
 
     @Test
-    fun `количество можно только увеличить`() {
-        val drug = drug(10.0).increaseQuantityTo(qty(25.0))
-        assertQty(25.0, drug.quantity)
+    fun `количество меняется в обе стороны`() {
+        assertQty(25.0, drug(10.0).changeQuantityTo(qty(25.0)).quantity)
+        assertQty(4.0, drug(10.0).changeQuantityTo(qty(4.0)).quantity)
+        assertFailsWith<InvalidQuantity> { drug(10.0).changeQuantityTo(qty(0.0)) }
+    }
 
-        assertFailsWith<QuantityNotIncreased> { drug.increaseQuantityTo(qty(24.0)) }
-        assertFailsWith<QuantityNotIncreased> { drug.increaseQuantityTo(qty(25.0)) }
+    /**
+     * Пересчёт учёта вниз — та же ветка, что и списание: агрегат загружен целиком, поэтому
+     * планы сжимаются по всем сразу, а не по тому, о котором вспомнили.
+     */
+    @Test
+    fun `уменьшение количества сжимает планы`() {
+        val drug = drug(100.0)
+            .createPlan(alice, qty(60.0))
+            .createPlan(bob, qty(40.0))
+
+        val corrected = drug.changeQuantityTo(qty(50.0))
+
+        assertQty(30.0, corrected.planOf(alice)!!.plannedAmount)
+        assertQty(20.0, corrected.planOf(bob)!!.plannedAmount)
+        assertQty(50.0, corrected.plannedTotal)
+    }
+
+    @Test
+    fun `увеличение количества планы не трогает`() {
+        val drug = drug(100.0).createPlan(alice, qty(60.0))
+
+        assertQty(60.0, drug.changeQuantityTo(qty(200.0)).planOf(alice)!!.plannedAmount)
     }
 
     @Test
@@ -70,14 +86,19 @@ class DrugAggregateTest {
     }
 
     @Test
-    fun `списание всего остатка исчерпывает препарат и уносит планы`() {
+    fun `списание всего остатка исчерпывает препарат`() {
         val drug = drug(10.0).createPlan(alice, qty(4.0))
 
-        val outcome = drug.consume(qty(10.0))
+        // Препарата с нулевым остатком не бывает, поэтому такого состояния агрегат не
+        // строит: он сообщает, что препарат кончился, а строку удаляет вызывающий.
+        assertNull(drug.consume(qty(10.0)), "препарат кончился")
+    }
 
-        assertTrue(outcome.exhausted, "препарат кончился")
-        assertQty(0.0, outcome.drug.quantity)
-        assertTrue(outcome.drug.plans.isEmpty(), "планы не переживают препарат")
+    @Test
+    fun `препарат с нулевым остатком не собирается вовсе`() {
+        assertFailsWith<InvalidQuantity> {
+            Drug(medKitId = kit, name = "Aspirin", quantity = qty(0.0), quantityUnit = "pills")
+        }
     }
 
     // ── Планы ────────────────────────────────────────────────────────────────────
@@ -132,9 +153,8 @@ class DrugAggregateTest {
 
         val outcome = drug.applyIntake(alice, qty(10.0))
 
-        assertFalse(outcome.drugExhausted)
         assertQty(20.0, outcome.plan!!.plannedAmount)
-        assertQty(90.0, outcome.drug.quantity)
+        assertQty(90.0, outcome.drug!!.quantity)
     }
 
     @Test
@@ -153,11 +173,10 @@ class DrugAggregateTest {
      */
     @Test
     fun `приём больше остатка отвергается, даже если план позволяет`() {
-        val stale = Drug.fromStored(
-            id = UUID.randomUUID(), medKitId = kit, name = "Aspirin", quantity = qty(2.0),
-            quantityUnit = "pills", formType = null, category = null, manufacturer = null,
-            country = null, description = null,
-            plans = listOf(TreatmentPlan(alice, UUID.randomUUID(), qty(10.0)))
+        val staleId = UUID.randomUUID()
+        val stale = Drug(
+            id = staleId, medKitId = kit, name = "Aspirin", quantity = qty(2.0),
+            quantityUnit = "pills", plans = listOf(TreatmentPlan(alice, staleId, qty(10.0)))
         )
 
         assertFailsWith<InsufficientStock> { stale.applyIntake(alice, qty(5.0)) }
@@ -174,10 +193,9 @@ class DrugAggregateTest {
 
         val outcome = drug.applyIntake(alice, qty(10.0))
 
-        assertFalse(outcome.drugExhausted)
         assertNull(outcome.plan, "исчерпанный план не возвращается")
-        assertNull(outcome.drug.planOf(alice))
-        assertQty(90.0, outcome.drug.quantity)
+        assertNull(outcome.drug!!.planOf(alice))
+        assertQty(90.0, outcome.drug!!.quantity)
     }
 
     @Test
@@ -186,9 +204,8 @@ class DrugAggregateTest {
 
         val outcome = drug.applyIntake(alice, qty(10.0))
 
-        assertTrue(outcome.drugExhausted)
+        assertNull(outcome.drug, "препарат кончился этим приёмом")
         assertNull(outcome.plan)
-        assertTrue(outcome.drug.plans.isEmpty())
     }
 
     // ── Пересчёт планов ──────────────────────────────────────────────────────────
@@ -199,12 +216,11 @@ class DrugAggregateTest {
             .createPlan(alice, qty(60.0))
             .createPlan(bob, qty(40.0))
 
-        val outcome = drug.consume(qty(50.0))
+        val left = drug.consume(qty(50.0))!!
 
-        assertFalse(outcome.exhausted)
-        assertQty(30.0, outcome.drug.planOf(alice)!!.plannedAmount)
-        assertQty(20.0, outcome.drug.planOf(bob)!!.plannedAmount)
-        assertQty(50.0, outcome.drug.plannedTotal)
+        assertQty(30.0, left.planOf(alice)!!.plannedAmount)
+        assertQty(20.0, left.planOf(bob)!!.plannedAmount)
+        assertQty(50.0, left.plannedTotal)
     }
 
     @Test
@@ -213,7 +229,7 @@ class DrugAggregateTest {
             .createPlan(alice, qty(20.0))
             .createPlan(bob, qty(20.0))
 
-        val left = drug.consume(qty(50.0)).drug
+        val left = drug.consume(qty(50.0))!!
 
         assertQty(20.0, left.planOf(alice)!!.plannedAmount)
         assertQty(20.0, left.planOf(bob)!!.plannedAmount)
@@ -229,11 +245,27 @@ class DrugAggregateTest {
             .createPlan(alice, qty(30.0))
             .createPlan(bob, qty(60.0))
 
-        val left = drug.consume(qty(30.0)).drug
+        val left = drug.consume(qty(30.0))!!
 
         assertQty(20.0, left.planOf(alice)!!.plannedAmount)
         assertQty(40.0, left.planOf(bob)!!.plannedAmount)
         assertTrue(left.plannedTotal <= left.quantity, "сумма планов не превышает остаток")
+    }
+
+    // ── Сравнение ────────────────────────────────────────────────────────────────
+
+    /**
+     * Препарат — сущность: списание меняет его состояние, но не делает другим препаратом.
+     * На этом же держится будущая версионность — версия не должна влиять на сравнение.
+     */
+    @Test
+    fun `два состояния одного препарата равны`() {
+        val drug = drug(100.0).createPlan(alice, qty(10.0))
+        val consumed = drug.consume(qty(30.0))!!
+
+        assertEquals(drug, consumed)
+        assertEquals(drug.hashCode(), consumed.hashCode())
+        assertNotEquals(drug, drug(100.0), "разные препараты остаются разными")
     }
 
     // ── Переезд ──────────────────────────────────────────────────────────────────

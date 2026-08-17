@@ -1,21 +1,22 @@
-package org.kert0n.medappserver.domain.medkit
+package org.kert0n.medappserver.domain
 
 import java.util.UUID
-import org.kert0n.medappserver.domain.error.AlreadyMember
-import org.kert0n.medappserver.domain.error.NotAMember
 
 /**
  * Аптечка — корень агрегата членства.
  *
  * Препаратов внутри нет: препарат сам знает, в какой он аптечке, и меняется своими
- * правилами. Здесь живёт только то, что нельзя решить, глядя на одну строку: кто участник,
+ * правилами. Здесь живёт только то, чего не решить, глядя на одну строку: кто участник,
  * можно ли войти, и что происходит, когда выходит последний.
  */
-@ConsistentCopyVisibility
-data class MedKit private constructor(
-    val id: UUID,
+data class MedKit(
+    val id: UUID = UUID.randomUUID(),
     val members: Set<UUID>
 ) {
+
+    init {
+        if (members.isEmpty()) throw MedKitWithoutMembers()
+    }
 
     fun isMember(userId: UUID): Boolean = userId in members
 
@@ -38,32 +39,21 @@ data class MedKit private constructor(
     /**
      * Выход участника.
      *
-     * Признак `becameEmpty` — то самое решение, ради которого аптечка вообще агрегат:
-     * аптечки без участников не бывает, поэтому последний выходящий забирает её с собой.
-     * Удаляет строку вызывающий — это работа хранилища.
+     * `null` означает, что вышел последний: аптечки без участников не бывает, поэтому она
+     * уходит вместе с ним — и такого состояния агрегат не строит вовсе. Удаляет строку
+     * вызывающий, это работа хранилища.
      */
-    fun leave(userId: UUID): LeaveOutcome {
+    fun leave(userId: UUID): MedKit? {
         if (!isMember(userId)) throw NotAMember()
-        val left = copy(members = members - userId)
-        return LeaveOutcome(left, becameEmpty = left.members.isEmpty())
+        val left = members - userId
+        return if (left.isEmpty()) null else copy(members = left)
     }
 
-    companion object {
-        /** Новая аптечка всегда заводится вместе со своим первым участником. */
-        fun create(ownerId: UUID, id: UUID = UUID.randomUUID()): MedKit =
-            MedKit(id = id, members = setOf(ownerId))
+    /** Аптечка — сущность: набор участников меняется, аптечка остаётся той же. */
+    override fun equals(other: Any?): Boolean = this === other || (other is MedKit && id == other.id)
 
-        /** Восстановление из хранилища: проверки входа здесь не повторяются. */
-        fun fromStored(id: UUID, members: Set<UUID>): MedKit = MedKit(id, members)
-    }
+    override fun hashCode(): Int = id.hashCode()
 }
-
-/** Что осталось после выхода участника. */
-data class LeaveOutcome(
-    val medKit: MedKit,
-    /** Участников не осталось: аптечку надо удалить вместе с её содержимым. */
-    val becameEmpty: Boolean
-)
 
 /**
  * Счётчики аптечки для списка.

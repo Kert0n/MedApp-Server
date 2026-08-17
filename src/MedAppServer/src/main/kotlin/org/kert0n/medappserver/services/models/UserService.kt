@@ -2,7 +2,7 @@ package org.kert0n.medappserver.services.models
 
 import java.util.UUID
 import org.kert0n.medappserver.db.store.UserStore
-import org.kert0n.medappserver.domain.user.User
+import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.security.SecurityService
 import org.slf4j.LoggerFactory
 import org.springframework.security.core.Authentication
@@ -22,7 +22,7 @@ class UserService(
     @Transactional
     fun registerNewUser(login: UUID, password: String, ip: String): User {
         logger.debug("Register new user {}", login)
-        val user = User.register(hashedKey = securityService.hashPassword(password), id = login)
+        val user = User(id = login, hashedKey = securityService.hashPassword(password))
         users.insert(user)
         securityService.registerIncrease(ip)
         return user

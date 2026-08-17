@@ -9,11 +9,11 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.api.DrugPatchRequest
-import org.kert0n.medappserver.domain.error.InsufficientStock
-import org.kert0n.medappserver.domain.error.IntakeExceedsPlan
-import org.kert0n.medappserver.domain.error.PlannedAmountExceedsStock
-import org.kert0n.medappserver.domain.error.QuantityNotIncreased
-import org.kert0n.medappserver.domain.error.TreatmentPlanAlreadyExists
+import org.kert0n.medappserver.domain.InsufficientStock
+import org.kert0n.medappserver.domain.InvalidQuantity
+import org.kert0n.medappserver.domain.IntakeExceedsPlan
+import org.kert0n.medappserver.domain.PlannedAmountExceedsStock
+import org.kert0n.medappserver.domain.TreatmentPlanAlreadyExists
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
@@ -22,7 +22,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.transaction.annotation.Transactional
-import org.kert0n.medappserver.domain.error.DomainRuleViolated
+import org.kert0n.medappserver.domain.DomainRuleViolated
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -180,34 +180,38 @@ class DrugServiceTest {
     }
 
     /**
-     * Уменьшение остатка через PATCH отвергается: расход выражается списанием, и только оно
-     * говорит, сколько именно ушло. Присвоенное меньшее число потеряло бы чужие списания,
-     * случившиеся между чтением и записью.
+     * Пересчёт учёта вниз: пользователь пересчитал упаковку и увидел меньше, чем числилось.
+     * Планы сжимаются тем же правилом, что и при списании, потому что агрегат загружен
+     * целиком и решение принимается по всем планам сразу.
      */
     @Test
-    fun `update refuses to decrease quantity`() {
+    fun `update decreasing quantity scales the plans down`() {
         val alice = dbHelper.freshUser("alice")
+        val bob = dbHelper.freshUser("bob")
         val kit = medKitService.createNew(alice.id)
+        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
+        drugService.createPlan(alice.id, drug.id, qty(60.0))
+        drugService.createPlan(bob.id, drug.id, qty(40.0))
         dbHelper.flushAndClear()
 
-        assertThrows<QuantityNotIncreased> {
-            drugService.update(drug.id, DrugPatchRequest(quantity = qty(40.0)), alice.id)
-        }
+        drugService.update(drug.id, DrugPatchRequest(quantity = qty(50.0)), alice.id)
         dbHelper.flushAndClear()
 
-        assertQty(100.0, dbHelper.drugQuantity(drug.id)!!)
+        assertQty(50.0, dbHelper.drugQuantity(drug.id)!!)
+        assertQty(30.0, dbHelper.userPlan(alice.id, drug.id)!!)
+        assertQty(20.0, dbHelper.userPlan(bob.id, drug.id)!!)
     }
 
     @Test
-    fun `update refuses to repeat the current quantity`() {
+    fun `update refuses a non-positive quantity`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        assertThrows<QuantityNotIncreased> {
-            drugService.update(drug.id, DrugPatchRequest(quantity = qty(100.0)), alice.id)
+        assertThrows<InvalidQuantity> {
+            drugService.update(drug.id, DrugPatchRequest(quantity = qty(0.0)), alice.id)
         }
     }
 
