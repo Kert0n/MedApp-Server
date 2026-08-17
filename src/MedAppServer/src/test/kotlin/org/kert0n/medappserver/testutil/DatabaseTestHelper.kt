@@ -1,39 +1,63 @@
 package org.kert0n.medappserver.testutil
 
-
 import jakarta.persistence.EntityManager
 import java.math.BigDecimal
 import java.util.*
-import org.kert0n.medappserver.db.model.Drug
-import org.kert0n.medappserver.db.model.MedKit
-import org.kert0n.medappserver.db.model.User
-import org.kert0n.medappserver.db.repository.DrugRepository
-import org.kert0n.medappserver.db.repository.TreatmentPlanRepository
-import org.kert0n.medappserver.db.repository.UserRepository
-import org.springframework.data.repository.findByIdOrNull
+import org.kert0n.medappserver.db.store.DrugStore
+import org.kert0n.medappserver.db.store.UserStore
+import org.kert0n.medappserver.domain.drug.Drug
+import org.kert0n.medappserver.domain.user.User
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
 
+/**
+ * Подготовка данных и точечные проверки состояния.
+ *
+ * Ходит через хранилища, а не через репозитории: тест обязан пользоваться той же границей,
+ * что и приложение, иначе он проверяет не то, что работает в проде.
+ */
 @Component
 class DatabaseTestHelper(
-    private val userRepository: UserRepository,
-    private val drugRepository: DrugRepository,
-    private val treatmentPlanRepository: TreatmentPlanRepository,
+    private val users: UserStore,
+    private val drugs: DrugStore,
     private val entityManager: EntityManager
 ) {
     @Transactional
     fun freshUser(tag: String): User {
-        val user = userBuilder().withHashedKey("${tag}_${UUID.randomUUID()}").build()
-        return userRepository.save(user)
+        val user = User.register(hashedKey = "${tag}_${UUID.randomUUID()}")
+        users.insert(user)
+        return user
     }
 
     @Transactional
-    fun freshDrug(medKit: MedKit, quantity: Double): Drug {
-        val drug = drugBuilder(medKit)
-            .withName("Drug_${UUID.randomUUID()}")
-            .withQuantity(quantity)
-            .build()
-        return drugRepository.save(drug)
+    fun freshDrug(medKitId: UUID, quantity: Double): Drug {
+        val drug = Drug.create(
+            medKitId = medKitId,
+            name = "Drug_${UUID.randomUUID()}",
+            quantity = qty(quantity),
+            quantityUnit = "mg",
+            formType = "tablet",
+            category = "painkiller",
+            manufacturer = "Test Pharma",
+            country = "TestLand",
+            description = "Test description"
+        )
+        drugs.insert(drug)
+        return drug
+    }
+
+    /** Кладёт заранее собранный препарат: тестам нужны свои имена и количества. */
+    @Transactional
+    fun insert(drug: Drug): Drug {
+        drugs.insert(drug)
+        return drug
+    }
+
+    /** Кладёт заранее собранного пользователя. */
+    @Transactional
+    fun insert(user: User): User {
+        users.insert(user)
+        return user
     }
 
     fun flushAndClear() {
@@ -41,9 +65,8 @@ class DatabaseTestHelper(
         entityManager.clear()
     }
 
-    // Null-safe getters essential for testing Privacy-by-Default (deletion)
-    fun drugQuantity(id: UUID): BigDecimal? = drugRepository.findByIdOrNull(id)?.quantity
-    fun totalPlanned(id: UUID): BigDecimal? = drugRepository.findByIdOrNull(id)?.storedPlannedTotal
-    fun userPlan(userId: UUID, drugId: UUID): BigDecimal? =
-        treatmentPlanRepository.findByUserIdAndDrugId(userId, drugId)?.plannedAmount
+    // Проверки, существенные для privacy-by-default: `null` означает, что записи больше нет.
+    fun drugQuantity(id: UUID): BigDecimal? = drugs.findById(id)?.quantity
+    fun totalPlanned(id: UUID): BigDecimal? = drugs.findById(id)?.let { drugs.plannedTotalOf(id) }
+    fun userPlan(userId: UUID, drugId: UUID): BigDecimal? = drugs.findPlan(userId, drugId)?.plannedAmount
 }

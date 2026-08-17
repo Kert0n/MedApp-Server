@@ -13,7 +13,7 @@ import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.api.MembershipCreateRequest
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.userId
-import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
+import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
@@ -26,7 +26,7 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBod
 @Tag(name = "Medicine kits", description = "Shared medicine kits")
 class MedKitController(
     private val medKitService: MedKitService,
-    private val medKitDrugServices: MedKitDrugServices
+    private val medKitDrugOrchestrator: MedKitDrugOrchestrator
 ) {
 
     private val logger = LoggerFactory.getLogger(MedKitController::class.java)
@@ -43,7 +43,7 @@ class MedKitController(
     @ApiResponse(responseCode = "200", description = "Kits returned")
     fun listMedKits(authentication: Authentication): Set<MedKitSummaryDTO> {
         logger.debug("GET /v1/med-kits by user {}", authentication.userId)
-        return medKitService.findMedKitSummaries(authentication.userId).map { it.toDto() }.toSet()
+        return medKitService.overviews(authentication.userId).map { it.toDto() }.toSet()
     }
 
     @GetMapping("/{medKitId}")
@@ -54,7 +54,7 @@ class MedKitController(
         @Parameter(description = "Medicine kit identifier") @PathVariable medKitId: UUID
     ): MedKitDTO {
         logger.debug("GET /v1/med-kits/{} by user {}", medKitId, authentication.userId)
-        return medKitDrugServices.toMedKitDTO(medKitService.findByIdForUser(medKitId, authentication.userId))
+        return medKitDrugOrchestrator.medKitWithDrugs(medKitId, authentication.userId)
     }
 
     /**
@@ -86,7 +86,7 @@ class MedKitController(
         @RequestParam(required = false) targetMedKitId: UUID?
     ) {
         logger.debug("DELETE /v1/med-kits/{} by user {}, target {}", medKitId, authentication.userId, targetMedKitId)
-        medKitDrugServices.delete(medKitId, authentication.userId, targetMedKitId)
+        medKitDrugOrchestrator.delete(medKitId, authentication.userId, targetMedKitId)
     }
 }
 
@@ -101,7 +101,7 @@ class MedKitController(
 @Tag(name = "Medicine kit memberships", description = "Participation of the caller in shared kits")
 class MedKitMembershipController(
     private val medKitService: MedKitService,
-    private val medKitDrugServices: MedKitDrugServices
+    private val medKitDrugOrchestrator: MedKitDrugOrchestrator
 ) {
 
     private val logger = LoggerFactory.getLogger(MedKitMembershipController::class.java)
@@ -116,7 +116,8 @@ class MedKitMembershipController(
         @Valid @RequestBody request: MembershipCreateRequest
     ): MedKitDTO {
         logger.debug("POST /v1/med-kit-memberships by user {}", authentication.userId)
-        return medKitDrugServices.toMedKitDTO(medKitService.joinMedKitByKey(request.key, authentication.userId))
+        val joined = medKitService.joinMedKitByKey(request.key, authentication.userId)
+        return medKitDrugOrchestrator.medKitWithDrugs(joined.id, authentication.userId)
     }
 
     @DeleteMapping("/{medKitId}")
@@ -128,6 +129,6 @@ class MedKitMembershipController(
         @Parameter(description = "Medicine kit identifier") @PathVariable medKitId: UUID
     ) {
         logger.debug("DELETE /v1/med-kit-memberships/{} by user {}", medKitId, authentication.userId)
-        medKitDrugServices.removeUserFromMedKit(medKitId, authentication.userId)
+        medKitDrugOrchestrator.leaveMedKit(medKitId, authentication.userId)
     }
 }

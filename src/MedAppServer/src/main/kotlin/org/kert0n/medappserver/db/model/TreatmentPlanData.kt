@@ -2,6 +2,9 @@ package org.kert0n.medappserver.db.model
 
 import jakarta.persistence.*
 import jakarta.validation.constraints.NotNull
+import org.kert0n.medappserver.domain.quantity.QUANTITY_PRECISION
+import org.kert0n.medappserver.domain.quantity.QUANTITY_SCALE
+import org.kert0n.medappserver.domain.quantity.toQuantityScale
 import java.io.Serializable
 import java.math.BigDecimal
 import java.util.*
@@ -15,7 +18,7 @@ import java.util.*
         Index(name = "ix_usings_drug_id", columnList = "drug_id")
     ]
 )
-class TreatmentPlan(
+class TreatmentPlanData(
 
     @EmbeddedId
     var planKey: TreatmentPlanKey = TreatmentPlanKey(),
@@ -25,7 +28,7 @@ class TreatmentPlan(
     // Имя задано явно, чтобы схема Hibernate и db/schema.sql совпадали и по именам ключей.
     // Каскада здесь намеренно нет: план не удаляется вслед за пользователем.
     @JoinColumn(name = "user_id", foreignKey = ForeignKey(name = "usings_user_fkey"))
-    var user: User,
+    var userData: UserData,
 
     @ManyToOne(fetch = FetchType.EAGER)
     @MapsId("drugId")
@@ -39,7 +42,7 @@ class TreatmentPlan(
                 "FOREIGN KEY (drug_id) REFERENCES user_drugs (id) ON DELETE CASCADE"
         )
     )
-    var drug: Drug,
+    var drugData: DrugData,
 
     plannedAmount: BigDecimal
 ) {
@@ -56,7 +59,7 @@ class TreatmentPlan(
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
 
-        other as TreatmentPlan
+        other as TreatmentPlanData
 
         return planKey == other.planKey
     }

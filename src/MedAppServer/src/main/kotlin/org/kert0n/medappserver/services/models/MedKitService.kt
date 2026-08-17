@@ -1,77 +1,70 @@
 package org.kert0n.medappserver.services.models
 
 import com.sksamuel.aedile.core.Cache
-import org.kert0n.medappserver.db.repository.MedKitSummary
-import org.kert0n.medappserver.db.model.MedKit
-import org.kert0n.medappserver.db.model.User
-import org.kert0n.medappserver.db.repository.MedKitRepository
+import java.util.UUID
+import org.kert0n.medappserver.db.store.MedKitStore
+import org.kert0n.medappserver.domain.error.NotAMember
+import org.kert0n.medappserver.domain.medkit.MedKit
+import org.kert0n.medappserver.domain.medkit.MedKitOverview
 import org.kert0n.medappserver.services.security.SecurityService
-import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import org.springframework.data.repository.findByIdOrNull
-import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.web.server.ResponseStatusException
-import java.util.*
 
+/**
+ * Аптечка: жизненный цикл участников.
+ *
+ * Правила членства живут в `domain.medkit.MedKit`; здесь — транзакция, проверка доступа и
+ * ключ приглашения. Ключ не доменное понятие: это одноразовый секрет с временем жизни, и
+ * место ему рядом с тем, кто умеет его выдавать и хранить.
+ */
 @Service
 class MedKitService(
-    private val medKitRepository: MedKitRepository,
+    private val medKits: MedKitStore,
     private val securityService: SecurityService,
-    private val logger: Logger = LoggerFactory.getLogger(MedKitService::class.java),
-    private val medKitTokenCache: Cache<String, UUID>,
-    private val userService: UserService
+    private val medKitTokenCache: Cache<String, UUID>
 ) {
+
+    private val logger = LoggerFactory.getLogger(MedKitService::class.java)
+
     @Transactional
     fun createNew(userId: UUID): MedKit {
         logger.debug("Creating new medkit for user: {}", userId)
-        val user: User = userService.findById(userId)
-        val medKit = medKitRepository.save(MedKit())
-        user.medKits.add(medKit)
-        medKit.users.add(user)
+        val medKit = MedKit.create(userId)
+        medKits.insert(medKit)
         return medKit
     }
 
-
     @Transactional(readOnly = true)
-    fun findById(medKitId: UUID): MedKit {
-        logger.debug("Finding medkit by ID: {}", medKitId)
-        return medKitRepository.findByIdOrNull(medKitId) ?: throw ResponseStatusException(
-            HttpStatus.NOT_FOUND,
-            "MedKit not found"
-        )
-    }
+    fun findById(medKitId: UUID): MedKit = medKits.findById(medKitId) ?: throw NotAMember()
 
+    /** Аптечка, доступная вызывающему, или 404 — недоступная и несуществующая неотличимы. */
     @Transactional(readOnly = true)
-    fun findByIdForUser(medKitId: UUID, userId: UUID): MedKit {
+    fun requireAccessible(medKitId: UUID, userId: UUID): MedKit {
         logger.debug("Finding medkit {} for user {}", medKitId, userId)
-        return medKitRepository.findByIdAndUserId(medKitId, userId) ?: throw ResponseStatusException(
-            HttpStatus.NOT_FOUND,
-            "Medkit not found or user has insufficient privileges"
-        )
-
+        val medKit = medKits.findById(medKitId) ?: throw NotAMember()
+        medKit.requireMember(userId)
+        return medKit
     }
 
     @Transactional(readOnly = true)
     fun findAllByUser(userId: UUID): List<MedKit> {
         logger.debug("Finding all medkits for user: {}", userId)
-        return medKitRepository.findByUserId(userId)
+        return medKits.findAllOfUser(userId)
     }
 
     @Transactional(readOnly = true)
-    fun findMedKitSummaries(userId: UUID): Set<MedKitSummary> {
-        logger.debug("Finding medkit summaries for user: {}", userId)
-        return medKitRepository.findMedKitSummariesByUserId(userId)
+    fun overviews(userId: UUID): List<MedKitOverview> {
+        logger.debug("Finding medkit overviews for user: {}", userId)
+        return medKits.overviewsOf(userId)
     }
 
     @Transactional(readOnly = true)
     fun generateMedKitShareKey(medKitId: UUID, userId: UUID): String {
-        logger.debug("Sharing medkit $medKitId by user: $userId")
-        // Checking access
-        findByIdForUser(medKitId, userId)
+        logger.debug("Sharing medkit {} by user: {}", medKitId, userId)
+        requireAccessible(medKitId, userId)
         val key = securityService.generateKey(16)
-        // Cache only a hash so the raw share key is never stored server-side.
+        // Кешируется только хеш: сырой ключ приглашения на сервере не хранится.
         medKitTokenCache[securityService.hashToken(key)] = medKitId
         return key
     }
@@ -79,39 +72,39 @@ class MedKitService(
     @Transactional
     fun addUserToMedKit(medKitId: UUID, userId: UUID): MedKit {
         logger.debug("Adding user {} to medkit {}", userId, medKitId)
-        val medKit = findById(medKitId)
-        val user = userService.findById(userId)
-        if (medKit.users.contains(user)) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "User already exists")
-        }
-        medKit.users.add(user)
-        user.medKits.add(medKit)
-        return medKitRepository.save(medKit)
+        val joined = findById(medKitId).join(userId)
+        medKits.save(joined)
+        return joined
     }
 
     @Transactional
     fun joinMedKitByKey(key: String, userId: UUID): MedKit {
-        val hashedKey = securityService.hashToken(key)
-        val medKitId = medKitTokenCache.getOrNull(hashedKey) ?: throw ResponseStatusException(
-            HttpStatus.NOT_FOUND, "Share key has expired or does not exist"
-        )
+        val medKitId = medKitTokenCache.getOrNull(securityService.hashToken(key))
+            ?: throw NotAMember()
         return addUserToMedKit(medKitId, userId)
     }
 
+    /**
+     * Выход участника.
+     *
+     * Возвращает `null`, когда вышел последний: аптечка удалена вместе с содержимым. Планы
+     * выходящего в препаратах этой аптечки — забота оркестратора, они лежат в чужом агрегате.
+     */
     @Transactional
-    fun removeUserFromMedKit(medKit: MedKit, user: User) {
-        logger.debug("Removing user {} from medkit {}", user.id, medKit.id)
+    fun removeUserFromMedKit(medKitId: UUID, userId: UUID): MedKit? {
+        logger.debug("Removing user {} from medkit {}", userId, medKitId)
+        val outcome = requireAccessible(medKitId, userId).leave(userId)
 
-        user.medKits.remove(medKit)
-        medKit.users.remove(user)
-        if (medKit.users.isEmpty()) {
-            // This user was the last
-            logger.debug("No users left in medkit {}, deleting", medKit.id)
-            medKitRepository.delete(medKit)
-        } else {
-            medKitRepository.save(medKit)
+        if (outcome.becameEmpty) {
+            medKits.delete(medKitId)
+            return null
         }
+        medKits.save(outcome.medKit)
+        return outcome.medKit
     }
 
-
+    @Transactional
+    fun delete(medKitId: UUID) {
+        medKits.delete(medKitId)
+    }
 }

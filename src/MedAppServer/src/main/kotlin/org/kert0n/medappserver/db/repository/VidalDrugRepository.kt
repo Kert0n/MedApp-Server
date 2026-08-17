@@ -1,6 +1,7 @@
 package org.kert0n.medappserver.db.repository
 
 import org.kert0n.medappserver.db.model.parsed.VidalDrug
+import org.kert0n.medappserver.domain.catalogue.DrugTemplate
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
@@ -16,7 +17,7 @@ interface VidalDrugRepository : JpaRepository<VidalDrug, UUID> {
      */
     @Query(
         """
-        SELECT new org.kert0n.medappserver.db.repository.DrugTemplateView(
+        SELECT new org.kert0n.medappserver.domain.catalogue.DrugTemplate(
             v.id, v.name, v.nameLat, v.activeSubstance, f.name, v.category, q.name,
             v.manufacturer, v.country, v.description)
         FROM VidalDrug v
@@ -25,7 +26,7 @@ interface VidalDrugRepository : JpaRepository<VidalDrug, UUID> {
         WHERE v.id = :id
         """
     )
-    fun findViewById(@Param("id") id: UUID): DrugTemplateView?
+    fun findViewById(@Param("id") id: UUID): DrugTemplate?
 
 
     /**

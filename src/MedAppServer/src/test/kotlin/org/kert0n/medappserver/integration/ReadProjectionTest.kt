@@ -37,16 +37,16 @@ class ReadProjectionTest {
         val kit = medKitService.createNew(alice.id)
         val bob = dbHelper.freshUser("bob")
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit.id, 100.0)
 
         drugService.createPlan(alice.id, drug.id, qty(30.0))
         drugService.createPlan(bob.id, drug.id, qty(20.0))
         dbHelper.flushAndClear()
 
-        val view = drugService.requireView(drug.id, alice.id)
+        val view = drugService.require(drug.id, alice.id)
 
         assertQty(100.0, view.quantity)
-        assertQty(50.0, view.plannedQuantity)
+        assertQty(50.0, view.plannedTotal)
         // Доступный остаток — разность, посчитанная от той же пары чисел, а не отдельным
         // запросом: иначе можно было увидеть остаток и планы из разных моментов времени.
         assertQty(50.0, view.availableQuantity)
@@ -56,13 +56,13 @@ class ReadProjectionTest {
     fun `препарат без планов отдаёт нулевую сумму, а не отсутствие строки`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 7.0)
+        val drug = dbHelper.freshDrug(kit.id, 7.0)
         dbHelper.flushAndClear()
 
         // Джойн с планами внешний: препарат без единого плана обязан остаться в выдаче.
-        val view = drugService.requireView(drug.id, alice.id)
+        val view = drugService.require(drug.id, alice.id)
 
-        assertQty(0.0, view.plannedQuantity)
+        assertQty(0.0, view.plannedTotal)
         assertQty(7.0, view.availableQuantity)
     }
 
@@ -71,10 +71,10 @@ class ReadProjectionTest {
         val alice = dbHelper.freshUser("alice")
         val eve = dbHelper.freshUser("eve")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 10.0)
+        val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
-        assertNull(drugService.findView(drug.id, eve.id), "чужая аптечка не должна читаться")
+        assertNull(drugService.find(drug.id, eve.id), "чужая аптечка не должна читаться")
     }
 
     @Test
@@ -85,13 +85,13 @@ class ReadProjectionTest {
         val outsider = dbHelper.freshUser("outsider")
         val foreign = medKitService.createNew(outsider.id)
 
-        dbHelper.freshDrug(first, 1.0)
-        dbHelper.freshDrug(first, 2.0)
-        dbHelper.freshDrug(second, 3.0)
-        dbHelper.freshDrug(foreign, 4.0)
+        dbHelper.freshDrug(first.id, 1.0)
+        dbHelper.freshDrug(first.id, 2.0)
+        dbHelper.freshDrug(second.id, 3.0)
+        dbHelper.freshDrug(foreign.id, 4.0)
         dbHelper.flushAndClear()
 
-        val views = drugService.viewsAccessibleTo(alice.id)
+        val views = drugService.accessibleTo(alice.id)
 
         assertEquals(3, views.size, "видны препараты обеих своих аптечек и только их")
         assertEquals(2, views.count { it.medKitId == first.id })
@@ -105,12 +105,12 @@ class ReadProjectionTest {
         val kit = medKitService.createNew(alice.id)
         val bob = dbHelper.freshUser("bob")
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit.id, 100.0)
         drugService.createPlan(alice.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
-        assertQty(30.0, treatmentPlanService.requireView(alice.id, drug.id).plannedAmount)
+        assertQty(30.0, treatmentPlanService.requirePlan(alice.id, drug.id).plannedAmount)
         // Препарат общий, план — личный: Боб видит препарат, но не чужой план.
-        assertNull(treatmentPlanService.findView(bob.id, drug.id), "чужой план не читается")
+        assertNull(treatmentPlanService.findPlan(bob.id, drug.id), "чужой план не читается")
     }
 }

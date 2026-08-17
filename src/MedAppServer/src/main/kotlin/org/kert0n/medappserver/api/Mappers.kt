@@ -1,22 +1,22 @@
 package org.kert0n.medappserver.api
 
-import org.kert0n.medappserver.db.repository.DrugTemplateView
-import org.kert0n.medappserver.db.repository.DrugView
-import org.kert0n.medappserver.db.repository.MedKitSummary
-import org.kert0n.medappserver.db.repository.TreatmentPlanView
+import org.kert0n.medappserver.domain.catalogue.DrugTemplate
+import org.kert0n.medappserver.domain.drug.Drug
+import org.kert0n.medappserver.domain.drug.TreatmentPlan
+import org.kert0n.medappserver.domain.medkit.MedKitOverview
 
 /**
- * Перевод форм чтения в публичный контракт.
+ * Перевод доменных значений в публичный контракт.
  *
- * DTO собирается только из проекций, и другого пути нет. Пока их было два — из сущности и из
- * запроса, — доступный остаток считался в каждом отдельно, и такие пары рано или поздно
- * расходятся.
+ * Отдельных форм чтения больше нет: DTO собирается из того же состояния, по которому агрегат
+ * принимает решения, поэтому разойтись «сколько запланировано в ответе» и «сколько
+ * запланировано в проверке» уже не могут.
  */
-fun DrugView.toDto(): DrugDTO = DrugDTO(
+fun Drug.toDto(): DrugDTO = DrugDTO(
     id = id,
     name = name,
     quantity = quantity,
-    plannedQuantity = plannedQuantity,
+    plannedQuantity = plannedTotal,
     availableQuantity = availableQuantity,
     quantityUnit = quantityUnit,
     formType = formType,
@@ -27,12 +27,12 @@ fun DrugView.toDto(): DrugDTO = DrugDTO(
     medKitId = medKitId
 )
 
-fun TreatmentPlanView.toDto(): TreatmentPlanDTO = TreatmentPlanDTO(
+fun TreatmentPlan.toDto(): TreatmentPlanDTO = TreatmentPlanDTO(
     drugId = drugId,
     plannedAmount = plannedAmount
 )
 
-fun DrugTemplateView.toDto(): DrugTemplateDTO = DrugTemplateDTO(
+fun DrugTemplate.toDto(): DrugTemplateDTO = DrugTemplateDTO(
     id = id,
     name = name,
     nameLat = nameLat,
@@ -45,8 +45,8 @@ fun DrugTemplateView.toDto(): DrugTemplateDTO = DrugTemplateDTO(
     description = description
 )
 
-fun MedKitSummary.toDto(): MedKitSummaryDTO = MedKitSummaryDTO(
+fun MedKitOverview.toDto(): MedKitSummaryDTO = MedKitSummaryDTO(
     id = id,
-    userCount = userCount,
+    userCount = memberCount,
     drugCount = drugCount
 )

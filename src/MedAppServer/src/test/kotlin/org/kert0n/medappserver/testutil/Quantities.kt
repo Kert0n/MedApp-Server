@@ -1,6 +1,6 @@
 package org.kert0n.medappserver.testutil
 
-import org.kert0n.medappserver.db.model.toQuantityScale
+import org.kert0n.medappserver.domain.quantity.toQuantityScale
 import java.math.BigDecimal
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue

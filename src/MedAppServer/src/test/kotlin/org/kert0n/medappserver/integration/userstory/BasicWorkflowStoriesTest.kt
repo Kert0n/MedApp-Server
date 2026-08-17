@@ -1,5 +1,9 @@
 package org.kert0n.medappserver.integration.userstory
 
+import org.kert0n.medappserver.testutil.DatabaseTestHelper
+import org.kert0n.medappserver.db.store.MedKitStore
+import org.kert0n.medappserver.domain.drug.Drug
+import org.kert0n.medappserver.domain.user.User
 import jakarta.persistence.EntityManager
 import java.util.*
 import kotlin.test.assertEquals
@@ -8,14 +12,14 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
-import org.kert0n.medappserver.db.model.Drug
-import org.kert0n.medappserver.db.model.User
+import org.kert0n.medappserver.db.model.DrugData
+import org.kert0n.medappserver.db.model.UserData
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
+import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
@@ -26,10 +30,14 @@ import org.springframework.transaction.annotation.Transactional
 class BasicWorkflowStoriesTest {
 
     @Autowired
-    private lateinit var userRepository: UserRepository
+
+    private lateinit var medKitStore: MedKitStore
+
 
     @Autowired
-    private lateinit var medKitRepository: MedKitRepository
+
+    private lateinit var dbHelper: DatabaseTestHelper
+
 
     @Autowired
     private lateinit var drugRepository: DrugRepository
@@ -44,7 +52,7 @@ class BasicWorkflowStoriesTest {
     private lateinit var medKitService: MedKitService
 
     @Autowired
-    private lateinit var medKitDrugServices: MedKitDrugServices
+    private lateinit var medKitDrugOrchestrator: MedKitDrugOrchestrator
 
     /**
      * Story 1: Anna creates her first medkit and adds some drugs
@@ -54,11 +62,11 @@ class BasicWorkflowStoriesTest {
     @Test
     fun `Story 1 - New user Anna creates and manages her medkit`() {
         // Anna signs up
-        val anna = User(
+        val anna = User.register(
             id = UUID.randomUUID(),
             hashedKey = "anna_hashed_key_${UUID.randomUUID()}"
         )
-        userRepository.save(anna)
+        dbHelper.insert(anna)
         entityManager.flush()
 
         // Creates medkit
@@ -66,7 +74,7 @@ class BasicWorkflowStoriesTest {
         assertNotNull(homeMedkit)
 
         // Adds drugs using repository directly (simulating controller layer)
-        val aspirin = Drug(
+        val aspirin = Drug.create(
             id = UUID.randomUUID(),
             name = "Aspirin",
             quantity = qty(100.0),
@@ -76,11 +84,11 @@ class BasicWorkflowStoriesTest {
             manufacturer = null,
             country = null,
             description = null,
-            medKit = homeMedkit
+            medKitId = homeMedkit.id
         )
-        drugRepository.save(aspirin)
+        dbHelper.insert(aspirin)
 
-        val ibuprofen = Drug(
+        val ibuprofen = Drug.create(
             id = UUID.randomUUID(),
             name = "Ibuprofen",
             quantity = qty(50.0),
@@ -90,18 +98,18 @@ class BasicWorkflowStoriesTest {
             manufacturer = null,
             country = null,
             description = null,
-            medKit = homeMedkit
+            medKitId = homeMedkit.id
         )
-        drugRepository.save(ibuprofen)
+        dbHelper.insert(ibuprofen)
         entityManager.flush()
 
         // Anna takes 2 tablets of Aspirin
-        drugService.consumeDrug(aspirin.id, qty(2.0), anna.id)
+        drugService.consume(aspirin.id, qty(2.0), anna.id)
         entityManager.flush()
         entityManager.clear()
 
         // Check inventory
-        val updatedAspirin = drugRepository.findById(aspirin.id).orElse(null)
+        val updatedAspirin = drugService.findById(aspirin.id)
         assertNotNull(updatedAspirin)
         assertQty(98.0, updatedAspirin.quantity, "Should have 98 tablets left")
 
@@ -119,11 +127,11 @@ class BasicWorkflowStoriesTest {
     @Test
     fun `Story 2 - Anna shares medkit with roommate Bob`() {
         // Anna's medkit
-        val anna = User(id = UUID.randomUUID(), hashedKey = "anna_${UUID.randomUUID()}")
-        userRepository.save(anna)
+        val anna = User.register(id = UUID.randomUUID(), hashedKey = "anna_${UUID.randomUUID()}")
+        dbHelper.insert(anna)
         val medkit = medKitService.createNew(anna.id)
 
-        val vitamins = Drug(
+        val vitamins = Drug.create(
             id = UUID.randomUUID(),
             name = "Vitamin C",
             quantity = qty(30.0),
@@ -133,14 +141,14 @@ class BasicWorkflowStoriesTest {
             manufacturer = null,
             country = null,
             description = null,
-            medKit = medkit
+            medKitId = medkit.id
         )
-        drugRepository.save(vitamins)
+        dbHelper.insert(vitamins)
         entityManager.flush()
 
         // Bob signs up
-        val bob = User(id = UUID.randomUUID(), hashedKey = "bob_${UUID.randomUUID()}")
-        userRepository.save(bob)
+        val bob = User.register(id = UUID.randomUUID(), hashedKey = "bob_${UUID.randomUUID()}")
+        dbHelper.insert(bob)
         entityManager.flush()
 
         // Anna shares with Bob via share key
@@ -158,9 +166,9 @@ class BasicWorkflowStoriesTest {
         assertEquals(annaMedkits[0].id, bobMedkits[0].id, "Should be the same medkit")
 
         // Verify the medkit has 2 users
-        val sharedMedkit = medKitRepository.findById(medkit.id).orElse(null)
+        val sharedMedkit = medKitStore.findById(medkit.id)
         assertNotNull(sharedMedkit)
-        assertEquals(2, sharedMedkit.users.size, "Medkit should have 2 users")
+        assertEquals(2, sharedMedkit.members.size, "Medkit should have 2 users")
 
         println("✅ Story 2 passed: Anna successfully shared medkit with Bob")
     }
@@ -173,16 +181,16 @@ class BasicWorkflowStoriesTest {
     @Test
     fun `Story 3 - Bob leaves shared medkit, cleanup works correctly`() {
         // Setup shared medkit
-        val anna = User(id = UUID.randomUUID(), hashedKey = "anna_${UUID.randomUUID()}")
-        val bob = User(id = UUID.randomUUID(), hashedKey = "bob_${UUID.randomUUID()}")
-        userRepository.save(anna)
-        userRepository.save(bob)
+        val anna = User.register(id = UUID.randomUUID(), hashedKey = "anna_${UUID.randomUUID()}")
+        val bob = User.register(id = UUID.randomUUID(), hashedKey = "bob_${UUID.randomUUID()}")
+        dbHelper.insert(anna)
+        dbHelper.insert(bob)
 
         val medkit = medKitService.createNew(anna.id)
         val shareKey = medKitService.generateMedKitShareKey(medkit.id, anna.id)
         medKitService.joinMedKitByKey(shareKey, bob.id)
 
-        val drug = Drug(
+        val drugData = Drug.create(
             id = UUID.randomUUID(),
             name = "Test Drug",
             quantity = qty(100.0),
@@ -192,29 +200,29 @@ class BasicWorkflowStoriesTest {
             manufacturer = null,
             country = null,
             description = null,
-            medKit = medkit
+            medKitId = medkit.id
         )
-        drugRepository.save(drug)
+        dbHelper.insert(drugData)
         entityManager.flush()
         entityManager.clear()
 
         // Verify both users have access
-        val loadedMedkit = medKitRepository.findById(medkit.id).get()
-        assertEquals(2, loadedMedkit.users.size)
+        val loadedMedkit = medKitStore.findById(medkit.id)!!
+        assertEquals(2, loadedMedkit.members.size)
 
         // Bob leaves (drugs stay)
-        medKitDrugServices.removeUserFromMedKit(medkit.id, bob.id)
+        medKitDrugOrchestrator.leaveMedKit(medkit.id, bob.id)
         entityManager.flush()
         entityManager.clear()
 
         // Medkit still exists with Anna only
-        val updatedMedkit = medKitRepository.findById(medkit.id).orElse(null)
+        val updatedMedkit = medKitStore.findById(medkit.id)
         assertNotNull(updatedMedkit)
-        assertEquals(1, updatedMedkit.users.size, "Only Anna should be in medkit")
-        assertTrue(updatedMedkit.users.any { it.id == anna.id })
+        assertEquals(1, updatedMedkit.members.size, "Only Anna should be in medkit")
+        assertTrue(updatedMedkit.members.contains(anna.id))
 
         // Drug still exists
-        val remainingDrug = drugRepository.findById(drug.id).orElse(null)
+        val remainingDrug = drugService.findById(drugData.id)
         assertNotNull(remainingDrug, "Drug should still exist")
 
         println("✅ Story 3 passed: Bob left medkit, cleanup successful")
@@ -228,12 +236,12 @@ class BasicWorkflowStoriesTest {
     @Test
     fun `Story 4 - User migrates drugs when deleting old medkit`() {
         // Create user and first medkit
-        val user = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
-        userRepository.save(user)
-        val oldMedkit = medKitService.createNew(user.id)
+        val userData = User.register(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
+        dbHelper.insert(userData)
+        val oldMedkit = medKitService.createNew(userData.id)
 
         // Add drugs
-        val drug1 = Drug(
+        val drugData1 = Drug.create(
             id = UUID.randomUUID(),
             name = "Drug A",
             quantity = qty(50.0),
@@ -243,9 +251,9 @@ class BasicWorkflowStoriesTest {
             manufacturer = null,
             country = null,
             description = null,
-            medKit = oldMedkit
+            medKitId = oldMedkit.id
         )
-        val drug2 = Drug(
+        val drugData2 = Drug.create(
             id = UUID.randomUUID(),
             name = "Drug B",
             quantity = qty(100.0),
@@ -255,21 +263,21 @@ class BasicWorkflowStoriesTest {
             manufacturer = null,
             country = null,
             description = null,
-            medKit = oldMedkit
+            medKitId = oldMedkit.id
         )
-        drugRepository.save(drug1)
-        drugRepository.save(drug2)
+        dbHelper.insert(drugData1)
+        dbHelper.insert(drugData2)
 
         // Create new medkit for migration
-        val newMedkit = medKitService.createNew(user.id)
+        val newMedkit = medKitService.createNew(userData.id)
         entityManager.flush()
         entityManager.clear()
 
         // Verify user has 2 medkits
-        assertEquals(2, medKitService.findAllByUser(user.id).size)
+        assertEquals(2, medKitService.findAllByUser(userData.id).size)
 
         // Delete old medkit and move drugs
-        medKitDrugServices.delete(oldMedkit.id, user.id, newMedkit.id)
+        medKitDrugOrchestrator.delete(oldMedkit.id, userData.id, newMedkit.id)
         entityManager.flush()
         entityManager.clear()
 
@@ -281,11 +289,11 @@ class BasicWorkflowStoriesTest {
         assertTrue(drugNames.contains("Drug B"))
 
         // Old medkit should be gone
-        val oldMedkitCheck = medKitRepository.findById(oldMedkit.id).orElse(null)
+        val oldMedkitCheck = medKitStore.findById(oldMedkit.id)
         assertNull(oldMedkitCheck, "Old medkit should be deleted")
 
         // User should have only 1 medkit now
-        assertEquals(1, medKitService.findAllByUser(user.id).size)
+        assertEquals(1, medKitService.findAllByUser(userData.id).size)
 
         println("✅ Story 4 passed: Drugs successfully migrated to new medkit")
     }
@@ -297,11 +305,11 @@ class BasicWorkflowStoriesTest {
      */
     @Test
     fun `Story 5 - User consumes all available drug quantity`() {
-        val user = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
-        userRepository.save(user)
+        val userData = User.register(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
+        dbHelper.insert(userData)
 
-        val medkit = medKitService.createNew(user.id)
-        val drug = Drug(
+        val medkit = medKitService.createNew(userData.id)
+        val drugData = Drug.create(
             id = UUID.randomUUID(),
             name = "Limited Drug",
             quantity = qty(30.0),
@@ -311,20 +319,20 @@ class BasicWorkflowStoriesTest {
             manufacturer = null,
             country = null,
             description = null,
-            medKit = medkit
+            medKitId = medkit.id
         )
-        drugRepository.save(drug)
+        dbHelper.insert(drugData)
         entityManager.flush()
 
         // Consume all in steps
-        drugService.consumeDrug(drug.id, qty(10.0), user.id)
-        drugService.consumeDrug(drug.id, qty(10.0), user.id)
-        drugService.consumeDrug(drug.id, qty(10.0), user.id)
+        drugService.consume(drugData.id, qty(10.0), userData.id)
+        drugService.consume(drugData.id, qty(10.0), userData.id)
+        drugService.consume(drugData.id, qty(10.0), userData.id)
         entityManager.flush()
         entityManager.clear()
 
         // Drug quantity should be exactly zero
-        val updatedDrug = drugRepository.findById(drug.id).orElse(null)
+        val updatedDrug = drugService.findById(drugData.id)
         // Must be deleted
         assertNull(updatedDrug)
 

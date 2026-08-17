@@ -16,9 +16,9 @@ import org.kert0n.medappserver.api.DrugPatchRequest
 import org.kert0n.medappserver.api.DrugTemplateDTO
 import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.services.models.DrugService
-import org.kert0n.medappserver.services.models.VidalDrugService
+import org.kert0n.medappserver.services.models.CatalogueService
 import org.kert0n.medappserver.services.models.userId
-import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
+import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
@@ -32,7 +32,7 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBod
 @Tag(name = "Drugs", description = "Drugs stored in medicine kits")
 class DrugController(
     private val drugService: DrugService,
-    private val medKitDrugServices: MedKitDrugServices
+    private val medKitDrugOrchestrator: MedKitDrugOrchestrator
 ) {
 
     private val logger = LoggerFactory.getLogger(DrugController::class.java)
@@ -45,7 +45,7 @@ class DrugController(
         @Parameter(description = "Drug identifier") @PathVariable drugId: UUID
     ): DrugDTO {
         logger.debug("GET /v1/drugs/{} by user {}", drugId, authentication.userId)
-        return drugService.requireView(drugId, authentication.userId).toDto()
+        return drugService.require(drugId, authentication.userId).toDto()
     }
 
     /**
@@ -65,8 +65,8 @@ class DrugController(
         @Valid @RequestBody request: DrugCreateRequest
     ): DrugDTO {
         logger.debug("POST /v1/med-kits/{}/drugs by user {}", medKitId, authentication.userId)
-        val created = medKitDrugServices.createDrugInMedkit(medKitId, request, authentication.userId)
-        return drugService.requireView(created.id, authentication.userId).toDto()
+        val created = medKitDrugOrchestrator.createDrugInMedKit(medKitId, request, authentication.userId)
+        return drugService.require(created.id, authentication.userId).toDto()
     }
 
     /** PATCH, а не PUT: тело описывает изменение части полей, а не препарат целиком. */
@@ -82,7 +82,7 @@ class DrugController(
     ): DrugDTO {
         logger.debug("PATCH /v1/drugs/{} by user {}", drugId, authentication.userId)
         drugService.update(drugId, request, authentication.userId)
-        return drugService.requireView(drugId, authentication.userId).toDto()
+        return drugService.require(drugId, authentication.userId).toDto()
     }
 
     @DeleteMapping("/drugs/{drugId}")
@@ -114,8 +114,8 @@ class DrugController(
     ): DrugDTO? {
         logger.debug("POST /v1/drugs/{}/consumptions by user {}", drugId, authentication.userId)
         // null означает, что препарат кончился и удалён этим списанием.
-        drugService.consumeDrug(drugId, request.quantity, authentication.userId) ?: return null
-        return drugService.findView(drugId, authentication.userId)?.toDto()
+        drugService.consume(drugId, request.quantity, authentication.userId) ?: return null
+        return drugService.find(drugId, authentication.userId)?.toDto()
     }
 
     /**
@@ -131,8 +131,8 @@ class DrugController(
         @Parameter(description = "Drug identifier") @PathVariable drugId: UUID
     ): DrugDTO {
         logger.debug("PUT /v1/med-kits/{}/drugs/{} by user {}", targetMedKitId, drugId, authentication.userId)
-        medKitDrugServices.moveDrug(drugId, targetMedKitId, authentication.userId)
-        return drugService.requireView(drugId, authentication.userId).toDto()
+        medKitDrugOrchestrator.moveDrug(drugId, targetMedKitId, authentication.userId)
+        return drugService.require(drugId, authentication.userId).toDto()
     }
 }
 
@@ -140,7 +140,7 @@ class DrugController(
 @RequestMapping("/v1/drug-templates")
 @Tag(name = "Drug catalogue", description = "Reference catalogue used when adding a drug")
 class DrugTemplateController(
-    private val vidalDrugService: VidalDrugService
+    private val catalogueService: CatalogueService
 ) {
 
     private val logger = LoggerFactory.getLogger(DrugTemplateController::class.java)
@@ -162,7 +162,7 @@ class DrugTemplateController(
         @RequestParam(defaultValue = "10") @Min(1) @Max(50) limit: Int
     ): List<DrugTemplateDTO> {
         logger.debug("GET /v1/drug-templates by user {}", authentication.userId)
-        return vidalDrugService.fuzzySearch(query, limit).map { it.toDto() }
+        return catalogueService.fuzzySearch(query, limit).map { it.toDto() }
     }
 
     @GetMapping("/{templateId}")
@@ -173,7 +173,7 @@ class DrugTemplateController(
         @Parameter(description = "Template identifier") @PathVariable templateId: UUID
     ): DrugTemplateDTO {
         logger.debug("GET /v1/drug-templates/{} by user {}", templateId, authentication.userId)
-        return vidalDrugService.findView(templateId)?.toDto()
+        return catalogueService.find(templateId)?.toDto()
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Drug template not found")
     }
 }

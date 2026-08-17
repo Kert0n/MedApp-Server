@@ -1,5 +1,8 @@
 package org.kert0n.medappserver.integration
 
+import org.kert0n.medappserver.testutil.DatabaseTestHelper
+import org.kert0n.medappserver.domain.drug.Drug
+import org.kert0n.medappserver.domain.user.User
 import org.kert0n.medappserver.testutil.ApiRoutes
 import java.util.UUID
 import kotlin.test.assertFalse
@@ -7,9 +10,8 @@ import kotlin.test.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
-import org.kert0n.medappserver.db.model.Drug
-import org.kert0n.medappserver.db.model.MedKit
-import org.kert0n.medappserver.db.model.User
+import org.kert0n.medappserver.db.model.DrugData
+import org.kert0n.medappserver.db.model.UserData
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.UserRepository
@@ -42,16 +44,20 @@ import tools.jackson.databind.ObjectMapper
 class ErrorResponseShapeTest {
 
     @Autowired
+
+    private lateinit var dbHelper: DatabaseTestHelper
+
+
+    @Autowired
+
+    private lateinit var medKitService: org.kert0n.medappserver.services.models.MedKitService
+
+
+    @Autowired
     private lateinit var context: WebApplicationContext
 
     @Autowired
-    private lateinit var userRepository: UserRepository
-
-    @Autowired
     private lateinit var medKitRepository: MedKitRepository
-
-    @Autowired
-    private lateinit var drugRepository: DrugRepository
 
     @Autowired
     private lateinit var objectMapper: ObjectMapper
@@ -88,15 +94,12 @@ class ErrorResponseShapeTest {
     @Test
     fun `insufficient quantity does not disclose amounts`() {
         // A real drug with 5 units in stock; ask for a plan of 500.
-        val user = userRepository.save(User(hashedKey = "{noop}k"))
-        val medKit = medKitRepository.save(MedKit())
-        medKit.users.add(user)
-        user.medKits.add(medKit)
-        medKitRepository.save(medKit)
-        val drug = drugRepository.save(
-            Drug(name = "Aspirin", quantity = qty(5.0), quantityUnit = "tab", formType = null,
-                category = null, manufacturer = null, country = null, description = null,
-                medKit = medKit)
+        val user = dbHelper.insert(User.register(hashedKey = "{noop}k"))
+        val medKit = medKitService.createNew(user.id)
+        val drug = dbHelper.insert(
+            Drug.create(
+                medKitId = medKit.id, name = "Aspirin", quantity = qty(5.0), quantityUnit = "tab"
+            )
         )
 
         val body = mockMvc.perform(
