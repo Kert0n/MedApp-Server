@@ -187,7 +187,7 @@ class ResourceApiContractTest {
     @Test
     fun `план лечения создаётся и меняется`() {
         val plan = Reservation(userId = userId, drugId = drugId, amount = Quantity(qty(20.0), unit))
-        whenever(reservationService.create(eq(userId), eq(drugId), any())).thenReturn(plan)
+        whenever(medKitDrugOrchestrator.createReservation(eq(userId), eq(drugId), any())).thenReturn(plan)
         whenever(reservationService.changeTo(eq(userId), eq(drugId), any(), eq(0L))).thenReturn(plan)
         whenever(reservationService.require(userId, drugId)).thenReturn(plan)
 

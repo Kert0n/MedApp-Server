@@ -10,6 +10,7 @@ import org.kert0n.medappserver.db.repository.MedKitMembershipRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.domain.MedKit
+import org.kert0n.medappserver.domain.StaleAggregateVersion
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Component
 
@@ -55,7 +56,10 @@ class MedKitStore(
      * чужой токен обесценивать не должно.
      */
     fun requireUnchanged(medKit: MedKit) {
-        val row = medKits.findByIdOrNull(medKit.id) ?: error("Аптечка ${medKit.id} исчезла во время чтения")
+        // Сравнение явное, а не «обе величины из одной транзакции, значит совпадут»: снимок
+        // может приехать и из другого чтения, и тогда молчаливое совпадение — везение.
+        val row = medKits.findByIdOrNull(medKit.id) ?: throw StaleAggregateVersion()
+        if (row.version != medKit.version) throw StaleAggregateVersion()
         entityManager.lock(row, LockModeType.OPTIMISTIC)
     }
 

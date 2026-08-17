@@ -63,6 +63,10 @@ class DrugSyncOrchestrator(
         }
 
         drug.requireVersion(request.drugVersion)
+        // Без приёма упаковка не записывается, и её версия сама себя не проверит: сравнение
+        // выше осталось бы украшением, а одновременный переезд или смена единицы прошли бы мимо.
+        if (request.consumed == null) drugService.requireUnchanged(drug)
+
         val left = request.consumed?.let {
             drugService.consume(drugId, it, userId, request.drugVersion)
         }
@@ -75,7 +79,7 @@ class DrugSyncOrchestrator(
 
         request.reservation?.let { wanted ->
             if (wanted.version == null) {
-                reservationService.create(userId, drugId, wanted.amount)
+                medKitDrugOrchestrator.createReservation(userId, drugId, wanted.amount)
             } else {
                 reservationService.changeTo(userId, drugId, wanted.amount, wanted.version)
             }

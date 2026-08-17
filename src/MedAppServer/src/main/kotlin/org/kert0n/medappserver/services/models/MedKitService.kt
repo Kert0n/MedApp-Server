@@ -68,10 +68,11 @@ class MedKitService(
         return medKits.findAllOfUser(userId)
     }
 
-    @Transactional(readOnly = true)
+    /** Состав удерживается до коммита: приглашать в аптечку, из которой уже вышел, нельзя. */
+    @Transactional
     fun invite(medKitId: UUID, userId: UUID): String {
         logger.debug("Sharing medkit {} by user: {}", medKitId, userId)
-        requireAccessible(medKitId, userId)
+        medKits.requireUnchanged(requireAccessible(medKitId, userId))
         val key = securityService.generateKey(16)
         // Кешируется только хеш: сырой ключ приглашения на сервере не хранится.
         medKitTokenCache[securityService.hashToken(key)] = medKitId

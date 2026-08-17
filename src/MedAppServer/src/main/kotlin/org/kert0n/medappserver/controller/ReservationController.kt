@@ -12,6 +12,7 @@ import org.kert0n.medappserver.api.ReservationPatchRequest
 import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.services.models.ReservationService
 import org.kert0n.medappserver.services.models.userId
+import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -28,6 +29,7 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBod
 @Tag(name = "Reservations", description = "How much of a package the caller claims for themselves")
 class ReservationController(
     private val reservationService: ReservationService,
+    private val medKitDrugOrchestrator: MedKitDrugOrchestrator,
     private val preconditions: Preconditions
 ) {
 
@@ -64,7 +66,8 @@ class ReservationController(
         logger.debug("POST /v1/reservations by user {} on drug {}", authentication.userId, request.drugId)
         // Предусловия нет: создание ничего не перезаписывает, а вторая бронь на ту же пачку
         // отвергается сама по себе — 409 приходит от правила, а не от версии.
-        return reservationService.create(authentication.userId, request.drugId, request.amount)
+        return medKitDrugOrchestrator
+            .createReservation(authentication.userId, request.drugId, request.amount)
             .toDto()
             .createdWithEtag()
     }

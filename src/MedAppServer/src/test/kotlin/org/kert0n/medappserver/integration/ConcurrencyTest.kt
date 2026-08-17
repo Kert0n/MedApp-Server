@@ -10,8 +10,10 @@ import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.db.store.ReservationStore
 import java.util.UUID
 import org.kert0n.medappserver.api.SyncRequest
+import org.kert0n.medappserver.api.SyncReservation
 import org.kert0n.medappserver.domain.IntakeJournal
 import org.kert0n.medappserver.domain.Quantity
+import org.kert0n.medappserver.domain.Reservation
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.ReservationService
@@ -245,5 +247,109 @@ class ConcurrencyTest {
         )
 
         assertQty(65.0, dbHelper.drugQuantity(drug.id)!!, "повтор списал те самые пять")
+    }
+
+    // ── Решение по чужому агрегату ───────────────────────────────────────────────
+
+    /**
+     * Бронь не появляется у того, кто в этот момент вышел из аптечки.
+     *
+     * Опасно здесь не то, что бронь заведена без права, а то, что её **некому убрать**: уборщик
+     * броней при выходе отработал по составу на свой момент, и запись, легшая следом, не видна
+     * больше ни одному сценарию очистки.
+     *
+     * Шаги повторяют `createReservation`, а не вызывают его: метод атомарен, и места, где его
+     * можно задержать между решением и записью, в нём нет.
+     *
+     * Запись идёт прямо в хранилище намеренно. Проверка доступа внутри `create` окно **сужает**
+     * — до промежутка между последним чтением членства и коммитом, — но не закрывает: чужой
+     * выход успевает закоммититься и там. Закрывает его требование не меняться, и тест
+     * показывает ровно это: убери `requireUnchanged` из шагов ниже, и бронь ляжет.
+     */
+    @Test
+    fun `бронь против выхода из аптечки не остаётся без доступа`() {
+        val alice = dbHelper.freshUser("alice")
+        val bob = dbHelper.freshUser("bob")
+        val kit = medKitService.create(alice.id)
+        medKitService.join(kit.id, bob.id)
+        val drug = dbHelper.freshDrug(kit.id, 100.0)
+
+        val failure = interleaved.lostUpdate(
+            read = {
+                val visible = drugService.require(drug.id, bob.id)
+                drugService.requireUnchanged(visible)
+                medKits.requireUnchanged(medKitService.requireAccessible(visible.medKitId, bob.id))
+                visible
+            },
+            meanwhile = { orchestrator.leaveMedKit(kit.id, bob.id, dbHelper.medKitVersion(kit.id)) },
+            write = { visible -> reservations.insert(Reservation(bob.id, drug.id, visible.quantity)) }
+        )
+
+        assertNotNull(failure, "бронь по устаревшему составу обязана быть отклонена")
+        assertNull(dbHelper.userReservation(bob.id, drug.id), "брони без доступа не осталось")
+    }
+
+    /** То же для переезда пачки: решение принималось по упаковке, которой в этой аптечке уже нет. */
+    @Test
+    fun `бронь против переноса упаковки не остаётся без доступа`() {
+        val alice = dbHelper.freshUser("alice")
+        val bob = dbHelper.freshUser("bob")
+        val shared = medKitService.create(alice.id)
+        medKitService.join(shared.id, bob.id)
+        val private = medKitService.create(alice.id)
+        val drug = dbHelper.freshDrug(shared.id, 100.0)
+
+        val failure = interleaved.lostUpdate(
+            read = {
+                val visible = drugService.require(drug.id, bob.id)
+                drugService.requireUnchanged(visible)
+                medKits.requireUnchanged(medKitService.requireAccessible(visible.medKitId, bob.id))
+                visible
+            },
+            meanwhile = {
+                orchestrator.moveDrug(drug.id, private.id, alice.id, dbHelper.drugVersion(drug.id))
+            },
+            write = { visible -> reservations.insert(Reservation(bob.id, drug.id, visible.quantity)) }
+        )
+
+        assertNotNull(failure, "бронь на уехавшую пачку обязана быть отклонена")
+        assertNull(dbHelper.userReservation(bob.id, drug.id), "брони без доступа не осталось")
+    }
+
+    /**
+     * Синхронизация «только бронь» держит упаковку, хотя её не пишет.
+     *
+     * `drugVersion` в теле сравнивается, но без приёма упаковка не записывается — и сама себя
+     * версия не проверит. Без требования не меняться предусловие было бы украшением.
+     */
+    @Test
+    fun `синхронизация только брони против правки упаковки отклоняется`() {
+        val alice = dbHelper.freshUser("alice")
+        val bob = dbHelper.freshUser("bob")
+        val kit = medKitService.create(alice.id)
+        medKitService.join(kit.id, bob.id)
+        val drug = dbHelper.freshDrug(kit.id, 100.0)
+        reservationService.create(alice.id, drug.id, qty(20.0))
+        val staleDrugVersion = dbHelper.drugVersion(drug.id)
+        val reservationVersion = dbHelper.reservationVersion(alice.id, drug.id)
+
+        val failure = interleaved.lostUpdate(
+            read = { drugs.findAccessible(drug.id, alice.id)!! },
+            meanwhile = { drugService.consume(drug.id, qty(30.0), bob.id, staleDrugVersion) },
+            write = {
+                syncOrchestrator.synchronise(
+                    UUID.randomUUID(),
+                    drug.id,
+                    SyncRequest(
+                        drugVersion = staleDrugVersion,
+                        reservation = SyncReservation(amount = qty(45.0), version = reservationVersion)
+                    ),
+                    alice.id
+                )
+            }
+        )
+
+        assertNotNull(failure, "синхронизация по устаревшей упаковке обязана быть отклонена")
+        assertQty(20.0, dbHelper.userReservation(alice.id, drug.id)!!, "бронь не тронута")
     }
 }

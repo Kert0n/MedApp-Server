@@ -1,5 +1,6 @@
 package org.kert0n.medappserver.services.orchestrators
 
+import java.math.BigDecimal
 import java.util.UUID
 import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.api.DrugDTO
@@ -11,6 +12,7 @@ import org.kert0n.medappserver.db.store.DrugStore
 import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.db.store.ReservationStore
 import org.kert0n.medappserver.domain.Drug
+import org.kert0n.medappserver.domain.Reservation
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.ReservationService
@@ -37,12 +39,33 @@ class MedKitDrugOrchestrator(
 
     private val logger = LoggerFactory.getLogger(MedKitDrugOrchestrator::class.java)
 
-    /** Доступ решает аптечка, заведение упаковки — упаковка. */
+    /**
+     * Доступ решает аптечка, заведение упаковки — упаковка.
+     *
+     * Состав удерживается до коммита: между проверкой доступа и записью вызывающий успевает из
+     * аптечки выйти, и пачка легла бы в чужую.
+     */
     @Transactional
     fun createDrugInMedKit(medKitId: UUID, request: DrugCreateRequest, userId: UUID): Drug {
         logger.debug("Creating drug {} in medkit {}", request.name, medKitId)
-        medKitService.requireAccessible(medKitId, userId)
+        medKits.requireUnchanged(medKitService.requireAccessible(medKitId, userId))
         return drugService.create(request, medKitId, userId)
+    }
+
+    /**
+     * Заведение брони: решение принимается по упаковке и по составу её аптечки.
+     *
+     * Оба удерживаются до коммита. Иначе бронь появляется у того, кто в этот момент вышел из
+     * аптечки, или на пачке, которая успела уехать в недоступную, — и живёт там, потому что
+     * уборщики броней отработали раньше, чем она была заведена.
+     */
+    @Transactional
+    fun createReservation(userId: UUID, drugId: UUID, amount: BigDecimal): Reservation {
+        logger.debug("Creating reservation of user {} on drug {}", userId, drugId)
+        val drug = drugService.require(drugId, userId)
+        drugService.requireUnchanged(drug)
+        medKits.requireUnchanged(medKitService.requireAccessible(drug.medKitId, userId))
+        return reservationService.create(userId, drugId, amount)
     }
 
     /**

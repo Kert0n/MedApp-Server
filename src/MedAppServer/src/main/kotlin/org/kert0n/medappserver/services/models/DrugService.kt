@@ -66,6 +66,15 @@ class DrugService(
     fun requireAt(drugId: UUID, userId: UUID, expectedVersion: Long): Drug =
         require(drugId, userId).also { it.requireVersion(expectedVersion) }
 
+    /**
+     * Требует, чтобы упаковка дожила до коммита такой, какой её прочитали.
+     *
+     * Для тех, кто решает по упаковке, а меняет другое: бронь заводится в единице этой пачки и
+     * только пока пачка видна вызывающему.
+     */
+    @Transactional
+    fun requireUnchanged(drug: Drug) = drugs.requireUnchanged(drug)
+
     /** Недоступная и несуществующая упаковка отвечают одинаково: иначе чужая обнаружится. */
     private fun notFound() = NotAMember()
 

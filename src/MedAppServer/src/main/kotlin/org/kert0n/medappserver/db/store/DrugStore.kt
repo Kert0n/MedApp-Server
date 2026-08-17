@@ -1,5 +1,7 @@
 package org.kert0n.medappserver.db.store
 
+import jakarta.persistence.EntityManager
+import jakarta.persistence.LockModeType
 import java.util.UUID
 import org.kert0n.medappserver.db.model.DrugData
 import org.kert0n.medappserver.db.model.MedKitData
@@ -11,6 +13,7 @@ import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.QuantityUnitRepository
 import org.kert0n.medappserver.db.repository.ReservationRepository
 import org.kert0n.medappserver.domain.Drug
+import org.kert0n.medappserver.domain.StaleAggregateVersion
 import org.kert0n.medappserver.domain.UnknownFormType
 import org.kert0n.medappserver.domain.UnknownQuantityUnit
 import org.springframework.data.repository.findByIdOrNull
@@ -28,7 +31,8 @@ class DrugStore(
     private val medKits: MedKitRepository,
     private val units: QuantityUnitRepository,
     private val forms: FormTypeRepository,
-    private val reservations: ReservationRepository
+    private val reservations: ReservationRepository,
+    private val entityManager: EntityManager
 ) {
 
     // ── Чтение ───────────────────────────────────────────────────────────────────
@@ -42,6 +46,23 @@ class DrugStore(
     fun findById(drugId: UUID): Drug? = drugs.findFullById(drugId)?.toDomain()
 
     // ── Команды ──────────────────────────────────────────────────────────────────
+
+    /**
+     * Требует, чтобы упаковка не изменилась до конца транзакции.
+     *
+     * Нужно тому, кто **решает по упаковке, а меняет другой агрегат**: бронь заводится в единице
+     * своей пачки и только если пачка видна вызывающему. Между этим решением и записью пачка
+     * успевает уехать в чужую аптечку или сменить единицу — и бронь окажется заявкой на то, чего
+     * человек не видит, да ещё и в миллилитрах вместо таблеток.
+     *
+     * `OPTIMISTIC` — проверка версии на коммите без её продвижения: чтение не команда и чужой
+     * токен обесценивать не должно.
+     */
+    fun requireUnchanged(drug: Drug) {
+        val row = drugs.findByIdOrNull(drug.id) ?: throw StaleAggregateVersion()
+        if (row.version != drug.version) throw StaleAggregateVersion()
+        entityManager.lock(row, LockModeType.OPTIMISTIC)
+    }
 
     fun insert(drug: Drug) {
         drugs.save(
