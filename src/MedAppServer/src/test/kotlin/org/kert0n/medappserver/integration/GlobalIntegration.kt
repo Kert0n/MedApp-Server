@@ -62,8 +62,8 @@ class PlannedQuantityTrackingTests {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
 
-        val kit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
+        val kit = medKitService.create(alice.id)
+        medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
 
         val drug = dbHelper.freshDrug(kit.id, 120.0)
         dbHelper.flushAndClear()
@@ -124,9 +124,9 @@ class PlannedQuantityTrackingTests {
         val bob = dbHelper.freshUser("bob")
         val charlie = dbHelper.freshUser("charlie")
 
-        val kit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), charlie.id)
+        val kit = medKitService.create(alice.id)
+        medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
+        medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), charlie.id)
 
         val drug = dbHelper.freshDrug(kit.id, 90.0)
         dbHelper.flushAndClear()
@@ -205,9 +205,9 @@ class PlannedQuantityTrackingTests {
         val bob = dbHelper.freshUser("bob")
         val charlie = dbHelper.freshUser("charlie")
 
-        val kit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), charlie.id)
+        val kit = medKitService.create(alice.id)
+        medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
+        medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), charlie.id)
 
         val drug = dbHelper.freshDrug(kit.id, 90.0)
         dbHelper.flushAndClear()
@@ -267,8 +267,8 @@ class PlannedQuantityTrackingTests {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
 
-        val kit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
+        val kit = medKitService.create(alice.id)
+        medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
 
         val drug = dbHelper.freshDrug(kit.id, 120.0)
         dbHelper.flushAndClear()

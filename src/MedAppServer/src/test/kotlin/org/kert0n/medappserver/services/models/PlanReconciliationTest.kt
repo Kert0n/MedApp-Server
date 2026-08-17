@@ -34,7 +34,7 @@ class PlanReconciliationTest {
     @Test
     fun `drug deleted when quantity reaches zero`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitService.create(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 50.0)
         dbHelper.flushAndClear()
 
@@ -54,8 +54,8 @@ class PlanReconciliationTest {
     fun `no scaling when planned within slack`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
+        val kit = medKitService.create(alice.id)
+        medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
@@ -77,8 +77,8 @@ class PlanReconciliationTest {
     fun `proportional scaling when planned exceeds quantity`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
+        val kit = medKitService.create(alice.id)
+        medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
@@ -102,8 +102,8 @@ class PlanReconciliationTest {
     fun `asymmetric plans preserve ratio after scaling`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
+        val kit = medKitService.create(alice.id)
+        medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 

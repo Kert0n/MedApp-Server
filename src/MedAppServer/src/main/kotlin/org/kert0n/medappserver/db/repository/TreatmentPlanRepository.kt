@@ -62,4 +62,23 @@ interface TreatmentPlanRepository : JpaRepository<TreatmentPlanData, TreatmentPl
     @Modifying
     @Query("DELETE FROM TreatmentPlanData p WHERE p.planKey.userId = :userId AND p.drugData.medKit.id = :medKitId")
     fun deleteByUserIdAndMedKitId(@Param("userId") userId: UUID, @Param("medKitId") medKitId: UUID)
+
+    /**
+     * Планы всех, кто к аптечке доступа не имеет, — одним запросом.
+     *
+     * Пара к массовому переезду препаратов: план не переживает утрату доступа, и здесь это
+     * правило записано вторым — первым его знает `Drug.moveTo`. Дублирование сознательное,
+     * ради постоянного числа запросов при удалении аптечки с переносом.
+     */
+    @Modifying
+    @Query(
+        """
+        DELETE FROM TreatmentPlanData p
+        WHERE p.drugData.medKit.id = :medKitId AND p.planKey.userId NOT IN :allowedUserIds
+    """
+    )
+    fun deleteInMedKitExcept(
+        @Param("medKitId") medKitId: UUID,
+        @Param("allowedUserIds") allowedUserIds: Collection<UUID>
+    )
 }

@@ -29,13 +29,14 @@ class UserService(
     }
 
     @Transactional(readOnly = true)
-    fun findById(id: UUID): User {
-        logger.debug("Find user by id {}", id)
-        return users.findById(id) ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "User not found")
-    }
+    fun requireById(id: UUID): User =
+        findById(id) ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "User not found")
 
     @Transactional(readOnly = true)
-    fun findByIdOrNull(id: UUID): User? = users.findById(id)
+    fun findById(id: UUID): User? {
+        logger.debug("Find user by id {}", id)
+        return users.findById(id)
+    }
 }
 
 val Authentication.userId: UUID

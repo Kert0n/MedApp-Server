@@ -89,7 +89,7 @@ class ErrorResponseShapeTest {
     fun `insufficient quantity does not disclose amounts`() {
         // A real drug with 5 units in stock; ask for a plan of 500.
         val user = dbHelper.insert(User(hashedKey = "{noop}k"))
-        val medKit = medKitService.createNew(user.id)
+        val medKit = medKitService.create(user.id)
         val drug = dbHelper.insert(
             Drug(
                 medKitId = medKit.id, name = "Aspirin", quantity = Quantity(qty(5.0), dbHelper.unit()),

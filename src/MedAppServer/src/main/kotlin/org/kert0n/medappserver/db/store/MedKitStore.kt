@@ -30,14 +30,14 @@ class MedKitStore(
         return MedKit(row.id, memberships.findMemberIds(row.id))
     }
 
-    fun findAllOfUser(userId: UUID): List<MedKit> =
-        medKits.findAllOfUser(userId).map { MedKit(it.id, memberships.findMemberIds(it.id)) }
+    /** Идентификаторы аптечек участника: их состав вызывающему не нужен. */
+    fun findIdsOfUser(userId: UUID): List<UUID> = medKits.findIdsOfUser(userId)
 
     fun overviewsOf(userId: UUID): List<MedKitOverview> = medKits.findOverviewsOfUser(userId)
 
     fun insert(medKit: MedKit) {
-        medKits.save(MedKitData(id = medKit.id))
-        memberships.saveAll(medKit.members.map { membershipRow(medKit.id, it) })
+        val row = medKits.save(MedKitData(id = medKit.id))
+        memberships.saveAll(medKit.members.map { membershipRow(row, it) })
     }
 
     /** Сводит строки членства к тому, что в состоянии. Сама аптечка полей больше не имеет. */
@@ -48,28 +48,38 @@ class MedKitStore(
         if (gone.isNotEmpty()) memberships.deleteMembers(medKit.id, gone)
 
         val added = medKit.members - stored
-        if (added.isNotEmpty()) memberships.saveAll(added.map { membershipRow(medKit.id, it) })
+        if (added.isNotEmpty()) {
+            val row = medKits.findByIdOrNull(medKit.id) ?: error("Аптечка ${medKit.id} исчезла во время записи")
+            memberships.saveAll(added.map { membershipRow(row, it) })
+        }
     }
 
     /**
      * Удаление аптечки.
      *
-     * Членство и препараты уносит база каскадом по внешнему ключу — тем самым, что описан в
-     * `db/schema.sql`. Коллекций для этого в отображении не нужно.
+     * Препараты уносит база каскадом по внешнему ключу — тем самым, что описан в
+     * `db/schema.sql`. Членство пришлось бы унести тем же каскадом, но строки членства к
+     * этому моменту уже загружены и ссылаются на удаляемую аптечку: Hibernate увидел бы
+     * ссылку на исчезнувшую запись и упал бы на ближайшем flush. Поэтому они удаляются явно,
+     * а участников у аптечки столько, сколько людей ею пользуется, — обход дешёвый.
      */
     fun delete(medKitId: UUID) {
-        medKits.findByIdOrNull(medKitId)?.let { medKits.delete(it) }
+        val row = medKits.findByIdOrNull(medKitId) ?: return
+        memberships.deleteAll(memberships.findAllOfMedKit(medKitId))
+        medKits.delete(row)
     }
 
     /**
      * Строка членства.
      *
-     * Ссылки берутся ссылками-заглушками: строке нужен только внешний ключ, и читать ради
-     * него аптечку с пользователем незачем.
+     * Ссылки берутся управляемыми сущностями, а не заглушками `getReferenceById`: заглушка на
+     * запись, ещё не дошедшую до базы, при первом же массовом запросе превращается в
+     * «ссылку на несохранённый объект» — Hibernate флашит контекст перед DML и видит прокси
+     * без строки за ним. Лишних запросов это не стоит: обе сущности уже в контексте.
      */
-    private fun membershipRow(medKitId: UUID, userId: UUID) = MedKitMembershipData(
-        membershipKey = MedKitMembershipKey(medKitId = medKitId, userId = userId),
-        medKit = medKits.getReferenceById(medKitId),
-        user = users.getReferenceById(userId)
+    private fun membershipRow(medKit: MedKitData, userId: UUID) = MedKitMembershipData(
+        membershipKey = MedKitMembershipKey(medKitId = medKit.id, userId = userId),
+        medKit = medKit,
+        user = users.findByIdOrNull(userId) ?: error("Пользователь $userId исчез во время записи членства")
     )
 }

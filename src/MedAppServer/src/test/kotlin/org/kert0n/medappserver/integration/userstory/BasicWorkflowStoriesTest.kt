@@ -63,7 +63,7 @@ class BasicWorkflowStoriesTest {
         entityManager.flush()
 
         // Creates medkit
-        val homeMedkit = medKitService.createNew(anna.id)
+        val homeMedkit = medKitService.create(anna.id)
         assertNotNull(homeMedkit)
 
         // Adds drugs using repository directly (simulating controller layer)
@@ -118,7 +118,7 @@ class BasicWorkflowStoriesTest {
         // Anna's medkit
         val anna = User(id = UUID.randomUUID(), hashedKey = "anna_${UUID.randomUUID()}")
         dbHelper.insert(anna)
-        val medkit = medKitService.createNew(anna.id)
+        val medkit = medKitService.create(anna.id)
 
         val vitamins = Drug(
             id = UUID.randomUUID(),
@@ -139,18 +139,18 @@ class BasicWorkflowStoriesTest {
         entityManager.flush()
 
         // Anna shares with Bob via share key
-        val shareKey = medKitService.generateMedKitShareKey(medkit.id, anna.id)
-        medKitService.joinMedKitByKey(shareKey, bob.id)
+        val shareKey = medKitService.invite(medkit.id, anna.id)
+        medKitService.joinByInvitation(shareKey, bob.id)
         entityManager.flush()
         entityManager.clear()
 
         // Both can see it
-        val annaMedkits = medKitService.findAllByUser(anna.id)
-        val bobMedkits = medKitService.findAllByUser(bob.id)
+        val annaMedkits = medKitService.idsOfUser(anna.id)
+        val bobMedkits = medKitService.idsOfUser(bob.id)
 
         assertEquals(1, annaMedkits.size)
         assertEquals(1, bobMedkits.size)
-        assertEquals(annaMedkits[0].id, bobMedkits[0].id, "Should be the same medkit")
+        assertEquals(annaMedkits[0], bobMedkits[0], "Should be the same medkit")
 
         // Verify the medkit has 2 users
         val sharedMedkit = medKitStore.findById(medkit.id)
@@ -173,9 +173,9 @@ class BasicWorkflowStoriesTest {
         dbHelper.insert(anna)
         dbHelper.insert(bob)
 
-        val medkit = medKitService.createNew(anna.id)
-        val shareKey = medKitService.generateMedKitShareKey(medkit.id, anna.id)
-        medKitService.joinMedKitByKey(shareKey, bob.id)
+        val medkit = medKitService.create(anna.id)
+        val shareKey = medKitService.invite(medkit.id, anna.id)
+        medKitService.joinByInvitation(shareKey, bob.id)
 
         val drugData = Drug(
             id = UUID.randomUUID(),
@@ -223,7 +223,7 @@ class BasicWorkflowStoriesTest {
         // Create user and first medkit
         val userData = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
         dbHelper.insert(userData)
-        val oldMedkit = medKitService.createNew(userData.id)
+        val oldMedkit = medKitService.create(userData.id)
 
         // Add drugs
         val drugData1 = Drug(
@@ -250,12 +250,12 @@ class BasicWorkflowStoriesTest {
         dbHelper.insert(drugData2)
 
         // Create new medkit for migration
-        val newMedkit = medKitService.createNew(userData.id)
+        val newMedkit = medKitService.create(userData.id)
         entityManager.flush()
         entityManager.clear()
 
         // Verify user has 2 medkits
-        assertEquals(2, medKitService.findAllByUser(userData.id).size)
+        assertEquals(2, medKitService.idsOfUser(userData.id).size)
 
         // Delete old medkit and move drugs
         medKitDrugOrchestrator.delete(oldMedkit.id, userData.id, newMedkit.id)
@@ -274,7 +274,7 @@ class BasicWorkflowStoriesTest {
         assertNull(oldMedkitCheck, "Old medkit should be deleted")
 
         // User should have only 1 medkit now
-        assertEquals(1, medKitService.findAllByUser(userData.id).size)
+        assertEquals(1, medKitService.idsOfUser(userData.id).size)
 
         println("✅ Story 4 passed: Drugs successfully migrated to new medkit")
     }
@@ -289,7 +289,7 @@ class BasicWorkflowStoriesTest {
         val userData = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
         dbHelper.insert(userData)
 
-        val medkit = medKitService.createNew(userData.id)
+        val medkit = medKitService.create(userData.id)
         val drugData = Drug(
             id = UUID.randomUUID(),
             name = "Limited Drug",

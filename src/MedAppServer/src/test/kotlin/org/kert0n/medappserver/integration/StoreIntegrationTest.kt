@@ -40,7 +40,7 @@ class StoreIntegrationTest {
     @Test
     fun `препараты аптечки читаются вместе со своими планами`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitService.create(alice.id)
         val first = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.freshDrug(kit.id, 20.0)
         drugService.createPlan(alice.id, first.id, qty(4.0))
@@ -56,7 +56,7 @@ class StoreIntegrationTest {
     @Test
     fun `пустая аптечка отдаёт пустой список`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitService.create(alice.id)
         dbHelper.flushAndClear()
 
         assertTrue(drugs.findAllInMedKit(kit.id).isEmpty())
@@ -66,7 +66,7 @@ class StoreIntegrationTest {
     fun `препарат читается участником и не читается посторонним`() {
         val alice = dbHelper.freshUser("alice")
         val eve = dbHelper.freshUser("eve")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitService.create(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
@@ -78,9 +78,9 @@ class StoreIntegrationTest {
     fun `снимок собирает препараты всех аптечек участника`() {
         val alice = dbHelper.freshUser("alice")
         val outsider = dbHelper.freshUser("outsider")
-        val first = medKitService.createNew(alice.id)
-        val second = medKitService.createNew(alice.id)
-        val foreign = medKitService.createNew(outsider.id)
+        val first = medKitService.create(alice.id)
+        val second = medKitService.create(alice.id)
+        val foreign = medKitService.create(outsider.id)
         dbHelper.freshDrug(first.id, 1.0)
         dbHelper.freshDrug(second.id, 2.0)
         dbHelper.freshDrug(foreign.id, 3.0)
@@ -95,7 +95,7 @@ class StoreIntegrationTest {
     @Test
     fun `блокирующая загрузка отдаёт то же состояние, что и обычная`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitService.create(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 30.0)
         drugService.createPlan(alice.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
@@ -111,7 +111,7 @@ class StoreIntegrationTest {
     @Test
     fun `планы участника собираются по всем препаратам`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitService.create(alice.id)
         val first = dbHelper.freshDrug(kit.id, 50.0)
         val second = dbHelper.freshDrug(kit.id, 50.0)
         drugService.createPlan(alice.id, first.id, qty(5.0))
@@ -128,8 +128,8 @@ class StoreIntegrationTest {
     fun `чужой план не читается по паре участник-препарат`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
+        val kit = medKitService.create(alice.id)
+        medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 50.0)
         drugService.createPlan(alice.id, drug.id, qty(5.0))
         dbHelper.flushAndClear()
@@ -141,7 +141,7 @@ class StoreIntegrationTest {
     @Test
     fun `сумма планов препарата без планов равна нулю`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitService.create(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 50.0)
         dbHelper.flushAndClear()
 
@@ -153,7 +153,7 @@ class StoreIntegrationTest {
     @Test
     fun `аптечка заводится вместе с первым участником`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitService.create(alice.id)
         dbHelper.flushAndClear()
 
         val loaded = medKits.findById(kit.id)!!
@@ -165,19 +165,19 @@ class StoreIntegrationTest {
     fun `аптечки участника перечисляются, чужие в список не попадают`() {
         val alice = dbHelper.freshUser("alice")
         val outsider = dbHelper.freshUser("outsider")
-        val mine = medKitService.createNew(alice.id)
-        medKitService.createNew(outsider.id)
+        val mine = medKitService.create(alice.id)
+        medKitService.create(outsider.id)
         dbHelper.flushAndClear()
 
-        assertEquals(listOf(mine.id), medKits.findAllOfUser(alice.id).map { it.id })
+        assertEquals(listOf(mine.id), medKits.findIdsOfUser(alice.id))
     }
 
     @Test
     fun `счётчики аптечки считаются базой`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
+        val kit = medKitService.create(alice.id)
+        medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
         dbHelper.freshDrug(kit.id, 1.0)
         dbHelper.freshDrug(kit.id, 2.0)
         dbHelper.freshDrug(kit.id, 3.0)
@@ -192,7 +192,7 @@ class StoreIntegrationTest {
     @Test
     fun `удаление аптечки уносит препараты и членство`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitService.create(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
@@ -201,10 +201,48 @@ class StoreIntegrationTest {
 
         assertNull(medKits.findById(kit.id))
         assertNull(drugs.findById(drug.id), "препараты не переживают свою аптечку")
-        assertTrue(medKits.findAllOfUser(alice.id).isEmpty())
+        assertTrue(medKits.findIdsOfUser(alice.id).isEmpty())
     }
 
     // ── Пользователи ─────────────────────────────────────────────────────────────
+
+    @Test
+    fun `снимку отдаются только идентификаторы аптечек`() {
+        val alice = dbHelper.freshUser("alice")
+        val outsider = dbHelper.freshUser("outsider")
+        val mine = medKitService.create(alice.id)
+        medKitService.create(outsider.id)
+        dbHelper.flushAndClear()
+
+        assertEquals(listOf(mine.id), medKits.findIdsOfUser(alice.id))
+    }
+
+    /**
+     * Массовый перенос обязан давать тот же исход, что и поштучный переезд через агрегат:
+     * препараты в целевой аптечке, планы участников без доступа исчезли, остальные целы.
+     */
+    @Test
+    fun `массовый перенос повторяет правило переезда препарата`() {
+        val alice = dbHelper.freshUser("alice")
+        val bob = dbHelper.freshUser("bob")
+        val source = medKitService.create(alice.id)
+        medKitService.joinByInvitation(medKitService.invite(source.id, alice.id), bob.id)
+        val target = medKitService.create(alice.id)
+
+        val first = dbHelper.freshDrug(source.id, 50.0)
+        val second = dbHelper.freshDrug(source.id, 30.0)
+        drugService.createPlan(alice.id, first.id, qty(10.0))
+        drugService.createPlan(bob.id, first.id, qty(20.0))
+        dbHelper.flushAndClear()
+
+        drugs.moveAllToMedKit(source.id, target.id, setOf(alice.id))
+        dbHelper.flushAndClear()
+
+        assertEquals(target.id, dbHelper.requireDrug(first.id).medKitId)
+        assertEquals(target.id, dbHelper.requireDrug(second.id).medKitId)
+        assertQty(10.0, dbHelper.userPlan(alice.id, first.id))
+        assertNull(dbHelper.userPlan(bob.id, first.id), "план без доступа не переезжает")
+    }
 
     @Test
     fun `пользователь читается по идентификатору`() {

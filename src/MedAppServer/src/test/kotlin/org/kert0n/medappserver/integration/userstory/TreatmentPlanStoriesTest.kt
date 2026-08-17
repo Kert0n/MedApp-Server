@@ -59,7 +59,7 @@ class TreatmentPlanStoriesTest {
         val userData = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
         dbHelper.insert(userData)
 
-        val medkit = medKitService.createNew(userData.id)
+        val medkit = medKitService.create(userData.id)
         val drugData = Drug(
             id = UUID.randomUUID(),
             name = "Treatment Drug",
@@ -110,9 +110,9 @@ class TreatmentPlanStoriesTest {
         dbHelper.insert(anna)
         dbHelper.insert(bob)
 
-        val medkit = medKitService.createNew(anna.id)
-        val shareKey = medKitService.generateMedKitShareKey(medkit.id, anna.id)
-        medKitService.joinMedKitByKey(shareKey, bob.id)
+        val medkit = medKitService.create(anna.id)
+        val shareKey = medKitService.invite(medkit.id, anna.id)
+        medKitService.joinByInvitation(shareKey, bob.id)
 
         val vitaminC = Drug(
             id = UUID.randomUUID(),
@@ -158,7 +158,7 @@ class TreatmentPlanStoriesTest {
     fun `Story 8 - Reducing drug quantity adjusts treatment plans proportionally`() {
         val userData = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
         dbHelper.insert(userData)
-        val medkit = medKitService.createNew(userData.id)
+        val medkit = medKitService.create(userData.id)
 
         val drugData = Drug(
             id = UUID.randomUUID(),
@@ -205,7 +205,7 @@ class TreatmentPlanStoriesTest {
     fun `Story 9 - Cannot over-plan drug quantity`() {
         val userData = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
         dbHelper.insert(userData)
-        val medkit = medKitService.createNew(userData.id)
+        val medkit = medKitService.create(userData.id)
 
         val drugData = Drug(
             id = UUID.randomUUID(),
@@ -232,8 +232,8 @@ class TreatmentPlanStoriesTest {
         // Another user tries to plan 25 (only 20 available: 50 - 30 = 20)
         val userData2 = User(id = UUID.randomUUID(), hashedKey = "user2_${UUID.randomUUID()}")
         dbHelper.insert(userData2)
-        val shareKey = medKitService.generateMedKitShareKey(medkit.id, userData.id)
-        medKitService.joinMedKitByKey(shareKey, userData2.id)
+        val shareKey = medKitService.invite(medkit.id, userData.id)
+        medKitService.joinByInvitation(shareKey, userData2.id)
         entityManager.flush()
         entityManager.clear()
         assertFailsWith<PlannedAmountExceedsStock> {
@@ -265,11 +265,11 @@ class TreatmentPlanStoriesTest {
         dbHelper.insert(child)
         entityManager.flush()
 
-        val familyKit = medKitService.createNew(mom.id)
-        val dadKey = medKitService.generateMedKitShareKey(familyKit.id, mom.id)
-        medKitService.joinMedKitByKey(dadKey, dad.id)
-        val childKey = medKitService.generateMedKitShareKey(familyKit.id, mom.id)
-        medKitService.joinMedKitByKey(childKey, child.id)
+        val familyKit = medKitService.create(mom.id)
+        val dadKey = medKitService.invite(familyKit.id, mom.id)
+        medKitService.joinByInvitation(dadKey, dad.id)
+        val childKey = medKitService.invite(familyKit.id, mom.id)
+        medKitService.joinByInvitation(childKey, child.id)
         entityManager.flush()
 
         // Add family medications

@@ -37,7 +37,7 @@ class TreatmentPlanServiceTest {
     @Test
     fun `findAllByUser returns treatment plans for user`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitService.create(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
@@ -50,7 +50,7 @@ class TreatmentPlanServiceTest {
     @Test
     fun `findAllByDrug returns treatment plans for drug`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitService.create(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
@@ -63,7 +63,7 @@ class TreatmentPlanServiceTest {
     @Test
     fun `requirePlan throws NOT_FOUND when no plan exists`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitService.create(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
@@ -75,7 +75,7 @@ class TreatmentPlanServiceTest {
     @Test
     fun `view carries the planned amount`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitService.create(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 

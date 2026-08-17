@@ -34,14 +34,15 @@ class UserController(
     @ApiResponse(responseCode = "200", description = "Snapshot returned", content = [Content(schema = Schema(implementation = UserSnapshotDTO::class))])
     fun getSnapshot(authentication: Authentication): UserSnapshotDTO {
         logger.debug("GET /v1/users/me by user {}", authentication.userId)
-        // Один запрос на все препараты вместо запроса на каждую аптечку: раньше число
-        // обращений к базе росло вместе с числом аптечек пользователя.
+        // Два запроса на весь снимок, сколько бы аптечек у пользователя ни было: препараты
+        // приходят одним, аптечки — вторым. Состав аптечек не запрашивается вовсе, в ответе
+        // его нет.
         val drugsByMedKit = drugService.accessibleTo(authentication.userId).groupBy { it.medKitId }
-        val medKits = medKitService.findAllByUser(authentication.userId)
-            .map { medKit ->
+        val medKits = medKitService.idsOfUser(authentication.userId)
+            .map { medKitId ->
                 MedKitDTO(
-                    id = medKit.id,
-                    drugs = drugsByMedKit[medKit.id].orEmpty().map { it.toDto() }.toSet()
+                    id = medKitId,
+                    drugs = drugsByMedKit[medKitId].orEmpty().map { it.toDto() }.toSet()
                 )
             }
             .toSet()

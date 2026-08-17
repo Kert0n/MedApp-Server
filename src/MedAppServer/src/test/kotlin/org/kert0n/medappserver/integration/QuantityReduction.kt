@@ -57,8 +57,8 @@ class QuantityReductionTests {
     fun `Consuming within slack leaves all plans untouched`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
+        val kit = medKitService.create(alice.id)
+        medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
@@ -90,9 +90,9 @@ class QuantityReductionTests {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
         val charlie = dbHelper.freshUser("charlie")
-        val kit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), charlie.id)
+        val kit = medKitService.create(alice.id)
+        medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
+        medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), charlie.id)
         val drug = dbHelper.freshDrug(kit.id, 90.0)
         dbHelper.flushAndClear()
 
@@ -128,8 +128,8 @@ class QuantityReductionTests {
     fun `Asymmetric plans preserve their ratio after scaling`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
+        val kit = medKitService.create(alice.id)
+        medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
@@ -171,8 +171,8 @@ class QuantityReductionTests {
     fun `Sequential unplanned consumptions compound scaling correctly`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
+        val kit = medKitService.create(alice.id)
+        medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 80.0)
         dbHelper.flushAndClear()
 
@@ -216,8 +216,8 @@ class QuantityReductionTests {
     fun `Partial consumption deep into reserved zone scales correctly`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
+        val kit = medKitService.create(alice.id)
+        medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
@@ -255,9 +255,9 @@ class QuantityReductionTests {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
         val charlie = dbHelper.freshUser("charlie")
-        val kit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), charlie.id)
+        val kit = medKitService.create(alice.id)
+        medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
+        medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), charlie.id)
         val drug = dbHelper.freshDrug(kit.id, 60.0)
         dbHelper.flushAndClear()
 
@@ -298,7 +298,7 @@ class QuantityReductionTests {
     @Test
     fun `Consuming entire stock with single plan deletes drug and plan`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
+        val kit = medKitService.create(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 50.0)
         dbHelper.flushAndClear()
 
@@ -340,8 +340,8 @@ class QuantityReductionTests {
     fun `Two-step reduction to zero cleans up all plans on final step`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.createNew(alice.id)
-        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
+        val kit = medKitService.create(alice.id)
+        medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 

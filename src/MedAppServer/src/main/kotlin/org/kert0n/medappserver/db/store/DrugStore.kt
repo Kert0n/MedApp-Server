@@ -50,7 +50,7 @@ class DrugStore(
     fun findAllAccessibleTo(userId: UUID): List<Drug> =
         drugs.findAllAccessibleWithPlans(userId).map { it.toDomain() }
 
-    fun findById(drugId: UUID): Drug? = drugs.findByIdOrNull(drugId)?.toDomain()
+    fun findById(drugId: UUID): Drug? = drugs.findByIdWithPlans(drugId)?.toDomain()
 
     fun findPlansOf(userId: UUID): List<TreatmentPlan> = plans.findPlansOfUser(userId).map { it.toDomain() }
 
@@ -90,6 +90,18 @@ class DrugStore(
 
     fun deletePlansOfUserInMedKit(userId: UUID, medKitId: UUID) {
         plans.deleteByUserIdAndMedKitId(userId, medKitId)
+    }
+
+    /**
+     * Переносит все препараты аптечки в другую и убирает планы тех, кто её не видит.
+     *
+     * Тот же исход, что дал бы поштучный `Drug.moveTo`, но постоянным числом запросов.
+     * Порядок важен: планы удаляются до переезда, пока препараты ещё привязаны к исходной
+     * аптечке и их можно выбрать одним условием.
+     */
+    fun moveAllToMedKit(sourceMedKitId: UUID, targetMedKitId: UUID, accessibleUserIds: Set<UUID>) {
+        plans.deleteInMedKitExcept(sourceMedKitId, accessibleUserIds)
+        drugs.moveAllToMedKit(sourceMedKitId, resolveMedKit(targetMedKitId))
     }
 
     /** Строка плана несёт единицу своего препарата — из неё и собирается величина. */
