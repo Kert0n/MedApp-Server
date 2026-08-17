@@ -8,8 +8,8 @@ import org.springframework.jdbc.core.JdbcTemplate
 
 /**
  * Каскады проверяются в самой базе, а не только через JPA: bulk-удаление и удаление вне
- * приложения не проходят через persistence context, и без каскада на уровне FK они оставили бы
- * висящие строки планов и членства.
+ * приложения не идут через persistence context, и без каскада на FK оставили бы висящие брони
+ * и членство.
  */
 @PostgresIntegrationTest
 class CascadeSchemaTest {

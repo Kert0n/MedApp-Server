@@ -29,11 +29,8 @@ import org.springframework.web.context.WebApplicationContext
 import tools.jackson.databind.ObjectMapper
 
 /**
- * Error bodies must not describe what failed in terms of the caller's data.
- *
- * Before ApiExceptionHandler the default error body echoed the exception message, and
- * those messages contained drug ids and amounts — with include-message=always switched on
- * in production.
+ * Error bodies must not describe what failed in terms of the caller's data: the default body
+ * echoes the exception message, and those carry package ids and amounts.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -77,9 +74,8 @@ class ErrorResponseShapeTest {
             .andExpect(jsonPath("$.detail").value("Requested resource does not exist"))
             .andReturn().response.contentAsString
 
-        // The `instance` field carries the request URI, so it does contain the id the
-        // caller just sent. That is standard for RFC 9457 and discloses nothing new; what
-        // must not appear is the internal message or exception type.
+        // `instance` carries the request URI, so it repeats the id the caller just sent —
+        // standard for RFC 9457. What must not appear is the message or the exception type.
         assertFalse(body.contains("access denied"), "internal message leaked: $body")
         assertFalse(body.contains("Drug not found"), "internal message leaked: $body")
         assertFalse(body.contains("Exception"), "error body leaked an exception class: $body")
@@ -87,8 +83,8 @@ class ErrorResponseShapeTest {
 
     @Test
     fun `insufficient quantity does not disclose amounts`() {
-        // Пачка на 5 таблеток; просим съесть 500. Бронь больше остатка теперь законна,
-        // поэтому утечку проверяем на том отказе, который остался.
+        // Пачка на 5 таблеток, просим съесть 500: бронь больше остатка законна, так что утечку
+        // проверяем на том отказе, который остался.
         val user = dbHelper.insert(User(hashedKey = "{noop}k"))
         val medKit = medKitService.create(user.id)
         val drug = dbHelper.insert(
@@ -107,10 +103,9 @@ class ErrorResponseShapeTest {
             .andExpect(jsonPath("$.detail").value("Request cannot be processed"))
             .andReturn().response.contentAsString
 
-        // `instance` несёт путь запроса — стандартное поле RFC 9457, и идентификатор пачки в
-        // нём нового не раскрывает. Проверяется всё остальное: в описании отказа не должно
-        // быть ни количеств, ни имени исключения. Раньше эта проверка смотрела на тело
-        // целиком и однажды совпала со случайным UUID, в котором нашлась подстрока «500».
+        // `instance` несёт путь запроса и нового не раскрывает, поэтому вырезан: иначе
+        // проверка ловит подстроку «500» в случайном UUID. В остальном теле не должно быть ни
+        // количеств, ни имени исключения.
         val described = body.replace(Regex("\"instance\":\"[^\"]*\""), "")
         assertFalse(described.contains("500"), "error body leaked the requested amount: $body")
         assertFalse(described.contains("5.0"), "error body leaked the available amount: $body")

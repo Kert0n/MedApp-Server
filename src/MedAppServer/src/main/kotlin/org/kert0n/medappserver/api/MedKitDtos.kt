@@ -28,12 +28,7 @@ data class MedKitCreatedDTO(
     val id: UUID
 )
 
-/**
- * Приглашение возвращается объектом, а не голой строкой.
- *
- * Строка в теле ответа не оставляет места ничему рядом: чтобы позже добавить срок жизни или
- * ссылку, пришлось бы ломать контракт. Объект расширяется добавлением поля.
- */
+/** Объектом, а не голой строкой: срок жизни или ссылку рядом с ней добавить было бы некуда. */
 @Schema(description = "Invitation to join a medicine kit")
 data class InvitationDTO(
     @Schema(description = "Key to join the kit; valid for a limited time and reusable within it")

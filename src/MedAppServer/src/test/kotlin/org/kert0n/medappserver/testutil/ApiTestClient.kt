@@ -4,13 +4,7 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.ResultActions
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 
-/**
- * Пути API в одном месте.
- *
- * Ресурсы ещё переезжают на `/v1`, и без такого списка каждый переезд правил бы по десятку
- * тестовых файлов. Здесь пока только аутентификация — остальные маршруты приедут вместе с
- * ресурсным API.
- */
+/** Пути API в одном месте: пока только аутентификация. */
 object ApiRoutes {
     const val REGISTER = "/v1/auth/register"
     const val TOKEN = "/v1/auth/token"
@@ -37,9 +31,8 @@ object ApiRoutes {
         "/drug", "/drug/quantity/x", "/drug/consume/x", "/drug/move/x",
         "/drug/template/search", "/drug/template/x",
         "/using", "/using/drug/x", "/using/drug/x/intake",
-        // Планы лечения стали бронями, а расход — приёмом упаковки. Отдельный маршрут приёма
-        // с клиентским идентификатором так и не заработал: он отвечал 501 и ушёл вместе с
-        // понятием «приём по плану».
+        // Планы лечения стали бронями, расход — приёмом упаковки, а маршрут приёма с
+        // клиентским идентификатором отвечал 501 и ушёл вместе с «приёмом по плану».
         "/v1/treatment-plans", "/v1/treatment-plans/x",
         "/v1/drugs/x/consumptions", "/v1/intakes/x",
         "/med-kit", "/med-kit/x", "/med-kit/join", "/med-kit/x/share", "/med-kit/x/leave"

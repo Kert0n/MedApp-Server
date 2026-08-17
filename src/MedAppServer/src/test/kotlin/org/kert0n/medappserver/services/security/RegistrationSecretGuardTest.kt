@@ -10,10 +10,9 @@ import org.springframework.mock.env.MockEnvironment
 /**
  * Прод не должен подниматься с секретом-заглушкой из git.
  *
- * Образ стартует с `SPRING_PROFILES_ACTIVE=mock-prod,prod`, а `mock-prod` лежит в
- * репозитории вместе со своим ненастоящим `registration.secret`. Проверка только на пустоту
- * пропускала забытый файл продовых секретов: сервер работал с общеизвестным значением и
- * молчал об этом.
+ * Образ стартует с `SPRING_PROFILES_ACTIVE=mock-prod,prod`, а `mock-prod` лежит в репозитории со
+ * своим ненастоящим `registration.secret`: проверки на пустоту не хватает — забытый файл
+ * продовых секретов дал бы общеизвестное значение и молчание.
  *
  * Конструктор проверяется напрямую: поднимать контекст ради `require` в `init` незачем.
  */
@@ -58,9 +57,8 @@ class RegistrationSecretGuardTest {
 
     @Test
     fun `литерал заглушки совпадает с application-mock-prod properties`() {
-        // Значение продублировано в коде и в properties. Дубль осознанный — читать
-        // properties в init нечем, — но он обязан быть проверяемым: без этого теста правка
-        // properties тихо обезоружила бы защиту, и никто бы не заметил.
+        // Значение продублировано в коде и в properties: читать properties в init нечем.
+        // Без этого теста правка properties тихо обезоружила бы защиту.
         val properties = Files.readString(Path.of("src/main/resources/application-mock-prod.properties"))
         assertTrue(
             properties.contains("registration.secret=$mockProdSecret"),

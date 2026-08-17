@@ -23,8 +23,8 @@ import org.springframework.web.server.ResponseStatusException
 @RequestMapping("/v1/auth")
 @Tag(name = "Authentication", description = "Public endpoints for registration and token issuance")
 class AuthController(
-    // Проверки секрета живут в самом RegistrationSecret: секрет-заглушка в проде должен
-    // ронять старт независимо от того, кто его читает.
+    // Проверки секрета — в самом RegistrationSecret: заглушка в проде должна ронять старт
+    // независимо от того, кто её читает.
     private val registrationSecret: RegistrationSecret,
     private val userService: UserService,
     private val securityService: SecurityService
@@ -49,15 +49,13 @@ class AuthController(
         @Parameter(description = "Shared registration secret", required = true, example = "dev-secret")
         @RequestHeader("X-Registration-Token") token: String
     ): RegisterResponse {
-        // Validate the shared secret first to avoid exposing rate-limit status to unauthorized callers.
-        // Constant-time: `!=` stops at the first differing character, so response time would
-        // reveal how long a correct prefix was.
+        // Secret first, so rate-limit status is not exposed to unauthorized callers. Constant
+        // time: `!=` stops at the first differing character and timing would leak the prefix.
         if (!securityService.secretsMatch(token, registrationSecret.value)) {
             throw ResponseStatusException(HttpStatus.FORBIDDEN, "Invalid secret")
         }
-        // Rate limit registration by IP address to reduce abuse without storing user PII.
-        // 429, а не 504: превышен лимит вызывающего, а не истёк срок ответа вышестоящего
-        // сервиса — 504 отправлял бы клиента чинить не ту проблему.
+        // Rate limit by IP to reduce abuse without storing PII. 429, а не 504: превышен лимит
+        // вызывающего, а не истёк срок вышестоящего сервиса.
         if (!securityService.validateRequest(request.remoteAddr)) {
             throw ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "Too many registration request")
         }
@@ -70,12 +68,8 @@ class AuthController(
     /**
      * Только сам токен.
      *
-     * Срока жизни здесь нет: он уже лежит в claim `exp` внутри возвращаемого JWT, и
-     * дублировать его в обёртке значит держать два источника одного факта. Клиенту,
-     * которому срок нужен, достаточно разобрать токен; остальным хватает 401 на протухшем.
-     *
-     * Схему (`Bearer`) тоже не передаём: она одна, зафиксирована в OpenAPI и никогда не
-     * меняется от ответа к ответу.
+     * Срок жизни уже в claim `exp`, дублировать его в обёртке — два источника одного факта.
+     * Схема (`Bearer`) одна и зафиксирована в OpenAPI, от ответа к ответу не меняется.
      */
     @Schema(description = "Issued access token")
     data class TokenResponse(
@@ -84,9 +78,8 @@ class AuthController(
     )
 
     /**
-     * POST, а не GET: выдача токена меняет состояние — она расходует лимит попыток и
-     * создаёт новый токен, — а GET разрешено повторять и кешировать. Раньше учётные данные
-     * уходили Basic-заголовком на кешируемый запрос.
+     * POST, а не GET: выдача расходует лимит попыток и создаёт токен, а GET разрешено повторять
+     * и кешировать — вместе с уходящим в нём Basic-заголовком.
      */
     @PostMapping("/token")
     @Operation(security = [SecurityRequirement(name = OpenApiConfiguration.BASIC_SCHEME)])

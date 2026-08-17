@@ -23,12 +23,9 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
 
 /**
- * Pins down which endpoints are reachable without a token, and that HTTP Basic is
- * confined to token issuance.
- *
- * Both used to be too wide: the whole actuator and auth path prefixes were open, and
- * Basic applied to every endpoint — so the long-lived registration key could be replayed
- * on any request and the 10 minute token lifetime was decorative.
+ * Pins down which endpoints are reachable without a token, and that HTTP Basic is confined to
+ * token issuance — otherwise the long-lived registration key is replayable on any request and
+ * the token lifetime is decorative.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -58,10 +55,9 @@ class PublicEndpointScopeTest {
     }
 
     /**
-     * Документация должна открываться без токена — и по тому адресу, который открыт в
-     * конфигурации безопасности. Раньше `/swagger` был разрешён, но ни на что не отображён:
-     * security пропускала запрос, а дальше он упирался в отсутствие обработчика и отвечал
-     * 404 со стектрейсом Whitelabel-страницы.
+     * Документация открывается без токена — и по тому адресу, который открыт в конфигурации
+     * безопасности: разрешённый, но ни на что не отображённый путь отвечал бы 404 с
+     * Whitelabel-страницей.
      */
     @Test
     fun `документация доступна без токена`() {
@@ -71,8 +67,8 @@ class PublicEndpointScopeTest {
 
     @Test
     fun `other actuator endpoints require authentication`() {
-        // Not exposed over HTTP by default either, so 401 rather than 404 is what we
-        // want: the guard must not depend on the exposure setting.
+        // Not exposed over HTTP by default either, so 401 rather than 404: the guard must not
+        // depend on the exposure setting.
         mockMvc.perform(get("/actuator/env")).andExpect(status().isUnauthorized)
         mockMvc.perform(get("/actuator/beans")).andExpect(status().isUnauthorized)
     }

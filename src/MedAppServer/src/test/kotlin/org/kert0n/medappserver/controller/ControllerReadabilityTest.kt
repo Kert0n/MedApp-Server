@@ -8,14 +8,11 @@ import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
 
 /**
- * Контроллеры остаются читаемыми.
+ * Контроллеры остаются читаемыми: тексты живут в `OPERATION_TEXTS`, а не в `@Operation`, и
+ * `@ApiResponse` повторяется вместо обёртки `@ApiResponses`.
  *
- * Аннотации OpenAPI занимали треть их исходника: между `@Operation` и списком ответов
- * терялся сам метод, и ревьюить такой файл было нечем. Тексты уехали в `OPERATION_TEXTS`,
- * а обёртка `@ApiResponses` заменена повторяемым `@ApiResponse`.
- *
- * Тест сторожит именно это: без него следующий эндпойнт легко вернёт всё как было, и через
- * несколько PR файл снова станет нечитаемым.
+ * Без этого теста следующий эндпойнт вернёт аннотации на треть исходника, и через несколько PR
+ * файл снова станет нечитаемым.
  */
 class ControllerReadabilityTest {
 
@@ -52,8 +49,7 @@ class ControllerReadabilityTest {
 
     @Test
     fun `у каждой операции есть текст`() {
-        // Дубль проверки, которую делает OperationTextCustomizer на старте: здесь она даёт
-        // внятное падение до подъёма контекста.
+        // То же, что проверяет OperationTextCustomizer на старте, но с внятным падением.
         val declared = controllers.flatMap { file ->
             Regex("\\n    fun (\\w+)\\(").findAll(Files.readString(file)).map { it.groupValues[1] }
         }.toSet()

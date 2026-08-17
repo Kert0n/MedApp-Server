@@ -16,10 +16,8 @@ import org.springframework.transaction.annotation.Transactional
 /**
  * Единственный вход к агрегату упаковки.
  *
- * Каждая команда устроена одинаково: взять состояние под блокировкой, вызвать метод домена,
- * отдать результат хранилищу. Правил здесь нет — они в `domain.Drug`; строк и запросов тоже
- * нет — они за `DrugStore`. Броней здесь нет вовсе: ими распоряжается их владелец через
- * `ReservationService`.
+ * Команды однотипны: взять состояние под блокировкой, вызвать метод домена, отдать результат
+ * хранилищу. Правила — в `domain.Drug`, запросы — за `DrugStore`, брони — в своём агрегате.
  */
 @Service
 class DrugService(
@@ -31,14 +29,14 @@ class DrugService(
 
     // ── Чтение ───────────────────────────────────────────────────────────────────
 
-    /** Препарат или `null`, если его нет или он недоступен вызывающему. */
+    /** `null`, если упаковки нет или она недоступна вызывающему. */
     @Transactional(readOnly = true)
     fun find(drugId: UUID, userId: UUID): Drug? {
         logger.debug("Reading drug {} for user {}", drugId, userId)
         return drugs.findAccessible(drugId, userId)
     }
 
-    /** Препарат или 404. */
+    /** Упаковка или 404. */
     @Transactional(readOnly = true)
     fun require(drugId: UUID, userId: UUID): Drug = find(drugId, userId) ?: throw notFound()
 
@@ -48,17 +46,14 @@ class DrugService(
         return drugs.findAllInMedKit(medKitId)
     }
 
-    /** Препараты всех аптечек участника — одним запросом, для снимка. */
+    /** Упаковки всех аптечек участника — одним запросом. */
     @Transactional(readOnly = true)
     fun accessibleTo(userId: UUID): List<Drug> {
         logger.debug("Reading all drugs available to user {}", userId)
         return drugs.findAllAccessibleTo(userId)
     }
 
-    /**
-     * Недоступный препарат и несуществующий отвечают одинаково: иначе по коду ответа можно
-     * было бы узнать, что такой препарат существует в чужой аптечке.
-     */
+    /** Недоступная и несуществующая упаковка отвечают одинаково: иначе чужая обнаружится. */
     private fun notFound() = NotAMember()
 
     private fun lock(drugId: UUID, userId: UUID): Drug =
@@ -119,9 +114,8 @@ class DrugService(
     /**
      * Списывает съеденное.
      *
-     * `null` означает «упаковка кончилась и уничтожена этим списанием», а не «не найдена»:
-     * недоступная упаковка отвергается 404 ещё до списания. Различия «приём по плану» и
-     * «расход вне плана» больше нет: съеденное уменьшает пачку, и всё.
+     * `null` — «пачка кончилась и уничтожена», а не «не найдена»: недоступная отвергается 404
+     * ещё до списания.
      */
     @Transactional
     fun consume(drugId: UUID, quantity: BigDecimal, userId: UUID): Drug? {
@@ -137,12 +131,7 @@ class DrugService(
         return left
     }
 
-    /**
-     * Переезд упаковки в другую аптечку.
-     *
-     * Судьба броней решается не здесь: они в чужом агрегате, и убрать те, что потеряли доступ,
-     * — работа межагрегатного сценария.
-     */
+    /** Брони, потерявшие доступ, убирает межагрегатный сценарий: они в чужом агрегате. */
     @Transactional
     fun moveTo(drugId: UUID, targetMedKitId: UUID, userId: UUID): Drug {
         logger.debug("Moving drug {} to medkit {}", drugId, targetMedKitId)

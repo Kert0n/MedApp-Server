@@ -11,17 +11,16 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
 
 /**
- * The registration limit keys on the client address, so behind a reverse proxy it is
- * only meaningful when X-Forwarded-For is honoured: otherwise every client shares the
- * proxy's address and therefore one global counter.
+ * The registration limit keys on the client address, so behind a reverse proxy it only means
+ * anything when X-Forwarded-For is honoured — otherwise every client shares the proxy's address
+ * and one global counter.
  *
- * Goes through real HTTP on purpose. MockMvc bypasses the servlet container, and with
- * forward-headers-strategy=native the rewriting is done by Tomcat's RemoteIpValve, so
- * a MockMvc test would pass while production stayed broken.
+ * Real HTTP on purpose: with forward-headers-strategy=native the rewriting is Tomcat's
+ * RemoteIpValve, which MockMvc bypasses, so a MockMvc test would pass over a broken production.
  *
- * The test profile sets registration.timeout.BanNumber=1 and validateRequest compares
- * with <=, so two registrations per address succeed and the third is rejected. That
- * off-by-one is accepted behaviour, see SecurityService.validateRequest.
+ * The test profile sets BanNumber=1 and `validateRequest` compares with `<=`, so two
+ * registrations per address succeed and the third is rejected — accepted off-by-one, see
+ * SecurityService.validateRequest.
  */
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,

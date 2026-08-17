@@ -60,8 +60,7 @@ class MedKitController(
     /**
      * Приглашение — подчинённый ресурс аптечки, а не действие «share» над ней.
      *
-     * Ключ живёт ограниченное время и в течение него принимается многократно: это
-     * приглашение, а не одноразовый токен.
+     * Ключ живёт ограниченное время и принимается многократно: приглашение, не одноразовый токен.
      */
     @PostMapping("/{medKitId}/invitations")
     @ResponseStatus(HttpStatus.CREATED)
@@ -90,12 +89,7 @@ class MedKitController(
     }
 }
 
-/**
- * Членство — собственный ресурс, а не действие над аптечкой.
- *
- * Раньше это были `POST /med-kit/join` и `DELETE /med-kit/{id}/leave`: два глагола вместо
- * создания и удаления одной и той же связи.
- */
+/** Членство — собственный ресурс: вход и выход это создание и удаление одной и той же связи. */
 @RestController
 @RequestMapping("/v1/med-kit-memberships")
 @Tag(name = "Medicine kit memberships", description = "Participation of the caller in shared kits")

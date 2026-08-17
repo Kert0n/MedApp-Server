@@ -14,10 +14,9 @@ import org.springframework.web.server.ResponseStatusException
 /**
  * Single place where failures become responses.
  *
- * Without it the default error body echoed the exception message, and those messages
- * carry drug identifiers and quantities ("Available: 3.0, Requested: 5.0"). That is
- * exactly the kind of detail this server is built not to hand out, and it was switched on
- * in production. The status code stays informative; the body does not.
+ * The default body echoes the exception message, and those carry package identifiers and
+ * quantities — exactly what this server is built not to hand out. The status code stays
+ * informative; the body does not.
  */
 @RestControllerAdvice
 class ApiExceptionHandler {
@@ -27,19 +26,18 @@ class ApiExceptionHandler {
         problem(HttpStatus.valueOf(exception.statusCode.value()))
 
     /**
-     * Нарушенное правило агрегата. Здесь и только здесь оно превращается в код ответа —
-     * сама модель про HTTP не знает, иначе её нельзя было бы проверить без веб-слоя.
+     * Нарушенное правило агрегата. Здесь и только здесь оно превращается в код ответа — сама
+     * модель про HTTP не знает, иначе её нельзя было бы проверить без веб-слоя.
      *
-     * Отсутствие плана — 404, потому что клиент обратился к ресурсу, которого нет. Второй
-     * план того же пользователя — 409: ресурс уже существует, и его надо менять, а не
-     * создавать заново. Остальное — 400: запрос сам по себе противоречив.
+     * Отсутствие брони — 404: ресурса нет. Вторая бронь того же человека на ту же пачку — 409:
+     * ресурс есть, его надо менять. Остальное — 400: запрос сам по себе противоречив.
      */
     @ExceptionHandler(DomainRuleViolated::class)
     fun handleDomainRule(exception: DomainRuleViolated): ProblemDetail = problem(
         when (exception) {
             is NoSuchReservation -> HttpStatus.NOT_FOUND
-            // Недоступная аптечка и несуществующая отвечают одинаково: иначе по коду ответа
-            // можно было бы узнать, что чужая аптечка существует.
+            // Недоступная аптечка и несуществующая отвечают одинаково: иначе код ответа
+            // выдавал бы существование чужой.
             is NotAMember -> HttpStatus.NOT_FOUND
             is ReservationAlreadyExists -> HttpStatus.CONFLICT
             else -> HttpStatus.BAD_REQUEST

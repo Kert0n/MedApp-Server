@@ -18,9 +18,8 @@ data class DrugDTO(
     /**
      * Сколько на эту пачку заявлено бронями.
      *
-     * Справка, а не ограничение: заявленное может превышать остаток, и это нормальное
-     * состояние — чью бронь ужать, решает её владелец, а не сервер. «Доступного остатка» как
-     * понятия больше нет, поэтому и поля такого нет.
+     * Справка, а не ограничение: заявленное может превышать остаток, и чью бронь ужать, решает
+     * её владелец, а не сервер.
      */
     @Schema(description = "Sum of all reservations on this package; may exceed the stock", example = "40.000000")
     val reservedQuantity: BigDecimal,
@@ -131,8 +130,7 @@ data class DrugTemplateDTO(
     val id: UUID,
     @Schema(description = "Drug name", example = "Аспирин")
     val name: String,
-    // Латинское название и действующее вещество — поля, по которым идёт поиск. Без них
-    // выдача не объясняет, почему запись нашлась.
+    // Поля, по которым идёт поиск: без них выдача не объясняет, почему запись нашлась.
     @Schema(description = "International name in Latin script", example = "Aspirin")
     val nameLat: String?,
     @Schema(description = "Active substance", example = "Acetylsalicylic acid")
@@ -158,8 +156,7 @@ data class DrugTemplateDTO(
 /**
  * Запись общего словаря — единица измерения или форма выпуска.
  *
- * Клиент выбирает из списка и присылает идентификатор: имя у одной и той же единицы должно
- * быть одно на всю систему, а не столько, сколько её написали руками.
+ * Клиент выбирает из списка и присылает идентификатор: имя у единицы одно на всю систему.
  */
 @Schema(description = "Shared vocabulary entry")
 data class VocabularyEntryDTO(

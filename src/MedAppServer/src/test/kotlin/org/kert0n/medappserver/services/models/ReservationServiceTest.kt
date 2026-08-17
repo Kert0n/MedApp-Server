@@ -13,13 +13,7 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.transaction.annotation.Transactional
 
-/**
- * Здесь остались только чтения планов.
- *
- * Создание, изменение, удаление и приём переехали в агрегат `Drug` и проверяются в
- * [DrugServiceTest]: у них общий инвариант — сумма планов не больше остатка, — и врозь он
- * не формулируется.
- */
+/** Чтения броней: своих, по упаковке и с 404 на отсутствующей. */
 @SpringBootTest
 @ActiveProfiles("test")
 @Transactional

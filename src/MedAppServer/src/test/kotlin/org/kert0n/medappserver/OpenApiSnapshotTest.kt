@@ -19,20 +19,17 @@ import org.springframework.web.context.WebApplicationContext
 /**
  * Keeps the committed API contract honest.
  *
- * open-api.yaml exists so the contract can be read without starting Spring or digging
- * through annotations. It was maintained by hand and had already drifted, which defeats the
- * point: a snapshot you cannot trust is worse than no snapshot. Now it is generated, and any
- * drift fails the build.
- *
- * Side effect worth having: every commit that changes the contract carries the regenerated
- * file, so an API change is visible in the diff of a pull request without reading code.
+ * open-api.yaml exists so the contract can be read without starting Spring or digging through
+ * annotations, and it is generated rather than hand-written: a snapshot you cannot trust is
+ * worse than none. Any drift fails the build, and every contract change carries the regenerated
+ * file into the diff.
  *
  * To regenerate after an intentional change:
  *
  *     ./gradlew test -DupdateOpenApi=true
  *
- * Always goes through MockMvc, which is what makes the `servers` entry deterministic — a
- * real server would put its randomly assigned port in there.
+ * Always through MockMvc — that is what makes the `servers` entry deterministic, where a real
+ * server would put its randomly assigned port.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -52,9 +49,8 @@ class OpenApiSnapshotTest {
 
     @Test
     fun `committed contract matches the generated one`() {
-        // Bytes decoded as UTF-8 explicitly: springdoc does not declare a charset on this
-        // response, so MockHttpServletResponse.contentAsString would fall back to
-        // ISO-8859-1 and mangle every non-ASCII character in the descriptions.
+        // UTF-8 explicitly: springdoc declares no charset here, and contentAsString would fall
+        // back to ISO-8859-1 and mangle every non-ASCII character in the descriptions.
         val generated = mockMvc.perform(get("/v3/api-docs.yaml"))
             .andExpect(status().isOk)
             .andReturn().response.contentAsByteArray

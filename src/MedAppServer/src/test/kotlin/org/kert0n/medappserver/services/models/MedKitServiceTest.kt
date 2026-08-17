@@ -84,8 +84,7 @@ class MedKitServiceTest {
         medKitService.create(alice.id)
         dbHelper.flushAndClear()
 
-        // Аптечка приходит агрегатом, поэтому счётчик участников получается из неё самой —
-        // отдельного запроса и отдельного типа под счётчики для этого не нужно.
+        // Аптечка приходит агрегатом: счётчик участников получается из неё самой.
         val mine = medKitService.allOfUser(alice.id).single()
         assertEquals(setOf(alice.id), mine.members)
     }

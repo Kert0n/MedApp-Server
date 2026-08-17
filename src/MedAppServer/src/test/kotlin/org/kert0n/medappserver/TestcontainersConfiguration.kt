@@ -12,15 +12,12 @@ class TestcontainersConfiguration {
     @Bean
     @ServiceConnection
     fun postgresContainer(): PostgreSQLContainer {
-        // Версия пришпилена и совпадает с продовой из compose. Было postgres:latest — то
-        // есть тесты молча меняли СУБД под собой при каждом обновлении образа, и разница с
-        // продом обнаруживалась бы уже в проде.
+        // Версия пришпилена и совпадает с продовой из compose: с `latest` тесты молча меняли
+        // бы СУБД под собой при каждом обновлении образа.
         return PostgreSQLContainer(DockerImageName.parse("postgres:18.3-trixie"))
             .withInitScript("init-pg-trgm.sql")
-            // Локаль та же, что в compose: pg_trgm определяет «буквенность» символа через
-            // LC_CTYPE, и в локали C кириллица буквой не считается — триграммы из русского
-            // текста не извлекаются вовсе. Унаследовать локаль от образа значит проверять
-            // не ту конфигурацию, что в проде.
+            // Локаль та же, что в compose: pg_trgm смотрит на LC_CTYPE, и в локали C кириллица
+            // буквой не считается — триграммы из русского текста не извлекаются вовсе.
             .withEnv("POSTGRES_INITDB_ARGS", "--encoding=UTF8 --lc-ctype=en_US.utf8 --lc-collate=en_US.utf8")
     }
 

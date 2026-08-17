@@ -52,11 +52,7 @@ class TreatmentPlanStoriesTest {
     private lateinit var medKitDrugOrchestrator: MedKitDrugOrchestrator
 
 
-    /**
-     * Story 6: Complex workflow with treatment plans
-     * 
-     * Validates: Treatment plan creation, intake recording, planned quantity tracking
-     */
+    /** Story 6: reserve a share, then take from the pack. */
     @Test
     fun `Story 6 - User creates treatment plan and records intakes`() {
         val userData = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
@@ -76,12 +72,12 @@ class TreatmentPlanStoriesTest {
         dbHelper.insert(drugData)
         entityManager.flush()
 
-        // Create treatment plan for 30 tablets
+        // Reserve 30 tablets
         val plan = reservationService.create(userId = userData.id, drugData.id, qty(30.0))
         assertNotNull(plan)
         entityManager.flush()
 
-        // Verify plan was created
+        // Verify the reservation was created
         val createdPlan = dbHelper.userReservation(userData.id, drugData.id)
         assertNotNull(createdPlan, "Plan should be created")
         assertQty(30.0, createdPlan, "Planned amount should be 30")
@@ -100,11 +96,7 @@ class TreatmentPlanStoriesTest {
         println("✅ Story 6 passed: Treatment plan and intakes work correctly")
     }
 
-    /**
-     * Story 7: Multiple users share a medkit and create separate treatment plans for the same drug
-     * 
-     * Validates: Multi-user treatment plans, planned quantity accounting, fair sharing
-     */
+    /** Story 7: several people reserve shares of the same pack, each their own. */
     @Test
     fun `Story 7 - Multiple users create treatment plans on shared drug`() {
         // Setup: Anna and Bob share a medkit with 100 tablets of Vitamin C
@@ -130,18 +122,18 @@ class TreatmentPlanStoriesTest {
         dbHelper.insert(vitaminC)
         entityManager.flush()
 
-        // Anna creates a treatment plan for 40 tablets
+        // Anna reserves 40 tablets
         reservationService.create(anna.id, vitaminC.id, qty(40.0))
         entityManager.flush()
 
-        // Bob creates a treatment plan for 50 tablets (should succeed: 100 - 40 = 60 available)
+        // Bob reserves 50 more
         reservationService.create(bob.id, vitaminC.id, qty(50.0))
         entityManager.flush()
         entityManager.clear()
-        // Total planned = 90, should match sumPlannedAmount
+        // 90 reserved on the pack in total
         assertQty(90.0, dbHelper.reservedOnDrug(vitaminC.id), "Total planned should be 90")
 
-        // Verify each user has their own plan
+        // Each has their own reservation
         val annaPlan = dbHelper.userReservation(anna.id, vitaminC.id)
         val bobPlan = dbHelper.userReservation(bob.id, vitaminC.id)
         assertNotNull(annaPlan)
@@ -156,7 +148,7 @@ class TreatmentPlanStoriesTest {
 
     /**
      * Story 10: Complete family medkit lifecycle
-     * 
+     *
      * Validates: Full end-to-end workflow from creation to cleanup
      */
     @Test
@@ -194,13 +186,13 @@ class TreatmentPlanStoriesTest {
         dbHelper.insert(vitamins)
         entityManager.flush()
 
-        // Everyone gets treatment plans for vitamins: 30 each
+        // Everyone reserves 30 vitamins
         reservationService.create(mom.id, vitamins.id, qty(30.0))
         reservationService.create(dad.id, vitamins.id, qty(30.0))
         reservationService.create(child.id, vitamins.id, qty(30.0))
         entityManager.flush()
         entityManager.clear()
-        // Total planned = 90 (full supply)
+        // 90 reserved — the whole pack
         assertQty(90.0, dbHelper.reservedOnDrug(vitamins.id))
 
         // Everyone takes their daily vitamin

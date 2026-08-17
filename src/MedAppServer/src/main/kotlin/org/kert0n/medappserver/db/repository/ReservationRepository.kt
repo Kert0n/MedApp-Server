@@ -11,10 +11,8 @@ import org.springframework.data.repository.query.Param
 /**
  * Строки броней.
  *
- * Каждое чтение забирает упаковку и её единицу измерения соединением, и это не оптимизация, а
- * необходимость: величина брони измеряется в единице своей пачки, и без неё бронь не собрать.
- * `EAGER`-связь сама по себе этого не даёт — HQL догружал бы упаковку отдельным запросом на
- * каждую строку.
+ * Упаковка и её единица забираются соединением: величина брони измеряется в единице своей пачки,
+ * и без неё бронь не собрать. `EAGER` тут не помог бы — HQL догружал бы пачку на каждую строку.
  */
 interface ReservationRepository : JpaRepository<ReservationData, ReservationKey> {
 
@@ -39,7 +37,6 @@ interface ReservationRepository : JpaRepository<ReservationData, ReservationKey>
     )
     fun findOne(@Param("userId") userId: UUID, @Param("drugId") drugId: UUID): ReservationData?
 
-    /** Все брони на перечисленные упаковки — чтобы показать, сколько на пачку заявлено. */
     @Query(
         """
         SELECT r FROM ReservationData r
@@ -50,23 +47,14 @@ interface ReservationRepository : JpaRepository<ReservationData, ReservationKey>
     )
     fun findAllOfDrugs(@Param("drugIds") drugIds: Collection<UUID>): List<ReservationData>
 
-    /**
-     * Брони участника во всех упаковках аптечки — путь выхода из неё.
-     *
-     * Через агрегаты этого не сделать: выход касается всех пачек аптечки сразу, и загружать
-     * каждую ради одного удаления незачем.
-     */
+    /** Выход из аптечки: пачек в ней много, поднимать каждую ради одной строки незачем. */
     @Modifying
     @Query(
         "DELETE FROM ReservationData r WHERE r.reservationKey.userId = :userId AND r.drugData.medKit.id = :medKitId"
     )
     fun deleteOfUserInMedKit(@Param("userId") userId: UUID, @Param("medKitId") medKitId: UUID)
 
-    /**
-     * Брони всех, кто к аптечке доступа не имеет, — одним запросом.
-     *
-     * Пара к массовому переезду упаковок: бронь не переживает утрату доступа к пачке.
-     */
+    /** Пара к массовому переезду упаковок: бронь не переживает утрату доступа к пачке. */
     @Modifying
     @Query(
         """
@@ -80,11 +68,10 @@ interface ReservationRepository : JpaRepository<ReservationData, ReservationKey>
     )
 
     /**
-     * Все брони упаковки — когда пачку уничтожают.
+     * Все брони уничтожаемой пачки.
      *
-     * Внешний ключ с каскадом уносит их и сам, но Hibernate об этом не знает: уже загруженные
-     * строки остались бы ссылаться на удалённую пачку и уронили бы ближайший flush. Это
-     * persistence-половина того же правила, а не решение агрегата.
+     * Каскад внешнего ключа сделал бы то же, но Hibernate о нём не знает: загруженные строки
+     * остались бы ссылаться на удалённую пачку и уронили бы ближайший flush.
      */
     @Modifying(clearAutomatically = true)
     @Query("DELETE FROM ReservationData r WHERE r.reservationKey.drugId = :drugId")

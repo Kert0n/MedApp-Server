@@ -54,8 +54,8 @@ class LoginThrottleTest {
         mockMvc = MockMvcBuilders.webAppContextSetup(context)
             .apply<DefaultMockMvcBuilder>(SecurityMockMvcConfigurers.springSecurity())
             .build()
-        // The cache is a context-wide singleton and MockMvc always reports the same client
-        // address, so without this the second test would start already throttled.
+        // The cache is a context-wide singleton and MockMvc always reports the same address,
+        // so without this the next test starts already throttled.
         loginAttemptsCache.invalidateAll()
     }
 
@@ -82,8 +82,7 @@ class LoginThrottleTest {
         val user = User(id = userId, hashedKey = "{noop}password")
         whenever(authenticatedUserService.loadUserByUsername(userId.toString())).thenReturn(user)
 
-        // Burn the quota with requests carrying no credentials: the filter counts attempts
-        // before Basic runs, so these consume the allowance too.
+        // No credentials at all: the filter counts before Basic runs, so these burn quota too.
         repeat(3) {
             mockMvc.perform(post(ApiRoutes.TOKEN)).andExpect(status().isUnauthorized)
         }
@@ -91,8 +90,7 @@ class LoginThrottleTest {
         mockMvc.perform(post(ApiRoutes.TOKEN).with(httpBasic(userId.toString(), "password")))
             .andExpect(status().isTooManyRequests)
 
-        // The decisive assertion: the user lookup, and therefore the bcrypt comparison
-        // that follows it, was never invoked.
+        // The decisive assertion: the user lookup — and the bcrypt after it — never ran.
         verify(authenticatedUserService, never()).loadUserByUsername(userId.toString())
     }
 }

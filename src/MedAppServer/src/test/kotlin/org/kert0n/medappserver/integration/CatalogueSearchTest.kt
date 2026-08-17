@@ -16,13 +16,11 @@ import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.support.TransactionTemplate
 
 /**
- * Integration tests for DrugTemplateData fuzzy search.
+ * Fuzzy search over the catalogue.
  *
- * NOTE: This test class deliberately does NOT use @Transactional on the class level.
- * This ensures we catch LazyInitializationException bugs that occur in production
- * when `spring.jpa.open-in-view=false` (the session closes after the repository call).
- * Using @Transactional on tests keeps the Hibernate session open for the entire test,
- * hiding lazy loading bugs that only manifest at runtime.
+ * Deliberately without class-level `@Transactional`: it would keep the Hibernate session open
+ * for the whole test and hide the LazyInitializationException that `open-in-view=false` gives
+ * in production, where the session closes after the repository call.
  */
 @PostgresIntegrationTest
 class CatalogueSearchTest {
@@ -183,9 +181,8 @@ class CatalogueSearchTest {
 
     // ── Поиск не только по названию ────────────────────────────────────────────────
     //
-    // Раньше искали исключительно по name: препарат нельзя было найти ни по действующему
-    // веществу, ни по латинскому написанию, ни по производителю — то есть ровно теми
-    // способами, которыми его обычно и ищут.
+    // Действующее вещество, латинское написание и производитель — то, чем препарат обычно и
+    // ищут.
 
     @Test
     fun `находит по латинскому названию`() {

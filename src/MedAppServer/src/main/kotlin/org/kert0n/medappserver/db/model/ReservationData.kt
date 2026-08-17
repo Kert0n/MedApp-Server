@@ -9,16 +9,14 @@ import org.kert0n.medappserver.domain.QUANTITY_PRECISION
 import org.kert0n.medappserver.domain.QUANTITY_SCALE
 
 /**
- * Отображение брони на таблицу `reservations`. Правил здесь нет.
+ * Отображение брони на `reservations`. Правил здесь нет.
  *
- * Ссылки на пользователя и упаковку остаются `@ManyToOne`: это работа ORM — держать внешние
- * ключи и их каскады, и по ним же Hibernate строит схему для тестов. Домен при этом ссылается
- * на упаковку идентификатором, потому что для него это другой агрегат; разное представление
- * одной и той же связи в двух слоях — не противоречие, а разделение обязанностей.
+ * Ссылки `@ManyToOne` — работа ORM: держать внешние ключи и каскады, по ним же Hibernate
+ * строит схему для тестов. Домен ссылается на упаковку идентификатором, потому что для него
+ * это другой агрегат.
  *
- * Обратной коллекции в `DrugData` нет намеренно: упаковка бронями не владеет. Поэтому здесь
- * нет ни каскада со стороны JPA, ни `orphanRemoval` — исчезновение брони вслед за пачкой
- * держит внешний ключ.
+ * Обратной коллекции в `DrugData` нет, JPA-каскада и `orphanRemoval` тоже: упаковка бронями
+ * не владеет, а их исчезновение вслед за ней держит внешний ключ.
  */
 @Entity
 @Table(
@@ -35,8 +33,7 @@ class ReservationData(
 
     @ManyToOne(fetch = FetchType.EAGER)
     @MapsId("userId")
-    // Имя задано явно, чтобы схема Hibernate и db/schema.sql совпадали и по именам ключей.
-    // Каскада здесь намеренно нет: бронь не удаляется вслед за пользователем.
+    // Каскада здесь нет: бронь не удаляется вслед за пользователем.
     @JoinColumn(name = "user_id", foreignKey = ForeignKey(name = "reservations_user_fkey"))
     var userData: UserData,
 
@@ -44,8 +41,7 @@ class ReservationData(
     @MapsId("drugId")
     @JoinColumn(
         name = "drug_id",
-        // Как и у Drug.medKit: явное определение держит схему Hibernate и db/schema.sql в
-        // одном каскадном контракте.
+        // Явное определение держит схему Hibernate и db/schema.sql в одном каскадном контракте.
         foreignKey = ForeignKey(
             name = "reservations_drug_fkey",
             foreignKeyDefinition =

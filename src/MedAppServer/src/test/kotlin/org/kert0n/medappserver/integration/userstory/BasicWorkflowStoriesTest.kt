@@ -49,7 +49,7 @@ class BasicWorkflowStoriesTest {
 
     /**
      * Story 1: Anna creates her first medkit and adds some drugs
-     * 
+     *
      * Validates: User registration, medkit creation, drug management, consumption tracking
      */
     @Test
@@ -66,7 +66,7 @@ class BasicWorkflowStoriesTest {
         val homeMedkit = medKitService.create(anna.id)
         assertNotNull(homeMedkit)
 
-        // Adds drugs using repository directly (simulating controller layer)
+        // Adds drugs through the store directly
         val aspirin = Drug(
             id = UUID.randomUUID(),
             name = "Aspirin",
@@ -110,7 +110,7 @@ class BasicWorkflowStoriesTest {
 
     /**
      * Story 2: Anna shares her medkit with Bob (her roommate)
-     * 
+     *
      * Validates: Multi-user medkit sharing, bidirectional relationships, data visibility
      */
     @Test
@@ -162,7 +162,7 @@ class BasicWorkflowStoriesTest {
 
     /**
      * Story 3: Bob leaves shared medkit - his data is cleaned up
-     * 
+     *
      * Validates: User removal, cascade operations, data integrity
      */
     @Test
@@ -215,7 +215,7 @@ class BasicWorkflowStoriesTest {
 
     /**
      * Story 4: Migrating drugs when deleting a medkit
-     * 
+     *
      * Validates: Drug migration, medkit deletion, data preservation
      */
     @Test
@@ -279,11 +279,7 @@ class BasicWorkflowStoriesTest {
         println("✅ Story 4 passed: Drugs successfully migrated to new medkit")
     }
 
-    /**
-     * Story 5: Edge case - consuming all drug quantity
-     * 
-     * Validates: Boundary conditions, zero quantity handling
-     */
+    /** Story 5: the pack emptied by an intake is destroyed, not left at zero. */
     @Test
     fun `Story 5 - User consumes all available drug quantity`() {
         val userData = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
@@ -310,7 +306,6 @@ class BasicWorkflowStoriesTest {
         entityManager.flush()
         entityManager.clear()
 
-        // Drug quantity should be exactly zero
         val updatedDrug = dbHelper.drug(drugData.id)
         // Must be deleted
         assertNull(updatedDrug)

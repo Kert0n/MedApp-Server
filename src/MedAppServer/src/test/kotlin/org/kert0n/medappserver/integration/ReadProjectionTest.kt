@@ -15,12 +15,9 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.transaction.annotation.Transactional
 
 /**
- * Формы чтения считают суммы планов в базе.
+ * Заявленное бронями складывается снаружи упаковки.
  *
- * Раньше сумма приходила полем `@Formula` внутри препарата: чтобы получить одно число,
- * загружалась сущность, а на списках — по запросу на каждый препарат. Здесь проверяется,
- * что суммы верны, что доступный остаток считается от них же, и что чужие планы в чужую
- * сумму не попадают.
+ * Проверяется, что сумма верна и что чужая бронь в неё не попадает.
  */
 @PostgresIntegrationTest
 @Transactional
@@ -107,7 +104,7 @@ class ReadProjectionTest {
         dbHelper.flushAndClear()
 
         assertQty(30.0, reservationService.require(alice.id, drug.id).amount)
-        // Препарат общий, план — личный: Боб видит препарат, но не чужой план.
+        // Пачка общая, бронь личная: Боб видит упаковку, но не чужую бронь.
         assertNull(reservationService.find(bob.id, drug.id), "чужой план не читается")
     }
 }

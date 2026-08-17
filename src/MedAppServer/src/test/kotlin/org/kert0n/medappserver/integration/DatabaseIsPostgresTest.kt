@@ -8,15 +8,11 @@ import org.kert0n.medappserver.PostgresIntegrationTest
 import org.springframework.beans.factory.annotation.Autowired
 
 /**
- * Страховка от ложно-зелёного прогона.
+ * Страховка от ложно-зелёного прогона: `@PostgresIntegrationTest` собран из мета-аннотаций, и
+ * если Spring перестанет их подхватывать, тесты молча уедут на H2 из базового
+ * `application.properties` — зелёные и проверяющие не то, что в проде.
  *
- * `@PostgresIntegrationTest` собран из мета-аннотаций, и если Spring перестанет их
- * подхватывать — например, `@TestPropertySource` на мета-аннотации или `@ServiceConnection`
- * от контейнера, — тесты молча уедут на H2 из базового `application.properties` и останутся
- * зелёными. Проверять при этом будут не то, что в проде.
- *
- * Поэтому здесь утверждается сам факт: под тестом настоящий Postgres той версии, что в
- * compose.
+ * Поэтому здесь утверждается сам факт: под тестом Postgres той версии, что в compose.
  */
 @PostgresIntegrationTest
 class DatabaseIsPostgresTest {

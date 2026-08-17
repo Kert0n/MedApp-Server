@@ -92,12 +92,7 @@ class DatabaseTestHelper(
     // Проверки, существенные для privacy-by-default: `null` означает, что записи больше нет.
     fun drugQuantity(id: UUID): BigDecimal? = drugs.findById(id)?.quantity?.amount
 
-    /**
-     * Сколько на упаковку заявлено бронями.
-     *
-     * Считается снаружи упаковки, потому что упаковка про брони не знает. Может превышать её
-     * остаток — это нормальное состояние, а не повод для проверки.
-     */
+    /** Заявленное бронями: считается снаружи упаковки и может превышать её остаток. */
     fun reservedOnDrug(id: UUID): BigDecimal =
         reservations.findAllOfDrugs(listOf(id)).sumOf { it.amount.amount }
 

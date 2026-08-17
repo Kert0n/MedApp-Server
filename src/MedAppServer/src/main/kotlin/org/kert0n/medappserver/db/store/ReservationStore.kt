@@ -15,9 +15,8 @@ import org.springframework.stereotype.Component
 /**
  * Хранилище агрегата брони.
  *
- * Наружу отдаёт и принимает только доменные типы: ни один сервис не видит ни строк, ни
- * репозиториев. Величина брони собирается в единице своей упаковки — единицу приносит то же
- * чтение, соединением.
+ * Наружу — только доменные типы: сервисы не видят ни строк, ни репозиториев. Единицу величины
+ * приносит то же чтение, соединением.
  */
 @Component
 class ReservationStore(
@@ -45,9 +44,8 @@ class ReservationStore(
         val user = users.findByIdOrNull(reservation.userId)
             ?: error("Пользователь ${reservation.userId} исчез во время записи брони")
 
-        // Именно persist, а не save: у брони присвоенный составной ключ, и `save` пошёл бы
-        // через merge — искать несуществующую строку и сохранять копию, теряя связь с уже
-        // управляемой упаковкой.
+        // persist, а не save: у брони присвоенный составной ключ, и save пошёл бы через merge —
+        // искать несуществующую строку и сохранять копию, теряя связь с управляемой упаковкой.
         entityManager.persist(
             ReservationData(
                 reservationKey = ReservationKey(reservation.userId, reservation.drugId),
@@ -58,12 +56,7 @@ class ReservationStore(
         )
     }
 
-    /**
-     * Записывает состояние в уже загруженную строку.
-     *
-     * Лишнего запроса тут нет: внутри той же транзакции строка лежит в persistence context, и
-     * поиск по ключу берёт её оттуда.
-     */
+    /** Лишнего запроса нет: в той же транзакции строка уже в persistence context. */
     fun save(reservation: Reservation) {
         val row = managed(reservation.userId, reservation.drugId)
         row.amount = reservation.amount.amount
