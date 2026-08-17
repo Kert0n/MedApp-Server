@@ -8,10 +8,14 @@ import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.db.store.DrugStore
 import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.db.store.ReservationStore
+import java.util.UUID
+import org.kert0n.medappserver.api.SyncRequest
+import org.kert0n.medappserver.domain.IntakeJournal
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.ReservationService
+import org.kert0n.medappserver.services.orchestrators.DrugSyncOrchestrator
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.InterleavedTransactions
@@ -40,6 +44,8 @@ class ConcurrencyTest {
     @Autowired private lateinit var medKits: MedKitStore
     @Autowired private lateinit var reservations: ReservationStore
     @Autowired private lateinit var dbHelper: DatabaseTestHelper
+    @Autowired private lateinit var syncOrchestrator: DrugSyncOrchestrator
+    @Autowired private lateinit var journal: IntakeJournal
     @Autowired private lateinit var interleaved: InterleavedTransactions
 
     /**
@@ -168,5 +174,76 @@ class ConcurrencyTest {
             dbHelper.userReservation(bob.id, drug.id),
             "бронь Боба цела: он всё ещё видит пачку в исходной аптечке"
         )
+    }
+
+    // ── Журнал синхронизаций ─────────────────────────────────────────────────────
+
+    /**
+     * Откатившаяся синхронизация не остаётся в журнале.
+     *
+     * Кеш не участвует в транзакции: запись «по ходу» пережила бы откат, и повтор получил бы
+     * подтверждение того, чего в базе нет. Хуже всего то, как это выглядит для человека —
+     * клиент видит 200, считает офлайн-очередь применённой и чистит её, а таблетки не списаны.
+     *
+     * Отказ приходит не изнутри команды, а с flush: обе стороны прочитали версию 3, вторая
+     * успела записать, и `UPDATE ... WHERE version = 3` не задевает ни одной строки.
+     */
+    @Test
+    fun `откатившаяся синхронизация не остаётся в журнале`() {
+        val alice = dbHelper.freshUser("alice")
+        val bob = dbHelper.freshUser("bob")
+        val kit = medKitService.create(alice.id)
+        medKitService.join(kit.id, bob.id)
+        val drug = dbHelper.freshDrug(kit.id, 100.0)
+        val staleVersion = dbHelper.drugVersion(drug.id)
+        val syncId = UUID.randomUUID()
+
+        val failure = interleaved.lostUpdate(
+            // Упаковка попадает в persistence context до чужой записи: дальше синхронизация
+            // увидит именно её, со своей версией 3.
+            read = { drugs.findAccessible(drug.id, alice.id)!! },
+            meanwhile = { drugService.consume(drug.id, qty(30.0), bob.id, staleVersion) },
+            write = {
+                syncOrchestrator.synchronise(
+                    syncId, drug.id, SyncRequest(consumed = qty(5.0), drugVersion = staleVersion), alice.id
+                )
+            }
+        )
+
+        assertNotNull(failure, "синхронизация по устаревшей версии обязана быть отклонена")
+        assertQty(70.0, dbHelper.drugQuantity(drug.id)!!, "в пачке результат победившей команды")
+        assertNull(journal.find(syncId), "неудачной попытки в журнале быть не должно")
+    }
+
+    /** И повтор того же запроса после отказа применяется по-настоящему, а не отвечает согласием. */
+    @Test
+    fun `повтор после отката списывает по-настоящему`() {
+        val alice = dbHelper.freshUser("alice")
+        val bob = dbHelper.freshUser("bob")
+        val kit = medKitService.create(alice.id)
+        medKitService.join(kit.id, bob.id)
+        val drug = dbHelper.freshDrug(kit.id, 100.0)
+        val staleVersion = dbHelper.drugVersion(drug.id)
+        val syncId = UUID.randomUUID()
+
+        interleaved.lostUpdate(
+            read = { drugs.findAccessible(drug.id, alice.id)!! },
+            meanwhile = { drugService.consume(drug.id, qty(30.0), bob.id, staleVersion) },
+            write = {
+                syncOrchestrator.synchronise(
+                    syncId, drug.id, SyncRequest(consumed = qty(5.0), drugVersion = staleVersion), alice.id
+                )
+            }
+        )
+
+        // Клиент перечитал пачку и повторил тем же идентификатором — так и задуман `syncId`.
+        syncOrchestrator.synchronise(
+            syncId,
+            drug.id,
+            SyncRequest(consumed = qty(5.0), drugVersion = dbHelper.drugVersion(drug.id)),
+            alice.id
+        )
+
+        assertQty(65.0, dbHelper.drugQuantity(drug.id)!!, "повтор списал те самые пять")
     }
 }

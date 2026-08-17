@@ -5,6 +5,8 @@ import java.util.UUID
 import org.kert0n.medappserver.domain.Intake
 import org.kert0n.medappserver.domain.IntakeJournal
 import org.springframework.stereotype.Component
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
 
 /**
  * Журнал синхронизаций поверх кеша.
@@ -21,7 +23,30 @@ class IntakeJournalStore(private val journal: Cache<UUID, Intake>) : IntakeJourn
 
     override fun find(id: UUID): Intake? = journal.getOrNull(id)
 
+    /**
+     * Запись появляется только после успешного коммита.
+     *
+     * Кеш не участвует в транзакции, поэтому запись «по ходу» пережила бы откат — и повтор
+     * получил бы подтверждение того, чего в базе нет. Ошибиться так легко: откат чаще всего
+     * приходит не изнутри команды, а с коммита, который случается уже **после** возврата из
+     * сервиса, — `try/catch` вокруг команды его не увидит.
+     *
+     * Вычищать запись при откате вместо отложенной вставки тоже можно, но тогда одновременный
+     * дубликат успевает увидеть чужую незакоммиченную запись и получить подтверждение раньше
+     * времени. Здесь он её не увидит: он либо проиграет на версии и повторится, либо придёт,
+     * когда первый уже закоммитился.
+     */
     override fun record(intake: Intake) {
-        journal[intake.id] = intake
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            journal[intake.id] = intake
+            return
+        }
+        TransactionSynchronizationManager.registerSynchronization(
+            object : TransactionSynchronization {
+                override fun afterCommit() {
+                    journal[intake.id] = intake
+                }
+            }
+        )
     }
 }
