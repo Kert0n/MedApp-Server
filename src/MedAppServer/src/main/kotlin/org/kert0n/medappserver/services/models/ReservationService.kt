@@ -19,6 +19,9 @@ import org.springframework.transaction.annotation.Transactional
  *
  * Доступ к упаковке проверяется первым: бронировать можно только то, что видно. Единицу
  * величины приносит `DrugService` — бронь в «штуках вообще» смысла не имеет.
+ *
+ * Команды возвращают **записанное** состояние, а не посчитанное: версию двигает Hibernate, и
+ * доменная копия, сделанная до записи, несёт устаревший токен.
  */
 @Service
 class ReservationService(
@@ -68,8 +71,7 @@ class ReservationService(
         if (reservations.find(userId, drugId) != null) throw ReservationAlreadyExists()
 
         val reservation = Reservation(userId, drugId, Quantity(amount, drug.quantity.unit))
-        reservations.insert(reservation)
-        return reservation
+        return reservations.insert(reservation)
     }
 
     @Transactional
@@ -77,9 +79,7 @@ class ReservationService(
         logger.debug("Changing reservation of user {} on drug {}", userId, drugId)
 
         val current = requireAt(userId, drugId, expectedVersion)
-        val changed = current.changeTo(Quantity(amount, current.amount.unit))
-        reservations.save(changed)
-        return changed
+        return reservations.save(current.changeTo(Quantity(amount, current.amount.unit)))
     }
 
     /** Отмена — это удаление: брони с нулём не бывает. */

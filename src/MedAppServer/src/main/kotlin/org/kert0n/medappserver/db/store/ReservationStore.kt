@@ -38,7 +38,14 @@ class ReservationStore(
 
     // ── Команды ──────────────────────────────────────────────────────────────────
 
-    fun insert(reservation: Reservation) {
+/**
+     * Возвращает записанное состояние, а не то, что просили записать.
+     *
+     * Разница в версии: её двигает Hibernate на flush, и доменная копия, посчитанная до записи,
+     * про это не знает. Вернуть её значило бы выдать клиенту тег, по которому его же следующая
+     * команда получит отказ.
+     */
+    fun insert(reservation: Reservation): Reservation {
         val drug = drugs.findByIdOrNull(reservation.drugId)
             ?: error("Упаковка ${reservation.drugId} исчезла во время записи брони")
         val user = users.findByIdOrNull(reservation.userId)
@@ -46,21 +53,24 @@ class ReservationStore(
 
         // persist, а не save: у брони присвоенный составной ключ, и save пошёл бы через merge —
         // искать несуществующую строку и сохранять копию, теряя связь с управляемой упаковкой.
-        entityManager.persist(
-            ReservationData(
-                reservationKey = ReservationKey(reservation.userId, reservation.drugId),
-                userData = user,
-                drugData = drug,
-                amount = reservation.amount.amount
-            )
+        val row = ReservationData(
+            reservationKey = ReservationKey(reservation.userId, reservation.drugId),
+            userData = user,
+            drugData = drug,
+            amount = reservation.amount.amount
         )
+        entityManager.persist(row)
+        entityManager.flush()
+        return row.toDomain()
     }
 
-    /** Лишнего запроса нет: в той же транзакции строка уже в persistence context. */
-    fun save(reservation: Reservation) {
+    /** Лишнего чтения нет: в той же транзакции строка уже в persistence context. */
+    fun save(reservation: Reservation): Reservation {
         val row = managed(reservation.userId, reservation.drugId)
         row.amount = reservation.amount.amount
         reservations.save(row)
+        entityManager.flush()
+        return row.toDomain()
     }
 
     fun delete(userId: UUID, drugId: UUID) {
