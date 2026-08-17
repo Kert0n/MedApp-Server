@@ -17,7 +17,9 @@ import java.util.UUID
 data class Reservation(
     val userId: UUID,
     val drugId: UUID,
-    val amount: Quantity
+    val amount: Quantity,
+    /** Непрозрачный токен состояния: домен его не толкует и не двигает, этим занят Hibernate. */
+    val version: Long = 0
 ) {
 
     init {
@@ -30,4 +32,15 @@ data class Reservation(
         if (newAmount.unit != amount.unit) throw QuantityUnitMismatch()
         return copy(amount = newAmount)
     }
+
+    /** Клиент решал по этому состоянию — или по устаревшему. */
+    fun requireVersion(expected: Long) {
+        if (expected != version) throw StaleAggregateVersion()
+    }
+
+    /** Сущность: идентичность — пара «человек и упаковка», а не количество и не версия. */
+    override fun equals(other: Any?): Boolean =
+        this === other || (other is Reservation && userId == other.userId && drugId == other.drugId)
+
+    override fun hashCode(): Int = 31 * userId.hashCode() + drugId.hashCode()
 }

@@ -95,20 +95,6 @@ class StoreIntegrationTest {
         assertTrue(accessible.none { it.medKitId == foreign.id })
     }
 
-    @Test
-    fun `блокирующая загрузка отдаёт то же состояние, что и обычная`() {
-        val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
-        val drug = dbHelper.freshDrug(kit.id, 30.0)
-        reservationService.create(alice.id, drug.id, qty(10.0))
-        dbHelper.flushAndClear()
-
-        val locked = drugs.lockAccessible(drug.id, alice.id)!!
-
-        assertQty(30.0, locked.quantity)
-        assertQty(10.0, dbHelper.reservedOnDrug(locked.id))
-    }
-
     // ── Брони ────────────────────────────────────────────────────────────────────
 
     @Test

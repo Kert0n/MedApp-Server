@@ -20,6 +20,14 @@ class ReservationAlreadyExists : DomainRuleViolated("Reservation already exists 
 /** Брони нет. */
 class NoSuchReservation : DomainRuleViolated("There is no such reservation")
 
+/**
+ * Клиент решал по устаревшему состоянию: с тех пор агрегат изменился.
+ *
+ * Повтора нет — сервер не знает, останется ли команда осмысленной по новому состоянию, и
+ * решить это может только тот, кто её отправил.
+ */
+class StaleAggregateVersion : DomainRuleViolated("Aggregate has changed since the version supplied")
+
 /** Пользователь не участник этой аптечки — или самой аптечки нет. */
 class NotAMember : DomainRuleViolated("Medicine kit is not accessible")
 

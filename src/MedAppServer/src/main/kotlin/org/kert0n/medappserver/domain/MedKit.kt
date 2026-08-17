@@ -10,11 +10,18 @@ import java.util.UUID
  */
 data class MedKit(
     val id: UUID = UUID.randomUUID(),
-    val members: Set<UUID>
+    val members: Set<UUID>,
+    /** Непрозрачный токен состояния: домен его не толкует и не двигает, этим занят Hibernate. */
+    val version: Long = 0
 ) {
 
     init {
         if (members.isEmpty()) throw MedKitWithoutMembers()
+    }
+
+    /** Клиент решал по этому составу — или по устаревшему. */
+    fun requireVersion(expected: Long) {
+        if (expected != version) throw StaleAggregateVersion()
     }
 
     fun isMember(userId: UUID): Boolean = userId in members

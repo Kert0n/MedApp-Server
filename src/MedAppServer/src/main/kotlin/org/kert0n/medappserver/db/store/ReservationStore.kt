@@ -86,7 +86,8 @@ class ReservationStore(
     private fun ReservationData.toDomain(): Reservation = Reservation(
         userId = reservationKey.userId,
         drugId = reservationKey.drugId,
-        amount = Quantity(amount, drugData.quantityUnit.toDomain())
+        amount = Quantity(amount, drugData.quantityUnit.toDomain()),
+        version = version
     )
 
     private fun managed(userId: UUID, drugId: UUID): ReservationData =

@@ -52,7 +52,12 @@ class ReservationData(
 
     @NotNull
     @Column(name = "amount", nullable = false, precision = QUANTITY_PRECISION, scale = QUANTITY_SCALE)
-    var amount: BigDecimal
+    var amount: BigDecimal,
+
+    /** Версией распоряжается Hibernate. Единственное поле брони меняет её же строку. */
+    @Version
+    @Column(name = "version", nullable = false)
+    var version: Long = 0
 ) {
 
     override fun equals(other: Any?): Boolean {

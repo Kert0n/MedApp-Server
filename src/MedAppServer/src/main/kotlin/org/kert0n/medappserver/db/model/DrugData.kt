@@ -80,10 +80,20 @@ class DrugData(
                 "FOREIGN KEY (med_kit_id) REFERENCES med_kits (id) ON DELETE CASCADE"
         )
     )
-    var medKit: MedKitData
+    var medKit: MedKitData,
 
     // Коллекции броней здесь нет: упаковка ими не владеет. Их исчезновение вслед за пачкой
     // держит внешний ключ в `ReservationData`.
+
+    /**
+     * Версией распоряжается Hibernate, присваивать её нельзя.
+     *
+     * Дочерних строк у упаковки нет, поэтому её двигает обычный dirty checking: любая команда
+     * над пачкой меняет саму эту строку.
+     */
+    @Version
+    @Column(name = "version", nullable = false)
+    var version: Long = 0
 ) {
 
     override fun equals(other: Any?): Boolean {

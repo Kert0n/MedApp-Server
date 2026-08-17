@@ -16,8 +16,11 @@ import org.springframework.transaction.annotation.Transactional
 /**
  * Единственный вход к агрегату упаковки.
  *
- * Команды однотипны: взять состояние под блокировкой, вызвать метод домена, отдать результат
- * хранилищу. Правила — в `domain.Drug`, запросы — за `DrugStore`, брони — в своём агрегате.
+ * Команды однотипны: прочитать состояние, вызвать метод домена, отдать результат хранилищу.
+ * Правила — в `domain.Drug`, запросы — за `DrugStore`, брони — в своём агрегате.
+ *
+ * Блокировок при чтении нет: одновременную запись ловит версия строки, и проигравшая
+ * транзакция откатывается вместо того, чтобы ждать победившую.
  */
 @Service
 class DrugService(
@@ -56,9 +59,6 @@ class DrugService(
     /** Недоступная и несуществующая упаковка отвечают одинаково: иначе чужая обнаружится. */
     private fun notFound() = NotAMember()
 
-    private fun lock(drugId: UUID, userId: UUID): Drug =
-        drugs.lockAccessible(drugId, userId) ?: throw notFound()
-
     // ── Команды препарата ────────────────────────────────────────────────────────
 
     @Transactional
@@ -84,7 +84,7 @@ class DrugService(
     fun update(drugId: UUID, request: DrugPatchRequest, userId: UUID): Drug {
         logger.debug("Updating drug: {}", drugId)
 
-        var drug = lock(drugId, userId)
+        var drug = require(drugId, userId)
         // Единица перевешивается первой: количество ниже собирается уже в ней.
         request.quantityUnitId?.let { drug = drug.relabelUnitTo(catalogue.requireQuantityUnit(it)) }
         request.quantity?.let { drug = drug.changeQuantityTo(Quantity(it, drug.quantity.unit)) }
@@ -121,7 +121,7 @@ class DrugService(
     fun consume(drugId: UUID, quantity: BigDecimal, userId: UUID): Drug? {
         logger.debug("Consuming {} of drug {}", quantity, drugId)
 
-        val drug = lock(drugId, userId)
+        val drug = require(drugId, userId)
         val left = drug.consume(Quantity(quantity, drug.quantity.unit))
         if (left == null) {
             drugs.delete(drugId)
@@ -136,7 +136,7 @@ class DrugService(
     fun moveTo(drugId: UUID, targetMedKitId: UUID, userId: UUID): Drug {
         logger.debug("Moving drug {} to medkit {}", drugId, targetMedKitId)
 
-        val moved = lock(drugId, userId).moveTo(targetMedKitId)
+        val moved = require(drugId, userId).moveTo(targetMedKitId)
         drugs.save(moved)
         return moved
     }

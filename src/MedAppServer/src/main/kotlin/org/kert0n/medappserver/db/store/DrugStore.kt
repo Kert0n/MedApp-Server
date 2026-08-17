@@ -43,9 +43,6 @@ class DrugStore(
 
     // ── Команды ──────────────────────────────────────────────────────────────────
 
-    /** Загрузка под блокировкой строки: с неё начинается любая команда над упаковкой. */
-    fun lockAccessible(drugId: UUID, userId: UUID): Drug? = drugs.lockAccessible(drugId, userId)?.toDomain()
-
     fun insert(drug: Drug) {
         drugs.save(
             drug.toNewEntity(

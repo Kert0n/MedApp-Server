@@ -26,9 +26,14 @@ CREATE TABLE users
 );
 
 -- У аптечки нет ни владельца, ни названия: участники равноправны.
+--
+-- version — оптимистическая блокировка. Собственная строка аптечки не меняется никогда: её
+-- состояние это состав, а он лежит в user_med_kits. Поэтому версию здесь двигает не dirty
+-- checking, а явная заявка на изменение корня (OPTIMISTIC_FORCE_INCREMENT) — см. MedKitStore.
 CREATE TABLE med_kits
 (
-    id uuid NOT NULL,
+    id      uuid   NOT NULL,
+    version bigint NOT NULL DEFAULT 0,
 
     CONSTRAINT med_kits_pkey PRIMARY KEY (id)
 );
@@ -91,6 +96,9 @@ CREATE TABLE user_drugs
     country          varchar(100),
     description      text,
     med_kit_id       uuid           NOT NULL,
+    -- Оптимистическая блокировка. Дочерних строк у упаковки нет, поэтому версию двигает
+    -- обычный dirty checking: любая её команда меняет саму эту строку.
+    version          bigint         NOT NULL DEFAULT 0,
 
     CONSTRAINT user_drugs_pkey PRIMARY KEY (id),
     CONSTRAINT user_drugs_med_kit_fkey FOREIGN KEY (med_kit_id) REFERENCES med_kits (id) ON DELETE CASCADE,
@@ -117,6 +125,7 @@ CREATE TABLE reservations
     user_id uuid           NOT NULL,
     drug_id uuid           NOT NULL,
     amount  numeric(19, 6) NOT NULL,
+    version bigint         NOT NULL DEFAULT 0,
 
     CONSTRAINT reservations_pkey PRIMARY KEY (drug_id, user_id),
     CONSTRAINT reservations_user_fkey FOREIGN KEY (user_id) REFERENCES users (id),

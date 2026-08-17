@@ -21,11 +21,18 @@ data class Drug(
     val category: String? = null,
     val manufacturer: String? = null,
     val country: String? = null,
-    val description: String? = null
+    val description: String? = null,
+    /** Непрозрачный токен состояния: домен его не толкует и не двигает, этим занят Hibernate. */
+    val version: Long = 0
 ) {
 
     init {
         if (!quantity.isPositive) throw InvalidQuantity()
+    }
+
+    /** Клиент решал по этому состоянию — или по устаревшему. */
+    fun requireVersion(expected: Long) {
+        if (expected != version) throw StaleAggregateVersion()
     }
 
     /** Описательные поля; `null` означает «оставить как есть». */

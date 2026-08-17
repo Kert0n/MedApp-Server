@@ -33,10 +33,12 @@ internal fun DrugData.toDomain(): Drug {
         category = category,
         manufacturer = manufacturer,
         country = country,
-        description = description
+        description = description,
+        version = version
     )
 }
 
+/** Версия не переносится обратно: ею распоряжается Hibernate, присваивание ей запрещено. */
 internal fun Drug.applyTo(
     entity: DrugData,
     resolveMedKit: (UUID) -> MedKitData,

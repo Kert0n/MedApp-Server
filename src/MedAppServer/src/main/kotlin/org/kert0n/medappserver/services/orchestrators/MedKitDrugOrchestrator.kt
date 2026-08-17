@@ -8,6 +8,7 @@ import org.kert0n.medappserver.api.MedKitSummaryDTO
 import org.kert0n.medappserver.api.toSummaryDto
 import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.db.store.DrugStore
+import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.db.store.ReservationStore
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.services.models.DrugService
@@ -30,7 +31,8 @@ class MedKitDrugOrchestrator(
     private val reservationService: ReservationService,
     private val medKitService: MedKitService,
     private val drugs: DrugStore,
-    private val reservations: ReservationStore
+    private val reservations: ReservationStore,
+    private val medKits: MedKitStore
 ) {
 
     private val logger = LoggerFactory.getLogger(MedKitDrugOrchestrator::class.java)
@@ -48,11 +50,16 @@ class MedKitDrugOrchestrator(
      *
      * Три агрегата в одном сценарии: пачка переезжает, аптечка называет состав, брони тех, кто
      * её больше не видит, убираются массово.
+     *
+     * Состав аптечки здесь — основание решения, а не то, что меняется: `requireUnchanged`
+     * требует, чтобы он дожил до коммита. Иначе вышедший в этот момент участник сохранил бы
+     * бронь на пачку, которую больше не видит.
      */
     @Transactional
     fun moveDrug(drugId: UUID, targetMedKitId: UUID, userId: UUID): Drug {
         logger.debug("Moving drug {} to medkit {}", drugId, targetMedKitId)
         val target = medKitService.requireAccessible(targetMedKitId, userId)
+        medKits.requireUnchanged(target)
         val moved = drugService.moveTo(drugId, target.id, userId)
         reservations.deleteOfDrugExcept(drugId, target.members)
         return moved
@@ -88,6 +95,8 @@ class MedKitDrugOrchestrator(
 
         if (transferToMedKitId != null) {
             val target = medKitService.requireAccessible(transferToMedKitId, userId)
+            // Тот же состав, что и при переносе одной пачки, — и то же требование к нему.
+            medKits.requireUnchanged(target)
             // Порядок важен: брони выбираются по исходной аптечке, пока упаковки ещё в ней.
             reservations.deleteInMedKitExcept(medKitId, target.members)
             drugs.moveAllToMedKit(medKitId, target.id)

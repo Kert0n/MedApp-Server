@@ -1,5 +1,7 @@
 package org.kert0n.medappserver.db.store
 
+import jakarta.persistence.EntityManager
+import jakarta.persistence.LockModeType
 import java.util.UUID
 import org.kert0n.medappserver.db.model.MedKitData
 import org.kert0n.medappserver.db.model.MedKitMembershipData
@@ -21,12 +23,13 @@ import org.springframework.stereotype.Component
 class MedKitStore(
     private val medKits: MedKitRepository,
     private val memberships: MedKitMembershipRepository,
-    private val users: UserRepository
+    private val users: UserRepository,
+    private val entityManager: EntityManager
 ) {
 
     fun findById(medKitId: UUID): MedKit? {
         val row = medKits.findByIdOrNull(medKitId) ?: return null
-        return MedKit(row.id, memberships.findMemberIds(row.id))
+        return MedKit(row.id, memberships.findMemberIds(row.id), row.version)
     }
 
     /**
@@ -36,27 +39,53 @@ class MedKitStore(
      */
     fun findAllOfUser(userId: UUID): List<MedKit> =
         medKits.findMembershipsOfUserKits(userId)
-            .groupBy { it.medKit.id }
-            .map { (id, memberships) -> MedKit(id, memberships.map { it.membershipKey.userId }.toSet()) }
+            .groupBy { it.medKit }
+            .map { (row, rows) -> MedKit(row.id, rows.map { it.membershipKey.userId }.toSet(), row.version) }
             .sortedBy { it.id }
+
+    /**
+     * Требует, чтобы состав аптечки не изменился до конца транзакции.
+     *
+     * Нужно тому, кто **решает по составу, а сам аптечку не меняет**: перенос упаковки смотрит,
+     * кто её увидит после переезда, и убирает брони остальных. Если в этот момент кто-то выйдет,
+     * решение окажется принятым по составу, которого уже нет, и бронь вышедшего переживёт утрату
+     * доступа.
+     *
+     * `OPTIMISTIC` — это проверка версии на коммите, без её продвижения: чтение не команда и
+     * чужой токен обесценивать не должно.
+     */
+    fun requireUnchanged(medKit: MedKit) {
+        val row = medKits.findByIdOrNull(medKit.id) ?: error("Аптечка ${medKit.id} исчезла во время чтения")
+        entityManager.lock(row, LockModeType.OPTIMISTIC)
+    }
 
     fun insert(medKit: MedKit) {
         val row = medKits.save(MedKitData(id = medKit.id))
         memberships.saveAll(medKit.members.map { membershipRow(row, it) })
     }
 
-    /** Сводит строки членства к тому, что в состоянии. Сама аптечка полей больше не имеет. */
+    /**
+     * Сводит строки членства к тому, что в состоянии, и двигает версию аптечки.
+     *
+     * Собственных полей у аптечки нет, её строка не меняется — dirty checking версию не тронет,
+     * и потерянное обновление состава остался бы незамеченным. Поэтому заявка на изменение
+     * корня: `OPTIMISTIC_FORCE_INCREMENT` — это то самое «меняется агрегат, а не строка».
+     *
+     * Замерено: заявка применяется перед коммитом и складывается с инкрементом от dirty
+     * checking, если строка всё-таки менялась. Скачок версии больше чем на единицу законен —
+     * версия это токен состояния, а не счётчик команд.
+     */
     fun save(medKit: MedKit) {
+        val row = medKits.findByIdOrNull(medKit.id) ?: error("Аптечка ${medKit.id} исчезла во время записи")
+        entityManager.lock(row, LockModeType.OPTIMISTIC_FORCE_INCREMENT)
+
         val stored = memberships.findMemberIds(medKit.id)
 
         val gone = stored - medKit.members
         if (gone.isNotEmpty()) memberships.deleteMembers(medKit.id, gone)
 
         val added = medKit.members - stored
-        if (added.isNotEmpty()) {
-            val row = medKits.findByIdOrNull(medKit.id) ?: error("Аптечка ${medKit.id} исчезла во время записи")
-            memberships.saveAll(added.map { membershipRow(row, it) })
-        }
+        if (added.isNotEmpty()) memberships.saveAll(added.map { membershipRow(row, it) })
     }
 
     /**
