@@ -1,22 +1,22 @@
 package org.kert0n.medappserver.integration
 
-import org.kert0n.medappserver.PostgresIntegrationTest
 import jakarta.persistence.EntityManager
-import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Test
-import org.kert0n.medappserver.db.model.parsed.FormType
-import org.kert0n.medappserver.db.model.parsed.VidalDrug
-import org.kert0n.medappserver.db.repository.VidalDrugRepository
-import org.kert0n.medappserver.services.models.VidalDrugService
-import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.transaction.PlatformTransactionManager
-import org.springframework.transaction.support.TransactionTemplate
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.kert0n.medappserver.PostgresIntegrationTest
+import org.kert0n.medappserver.db.model.parsed.DrugTemplateData
+import org.kert0n.medappserver.db.model.parsed.FormTypeData
+import org.kert0n.medappserver.db.repository.VidalDrugRepository
+import org.kert0n.medappserver.services.models.CatalogueService
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.transaction.PlatformTransactionManager
+import org.springframework.transaction.support.TransactionTemplate
 
 /**
- * Integration tests for VidalDrug fuzzy search.
+ * Integration tests for DrugTemplateData fuzzy search.
  *
  * NOTE: This test class deliberately does NOT use @Transactional on the class level.
  * This ensures we catch LazyInitializationException bugs that occur in production
@@ -25,13 +25,13 @@ import kotlin.test.assertTrue
  * hiding lazy loading bugs that only manifest at runtime.
  */
 @PostgresIntegrationTest
-class VidalDrugFuzzySearchTest {
+class CatalogueSearchTest {
 
     @Autowired
     private lateinit var vidalDrugRepository: VidalDrugRepository
 
     @Autowired
-    private lateinit var vidalDrugService: VidalDrugService
+    private lateinit var catalogueService: CatalogueService
 
     @Autowired
     private lateinit var entityManager: EntityManager
@@ -48,23 +48,23 @@ class VidalDrugFuzzySearchTest {
             vidalDrugRepository.deleteAll()
             entityManager.createNativeQuery("DELETE FROM form_types").executeUpdate()
 
-            val tabletType = FormType(name = "таблетки")
+            val tabletType = FormTypeData(name = "таблетки")
             entityManager.persist(tabletType)
             entityManager.flush()
 
             val drugs = listOf(
-                VidalDrug(name = "Аспирин", manufacturer = "Байер", otc = true, formType = tabletType),
-                VidalDrug(name = "Аспирин Кардио", manufacturer = "Байер", otc = true, formType = tabletType),
-                VidalDrug(
+                DrugTemplateData(name = "Аспирин", manufacturer = "Байер", otc = true, formType = tabletType),
+                DrugTemplateData(name = "Аспирин Кардио", manufacturer = "Байер", otc = true, formType = tabletType),
+                DrugTemplateData(
                     name = "Ибупрофен", nameLat = "Ibuprofenum", manufacturer = "Фармстандарт",
                     activeSubstance = "ибупрофен", otc = true
                 ),
-                VidalDrug(
+                DrugTemplateData(
                     name = "Парацетамол", nameLat = "Paracetamolum", manufacturer = "Медисорб",
                     activeSubstance = "парацетамол", otc = true
                 ),
-                VidalDrug(name = "Aspirin", manufacturer = "Bayer", otc = true, formType = tabletType),
-                VidalDrug(name = "Ibuprofen", manufacturer = "Generic", otc = true)
+                DrugTemplateData(name = "Aspirin", manufacturer = "Bayer", otc = true, formType = tabletType),
+                DrugTemplateData(name = "Ibuprofen", manufacturer = "Generic", otc = true)
             )
             vidalDrugRepository.saveAll(drugs)
         }
@@ -140,9 +140,9 @@ class VidalDrugFuzzySearchTest {
             vidalDrugRepository.deleteAll()
             vidalDrugRepository.saveAll(
                 listOf(
-                    VidalDrug(name = "Aspirin", manufacturer = "Bayer", otc = true),
-                    VidalDrug(name = "Aspirin Cardio", manufacturer = "Bayer", otc = true),
-                    VidalDrug(name = "Baby Aspirin", manufacturer = "Generic", otc = true)
+                    DrugTemplateData(name = "Aspirin", manufacturer = "Bayer", otc = true),
+                    DrugTemplateData(name = "Aspirin Cardio", manufacturer = "Bayer", otc = true),
+                    DrugTemplateData(name = "Baby Aspirin", manufacturer = "Generic", otc = true)
                 )
             )
         }
@@ -157,27 +157,27 @@ class VidalDrugFuzzySearchTest {
         val results = search("аспир", 10)
         assertTrue(results.isNotEmpty())
         val formTypeName = results.first { it.formType != null }.formType?.name
-        assertNotNull(formTypeName, "FormType should be eagerly loaded and accessible outside transaction")
+        assertNotNull(formTypeName, "FormTypeData should be eagerly loaded and accessible outside transaction")
         assertEquals("таблетки", formTypeName)
     }
 
     @Test
     fun `service fuzzySearch returns results with accessible formType`() {
-        val results = vidalDrugService.fuzzySearch("аспир", 10)
+        val results = catalogueService.fuzzySearch("аспир", 10)
         assertTrue(results.isNotEmpty())
         val drugWithForm = results.first { it.formType != null }
-        assertNotNull(drugWithForm.formType, "FormType should be accessible via service results")
+        assertNotNull(drugWithForm.formType, "FormTypeData should be accessible via service results")
     }
 
     @Test
     fun `service fuzzySearch returns empty for blank input`() {
-        val results = vidalDrugService.fuzzySearch("   ", 10)
+        val results = catalogueService.fuzzySearch("   ", 10)
         assertTrue(results.isEmpty(), "Should return empty for blank input")
     }
 
     @Test
     fun `service fuzzySearch sanitizes special characters`() {
-        val results = vidalDrugService.fuzzySearch("аспир%", 10)
+        val results = catalogueService.fuzzySearch("аспир%", 10)
         assertNotNull(results)
     }
 
@@ -234,7 +234,7 @@ class VidalDrugFuzzySearchTest {
     fun `выдача содержит поля, по которым идёт поиск`() {
         // Иначе результат не объясняет, почему запись нашлась: набрали «Ibuprofenum»,
         // а в ответе одно торговое название.
-        val found = vidalDrugService.fuzzySearch("Ibuprofenum").first { it.name == "Ибупрофен" }
+        val found = catalogueService.fuzzySearch("Ibuprofenum").first { it.name == "Ибупрофен" }
 
         assertEquals("Ibuprofenum", found.nameLat)
         assertEquals("ибупрофен", found.activeSubstance)

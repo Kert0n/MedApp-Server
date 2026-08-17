@@ -1,7 +1,13 @@
 package org.kert0n.medappserver.services.security
 
 import com.sksamuel.aedile.core.Cache
-import org.kert0n.medappserver.db.model.User
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
+import java.security.SecureRandom
+import java.time.Instant
+import java.time.temporal.ChronoUnit
+import kotlin.io.encoding.Base64
+import org.kert0n.medappserver.domain.User
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.security.crypto.password.PasswordEncoder
@@ -10,12 +16,6 @@ import org.springframework.security.oauth2.jwt.JwtDecoder
 import org.springframework.security.oauth2.jwt.JwtEncoder
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters
 import org.springframework.stereotype.Service
-import java.nio.charset.StandardCharsets
-import java.security.MessageDigest
-import java.security.SecureRandom
-import java.time.Instant
-import java.time.temporal.ChronoUnit
-import kotlin.io.encoding.Base64
 
 @Service
 class SecurityService(

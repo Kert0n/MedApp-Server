@@ -1,6 +1,5 @@
 package org.kert0n.medappserver.services.models
 
-import org.kert0n.medappserver.api.toDto
 import java.util.*
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -9,12 +8,15 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.api.DrugPatchRequest
-import org.kert0n.medappserver.db.model.InsufficientStock
-import org.kert0n.medappserver.db.model.IntakeExceedsPlan
-import org.kert0n.medappserver.db.model.PlannedAmountExceedsStock
-import org.kert0n.medappserver.db.model.QuantityNotIncreased
-import org.kert0n.medappserver.db.model.TreatmentPlanAlreadyExists
+import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.db.repository.DrugRepository
+import org.kert0n.medappserver.domain.DomainRuleViolated
+import org.kert0n.medappserver.domain.InsufficientStock
+import org.kert0n.medappserver.domain.IntakeExceedsPlan
+import org.kert0n.medappserver.domain.InvalidQuantity
+import org.kert0n.medappserver.domain.NotAMember
+import org.kert0n.medappserver.domain.PlannedAmountExceedsStock
+import org.kert0n.medappserver.domain.TreatmentPlanAlreadyExists
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -22,7 +24,6 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.web.server.ResponseStatusException
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -43,10 +44,10 @@ class DrugServiceTest {
     // ── findById ──
 
     @Test
-    fun `findById throws NOT_FOUND for non-existent drug`() {
-        assertThrows<ResponseStatusException> {
-            drugService.requireById(UUID.randomUUID())
-        }
+    fun `несуществующий препарат неотличим от недоступного`() {
+        val alice = dbHelper.freshUser("alice")
+
+        assertThrows<NotAMember> { drugService.require(UUID.randomUUID(), alice.id) }
     }
 
     // ── findByIdForUser / findByIdForUserForUpdate ──
@@ -56,11 +57,11 @@ class DrugServiceTest {
         val alice = dbHelper.freshUser("alice")
         val eve = dbHelper.freshUser("eve")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 10.0)
+        val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
-        assertThrows<ResponseStatusException> {
-            drugService.requireAccessible(drug.id, eve.id)
+        assertThrows<DomainRuleViolated> {
+            drugService.require(drug.id, eve.id)
         }
     }
 
@@ -69,11 +70,11 @@ class DrugServiceTest {
         val alice = dbHelper.freshUser("alice")
         val eve = dbHelper.freshUser("eve")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 10.0)
+        val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
-        assertThrows<ResponseStatusException> {
-            drugService.lockAccessible(drug.id, eve.id)
+        assertThrows<DomainRuleViolated> {
+            drugService.require(drug.id, eve.id)
         }
     }
 
@@ -83,26 +84,26 @@ class DrugServiceTest {
     fun `findAllByMedKit returns drugs in medkit`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        dbHelper.freshDrug(kit, 10.0)
-        dbHelper.freshDrug(kit, 20.0)
+        dbHelper.freshDrug(kit.id, 10.0)
+        dbHelper.freshDrug(kit.id, 20.0)
         dbHelper.flushAndClear()
 
-        assertEquals(2, drugService.findAllByMedKit(kit.id).size)
+        assertEquals(2, drugService.ofMedKit(kit.id).size)
     }
 
     @Test
     fun `findAllByUser returns drugs user has treatment plans for`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        assertEquals(0, treatmentPlanService.viewsOf(alice.id).size)
+        assertEquals(0, treatmentPlanService.plansOf(alice.id).size)
 
         drugService.createPlan(alice.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
-        assertEquals(1, treatmentPlanService.viewsOf(alice.id).size)
+        assertEquals(1, treatmentPlanService.plansOf(alice.id).size)
     }
 
     // ── create ──
@@ -114,14 +115,14 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         val drug = drugService.create(
-            DrugCreateRequest(name = "Aspirin", quantity = qty(100.0), quantityUnit = "mg"),
-            kit, alice.id
+            DrugCreateRequest(name = "Aspirin", quantity = qty(100.0), quantityUnitId = dbHelper.unit().id),
+            kit.id, alice.id
         )
 
         assertNotNull(drug.id)
         assertEquals("Aspirin", drug.name)
         assertQty(100.0, drug.quantity)
-        assertEquals(kit.id, drug.medKit.id)
+        assertEquals(kit.id, drug.medKitId)
     }
 
     // ── update ──
@@ -130,36 +131,33 @@ class DrugServiceTest {
     fun `update with all nulls leaves drug unchanged`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 10.0)
+        val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
         val emptyUpdate = DrugPatchRequest(null, null, null, null, null, null, null, null)
         drugService.update(drug.id, emptyUpdate, alice.id)
         dbHelper.flushAndClear()
 
-        assertQty(10.0, drugService.requireById(drug.id).quantity)
+        assertQty(10.0, dbHelper.requireDrug(drug.id).quantity)
     }
 
     @Test
     fun `update with all fields populates every property`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 50.0)
+        val drug = dbHelper.freshDrug(kit.id, 50.0)
         dbHelper.flushAndClear()
 
         val fullUpdate = DrugPatchRequest(
-            name = "New Name", quantity = qty(100.0), quantityUnit = "ml",
-            formType = "liquid", category = "cat", manufacturer = "man",
+            name = "New Name", quantity = qty(100.0), category = "cat", manufacturer = "man",
             country = "co", description = "desc"
         )
         drugService.update(drug.id, fullUpdate, alice.id)
         dbHelper.flushAndClear()
 
-        val updated = drugService.requireById(drug.id)
+        val updated = dbHelper.requireDrug(drug.id)
         assertEquals("New Name", updated.name)
         assertQty(100.0, updated.quantity)
-        assertEquals("ml", updated.quantityUnit)
-        assertEquals("liquid", updated.formType)
         assertEquals("cat", updated.category)
         assertEquals("man", updated.manufacturer)
         assertEquals("co", updated.country)
@@ -170,7 +168,7 @@ class DrugServiceTest {
     fun `update increasing quantity bypasses reduction`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 10.0)
+        val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
         drugService.update(drug.id, DrugPatchRequest(quantity = qty(20.0)), alice.id)
@@ -180,34 +178,38 @@ class DrugServiceTest {
     }
 
     /**
-     * Уменьшение остатка через PATCH отвергается: расход выражается списанием, и только оно
-     * говорит, сколько именно ушло. Присвоенное меньшее число потеряло бы чужие списания,
-     * случившиеся между чтением и записью.
+     * Пересчёт учёта вниз: пользователь пересчитал упаковку и увидел меньше, чем числилось.
+     * Планы сжимаются тем же правилом, что и при списании, потому что агрегат загружен
+     * целиком и решение принимается по всем планам сразу.
      */
     @Test
-    fun `update refuses to decrease quantity`() {
+    fun `update decreasing quantity scales the plans down`() {
         val alice = dbHelper.freshUser("alice")
+        val bob = dbHelper.freshUser("bob")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
+        val drug = dbHelper.freshDrug(kit.id, 100.0)
+        drugService.createPlan(alice.id, drug.id, qty(60.0))
+        drugService.createPlan(bob.id, drug.id, qty(40.0))
         dbHelper.flushAndClear()
 
-        assertThrows<QuantityNotIncreased> {
-            drugService.update(drug.id, DrugPatchRequest(quantity = qty(40.0)), alice.id)
-        }
+        drugService.update(drug.id, DrugPatchRequest(quantity = qty(50.0)), alice.id)
         dbHelper.flushAndClear()
 
-        assertQty(100.0, dbHelper.drugQuantity(drug.id)!!)
+        assertQty(50.0, dbHelper.drugQuantity(drug.id)!!)
+        assertQty(30.0, dbHelper.userPlan(alice.id, drug.id)!!)
+        assertQty(20.0, dbHelper.userPlan(bob.id, drug.id)!!)
     }
 
     @Test
-    fun `update refuses to repeat the current quantity`() {
+    fun `update refuses a non-positive quantity`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        assertThrows<QuantityNotIncreased> {
-            drugService.update(drug.id, DrugPatchRequest(quantity = qty(100.0)), alice.id)
+        assertThrows<InvalidQuantity> {
+            drugService.update(drug.id, DrugPatchRequest(quantity = qty(0.0)), alice.id)
         }
     }
 
@@ -217,15 +219,13 @@ class DrugServiceTest {
     fun `delete removes drug`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 50.0)
+        val drug = dbHelper.freshDrug(kit.id, 50.0)
         dbHelper.flushAndClear()
 
         drugService.delete(drug.id, alice.id)
         dbHelper.flushAndClear()
 
-        assertThrows<ResponseStatusException> {
-            drugService.requireById(drug.id)
-        }
+        assertNull(dbHelper.drug(drug.id))
     }
 
     // ── consumeDrug ──
@@ -234,10 +234,10 @@ class DrugServiceTest {
     fun `consumeDrug reduces quantity`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        val consumed = drugService.consumeDrug(drug.id, qty(30.0), alice.id)
+        val consumed = drugService.consume(drug.id, qty(30.0), alice.id)
         assertQty(70.0, consumed?.quantity)
     }
 
@@ -245,11 +245,11 @@ class DrugServiceTest {
     fun `consumeDrug throws when insufficient quantity`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 10.0)
+        val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
         assertThrows<InsufficientStock> {
-            drugService.consumeDrug(drug.id, qty(20.0), alice.id)
+            drugService.consume(drug.id, qty(20.0), alice.id)
         }
     }
 
@@ -260,15 +260,15 @@ class DrugServiceTest {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
         val drug = drugService.create(
-            DrugCreateRequest(name = "Drug", quantity = qty(100.0), quantityUnit = "mg"),
-            kit, alice.id
+            DrugCreateRequest(name = "Drug", quantity = qty(100.0), quantityUnitId = dbHelper.unit().id),
+            kit.id, alice.id
         )
         drugService.createPlan(alice.id, drug.id, qty(25.0))
         dbHelper.flushAndClear()
 
         // DTO собирается только из формы чтения: сумма планов приходит из запроса, а не из
         // поля сущности, которое после изменения планов в той же транзакции устаревало.
-        val dto = drugService.requireView(drug.id, alice.id).toDto()
+        val dto = drugService.require(drug.id, alice.id).toDto()
         assertQty(25.0, dto.plannedQuantity)
         assertQty(100.0, dto.quantity)
         assertQty(75.0, dto.availableQuantity)
@@ -280,21 +280,21 @@ class DrugServiceTest {
     fun `createPlan reserves the amount for the user`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
         val plan = drugService.createPlan(alice.id, drug.id, qty(30.0))
 
         assertQty(30.0, plan.plannedAmount)
-        assertEquals(alice.id, plan.user.id)
-        assertEquals(drug.id, plan.drug.id)
+        assertEquals(alice.id, plan.userId)
+        assertQty(30.0, dbHelper.userPlan(alice.id, drug.id))
     }
 
     @Test
     fun `createPlan refuses a second plan of the same user`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
         drugService.createPlan(alice.id, drug.id, qty(30.0))
@@ -309,7 +309,7 @@ class DrugServiceTest {
     fun `createPlan refuses to reserve more than the stock`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 50.0)
+        val drug = dbHelper.freshDrug(kit.id, 50.0)
         dbHelper.flushAndClear()
 
         assertThrows<PlannedAmountExceedsStock> {
@@ -321,7 +321,7 @@ class DrugServiceTest {
     fun `changePlan updates the planned amount`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
         drugService.createPlan(alice.id, drug.id, qty(30.0))
@@ -336,7 +336,7 @@ class DrugServiceTest {
         val bob = dbHelper.freshUser("bob")
         val kit = medKitService.createNew(alice.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
         drugService.createPlan(alice.id, drug.id, qty(50.0))
@@ -356,7 +356,7 @@ class DrugServiceTest {
     fun `cancelPlan removes the plan`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
         drugService.createPlan(alice.id, drug.id, qty(30.0))
@@ -374,7 +374,7 @@ class DrugServiceTest {
     fun `recordIntake reduces both the stock and the plan`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
         drugService.createPlan(alice.id, drug.id, qty(30.0))
@@ -384,14 +384,14 @@ class DrugServiceTest {
 
         assertNotNull(remaining)
         assertQty(20.0, remaining.plannedAmount)
-        assertQty(90.0, drugService.requireById(drug.id).quantity)
+        assertQty(90.0, dbHelper.requireDrug(drug.id).quantity)
     }
 
     @Test
     fun `recordIntake refuses more than the plan holds`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
         drugService.createPlan(alice.id, drug.id, qty(10.0))
@@ -403,31 +403,10 @@ class DrugServiceTest {
     }
 
     @Test
-    fun `recordIntake refuses more than the stock holds`() {
-        val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 20.0)
-        dbHelper.flushAndClear()
-
-        drugService.createPlan(alice.id, drug.id, qty(10.0))
-        dbHelper.flushAndClear()
-
-        // Остаток подменяется напрямую: так выглядит состояние, в котором план пережил
-        // списание, сделанное кем-то другим.
-        val stored = drugService.lockAccessible(drug.id, alice.id)
-        stored.quantity = qty(2.0)
-        drugRepository.saveAndFlush(stored)
-
-        assertThrows<InsufficientStock> {
-            drugService.recordIntake(alice.id, drug.id, qty(5.0))
-        }
-    }
-
-    @Test
     fun `recordIntake exhausting the plan removes it`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 20.0)
+        val drug = dbHelper.freshDrug(kit.id, 20.0)
         dbHelper.flushAndClear()
 
         drugService.createPlan(alice.id, drug.id, qty(10.0))

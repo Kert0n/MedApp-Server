@@ -5,6 +5,8 @@ import jakarta.validation.constraints.NotNull
 import java.io.Serializable
 import java.math.BigDecimal
 import java.util.*
+import org.kert0n.medappserver.domain.QUANTITY_PRECISION
+import org.kert0n.medappserver.domain.QUANTITY_SCALE
 
 
 @Entity
@@ -15,7 +17,7 @@ import java.util.*
         Index(name = "ix_usings_drug_id", columnList = "drug_id")
     ]
 )
-class TreatmentPlan(
+class TreatmentPlanData(
 
     @EmbeddedId
     var planKey: TreatmentPlanKey = TreatmentPlanKey(),
@@ -25,7 +27,7 @@ class TreatmentPlan(
     // Имя задано явно, чтобы схема Hibernate и db/schema.sql совпадали и по именам ключей.
     // Каскада здесь намеренно нет: план не удаляется вслед за пользователем.
     @JoinColumn(name = "user_id", foreignKey = ForeignKey(name = "usings_user_fkey"))
-    var user: User,
+    var userData: UserData,
 
     @ManyToOne(fetch = FetchType.EAGER)
     @MapsId("drugId")
@@ -39,24 +41,18 @@ class TreatmentPlan(
                 "FOREIGN KEY (drug_id) REFERENCES user_drugs (id) ON DELETE CASCADE"
         )
     )
-    var drug: Drug,
+    var drugData: DrugData,
 
-    plannedAmount: BigDecimal
-) {
-
-    /** Запланированное количество, нормализованное до масштаба колонки `NUMERIC(19,6)`. */
     @NotNull
     @Column(name = "planned_amount", nullable = false, precision = QUANTITY_PRECISION, scale = QUANTITY_SCALE)
-    var plannedAmount: BigDecimal = plannedAmount.toQuantityScale()
-        set(value) {
-            field = value.toQuantityScale()
-        }
+    var plannedAmount: BigDecimal
+) {
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
 
-        other as TreatmentPlan
+        other as TreatmentPlanData
 
         return planKey == other.planKey
     }

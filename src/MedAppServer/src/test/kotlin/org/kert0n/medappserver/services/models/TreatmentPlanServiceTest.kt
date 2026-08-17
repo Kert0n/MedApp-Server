@@ -4,6 +4,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.api.toDto
+import org.kert0n.medappserver.domain.DomainRuleViolated
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -11,7 +12,6 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.web.server.ResponseStatusException
 
 /**
  * Здесь остались только чтения планов.
@@ -38,36 +38,36 @@ class TreatmentPlanServiceTest {
     fun `findAllByUser returns treatment plans for user`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
         drugService.createPlan(alice.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
-        assertEquals(1, treatmentPlanService.findAllByUser(alice.id).size)
+        assertEquals(1, treatmentPlanService.plansOf(alice.id).size)
     }
 
     @Test
     fun `findAllByDrug returns treatment plans for drug`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
         drugService.createPlan(alice.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
-        assertEquals(1, treatmentPlanService.findAllByDrug(drug.id).size)
+        assertEquals(1, drugService.require(drug.id, alice.id).plans.size)
     }
 
     @Test
     fun `requirePlan throws NOT_FOUND when no plan exists`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        assertFailsWith<ResponseStatusException> {
+        assertFailsWith<DomainRuleViolated> {
             treatmentPlanService.requirePlan(alice.id, drug.id)
         }
     }
@@ -76,13 +76,13 @@ class TreatmentPlanServiceTest {
     fun `view carries the planned amount`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
         drugService.createPlan(alice.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
-        val dto = treatmentPlanService.requireView(alice.id, drug.id).toDto()
+        val dto = treatmentPlanService.requirePlan(alice.id, drug.id).toDto()
         assertEquals(drug.id, dto.drugId)
         assertQty(30.0, dto.plannedAmount)
     }

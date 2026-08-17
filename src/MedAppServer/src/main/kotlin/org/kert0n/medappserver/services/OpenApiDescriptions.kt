@@ -71,6 +71,15 @@ val OPERATION_TEXTS: Map<String, OperationText> = mapOf(
         "Search the catalogue",
         "Searches by name, Latin name, active substance and manufacturer."
     ),
+    "listQuantityUnits" to OperationText(
+        "List quantity units",
+        "Shared vocabulary of quantity units. A drug references a unit by identifier, so this " +
+            "list is where the identifier comes from."
+    ),
+    "listFormTypes" to OperationText(
+        "List dosage forms",
+        "Shared vocabulary of dosage forms, used the same way as quantity units."
+    ),
     "getDrugTemplate" to OperationText(
         "Get a catalogue entry",
         "Returns a single catalogue entry."

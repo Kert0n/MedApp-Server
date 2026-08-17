@@ -3,14 +3,11 @@ package org.kert0n.medappserver.services.models
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import org.junit.jupiter.api.Test
-import org.kert0n.medappserver.db.repository.DrugRepository
-import org.kert0n.medappserver.db.repository.TreatmentPlanRepository
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.data.repository.findByIdOrNull
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.transaction.annotation.Transactional
 
@@ -30,12 +27,6 @@ class PlanReconciliationTest {
     @Autowired
     private lateinit var medKitService: MedKitService
     @Autowired
-    private lateinit var treatmentPlanService: TreatmentPlanService
-    @Autowired
-    private lateinit var drugRepository: DrugRepository
-    @Autowired
-    private lateinit var treatmentPlanRepository: TreatmentPlanRepository
-    @Autowired
     private lateinit var dbHelper: DatabaseTestHelper
 
     // ── остаток дошёл до нуля: препарат удаляется вместе с планами ──
@@ -44,17 +35,17 @@ class PlanReconciliationTest {
     fun `drug deleted when quantity reaches zero`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
-        val drug = dbHelper.freshDrug(kit, 50.0)
+        val drug = dbHelper.freshDrug(kit.id, 50.0)
         dbHelper.flushAndClear()
 
         drugService.createPlan(alice.id, drug.id, qty(50.0))
         dbHelper.flushAndClear()
 
-        drugService.consumeDrug(drug.id, qty(50.0), alice.id)
+        drugService.consume(drug.id, qty(50.0), alice.id)
         dbHelper.flushAndClear()
 
-        assertNull(drugRepository.findByIdOrNull(drug.id))
-        assertEquals(0, treatmentPlanRepository.findAllByPlanKeyDrugId(drug.id).size)
+        assertNull(dbHelper.drug(drug.id))
+        assertEquals(0, (dbHelper.drug(drug.id)?.plans ?: emptyList()).size)
     }
 
     // ── сумма планов укладывается в остаток: пересчёта нет ──
@@ -65,14 +56,14 @@ class PlanReconciliationTest {
         val bob = dbHelper.freshUser("bob")
         val kit = medKitService.createNew(alice.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
         drugService.createPlan(alice.id, drug.id, qty(20.0))
         drugService.createPlan(bob.id, drug.id, qty(20.0))
         dbHelper.flushAndClear()
 
-        drugService.consumeDrug(drug.id, qty(50.0), alice.id)
+        drugService.consume(drug.id, qty(50.0), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(50.0, dbHelper.drugQuantity(drug.id))
@@ -88,7 +79,7 @@ class PlanReconciliationTest {
         val bob = dbHelper.freshUser("bob")
         val kit = medKitService.createNew(alice.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
         drugService.createPlan(alice.id, drug.id, qty(60.0))
@@ -96,7 +87,7 @@ class PlanReconciliationTest {
         dbHelper.flushAndClear()
 
         // Consume 50 → quantity=50, factor=50/100=0.5
-        drugService.consumeDrug(drug.id, qty(50.0), alice.id)
+        drugService.consume(drug.id, qty(50.0), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(50.0, dbHelper.drugQuantity(drug.id))
@@ -113,14 +104,14 @@ class PlanReconciliationTest {
         val bob = dbHelper.freshUser("bob")
         val kit = medKitService.createNew(alice.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kit.id, alice.id), bob.id)
-        val drug = dbHelper.freshDrug(kit, 100.0)
+        val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
         drugService.createPlan(alice.id, drug.id, qty(60.0))
         drugService.createPlan(bob.id, drug.id, qty(40.0))
         dbHelper.flushAndClear()
 
-        drugService.consumeDrug(drug.id, qty(50.0), alice.id)
+        drugService.consume(drug.id, qty(50.0), alice.id)
         dbHelper.flushAndClear()
 
         val alicePlan = dbHelper.userPlan(alice.id, drug.id)!!

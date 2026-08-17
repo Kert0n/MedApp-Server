@@ -1,4 +1,4 @@
-package org.kert0n.medappserver.db.model
+package org.kert0n.medappserver.domain
 
 /**
  * Отказы агрегата.
@@ -17,9 +17,6 @@ class InvalidQuantity : DomainRuleViolated("Quantity must be greater than zero")
 /** Списать больше, чем есть, нельзя. */
 class InsufficientStock : DomainRuleViolated("Amount exceeds the stock")
 
-/** Запас можно только пополнить; расход выражается списанием. */
-class QuantityNotIncreased : DomainRuleViolated("New quantity must be greater than the current one")
-
 /** Сумма планов не может превысить остаток. */
 class PlannedAmountExceedsStock : DomainRuleViolated("Planned amount exceeds the available stock")
 
@@ -31,3 +28,30 @@ class TreatmentPlanAlreadyExists : DomainRuleViolated("Treatment plan already ex
 
 /** Плана нет. */
 class NoSuchTreatmentPlan : DomainRuleViolated("There is no such treatment plan")
+
+/** Пользователь не участник этой аптечки — или самой аптечки нет. */
+class NotAMember : DomainRuleViolated("Medicine kit is not accessible")
+
+/** Пользователь уже участник: вступать второй раз нечего. */
+class AlreadyMember : DomainRuleViolated("User is already a member of this medicine kit")
+
+/** Пользователь без ключа не существует. */
+class InvalidCredentials : DomainRuleViolated("Credentials must not be blank")
+
+/** Аптечки без участников не бывает: последний выходящий забирает её с собой. */
+class MedKitWithoutMembers : DomainRuleViolated("Medicine kit must have at least one member")
+
+/** Количество не бывает отрицательным. */
+class NegativeQuantity : DomainRuleViolated("Quantity must not be negative")
+
+/** Величины в разных единицах измерения несравнимы и не складываются. */
+class QuantityUnitMismatch : DomainRuleViolated("Quantities must share the same unit")
+
+/** План принадлежит другому препарату. */
+class ForeignTreatmentPlan : DomainRuleViolated("Treatment plan belongs to another drug")
+
+/** Единицы измерения с таким идентификатором в справочнике нет. */
+class UnknownQuantityUnit : DomainRuleViolated("Unknown quantity unit")
+
+/** Формы выпуска с таким идентификатором в справочнике нет. */
+class UnknownFormType : DomainRuleViolated("Unknown dosage form")

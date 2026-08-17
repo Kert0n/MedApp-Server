@@ -6,23 +6,20 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
-import org.kert0n.medappserver.db.model.PlannedAmountExceedsStock
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
-import org.kert0n.medappserver.db.model.Drug
-import org.kert0n.medappserver.db.model.User
-import org.kert0n.medappserver.db.repository.DrugRepository
-import org.kert0n.medappserver.db.repository.MedKitRepository
-import org.kert0n.medappserver.db.repository.TreatmentPlanRepository
-import org.kert0n.medappserver.db.repository.UserRepository
+import org.kert0n.medappserver.db.store.MedKitStore
+import org.kert0n.medappserver.domain.Drug
+import org.kert0n.medappserver.domain.PlannedAmountExceedsStock
+import org.kert0n.medappserver.domain.Quantity
+import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.models.TreatmentPlanService
-import org.kert0n.medappserver.services.orchestrators.MedKitDrugServices
+import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
+import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.data.repository.findByIdOrNull
 import org.springframework.transaction.annotation.Transactional
 
 @PostgresIntegrationTest
@@ -30,16 +27,14 @@ import org.springframework.transaction.annotation.Transactional
 class TreatmentPlanStoriesTest {
 
     @Autowired
-    private lateinit var userRepository: UserRepository
+
+    private lateinit var medKitStore: MedKitStore
+
 
     @Autowired
-    private lateinit var medKitRepository: MedKitRepository
 
-    @Autowired
-    private lateinit var drugRepository: DrugRepository
+    private lateinit var dbHelper: DatabaseTestHelper
 
-    @Autowired
-    private lateinit var treatmentPlanRepository: TreatmentPlanRepository
 
     @Autowired
     private lateinit var entityManager: EntityManager
@@ -51,10 +46,8 @@ class TreatmentPlanStoriesTest {
     private lateinit var medKitService: MedKitService
 
     @Autowired
-    private lateinit var medKitDrugServices: MedKitDrugServices
+    private lateinit var medKitDrugOrchestrator: MedKitDrugOrchestrator
 
-    @Autowired
-    private lateinit var treatmentPlanService: TreatmentPlanService
 
     /**
      * Story 6: Complex workflow with treatment plans
@@ -63,43 +56,41 @@ class TreatmentPlanStoriesTest {
      */
     @Test
     fun `Story 6 - User creates treatment plan and records intakes`() {
-        val user = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
-        userRepository.save(user)
+        val userData = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
+        dbHelper.insert(userData)
 
-        val medkit = medKitService.createNew(user.id)
-        val drug = Drug(
+        val medkit = medKitService.createNew(userData.id)
+        val drugData = Drug(
             id = UUID.randomUUID(),
             name = "Treatment Drug",
-            quantity = qty(100.0),
-            quantityUnit = "tablets",
-            formType = null,
+            quantity = Quantity(qty(100.0), dbHelper.unit()),
             category = null,
             manufacturer = null,
             country = null,
             description = null,
-            medKit = medkit
+            medKitId = medkit.id
         )
-        drugRepository.save(drug)
+        dbHelper.insert(drugData)
         entityManager.flush()
 
         // Create treatment plan for 30 tablets
-        val plan = drugService.createPlan(userId = user.id, drug.id, qty(30.0))
+        val plan = drugService.createPlan(userId = userData.id, drugData.id, qty(30.0))
         assertNotNull(plan)
         entityManager.flush()
 
         // Verify plan was created
-        val createdPlan = treatmentPlanRepository.findByUserIdAndDrugId(user.id, drug.id)
+        val createdPlan = dbHelper.userPlan(userData.id, drugData.id)
         assertNotNull(createdPlan, "Plan should be created")
-        assertQty(30.0, createdPlan.plannedAmount, "Planned amount should be 30")
+        assertQty(30.0, createdPlan, "Planned amount should be 30")
 
         // Record some intakes
-        drugService.recordIntake(user.id, drug.id, qty(5.0))
-        drugService.recordIntake(user.id, drug.id, qty(5.0))
+        drugService.recordIntake(userData.id, drugData.id, qty(5.0))
+        drugService.recordIntake(userData.id, drugData.id, qty(5.0))
         entityManager.flush()
         entityManager.clear()
 
         // Verify drug quantity decreased
-        val updatedDrug = drugRepository.findById(drug.id).orElse(null)
+        val updatedDrug = dbHelper.drug(drugData.id)
         assertNotNull(updatedDrug)
         assertQty(90.0, updatedDrug.quantity, "Drug quantity should be 90 after 10 consumed")
 
@@ -116,8 +107,8 @@ class TreatmentPlanStoriesTest {
         // Setup: Anna and Bob share a medkit with 100 tablets of Vitamin C
         val anna = User(id = UUID.randomUUID(), hashedKey = "anna_${UUID.randomUUID()}")
         val bob = User(id = UUID.randomUUID(), hashedKey = "bob_${UUID.randomUUID()}")
-        userRepository.save(anna)
-        userRepository.save(bob)
+        dbHelper.insert(anna)
+        dbHelper.insert(bob)
 
         val medkit = medKitService.createNew(anna.id)
         val shareKey = medKitService.generateMedKitShareKey(medkit.id, anna.id)
@@ -126,16 +117,14 @@ class TreatmentPlanStoriesTest {
         val vitaminC = Drug(
             id = UUID.randomUUID(),
             name = "Vitamin C",
-            quantity = qty(100.0),
-            quantityUnit = "tablets",
-            formType = "tablet",
+            quantity = Quantity(qty(100.0), dbHelper.unit()),
             category = null,
             manufacturer = null,
             country = null,
             description = null,
-            medKit = medkit
+            medKitId = medkit.id
         )
-        drugRepository.save(vitaminC)
+        dbHelper.insert(vitaminC)
         entityManager.flush()
 
         // Anna creates a treatment plan for 40 tablets
@@ -147,15 +136,15 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
         entityManager.clear()
         // Total planned = 90, should match sumPlannedAmount
-        assertQty(90.0, drugRepository.findByIdOrNull(vitaminC.id)?.storedPlannedTotal, "Total planned should be 90")
+        assertQty(90.0, dbHelper.totalPlanned(vitaminC.id), "Total planned should be 90")
 
         // Verify each user has their own plan
-        val annaPlan = treatmentPlanRepository.findByUserIdAndDrugId(anna.id, vitaminC.id)
-        val bobPlan = treatmentPlanRepository.findByUserIdAndDrugId(bob.id, vitaminC.id)
+        val annaPlan = dbHelper.userPlan(anna.id, vitaminC.id)
+        val bobPlan = dbHelper.userPlan(bob.id, vitaminC.id)
         assertNotNull(annaPlan)
         assertNotNull(bobPlan)
-        assertQty(40.0, annaPlan.plannedAmount)
-        assertQty(50.0, bobPlan.plannedAmount)
+        assertQty(40.0, annaPlan)
+        assertQty(50.0, bobPlan)
 
         println("✅ Story 7 passed: Multiple users created treatment plans on shared drug")
     }
@@ -167,44 +156,42 @@ class TreatmentPlanStoriesTest {
      */
     @Test
     fun `Story 8 - Reducing drug quantity adjusts treatment plans proportionally`() {
-        val user = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
-        userRepository.save(user)
-        val medkit = medKitService.createNew(user.id)
+        val userData = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
+        dbHelper.insert(userData)
+        val medkit = medKitService.createNew(userData.id)
 
-        val drug = Drug(
+        val drugData = Drug(
             id = UUID.randomUUID(),
             name = "Paracetamol",
-            quantity = qty(100.0),
-            quantityUnit = "tablets",
-            formType = null,
+            quantity = Quantity(qty(100.0), dbHelper.unit()),
             category = null,
             manufacturer = null,
             country = null,
             description = null,
-            medKit = medkit
+            medKitId = medkit.id
         )
-        drugRepository.save(drug)
+        dbHelper.insert(drugData)
         entityManager.flush()
 
         // Create plan for 80 tablets
-        drugService.createPlan(user.id, drug.id, qty(80.0))
+        drugService.createPlan(userData.id, drugData.id, qty(80.0))
         entityManager.flush()
         entityManager.clear()
 
         // Consume 50 tablets (drug goes to 50, but plan is 80 > 50)
         // reconciliation should scale the plan down
-        drugService.consumeDrug(drug.id, qty(50.0), user.id)
+        drugService.consume(drugData.id, qty(50.0), userData.id)
         entityManager.flush()
         entityManager.clear()
 
-        val updatedDrug = drugRepository.findById(drug.id).orElse(null)
+        val updatedDrug = dbHelper.drug(drugData.id)
         assertNotNull(updatedDrug)
         assertQty(50.0, updatedDrug.quantity)
 
         // Plan should be reduced proportionally: 80 * (50/80) = 50
-        val updatedPlan = treatmentPlanRepository.findByUserIdAndDrugId(user.id, drug.id)
+        val updatedPlan = dbHelper.userPlan(userData.id, drugData.id)
         assertNotNull(updatedPlan)
-        assertTrue(updatedPlan.plannedAmount <= qty(50.0), "Plan should be reduced to fit available quantity")
+        assertTrue(updatedPlan <= qty(50.0), "Plan should be reduced to fit available quantity")
 
         println("✅ Story 8 passed: Drug quantity reduction cascaded to treatment plans")
     }
@@ -216,50 +203,48 @@ class TreatmentPlanStoriesTest {
      */
     @Test
     fun `Story 9 - Cannot over-plan drug quantity`() {
-        val user = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
-        userRepository.save(user)
-        val medkit = medKitService.createNew(user.id)
+        val userData = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
+        dbHelper.insert(userData)
+        val medkit = medKitService.createNew(userData.id)
 
-        val drug = Drug(
+        val drugData = Drug(
             id = UUID.randomUUID(),
             name = "Ibuprofen",
-            quantity = qty(50.0),
-            quantityUnit = "tablets",
-            formType = null,
+            quantity = Quantity(qty(50.0), dbHelper.unit()),
             category = null,
             manufacturer = null,
             country = null,
             description = null,
-            medKit = medkit
+            medKitId = medkit.id
         )
-        drugRepository.save(drug)
+        dbHelper.insert(drugData)
         entityManager.flush()
 
         // Try to create a plan for 60 tablets when only 50 available
         assertFailsWith<PlannedAmountExceedsStock> {
-            drugService.createPlan(user.id, drug.id, qty(60.0))
+            drugService.createPlan(userData.id, drugData.id, qty(60.0))
         }
 
         // Create a plan for 30
-        drugService.createPlan(user.id, drug.id, qty(30.0))
+        drugService.createPlan(userData.id, drugData.id, qty(30.0))
         entityManager.flush()
 
         // Another user tries to plan 25 (only 20 available: 50 - 30 = 20)
-        val user2 = User(id = UUID.randomUUID(), hashedKey = "user2_${UUID.randomUUID()}")
-        userRepository.save(user2)
-        val shareKey = medKitService.generateMedKitShareKey(medkit.id, user.id)
-        medKitService.joinMedKitByKey(shareKey, user2.id)
+        val userData2 = User(id = UUID.randomUUID(), hashedKey = "user2_${UUID.randomUUID()}")
+        dbHelper.insert(userData2)
+        val shareKey = medKitService.generateMedKitShareKey(medkit.id, userData.id)
+        medKitService.joinMedKitByKey(shareKey, userData2.id)
         entityManager.flush()
         entityManager.clear()
         assertFailsWith<PlannedAmountExceedsStock> {
-            drugService.createPlan(user2.id, drug.id, qty(25.0))
+            drugService.createPlan(userData2.id, drugData.id, qty(25.0))
         }
 
         // But 20 should work
-        drugService.createPlan(user2.id, drug.id, qty(20.0))
+        drugService.createPlan(userData2.id, drugData.id, qty(20.0))
         entityManager.flush()
         entityManager.clear()
-        assertQty(50.0, drugRepository.findByIdOrNull(drug.id)?.storedPlannedTotal)
+        assertQty(50.0, dbHelper.totalPlanned(drugData.id))
 
         println("✅ Story 9 passed: Cannot over-plan drug quantity")
     }
@@ -275,9 +260,9 @@ class TreatmentPlanStoriesTest {
         val mom = User(id = UUID.randomUUID(), hashedKey = "mom_${UUID.randomUUID()}")
         val dad = User(id = UUID.randomUUID(), hashedKey = "dad_${UUID.randomUUID()}")
         val child = User(id = UUID.randomUUID(), hashedKey = "child_${UUID.randomUUID()}")
-        userRepository.save(mom)
-        userRepository.save(dad)
-        userRepository.save(child)
+        dbHelper.insert(mom)
+        dbHelper.insert(dad)
+        dbHelper.insert(child)
         entityManager.flush()
 
         val familyKit = medKitService.createNew(mom.id)
@@ -290,18 +275,18 @@ class TreatmentPlanStoriesTest {
         // Add family medications
         val aspirin = Drug(
             id = UUID.randomUUID(), name = "Children's Aspirin",
-            quantity = qty(200.0), quantityUnit = "tablets", formType = "chewable",
+            quantity = Quantity(qty(200.0), dbHelper.unit()),
             category = "painkiller", manufacturer = null, country = null,
-            description = null, medKit = familyKit
+            description = null, medKitId = familyKit.id
         )
         val vitamins = Drug(
             id = UUID.randomUUID(), name = "Multivitamins",
-            quantity = qty(90.0), quantityUnit = "tablets", formType = "tablet",
+            quantity = Quantity(qty(90.0), dbHelper.unit()),
             category = "supplement", manufacturer = null, country = null,
-            description = null, medKit = familyKit
+            description = null, medKitId = familyKit.id
         )
-        drugRepository.save(aspirin)
-        drugRepository.save(vitamins)
+        dbHelper.insert(aspirin)
+        dbHelper.insert(vitamins)
         entityManager.flush()
 
         // Everyone gets treatment plans for vitamins: 30 each
@@ -311,7 +296,7 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
         entityManager.clear()
         // Total planned = 90 (full supply)
-        assertQty(90.0, drugRepository.findByIdOrNull(vitamins.id)?.storedPlannedTotal)
+        assertQty(90.0, dbHelper.totalPlanned(vitamins.id))
 
         // Everyone takes their daily vitamin
         drugService.recordIntake(mom.id, vitamins.id, qty(1.0))
@@ -323,24 +308,24 @@ class TreatmentPlanStoriesTest {
         entityManager.clear()
 
         // Check vitamins after 1 day
-        val updatedVitamins = drugRepository.findById(vitamins.id).orElse(null)
+        val updatedVitamins = dbHelper.drug(vitamins.id)
         assertNotNull(updatedVitamins)
         assertQty(87.0, updatedVitamins.quantity, "Should be 90 - 3 = 87")
 
         // 3 users in the medkit
-        val medkit = medKitRepository.findById(familyKit.id).orElse(null)
+        val medkit = medKitStore.findById(familyKit.id)
         assertNotNull(medkit)
-        assertEquals(3, medkit.users.size)
+        assertEquals(3, medkit.members.size)
 
         // Child leaves the medkit
-        medKitDrugServices.removeUserFromMedKit(familyKit.id, child.id)
+        medKitDrugOrchestrator.leaveMedKit(familyKit.id, child.id)
         entityManager.flush()
         entityManager.clear()
 
         // Medkit still has mom and dad
-        val updatedKit = medKitRepository.findById(familyKit.id).orElse(null)
+        val updatedKit = medKitStore.findById(familyKit.id)
         assertNotNull(updatedKit)
-        assertEquals(2, updatedKit.users.size)
+        assertEquals(2, updatedKit.members.size)
 
         println("✅ Story 10 passed: Complete family medkit lifecycle")
     }

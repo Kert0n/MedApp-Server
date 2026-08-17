@@ -1,8 +1,9 @@
 package org.kert0n.medappserver.controller
 
-import org.kert0n.medappserver.db.model.DomainRuleViolated
-import org.kert0n.medappserver.db.model.NoSuchTreatmentPlan
-import org.kert0n.medappserver.db.model.TreatmentPlanAlreadyExists
+import org.kert0n.medappserver.domain.DomainRuleViolated
+import org.kert0n.medappserver.domain.NoSuchTreatmentPlan
+import org.kert0n.medappserver.domain.NotAMember
+import org.kert0n.medappserver.domain.TreatmentPlanAlreadyExists
 import org.springframework.http.HttpStatus
 import org.springframework.http.ProblemDetail
 import org.springframework.web.bind.MethodArgumentNotValidException
@@ -37,6 +38,9 @@ class ApiExceptionHandler {
     fun handleDomainRule(exception: DomainRuleViolated): ProblemDetail = problem(
         when (exception) {
             is NoSuchTreatmentPlan -> HttpStatus.NOT_FOUND
+            // Недоступная аптечка и несуществующая отвечают одинаково: иначе по коду ответа
+            // можно было бы узнать, что чужая аптечка существует.
+            is NotAMember -> HttpStatus.NOT_FOUND
             is TreatmentPlanAlreadyExists -> HttpStatus.CONFLICT
             else -> HttpStatus.BAD_REQUEST
         }
