@@ -14,6 +14,7 @@ import org.kert0n.medappserver.services.models.ReservationService
 import org.kert0n.medappserver.services.models.userId
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
+import org.springframework.http.ResponseEntity
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
 import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBody
@@ -25,7 +26,10 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBod
 @RestController
 @RequestMapping("/v1/reservations")
 @Tag(name = "Reservations", description = "How much of a package the caller claims for themselves")
-class ReservationController(private val reservationService: ReservationService) {
+class ReservationController(
+    private val reservationService: ReservationService,
+    private val preconditions: Preconditions
+) {
 
     private val logger = LoggerFactory.getLogger(ReservationController::class.java)
 
@@ -42,13 +46,12 @@ class ReservationController(private val reservationService: ReservationService) 
     fun getReservation(
         authentication: Authentication,
         @Parameter(description = "Package identifier") @PathVariable drugId: UUID
-    ): ReservationDTO {
+    ): ResponseEntity<ReservationDTO> {
         logger.debug("GET /v1/reservations/{} by user {}", drugId, authentication.userId)
-        return reservationService.require(authentication.userId, drugId).toDto()
+        return reservationService.require(authentication.userId, drugId).toDto().withEtag()
     }
 
     @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
     @ApiResponse(responseCode = "201", description = "Reservation created")
     @ApiResponse(responseCode = "400", description = "Invalid amount", content = [Content()])
     @ApiResponse(responseCode = "404", description = "Package is not accessible", content = [Content()])
@@ -57,34 +60,58 @@ class ReservationController(private val reservationService: ReservationService) 
         authentication: Authentication,
         @SwaggerRequestBody(description = "Reservation to create")
         @Valid @RequestBody request: ReservationCreateRequest
-    ): ReservationDTO {
+    ): ResponseEntity<ReservationDTO> {
         logger.debug("POST /v1/reservations by user {} on drug {}", authentication.userId, request.drugId)
-        return reservationService.create(authentication.userId, request.drugId, request.amount).toDto()
+        // Предусловия нет: создание ничего не перезаписывает, а вторая бронь на ту же пачку
+        // отвергается сама по себе — 409 приходит от правила, а не от версии.
+        return reservationService.create(authentication.userId, request.drugId, request.amount)
+            .toDto()
+            .createdWithEtag()
     }
 
     @PatchMapping("/{drugId}")
     @ApiResponse(responseCode = "200", description = "Reservation updated")
-    @ApiResponse(responseCode = "400", description = "Invalid amount", content = [Content()])
+    @ApiResponse(responseCode = "400", description = "Invalid amount or malformed If-Match", content = [Content()])
     @ApiResponse(responseCode = "404", description = "No reservation on this package", content = [Content()])
+    @ApiResponse(responseCode = "409", description = "Reservation has changed since the version supplied", content = [Content()])
+    @ApiResponse(responseCode = "428", description = "If-Match is required", content = [Content()])
     fun patchReservation(
         authentication: Authentication,
         @Parameter(description = "Package identifier") @PathVariable drugId: UUID,
+        @Parameter(
+            description = "Version the caller decided by, as a strong entity tag",
+            required = true,
+            example = "\"3\""
+        )
+        @RequestHeader(value = Preconditions.IF_MATCH, required = false) ifMatch: String?,
         @SwaggerRequestBody(description = "New reserved amount")
         @Valid @RequestBody request: ReservationPatchRequest
-    ): ReservationDTO {
+    ): ResponseEntity<ReservationDTO> {
         logger.debug("PATCH /v1/reservations/{} by user {}", drugId, authentication.userId)
-        return reservationService.changeTo(authentication.userId, drugId, request.amount).toDto()
+        return reservationService
+            .changeTo(authentication.userId, drugId, request.amount, preconditions.requiredMatch(ifMatch))
+            .toDto()
+            .withEtag()
     }
 
     @DeleteMapping("/{drugId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @ApiResponse(responseCode = "204", description = "Reservation cancelled")
+    @ApiResponse(responseCode = "400", description = "Malformed If-Match", content = [Content()])
     @ApiResponse(responseCode = "404", description = "No reservation on this package", content = [Content()])
+    @ApiResponse(responseCode = "409", description = "Reservation has changed since the version supplied", content = [Content()])
+    @ApiResponse(responseCode = "428", description = "If-Match is required", content = [Content()])
     fun deleteReservation(
         authentication: Authentication,
-        @Parameter(description = "Package identifier") @PathVariable drugId: UUID
+        @Parameter(description = "Package identifier") @PathVariable drugId: UUID,
+        @Parameter(
+            description = "Version the caller decided by, as a strong entity tag",
+            required = true,
+            example = "\"3\""
+        )
+        @RequestHeader(value = Preconditions.IF_MATCH, required = false) ifMatch: String?
     ) {
         logger.debug("DELETE /v1/reservations/{} by user {}", drugId, authentication.userId)
-        reservationService.cancel(authentication.userId, drugId)
+        reservationService.cancel(authentication.userId, drugId, preconditions.requiredMatch(ifMatch))
     }
 }

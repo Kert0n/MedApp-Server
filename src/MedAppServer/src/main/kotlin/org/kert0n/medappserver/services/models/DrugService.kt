@@ -56,6 +56,16 @@ class DrugService(
         return drugs.findAllAccessibleTo(userId)
     }
 
+    /**
+     * Упаковка в том состоянии, по которому решал клиент.
+     *
+     * Порядок проверок значим: сначала доступ, потом версия. Иначе по коду ответа на чужую пачку
+     * можно было бы отличить «нет такой» от «есть, но версия другая».
+     */
+    @Transactional(readOnly = true)
+    fun requireAt(drugId: UUID, userId: UUID, expectedVersion: Long): Drug =
+        require(drugId, userId).also { it.requireVersion(expectedVersion) }
+
     /** Недоступная и несуществующая упаковка отвечают одинаково: иначе чужая обнаружится. */
     private fun notFound() = NotAMember()
 
@@ -81,10 +91,10 @@ class DrugService(
     }
 
     @Transactional
-    fun update(drugId: UUID, request: DrugPatchRequest, userId: UUID): Drug {
+    fun update(drugId: UUID, request: DrugPatchRequest, userId: UUID, expectedVersion: Long): Drug {
         logger.debug("Updating drug: {}", drugId)
 
-        var drug = require(drugId, userId)
+        var drug = requireAt(drugId, userId, expectedVersion)
         // Единица перевешивается первой: количество ниже собирается уже в ней.
         request.quantityUnitId?.let { drug = drug.relabelUnitTo(catalogue.requireQuantityUnit(it)) }
         request.quantity?.let { drug = drug.changeQuantityTo(Quantity(it, drug.quantity.unit)) }
@@ -104,10 +114,10 @@ class DrugService(
     }
 
     @Transactional
-    fun delete(drugId: UUID, userId: UUID) {
+    fun delete(drugId: UUID, userId: UUID, expectedVersion: Long) {
         logger.debug("Deleting drug: {}", drugId)
 
-        val drug = require(drugId, userId)
+        val drug = requireAt(drugId, userId, expectedVersion)
         drugs.delete(drug.id)
     }
 
@@ -118,10 +128,10 @@ class DrugService(
      * ещё до списания.
      */
     @Transactional
-    fun consume(drugId: UUID, quantity: BigDecimal, userId: UUID): Drug? {
+    fun consume(drugId: UUID, quantity: BigDecimal, userId: UUID, expectedVersion: Long): Drug? {
         logger.debug("Consuming {} of drug {}", quantity, drugId)
 
-        val drug = require(drugId, userId)
+        val drug = requireAt(drugId, userId, expectedVersion)
         val left = drug.consume(Quantity(quantity, drug.quantity.unit))
         if (left == null) {
             drugs.delete(drugId)
@@ -133,10 +143,10 @@ class DrugService(
 
     /** Брони, потерявшие доступ, убирает межагрегатный сценарий: они в чужом агрегате. */
     @Transactional
-    fun moveTo(drugId: UUID, targetMedKitId: UUID, userId: UUID): Drug {
+    fun moveTo(drugId: UUID, targetMedKitId: UUID, userId: UUID, expectedVersion: Long): Drug {
         logger.debug("Moving drug {} to medkit {}", drugId, targetMedKitId)
 
-        val moved = require(drugId, userId).moveTo(targetMedKitId)
+        val moved = requireAt(drugId, userId, expectedVersion).moveTo(targetMedKitId)
         drugs.save(moved)
         return moved
     }

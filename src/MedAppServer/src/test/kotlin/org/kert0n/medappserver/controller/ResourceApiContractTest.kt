@@ -27,6 +27,7 @@ import org.mockito.kotlin.eq
 import org.mockito.kotlin.whenever
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers
@@ -73,6 +74,9 @@ class ResourceApiContractTest {
         quantity = Quantity(qty(100.0), unit)
     )
     private val drugDto = drug.toDto(emptyList())
+
+    /** Тег того состояния, по которому «решал клиент»: у свежей заготовки версия нулевая. */
+    private val currentTag = "\"0\""
 
     @BeforeEach
     fun setup() {
@@ -127,34 +131,36 @@ class ResourceApiContractTest {
 
     @Test
     fun `приём создаётся подчинённым ресурсом упаковки`() {
-        whenever(drugService.consume(eq(drugId), any(), eq(userId))).thenReturn(drug)
+        whenever(drugService.consume(eq(drugId), any(), eq(userId), eq(0L))).thenReturn(drug)
         whenever(medKitDrugOrchestrator.drug(drugId, userId)).thenReturn(drugDto)
 
         mockMvc.perform(
             post(ApiRoutes.intakes(drugId)).with(asUser())
+                .header(HttpHeaders.IF_MATCH, currentTag)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"quantity":2.0}""")
         )
             .andExpect(status().isOk)
+            .andExpect(header().string(HttpHeaders.ETAG, currentTag))
             .andExpect(jsonPath("$.id").value(drugId.toString()))
     }
 
     @Test
     fun `перенос выражен размещением препарата в целевой аптечке`() {
         val target = UUID.randomUUID()
-        whenever(medKitDrugOrchestrator.moveDrug(drugId, target, userId)).thenReturn(drug)
+        whenever(medKitDrugOrchestrator.moveDrug(drugId, target, userId, 0L)).thenReturn(drug)
         whenever(medKitDrugOrchestrator.drug(drugId, userId)).thenReturn(drugDto)
 
-        mockMvc.perform(put(ApiRoutes.drugIn(target, drugId)).with(asUser()))
+        mockMvc.perform(put(ApiRoutes.drugIn(target, drugId)).with(asUser()).header(HttpHeaders.IF_MATCH, currentTag))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.id").value(drugId.toString()))
     }
 
     @Test
     fun `препарат удаляется`() {
-        doNothing().whenever(drugService).delete(drugId, userId)
+        doNothing().whenever(drugService).delete(drugId, userId, 0L)
 
-        mockMvc.perform(delete(ApiRoutes.drug(drugId)).with(asUser()))
+        mockMvc.perform(delete(ApiRoutes.drug(drugId)).with(asUser()).header(HttpHeaders.IF_MATCH, currentTag))
             .andExpect(status().isNoContent)
     }
 
@@ -182,7 +188,7 @@ class ResourceApiContractTest {
     fun `план лечения создаётся и меняется`() {
         val plan = Reservation(userId = userId, drugId = drugId, amount = Quantity(qty(20.0), unit))
         whenever(reservationService.create(eq(userId), eq(drugId), any())).thenReturn(plan)
-        whenever(reservationService.changeTo(eq(userId), eq(drugId), any())).thenReturn(plan)
+        whenever(reservationService.changeTo(eq(userId), eq(drugId), any(), eq(0L))).thenReturn(plan)
         whenever(reservationService.require(userId, drugId)).thenReturn(plan)
 
         mockMvc.perform(
@@ -198,6 +204,7 @@ class ResourceApiContractTest {
 
         mockMvc.perform(
             patch(ApiRoutes.reservation(drugId)).with(asUser())
+                .header(HttpHeaders.IF_MATCH, currentTag)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(ReservationPatchRequest(qty(15.0))))
         )
@@ -206,9 +213,11 @@ class ResourceApiContractTest {
 
     @Test
     fun `план лечения удаляется`() {
-        doNothing().whenever(reservationService).cancel(userId, drugId)
+        doNothing().whenever(reservationService).cancel(userId, drugId, 0L)
 
-        mockMvc.perform(delete(ApiRoutes.reservation(drugId)).with(asUser()))
+        mockMvc.perform(
+            delete(ApiRoutes.reservation(drugId)).with(asUser()).header(HttpHeaders.IF_MATCH, currentTag)
+        )
             .andExpect(status().isNoContent)
     }
 
@@ -244,8 +253,8 @@ class ResourceApiContractTest {
     fun `членство создаётся и удаляется`() {
         whenever(medKitService.joinByInvitation("invite-key", userId)).thenReturn(medKit)
         whenever(medKitDrugOrchestrator.medKitWithDrugs(medKitId, userId))
-            .thenReturn(org.kert0n.medappserver.api.MedKitDTO(medKitId, emptySet()))
-        doNothing().whenever(medKitDrugOrchestrator).leaveMedKit(medKitId, userId)
+            .thenReturn(org.kert0n.medappserver.api.MedKitDTO(medKitId, emptySet(), 0))
+        doNothing().whenever(medKitDrugOrchestrator).leaveMedKit(medKitId, userId, 0L)
 
         mockMvc.perform(
             post(ApiRoutes.MEMBERSHIPS).with(asUser())
@@ -254,17 +263,22 @@ class ResourceApiContractTest {
         )
             .andExpect(status().isCreated)
 
-        mockMvc.perform(delete(ApiRoutes.membership(medKitId)).with(asUser()))
+        mockMvc.perform(
+            delete(ApiRoutes.membership(medKitId)).with(asUser()).header(HttpHeaders.IF_MATCH, currentTag)
+        )
             .andExpect(status().isNoContent)
     }
 
     @Test
     fun `удаление аптечки принимает целевую параметром запроса`() {
         val target = UUID.randomUUID()
-        doNothing().whenever(medKitDrugOrchestrator).delete(medKitId, userId, target)
+        doNothing().whenever(medKitDrugOrchestrator).delete(medKitId, userId, 0L, target)
 
         mockMvc.perform(
-            delete(ApiRoutes.medKit(medKitId)).param("targetMedKitId", target.toString()).with(asUser())
+            delete(ApiRoutes.medKit(medKitId))
+                .param("targetMedKitId", target.toString())
+                .with(asUser())
+                .header(HttpHeaders.IF_MATCH, currentTag)
         )
             .andExpect(status().isNoContent)
     }
@@ -273,8 +287,8 @@ class ResourceApiContractTest {
 
     @Test
     fun `снимок пользователя лежит по пути me`() {
-        whenever(medKitService.allOfUser(userId)).thenReturn(listOf(medKit))
-        whenever(drugService.accessibleTo(userId)).thenReturn(listOf(drug))
+        whenever(medKitDrugOrchestrator.medKitsWithDrugs(userId))
+            .thenReturn(setOf(org.kert0n.medappserver.api.MedKitDTO(medKitId, setOf(drugDto), 0)))
 
         mockMvc.perform(get(ApiRoutes.ME).with(asUser()))
             .andExpect(status().isOk)

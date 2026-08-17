@@ -1,6 +1,9 @@
 package org.kert0n.medappserver.api
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import io.swagger.v3.oas.annotations.media.Schema
+import jakarta.validation.constraints.AssertTrue
+import org.kert0n.medappserver.controller.Versioned
 import jakarta.validation.constraints.DecimalMin
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
@@ -40,8 +43,16 @@ data class DrugDTO(
     @Schema(description = "Description")
     val description: String?,
     @Schema(description = "Medicine kit the drug belongs to")
-    val medKitId: UUID
-)
+    val medKitId: UUID,
+    /**
+     * То же значение, что и в `ETag` ответа.
+     *
+     * В теле — чтобы клиент, сложивший снимок целиком, не разбирал заголовки каждого объекта по
+     * отдельности: снимок пользователя приходит одним ответом с одним тегом на него.
+     */
+    @Schema(description = "Opaque state token; send it back in If-Match", example = "3")
+    override val version: Long
+) : Versioned
 
 /** Аптечка задаётся путём, поэтому её идентификатора в теле нет. */
 @Schema(description = "Request to add a drug to a medicine kit")
@@ -85,6 +96,9 @@ data class DrugCreateRequest(
  *
  * Поэтому очистить необязательное поле этим запросом нельзя — отличить «не передал» от
  * «передал пустое» в такой схеме невозможно, и притворяться, что можно, хуже, чем сказать.
+ *
+ * Запрос, не просящий изменить ничего, отвергается: он не команда, но при этом двигал бы версию
+ * упаковки и обесценивал чужие теги.
  */
 @Schema(description = "Partial update of a drug")
 data class DrugPatchRequest(
@@ -122,7 +136,15 @@ data class DrugPatchRequest(
     @field:Size(max = 4000)
     @Schema(description = "Description")
     val description: String? = null
-)
+) {
+    @get:JsonIgnore
+    @get:Schema(hidden = true)
+    @get:AssertTrue(message = "at least one field must be present")
+    val isNotEmpty: Boolean
+        get() = listOfNotNull(
+            name, quantity, quantityUnitId, formTypeId, category, manufacturer, country, description
+        ).isNotEmpty()
+}
 
 @Schema(description = "Catalogue entry used as a template for a new drug")
 data class DrugTemplateDTO(

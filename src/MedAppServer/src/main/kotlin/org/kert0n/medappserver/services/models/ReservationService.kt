@@ -45,6 +45,15 @@ class ReservationService(
     @Transactional(readOnly = true)
     fun require(userId: UUID, drugId: UUID): Reservation = find(userId, drugId) ?: throw NoSuchReservation()
 
+    /**
+     * Бронь в том состоянии, по которому решал клиент.
+     *
+     * Сначала существование, потом версия: чужой брони не существует для вызывающего вовсе.
+     */
+    @Transactional(readOnly = true)
+    fun requireAt(userId: UUID, drugId: UUID, expectedVersion: Long): Reservation =
+        require(userId, drugId).also { it.requireVersion(expectedVersion) }
+
     /** Брони на перечисленные упаковки — чтобы ответить, сколько на пачку заявлено. */
     @Transactional(readOnly = true)
     fun onDrugs(drugIds: Collection<UUID>): List<Reservation> = reservations.findAllOfDrugs(drugIds)
@@ -64,10 +73,10 @@ class ReservationService(
     }
 
     @Transactional
-    fun changeTo(userId: UUID, drugId: UUID, amount: BigDecimal): Reservation {
+    fun changeTo(userId: UUID, drugId: UUID, amount: BigDecimal, expectedVersion: Long): Reservation {
         logger.debug("Changing reservation of user {} on drug {}", userId, drugId)
 
-        val current = require(userId, drugId)
+        val current = requireAt(userId, drugId, expectedVersion)
         val changed = current.changeTo(Quantity(amount, current.amount.unit))
         reservations.save(changed)
         return changed
@@ -75,10 +84,10 @@ class ReservationService(
 
     /** Отмена — это удаление: брони с нулём не бывает. */
     @Transactional
-    fun cancel(userId: UUID, drugId: UUID) {
+    fun cancel(userId: UUID, drugId: UUID, expectedVersion: Long) {
         logger.debug("Cancelling reservation of user {} on drug {}", userId, drugId)
 
-        require(userId, drugId)
+        requireAt(userId, drugId, expectedVersion)
         reservations.delete(userId, drugId)
     }
 }

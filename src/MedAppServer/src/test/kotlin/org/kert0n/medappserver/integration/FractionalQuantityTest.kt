@@ -46,8 +46,8 @@ class FractionalQuantityTest {
         dbHelper.flushAndClear()
 
         val third = third("1")   // 0.333333
-        drugService.consume(drug.id, third, alice.id)
-        drugService.consume(drug.id, third, alice.id)
+        drugService.consume(drug.id, third, alice.id, dbHelper.drugVersion(drug.id))
+        drugService.consume(drug.id, third, alice.id, dbHelper.drugVersion(drug.id))
         dbHelper.flushAndClear()
 
         // 1 - 2 * 0.333333 = 0.333334: остаток чуть больше трети, и он не потерян.
@@ -55,7 +55,7 @@ class FractionalQuantityTest {
 
         // Третий приём забирает ровно остаток — препарат кончился.
         val last = dbHelper.drugQuantity(drug.id)!!
-        val afterLast = drugService.consume(drug.id, last, alice.id)
+        val afterLast = drugService.consume(drug.id, last, alice.id, dbHelper.drugVersion(drug.id))
         dbHelper.flushAndClear()
 
         assertNull(afterLast, "план исчезает вместе с кончившимся препаратом")

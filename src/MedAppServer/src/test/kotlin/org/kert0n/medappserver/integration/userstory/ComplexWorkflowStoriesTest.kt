@@ -116,7 +116,7 @@ class ComplexWorkflowStoriesTest {
         // PHASE 3: Heavy Consumption
         // ==========================================
         // Bob consumes 30 Allergy Meds: 60 in the pack becomes 30, while 60 stays reserved.
-        drugService.consume(allergyMeds.id, qty(30.0), bob.id)
+        drugService.consume(allergyMeds.id, qty(30.0), bob.id, dbHelper.drugVersion(allergyMeds.id))
 
         entityManager.flush()
         entityManager.clear()
@@ -137,7 +137,7 @@ class ComplexWorkflowStoriesTest {
         entityManager.flush()
         entityManager.clear()
 
-        medKitDrugOrchestrator.moveDrug(painkillers.id, travelKit.id, alice.id)
+        medKitDrugOrchestrator.moveDrug(painkillers.id, travelKit.id, alice.id, dbHelper.drugVersion(painkillers.id))
 
         entityManager.flush()
         entityManager.clear()
@@ -160,7 +160,7 @@ class ComplexWorkflowStoriesTest {
         entityManager.clear()
 
         // Perform the complex deletion migration
-        medKitDrugOrchestrator.delete(homeKit.id, alice.id, duoKit.id)
+        medKitDrugOrchestrator.delete(homeKit.id, alice.id, dbHelper.medKitVersion(homeKit.id), duoKit.id)
 
         entityManager.flush()
         entityManager.clear()
@@ -187,7 +187,7 @@ class ComplexWorkflowStoriesTest {
         // PHASE 6: Last User Standing Auto-Cleanup
         // ==========================================
         // Bob leaves Duo Kit
-        medKitDrugOrchestrator.leaveMedKit(duoKit.id, bob.id)
+        medKitDrugOrchestrator.leaveMedKit(duoKit.id, bob.id, dbHelper.medKitVersion(duoKit.id))
 
         entityManager.flush()
         entityManager.clear()
@@ -197,7 +197,7 @@ class ComplexWorkflowStoriesTest {
 
         // Alice is the last one out, so the kit auto-deletes. medKitService directly: the
         // orchestrator would clean up reservations that are already gone with the kit.
-        medKitService.leave(duoKitCheck1.id, alice.id)
+        medKitService.leave(duoKitCheck1.id, alice.id, dbHelper.medKitVersion(duoKitCheck1.id))
 
         entityManager.flush()
         entityManager.clear()
@@ -235,7 +235,7 @@ class ComplexWorkflowStoriesTest {
 
         // ── Phase 1: Alter a reservation ──
         // Bob raises his from 40 to 60. Nothing checks it against the pack: that is his call.
-        reservationService.changeTo(bob.id, drug.id, qty(60.0))
+        reservationService.changeTo(bob.id, drug.id, qty(60.0), dbHelper.reservationVersion(bob.id, drug.id))
         dbHelper.flushAndClear()
 
         assertQty(60.0, dbHelper.userReservation(bob.id, drug.id)!!, "Bob's reservation is 60")
@@ -244,7 +244,7 @@ class ComplexWorkflowStoriesTest {
         // ── Phase 2: Alter Drug (The Spill) ──
         // Алиса разлила половину. Брони не двигаются: вместе они теперь превышают содержимое
         // пачки, и это законное состояние — отвечают за него их владельцы.
-        drugService.consume(drug.id, qty(50.0), alice.id)
+        drugService.consume(drug.id, qty(50.0), alice.id, dbHelper.drugVersion(drug.id))
         dbHelper.flushAndClear()
 
         assertQty(50.0, dbHelper.drugQuantity(drug.id)!!, "в пачке осталось 50")
@@ -254,7 +254,7 @@ class ComplexWorkflowStoriesTest {
 
         // ── Phase 3: Move Drug ──
         // Alice moves the drug to targetKit (where Bob has no access).
-        medKitDrugOrchestrator.moveDrug(drug.id, targetKit.id, alice.id)
+        medKitDrugOrchestrator.moveDrug(drug.id, targetKit.id, alice.id, dbHelper.drugVersion(drug.id))
         dbHelper.flushAndClear()
 
         val movedDrug = dbHelper.requireDrug(drug.id)
@@ -266,7 +266,7 @@ class ComplexWorkflowStoriesTest {
 
         // ── Phase 4: Privacy-by-Default Deletion ──
         // Alice deletes the drug completely.
-        drugService.delete(drug.id, alice.id)
+        drugService.delete(drug.id, alice.id, dbHelper.drugVersion(drug.id))
         dbHelper.flushAndClear()
 
         assertNull(dbHelper.drugQuantity(drug.id), "Drug record completely purged")
@@ -296,7 +296,7 @@ class ComplexWorkflowStoriesTest {
 
         // ACT: Bob moves the drug to his private kit — he needs no reservation of his own
         assertDoesNotThrow {
-            medKitDrugOrchestrator.moveDrug(drug.id, kitB.id, bob.id)
+            medKitDrugOrchestrator.moveDrug(drug.id, kitB.id, bob.id, dbHelper.drugVersion(drug.id))
         }
 
         // VERIFY: Drug moved
@@ -323,7 +323,7 @@ class ComplexWorkflowStoriesTest {
         entityManager.flush()
         entityManager.clear()
         // ACT: Move drug to private kit
-        medKitDrugOrchestrator.moveDrug(drug.id, kitB.id, alice.id)
+        medKitDrugOrchestrator.moveDrug(drug.id, kitB.id, alice.id, dbHelper.drugVersion(drug.id))
         entityManager.flush()
         entityManager.clear()
         // VERIFY: Bob's reservation is purged, Alice's remains
@@ -347,7 +347,7 @@ class ComplexWorkflowStoriesTest {
         // ACT: Delete Kit A and migrate drugs to Kit B
         entityManager.flush()
         entityManager.clear()
-        medKitDrugOrchestrator.delete(kitA.id, alice.id, kitB.id)
+        medKitDrugOrchestrator.delete(kitA.id, alice.id, dbHelper.medKitVersion(kitA.id), kitB.id)
         entityManager.flush()
         entityManager.clear()
         // VERIFY: Kit A is gone, but the drug survives in Kit B

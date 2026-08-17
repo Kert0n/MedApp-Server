@@ -59,7 +59,7 @@ class ConcurrencyTest {
 
         val failure = interleaved.lostUpdate(
             read = { drugs.findAccessible(drug.id, alice.id)!! },
-            meanwhile = { drugService.consume(drug.id, qty(30.0), bob.id) },
+            meanwhile = { drugService.consume(drug.id, qty(30.0), bob.id, dbHelper.drugVersion(drug.id)) },
             write = { stale -> drugs.save(stale.consume(Quantity(qty(10.0), stale.quantity.unit))!!) }
         )
 
@@ -83,7 +83,7 @@ class ConcurrencyTest {
 
         val failure = interleaved.lostUpdate(
             read = { medKits.findById(kit.id)!! },
-            meanwhile = { orchestrator.leaveMedKit(kit.id, bob.id) },
+            meanwhile = { orchestrator.leaveMedKit(kit.id, bob.id, dbHelper.medKitVersion(kit.id)) },
             write = { stale -> medKits.save(stale.leave(alice.id)!!) }
         )
 
@@ -113,7 +113,7 @@ class ConcurrencyTest {
 
         val failure = interleaved.lostUpdate(
             read = { medKits.findById(kit.id)!! },
-            meanwhile = { orchestrator.delete(kit.id, alice.id) },
+            meanwhile = { orchestrator.delete(kit.id, alice.id, dbHelper.medKitVersion(kit.id)) },
             write = { stale -> medKits.save(stale.join(bob.id)) }
         )
 
@@ -155,7 +155,7 @@ class ConcurrencyTest {
                 medKits.requireUnchanged(kit)
                 kit
             },
-            meanwhile = { orchestrator.leaveMedKit(target.id, bob.id) },
+            meanwhile = { orchestrator.leaveMedKit(target.id, bob.id, dbHelper.medKitVersion(target.id)) },
             write = { stale ->
                 drugs.save(drugs.findAccessible(drug.id, alice.id)!!.moveTo(stale.id))
                 reservations.deleteOfDrugExcept(drug.id, stale.members)

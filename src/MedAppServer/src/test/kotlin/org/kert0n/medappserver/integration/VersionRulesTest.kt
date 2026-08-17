@@ -47,7 +47,7 @@ class VersionRulesTest {
         val drug = dbHelper.freshDrug(kit.id, 100.0)
 
         val before = dbHelper.requireDrug(drug.id).version
-        drugService.consume(drug.id, qty(10.0), alice.id)
+        drugService.consume(drug.id, qty(10.0), alice.id, dbHelper.drugVersion(drug.id))
 
         assertTrue(dbHelper.requireDrug(drug.id).version > before, "версия обязана сдвинуться")
     }
@@ -59,7 +59,7 @@ class VersionRulesTest {
         val drug = dbHelper.freshDrug(kit.id, 100.0)
 
         val before = dbHelper.requireDrug(drug.id).version
-        drugService.update(drug.id, DrugPatchRequest(quantity = qty(80.0)), alice.id)
+        drugService.update(drug.id, DrugPatchRequest(quantity = qty(80.0)), alice.id, dbHelper.drugVersion(drug.id))
 
         assertTrue(dbHelper.requireDrug(drug.id).version > before, "версия обязана сдвинуться")
     }
@@ -72,7 +72,7 @@ class VersionRulesTest {
         val drug = dbHelper.freshDrug(kit.id, 5.0)
 
         val before = dbHelper.requireDrug(drug.id).version
-        assertFailsWith<InsufficientStock> { drugService.consume(drug.id, qty(50.0), alice.id) }
+        assertFailsWith<InsufficientStock> { drugService.consume(drug.id, qty(50.0), alice.id, dbHelper.drugVersion(drug.id)) }
 
         assertEquals(before, dbHelper.requireDrug(drug.id).version, "версия после отказа та же")
     }
@@ -103,7 +103,7 @@ class VersionRulesTest {
         val reservationBefore = reservationService.require(alice.id, drug.id).version
         val drugBefore = dbHelper.requireDrug(drug.id).version
 
-        reservationService.changeTo(alice.id, drug.id, qty(30.0))
+        reservationService.changeTo(alice.id, drug.id, qty(30.0), dbHelper.reservationVersion(alice.id, drug.id))
 
         assertTrue(
             reservationService.require(alice.id, drug.id).version > reservationBefore,
@@ -124,7 +124,7 @@ class VersionRulesTest {
         reservationService.create(alice.id, drug.id, qty(20.0))
 
         val before = reservationService.require(alice.id, drug.id).version
-        drugService.consume(drug.id, qty(10.0), alice.id)
+        drugService.consume(drug.id, qty(10.0), alice.id, dbHelper.drugVersion(drug.id))
 
         assertEquals(
             before,
@@ -162,7 +162,7 @@ class VersionRulesTest {
         medKitService.join(kit.id, bob.id)
 
         val before = requireKit(kit.id).version
-        orchestrator.leaveMedKit(kit.id, bob.id)
+        orchestrator.leaveMedKit(kit.id, bob.id, dbHelper.medKitVersion(kit.id))
 
         assertTrue(requireKit(kit.id).version > before, "версия аптечки обязана сдвинуться")
     }
@@ -200,7 +200,7 @@ class VersionRulesTest {
         val firstBefore = dbHelper.requireDrug(first.id).version
         val secondBefore = dbHelper.requireDrug(second.id).version
 
-        orchestrator.delete(source.id, alice.id, target.id)
+        orchestrator.delete(source.id, alice.id, dbHelper.medKitVersion(source.id), target.id)
 
         val movedFirst = dbHelper.requireDrug(first.id)
         val movedSecond = dbHelper.requireDrug(second.id)

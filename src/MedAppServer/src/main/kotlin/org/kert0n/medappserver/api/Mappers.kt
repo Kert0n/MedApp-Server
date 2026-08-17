@@ -31,12 +31,14 @@ fun Drug.toDto(reservations: List<Reservation>): DrugDTO = DrugDTO(
     manufacturer = manufacturer,
     country = country,
     description = description,
-    medKitId = medKitId
+    medKitId = medKitId,
+    version = version
 )
 
 fun Reservation.toDto(): ReservationDTO = ReservationDTO(
     drugId = drugId,
-    amount = amount.amount
+    amount = amount.amount,
+    version = version
 )
 
 fun DrugTemplate.toDto(): DrugTemplateDTO = DrugTemplateDTO(
@@ -52,6 +54,13 @@ fun DrugTemplate.toDto(): DrugTemplateDTO = DrugTemplateDTO(
     manufacturer = manufacturer,
     country = country,
     description = description
+)
+
+/** Аптечка с содержимым: состав она знает сама, упаковки приносит вызывающий. */
+fun MedKit.toDto(drugs: Set<DrugDTO>): MedKitDTO = MedKitDTO(
+    id = id,
+    drugs = drugs,
+    version = version
 )
 
 fun QuantityUnit.toDto(): VocabularyEntryDTO = VocabularyEntryDTO(id = id, name = name)

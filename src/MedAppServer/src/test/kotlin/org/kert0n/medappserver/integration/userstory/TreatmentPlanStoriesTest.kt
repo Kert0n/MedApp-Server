@@ -83,8 +83,8 @@ class TreatmentPlanStoriesTest {
         assertQty(30.0, createdPlan, "Planned amount should be 30")
 
         // Record some intakes
-        drugService.consume(drugData.id, qty(5.0), userData.id)
-        drugService.consume(drugData.id, qty(5.0), userData.id)
+        drugService.consume(drugData.id, qty(5.0), userData.id, dbHelper.drugVersion(drugData.id))
+        drugService.consume(drugData.id, qty(5.0), userData.id, dbHelper.drugVersion(drugData.id))
         entityManager.flush()
         entityManager.clear()
 
@@ -196,11 +196,11 @@ class TreatmentPlanStoriesTest {
         assertQty(90.0, dbHelper.reservedOnDrug(vitamins.id))
 
         // Everyone takes their daily vitamin
-        drugService.consume(vitamins.id, qty(1.0), mom.id)
+        drugService.consume(vitamins.id, qty(1.0), mom.id, dbHelper.drugVersion(vitamins.id))
         entityManager.flush()
-        drugService.consume(vitamins.id, qty(1.0), dad.id)
+        drugService.consume(vitamins.id, qty(1.0), dad.id, dbHelper.drugVersion(vitamins.id))
         entityManager.flush()
-        drugService.consume(vitamins.id, qty(1.0), child.id)
+        drugService.consume(vitamins.id, qty(1.0), child.id, dbHelper.drugVersion(vitamins.id))
         entityManager.flush()
         entityManager.clear()
 
@@ -215,7 +215,7 @@ class TreatmentPlanStoriesTest {
         assertEquals(3, medkit.members.size)
 
         // Child leaves the medkit
-        medKitDrugOrchestrator.leaveMedKit(familyKit.id, child.id)
+        medKitDrugOrchestrator.leaveMedKit(familyKit.id, child.id, dbHelper.medKitVersion(familyKit.id))
         entityManager.flush()
         entityManager.clear()
 

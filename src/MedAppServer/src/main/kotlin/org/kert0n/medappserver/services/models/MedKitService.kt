@@ -42,6 +42,16 @@ class MedKitService(
     @Transactional(readOnly = true)
     fun requireById(medKitId: UUID): MedKit = findById(medKitId) ?: throw NotAMember()
 
+    /**
+     * Аптечка в том составе, по которому решал клиент.
+     *
+     * Порядок проверок значим: сначала доступ, потом версия — иначе по коду ответа узнавалось бы
+     * существование чужой аптечки.
+     */
+    @Transactional(readOnly = true)
+    fun requireAccessibleAt(medKitId: UUID, userId: UUID, expectedVersion: Long): MedKit =
+        requireAccessible(medKitId, userId).also { it.requireVersion(expectedVersion) }
+
     /** Аптечка, доступная вызывающему, или 404 — недоступная и несуществующая неотличимы. */
     @Transactional(readOnly = true)
     fun requireAccessible(medKitId: UUID, userId: UUID): MedKit {
@@ -89,9 +99,9 @@ class MedKitService(
      * Брони выходящего лежат в чужом агрегате: их убирает оркестратор.
      */
     @Transactional
-    fun leave(medKitId: UUID, userId: UUID): MedKit? {
+    fun leave(medKitId: UUID, userId: UUID, expectedVersion: Long): MedKit? {
         logger.debug("Removing user {} from medkit {}", userId, medKitId)
-        val left = requireAccessible(medKitId, userId).leave(userId)
+        val left = requireAccessibleAt(medKitId, userId, expectedVersion).leave(userId)
 
         if (left == null) {
             medKits.delete(medKitId)
@@ -103,8 +113,8 @@ class MedKitService(
 
     /** Доступ проверяется здесь: команда по одному идентификатору однажды придёт без проверки. */
     @Transactional
-    fun delete(medKitId: UUID, userId: UUID) {
-        requireAccessible(medKitId, userId)
+    fun delete(medKitId: UUID, userId: UUID, expectedVersion: Long) {
+        requireAccessibleAt(medKitId, userId, expectedVersion)
         medKits.delete(medKitId)
     }
 }

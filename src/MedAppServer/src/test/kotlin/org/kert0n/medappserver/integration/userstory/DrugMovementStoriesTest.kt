@@ -67,7 +67,7 @@ class DrugMovementStoriesTest {
         entityManager.flush()
 
         // Move drug to travel kit
-        medKitDrugOrchestrator.moveDrug(painkiller.id, travelKit.id, userData.id)
+        medKitDrugOrchestrator.moveDrug(painkiller.id, travelKit.id, userData.id, dbHelper.drugVersion(painkiller.id))
         entityManager.flush()
         entityManager.clear()
 
@@ -118,14 +118,14 @@ class DrugMovementStoriesTest {
         reservationService.create(bob.id, drugData.id, qty(30.0))
         entityManager.flush()
 
-        val updated = reservationService.changeTo(anna.id, drugData.id, qty(70.0))
+        val updated = reservationService.changeTo(anna.id, drugData.id, qty(70.0), dbHelper.reservationVersion(anna.id, drugData.id))
         assertQty(70.0, updated.amount)
         entityManager.flush()
         entityManager.clear()
         assertQty(100.0, dbHelper.reservedOnDrug(drugData.id))
 
         // Выше содержимого пачки тоже можно: 200 + 30 на сотню таблеток — законное состояние.
-        reservationService.changeTo(anna.id, drugData.id, qty(200.0))
+        reservationService.changeTo(anna.id, drugData.id, qty(200.0), dbHelper.reservationVersion(anna.id, drugData.id))
         entityManager.flush()
         entityManager.clear()
         assertQty(230.0, dbHelper.reservedOnDrug(drugData.id))
@@ -159,7 +159,7 @@ class DrugMovementStoriesTest {
         assertNotNull(plan)
 
         // Delete the drug
-        drugService.delete(drugData.id, userData.id)
+        drugService.delete(drugData.id, userData.id, dbHelper.drugVersion(drugData.id))
         entityManager.flush()
         entityManager.clear()
 
@@ -210,7 +210,7 @@ class DrugMovementStoriesTest {
         entityManager.clear()
 
         // Anna deletes the old kit and migrates to the new kit
-        medKitDrugOrchestrator.delete(oldKit.id, anna.id, newKit.id)
+        medKitDrugOrchestrator.delete(oldKit.id, anna.id, dbHelper.medKitVersion(oldKit.id), newKit.id)
 
         entityManager.flush()
         entityManager.clear()
@@ -259,7 +259,7 @@ class DrugMovementStoriesTest {
         entityManager.clear()
 
         // Move ONLY one drug
-        medKitDrugOrchestrator.moveDrug(drugDataToMove.id, targetKit.id, userData.id)
+        medKitDrugOrchestrator.moveDrug(drugDataToMove.id, targetKit.id, userData.id, dbHelper.drugVersion(drugDataToMove.id))
 
         entityManager.flush()
         entityManager.clear()

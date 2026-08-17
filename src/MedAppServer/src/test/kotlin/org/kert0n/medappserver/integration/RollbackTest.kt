@@ -44,7 +44,7 @@ class RollbackTest {
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         reservationService.create(alice.id, drug.id, qty(4.0))
 
-        assertFailsWith<InsufficientStock> { drugService.consume(drug.id, qty(11.0), alice.id) }
+        assertFailsWith<InsufficientStock> { drugService.consume(drug.id, qty(11.0), alice.id, dbHelper.drugVersion(drug.id)) }
 
         assertQty(10.0, dbHelper.drugQuantity(drug.id))
         assertQty(4.0, dbHelper.userReservation(alice.id, drug.id))
@@ -63,7 +63,7 @@ class RollbackTest {
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         reservationService.create(alice.id, drug.id, qty(4.0))
 
-        assertFailsWith<NotAMember> { orchestrator.moveDrug(drug.id, foreign.id, alice.id) }
+        assertFailsWith<NotAMember> { orchestrator.moveDrug(drug.id, foreign.id, alice.id, dbHelper.drugVersion(drug.id)) }
 
         val stored = dbHelper.requireDrug(drug.id)
         assertEquals(kit.id, stored.medKitId, "упаковка осталась в своей аптечке")
@@ -77,7 +77,7 @@ class RollbackTest {
         val kit = medKitService.create(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 10.0)
 
-        assertFailsWith<NotAMember> { orchestrator.delete(kit.id, eve.id) }
+        assertFailsWith<NotAMember> { orchestrator.delete(kit.id, eve.id, dbHelper.medKitVersion(kit.id)) }
 
         assertNotNull(medKitService.findById(kit.id), "аптечка на месте")
         assertNotNull(dbHelper.drug(drug.id), "препарат на месте")
@@ -88,6 +88,7 @@ class RollbackTest {
         val alice = dbHelper.freshUser("alice")
         medKitService.create(alice.id)
 
-        assertFailsWith<NotAMember> { drugService.consume(UUID.randomUUID(), qty(1.0), alice.id) }
+        // Версия любая: недоступная упаковка отвергается раньше, чем дело дойдёт до неё.
+        assertFailsWith<NotAMember> { drugService.consume(UUID.randomUUID(), qty(1.0), alice.id, 0) }
     }
 }

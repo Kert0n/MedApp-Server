@@ -93,7 +93,7 @@ class BasicWorkflowStoriesTest {
         entityManager.flush()
 
         // Anna takes 2 tablets of Aspirin
-        drugService.consume(aspirin.id, qty(2.0), anna.id)
+        drugService.consume(aspirin.id, qty(2.0), anna.id, dbHelper.drugVersion(aspirin.id))
         entityManager.flush()
         entityManager.clear()
 
@@ -196,7 +196,7 @@ class BasicWorkflowStoriesTest {
         assertEquals(2, loadedMedkit.members.size)
 
         // Bob leaves (drugs stay)
-        medKitDrugOrchestrator.leaveMedKit(medkit.id, bob.id)
+        medKitDrugOrchestrator.leaveMedKit(medkit.id, bob.id, dbHelper.medKitVersion(medkit.id))
         entityManager.flush()
         entityManager.clear()
 
@@ -258,7 +258,7 @@ class BasicWorkflowStoriesTest {
         assertEquals(2, medKitService.allOfUser(userData.id).size)
 
         // Delete old medkit and move drugs
-        medKitDrugOrchestrator.delete(oldMedkit.id, userData.id, newMedkit.id)
+        medKitDrugOrchestrator.delete(oldMedkit.id, userData.id, dbHelper.medKitVersion(oldMedkit.id), newMedkit.id)
         entityManager.flush()
         entityManager.clear()
 
@@ -300,9 +300,9 @@ class BasicWorkflowStoriesTest {
         entityManager.flush()
 
         // Consume all in steps
-        drugService.consume(drugData.id, qty(10.0), userData.id)
-        drugService.consume(drugData.id, qty(10.0), userData.id)
-        drugService.consume(drugData.id, qty(10.0), userData.id)
+        drugService.consume(drugData.id, qty(10.0), userData.id, dbHelper.drugVersion(drugData.id))
+        drugService.consume(drugData.id, qty(10.0), userData.id, dbHelper.drugVersion(drugData.id))
+        drugService.consume(drugData.id, qty(10.0), userData.id, dbHelper.drugVersion(drugData.id))
         entityManager.flush()
         entityManager.clear()
 

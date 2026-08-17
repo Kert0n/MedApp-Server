@@ -1,6 +1,7 @@
 package org.kert0n.medappserver.api
 
 import io.swagger.v3.oas.annotations.media.Schema
+import org.kert0n.medappserver.controller.Versioned
 import jakarta.validation.constraints.DecimalMin
 import jakarta.validation.constraints.NotNull
 import java.math.BigDecimal
@@ -21,8 +22,11 @@ data class ReservationDTO(
      * решает её владелец.
      */
     @Schema(description = "Reserved amount; may exceed what is left in the package", example = "20.000000")
-    val amount: BigDecimal
-)
+    val amount: BigDecimal,
+    /** То же значение, что и в `ETag` ответа. */
+    @Schema(description = "Opaque state token; send it back in If-Match", example = "7")
+    override val version: Long
+) : Versioned
 
 @Schema(description = "Request to reserve part of a package")
 data class ReservationCreateRequest(

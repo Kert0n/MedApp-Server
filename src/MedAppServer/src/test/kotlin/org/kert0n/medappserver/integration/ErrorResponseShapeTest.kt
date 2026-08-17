@@ -14,6 +14,7 @@ import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers
@@ -96,6 +97,7 @@ class ErrorResponseShapeTest {
         val body = mockMvc.perform(
             post(ApiRoutes.intakes(drug.id))
                 .with(jwt().jwt { it.subject(user.id.toString()) })
+                .header(HttpHeaders.IF_MATCH, "\"${dbHelper.drugVersion(drug.id)}\"")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"quantity":500.0}""")
         )

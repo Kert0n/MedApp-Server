@@ -133,7 +133,7 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         val emptyUpdate = DrugPatchRequest(null, null, null, null, null, null, null, null)
-        drugService.update(drug.id, emptyUpdate, alice.id)
+        drugService.update(drug.id, emptyUpdate, alice.id, dbHelper.drugVersion(drug.id))
         dbHelper.flushAndClear()
 
         assertQty(10.0, dbHelper.requireDrug(drug.id).quantity)
@@ -150,7 +150,7 @@ class DrugServiceTest {
             name = "New Name", quantity = qty(100.0), category = "cat", manufacturer = "man",
             country = "co", description = "desc"
         )
-        drugService.update(drug.id, fullUpdate, alice.id)
+        drugService.update(drug.id, fullUpdate, alice.id, dbHelper.drugVersion(drug.id))
         dbHelper.flushAndClear()
 
         val updated = dbHelper.requireDrug(drug.id)
@@ -169,7 +169,7 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
-        drugService.update(drug.id, DrugPatchRequest(quantity = qty(20.0)), alice.id)
+        drugService.update(drug.id, DrugPatchRequest(quantity = qty(20.0)), alice.id, dbHelper.drugVersion(drug.id))
         dbHelper.flushAndClear()
 
         assertQty(20.0, dbHelper.drugQuantity(drug.id))
@@ -190,7 +190,7 @@ class DrugServiceTest {
         reservationService.create(bob.id, drug.id, qty(40.0))
         dbHelper.flushAndClear()
 
-        drugService.update(drug.id, DrugPatchRequest(quantity = qty(50.0)), alice.id)
+        drugService.update(drug.id, DrugPatchRequest(quantity = qty(50.0)), alice.id, dbHelper.drugVersion(drug.id))
         dbHelper.flushAndClear()
 
         assertQty(50.0, dbHelper.drugQuantity(drug.id)!!)
@@ -208,7 +208,7 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         assertThrows<InvalidQuantity> {
-            drugService.update(drug.id, DrugPatchRequest(quantity = qty(0.0)), alice.id)
+            drugService.update(drug.id, DrugPatchRequest(quantity = qty(0.0)), alice.id, dbHelper.drugVersion(drug.id))
         }
     }
 
@@ -221,7 +221,7 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 50.0)
         dbHelper.flushAndClear()
 
-        drugService.delete(drug.id, alice.id)
+        drugService.delete(drug.id, alice.id, dbHelper.drugVersion(drug.id))
         dbHelper.flushAndClear()
 
         assertNull(dbHelper.drug(drug.id))
@@ -236,7 +236,7 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        val consumed = drugService.consume(drug.id, qty(30.0), alice.id)
+        val consumed = drugService.consume(drug.id, qty(30.0), alice.id, dbHelper.drugVersion(drug.id))
         assertQty(70.0, consumed?.quantity)
     }
 
@@ -248,7 +248,7 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         assertThrows<InsufficientStock> {
-            drugService.consume(drug.id, qty(20.0), alice.id)
+            drugService.consume(drug.id, qty(20.0), alice.id, dbHelper.drugVersion(drug.id))
         }
     }
 

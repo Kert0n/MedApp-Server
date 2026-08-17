@@ -48,6 +48,13 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: If-Match
+        in: header
+        description: "Version the caller decided by, as a strong entity tag"
+        required: true
+        schema:
+          type: string
+        example: "3"
       responses:
         "200":
           description: Drug moved
@@ -55,8 +62,14 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/DrugDTO"
+        "400":
+          description: Malformed If-Match
         "404":
           description: Drug or target kit is not accessible
+        "409":
+          description: Drug has changed since the version supplied
+        "428":
+          description: If-Match is required
         "401":
           description: Authentication is required
   /v1/reservations:
@@ -248,6 +261,13 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: If-Match
+        in: header
+        description: "Version the caller decided by, as a strong entity tag"
+        required: true
+        schema:
+          type: string
+        example: "3"
       requestBody:
         description: Amount taken
         content:
@@ -265,9 +285,13 @@ paths:
         "204":
           description: Package ran out and was destroyed
         "400":
-          description: Amount exceeds what is left in the package
+          description: "Amount exceeds the package, or malformed If-Match"
         "404":
           description: Package does not exist or is not accessible
+        "409":
+          description: Package has changed since the version supplied
+        "428":
+          description: If-Match is required
         "401":
           description: Authentication is required
   /v1/auth/token:
@@ -359,11 +383,24 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: If-Match
+        in: header
+        description: "Version the caller decided by, as a strong entity tag"
+        required: true
+        schema:
+          type: string
+        example: "3"
       responses:
         "204":
           description: Reservation cancelled
+        "400":
+          description: Malformed If-Match
         "404":
           description: No reservation on this package
+        "409":
+          description: Reservation has changed since the version supplied
+        "428":
+          description: If-Match is required
         "401":
           description: Authentication is required
     patch:
@@ -380,6 +417,13 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: If-Match
+        in: header
+        description: "Version the caller decided by, as a strong entity tag"
+        required: true
+        schema:
+          type: string
+        example: "3"
       requestBody:
         description: New reserved amount
         content:
@@ -395,9 +439,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReservationDTO"
         "400":
-          description: Invalid amount
+          description: Invalid amount or malformed If-Match
         "404":
           description: No reservation on this package
+        "409":
+          description: Reservation has changed since the version supplied
+        "428":
+          description: If-Match is required
         "401":
           description: Authentication is required
   /v1/drugs/{drugId}:
@@ -440,11 +488,24 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: If-Match
+        in: header
+        description: "Version the caller decided by, as a strong entity tag"
+        required: true
+        schema:
+          type: string
+        example: "3"
       responses:
         "204":
           description: Drug deleted
+        "400":
+          description: Malformed If-Match
         "404":
           description: Drug does not exist or is not accessible
+        "409":
+          description: Drug has changed since the version supplied
+        "428":
+          description: If-Match is required
         "401":
           description: Authentication is required
     patch:
@@ -463,6 +524,13 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: If-Match
+        in: header
+        description: "Version the caller decided by, as a strong entity tag"
+        required: true
+        schema:
+          type: string
+        example: "3"
       requestBody:
         description: Fields to change
         content:
@@ -478,9 +546,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/DrugDTO"
         "400":
-          description: Invalid request
+          description: Invalid request or malformed If-Match
         "404":
           description: Drug does not exist or is not accessible
+        "409":
+          description: Drug has changed since the version supplied
+        "428":
+          description: If-Match is required
         "401":
           description: Authentication is required
   /v1/users/me:
@@ -563,6 +635,13 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: If-Match
+        in: header
+        description: "Version the caller decided by, as a strong entity tag"
+        required: true
+        schema:
+          type: string
+        example: "3"
       - name: targetMedKitId
         in: query
         description: Kit to move the drugs into instead of discarding them
@@ -573,8 +652,14 @@ paths:
       responses:
         "204":
           description: Kit deleted for everyone
+        "400":
+          description: Malformed If-Match
         "404":
           description: Kit does not exist or is not accessible
+        "409":
+          description: Kit membership has changed since the version supplied
+        "428":
+          description: If-Match is required
         "401":
           description: Authentication is required
   /v1/form-types:
@@ -676,11 +761,24 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: If-Match
+        in: header
+        description: "Version the caller decided by, as a strong entity tag"
+        required: true
+        schema:
+          type: string
+        example: "3"
       responses:
         "204":
           description: Left the kit
+        "400":
+          description: Malformed If-Match
         "404":
           description: Kit does not exist or is not accessible
+        "409":
+          description: Kit membership has changed since the version supplied
+        "428":
+          description: If-Match is required
         "401":
           description: Authentication is required
 components:
@@ -740,6 +838,11 @@ components:
           type: string
           format: uuid
           description: Medicine kit the drug belongs to
+        version:
+          type: integer
+          format: int64
+          description: Opaque state token; send it back in If-Match
+          example: 3
     ReservationCreateRequest:
       type: object
       description: Request to reserve part of a package
@@ -769,6 +872,11 @@ components:
           type: number
           description: Reserved amount; may exceed what is left in the package
           example: 20.0
+        version:
+          type: integer
+          format: int64
+          description: Opaque state token; send it back in If-Match
+          example: 7
     MedKitCreatedDTO:
       type: object
       description: Created medicine kit
@@ -859,6 +967,11 @@ components:
           items:
             $ref: "#/components/schemas/DrugDTO"
           uniqueItems: true
+        version:
+          type: integer
+          format: int64
+          description: Opaque state token of the membership; send it back in If-Match
+          example: 2
     IntakeRequest:
       type: object
       description: Amount taken out of the package

@@ -6,6 +6,7 @@ import java.util.*
 import org.kert0n.medappserver.db.model.parsed.QuantityUnitData
 import org.kert0n.medappserver.db.repository.QuantityUnitRepository
 import org.kert0n.medappserver.db.store.DrugStore
+import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.db.store.ReservationStore
 import org.kert0n.medappserver.db.store.UserStore
 import org.kert0n.medappserver.domain.Drug
@@ -27,6 +28,7 @@ class DatabaseTestHelper(
     private val users: UserStore,
     private val drugs: DrugStore,
     private val reservations: ReservationStore,
+    private val medKits: MedKitStore,
     private val quantityUnits: QuantityUnitRepository,
     private val entityManager: EntityManager
 ) {
@@ -98,4 +100,18 @@ class DatabaseTestHelper(
 
     fun userReservation(userId: UUID, drugId: UUID): BigDecimal? =
         reservations.find(userId, drugId)?.amount?.amount
+
+    /**
+     * Текущие версии — чтобы команда предъявила ту, по которой «решал клиент».
+     *
+     * В тестах, где проверяется не предусловие, а сама операция, читать версию перед вызовом
+     * честнее, чем помнить её от предыдущей строки: любая команда двигает её на неизвестную
+     * величину, и держать это в голове по всему тесту значит проверять свою память.
+     */
+    fun drugVersion(drugId: UUID): Long = drugs.findById(drugId)?.version ?: error("Упаковки $drugId нет")
+
+    fun reservationVersion(userId: UUID, drugId: UUID): Long =
+        reservations.find(userId, drugId)?.version ?: error("Брони $userId/$drugId нет")
+
+    fun medKitVersion(medKitId: UUID): Long = medKits.findById(medKitId)?.version ?: error("Аптечки $medKitId нет")
 }

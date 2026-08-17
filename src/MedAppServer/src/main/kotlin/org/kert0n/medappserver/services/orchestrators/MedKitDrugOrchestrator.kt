@@ -56,11 +56,11 @@ class MedKitDrugOrchestrator(
      * бронь на пачку, которую больше не видит.
      */
     @Transactional
-    fun moveDrug(drugId: UUID, targetMedKitId: UUID, userId: UUID): Drug {
+    fun moveDrug(drugId: UUID, targetMedKitId: UUID, userId: UUID, expectedVersion: Long): Drug {
         logger.debug("Moving drug {} to medkit {}", drugId, targetMedKitId)
         val target = medKitService.requireAccessible(targetMedKitId, userId)
         medKits.requireUnchanged(target)
-        val moved = drugService.moveTo(drugId, target.id, userId)
+        val moved = drugService.moveTo(drugId, target.id, userId, expectedVersion)
         reservations.deleteOfDrugExcept(drugId, target.members)
         return moved
     }
@@ -72,9 +72,9 @@ class MedKitDrugOrchestrator(
      * не обходом пачек.
      */
     @Transactional
-    fun leaveMedKit(medKitId: UUID, userId: UUID) {
+    fun leaveMedKit(medKitId: UUID, userId: UUID, expectedVersion: Long) {
         logger.debug("Removing user {} from medkit {}", userId, medKitId)
-        val left = medKitService.leave(medKitId, userId)
+        val left = medKitService.leave(medKitId, userId, expectedVersion)
         // Аптечки не стало — брони ушли вместе с упаковками по каскаду.
         if (left != null) {
             reservations.deleteOfUserInMedKit(userId, medKitId)
@@ -89,9 +89,9 @@ class MedKitDrugOrchestrator(
      * загрузок.
      */
     @Transactional
-    fun delete(medKitId: UUID, userId: UUID, transferToMedKitId: UUID? = null) {
+    fun delete(medKitId: UUID, userId: UUID, expectedVersion: Long, transferToMedKitId: UUID? = null) {
         logger.debug("Deleting medkit {} (transfer to {})", medKitId, transferToMedKitId)
-        medKitService.requireAccessible(medKitId, userId)
+        medKitService.requireAccessibleAt(medKitId, userId, expectedVersion)
 
         if (transferToMedKitId != null) {
             val target = medKitService.requireAccessible(transferToMedKitId, userId)
@@ -102,7 +102,7 @@ class MedKitDrugOrchestrator(
             drugs.moveAllToMedKit(medKitId, target.id)
         }
 
-        medKitService.delete(medKitId, userId)
+        medKitService.delete(medKitId, userId, expectedVersion)
     }
 
     /**
@@ -123,11 +123,22 @@ class MedKitDrugOrchestrator(
     /** Аптечка вместе с содержимым: сама аптечка знает участников, упаковки — себя. */
     @Transactional(readOnly = true)
     fun medKitWithDrugs(medKitId: UUID, userId: UUID): MedKitDTO {
-        medKitService.requireAccessible(medKitId, userId)
-        return MedKitDTO(
-            id = medKitId,
-            drugs = drugsWithReservations(drugService.ofMedKit(medKitId)).toSet()
-        )
+        val medKit = medKitService.requireAccessible(medKitId, userId)
+        return medKit.toDto(drugsWithReservations(drugService.ofMedKit(medKitId)).toSet())
+    }
+
+    /**
+     * Всё, что вызывающему видно, — для снимка.
+     *
+     * Число запросов постоянно: аптечки одним чтением, доступные упаковки вторым, брони на них
+     * третьим. От того, сколько у человека аптечек и пачек, оно не зависит.
+     */
+    @Transactional(readOnly = true)
+    fun medKitsWithDrugs(userId: UUID): Set<MedKitDTO> {
+        val drugsByMedKit = drugsAccessibleTo(userId).groupBy { it.medKitId }
+        return medKitService.allOfUser(userId)
+            .map { it.toDto(drugsByMedKit[it.id].orEmpty().toSet()) }
+            .toSet()
     }
 
     /**
