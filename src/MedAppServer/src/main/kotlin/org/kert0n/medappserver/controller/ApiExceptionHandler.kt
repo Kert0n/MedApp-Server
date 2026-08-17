@@ -3,6 +3,7 @@ package org.kert0n.medappserver.controller
 import org.kert0n.medappserver.domain.DomainRuleViolated
 import org.kert0n.medappserver.domain.NoSuchReservation
 import org.kert0n.medappserver.domain.NotAMember
+import org.kert0n.medappserver.domain.ConflictingSync
 import org.kert0n.medappserver.domain.ReservationAlreadyExists
 import org.kert0n.medappserver.domain.StaleAggregateVersion
 import org.springframework.http.HttpStatus
@@ -44,6 +45,8 @@ class ApiExceptionHandler {
             is ReservationAlreadyExists -> HttpStatus.CONFLICT
             // Клиент решал по устаревшему состоянию: ресурс есть, но не тот, который он видел.
             is StaleAggregateVersion -> HttpStatus.CONFLICT
+            // Тот же идентификатор синхронизации с другим содержимым: одно из двух не то.
+            is ConflictingSync -> HttpStatus.CONFLICT
             else -> HttpStatus.BAD_REQUEST
         }
     )

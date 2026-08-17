@@ -28,6 +28,12 @@ class NoSuchReservation : DomainRuleViolated("There is no such reservation")
  */
 class StaleAggregateVersion : DomainRuleViolated("Aggregate has changed since the version supplied")
 
+/** Запрос, не просящий сделать ничего, командой не является. */
+class EmptySync : DomainRuleViolated("Synchronisation must carry an intake, a reservation, or both")
+
+/** Тот же идентификатор синхронизации с другим содержимым: одно из двух не то, что было. */
+class ConflictingSync : DomainRuleViolated("Synchronisation id was already used for a different request")
+
 /** Пользователь не участник этой аптечки — или самой аптечки нет. */
 class NotAMember : DomainRuleViolated("Medicine kit is not accessible")
 

@@ -1,0 +1,96 @@
+package org.kert0n.medappserver.services.orchestrators
+
+import java.util.UUID
+import org.kert0n.medappserver.api.SyncRequest
+import org.kert0n.medappserver.api.SyncResultDTO
+import org.kert0n.medappserver.api.toDto
+import org.kert0n.medappserver.domain.ConflictingSync
+import org.kert0n.medappserver.domain.Intake
+import org.kert0n.medappserver.domain.IntakeJournal
+import org.kert0n.medappserver.domain.Quantity
+import org.kert0n.medappserver.services.models.DrugService
+import org.kert0n.medappserver.services.models.ReservationService
+import org.slf4j.LoggerFactory
+import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
+
+/**
+ * Синхронизация одной пачки: приём и бронь в одной транзакции.
+ *
+ * Порознь эти две команды дают разрыв, который виден человеку: приходит списание, кто-то читает
+ * «лекарства мало», и только потом доезжает уменьшение брони. Порядок двух запросов клиент не
+ * контролирует, поэтому запрос один — и он либо применяется целиком, либо не применяется вовсе.
+ *
+ * Повтор после обрыва связи не должен списывать второй раз, а отличить его от новой команды
+ * можно только по метке клиента: `syncId`. Журнал помнит выполненный запрос и отвечает на
+ * повтор текущим состоянием, а на тот же идентификатор с другим содержимым — отказом.
+ */
+@Service
+class DrugSyncOrchestrator(
+    private val drugService: DrugService,
+    private val reservationService: ReservationService,
+    private val medKitDrugOrchestrator: MedKitDrugOrchestrator,
+    private val journal: IntakeJournal
+) {
+
+    private val logger = LoggerFactory.getLogger(DrugSyncOrchestrator::class.java)
+
+    /**
+     * `null` — пачка кончилась и уничтожена этой синхронизацией; бронь ушла вместе с ней.
+     *
+     * Предусловия проверяются только у новой команды. У повтора они заведомо устарели — их
+     * подвинул он сам, — и требовать их значило бы отказывать клиенту за то, что его первый
+     * запрос дошёл.
+     */
+    @Transactional
+    fun synchronise(syncId: UUID, drugId: UUID, request: SyncRequest, userId: UUID): SyncResultDTO? {
+        logger.debug("PUT sync {} of drug {} by user {}", syncId, drugId, userId)
+
+        // Доступ проверяется первым и для повтора тоже: журнал не место для чужих пачек.
+        val drug = drugService.require(drugId, userId)
+        val requested = Intake(
+            id = syncId,
+            drugId = drugId,
+            userId = userId,
+            consumed = request.consumed?.let { Quantity(it, drug.quantity.unit) },
+            reservedTo = request.reservation?.let { Quantity(it.amount, drug.quantity.unit) }
+        )
+
+        journal.find(syncId)?.let { previous ->
+            if (!requested.isRepeatOf(previous)) throw ConflictingSync()
+            logger.debug("Sync {} is a repeat, answering with the current state", syncId)
+            return currentState(drugId, userId)
+        }
+
+        drug.requireVersion(request.drugVersion)
+        val left = request.consumed?.let {
+            drugService.consume(drugId, it, userId, request.drugVersion)
+        }
+
+        // Пачки не стало — брони на ней тоже: правку несуществующей брони применять некуда.
+        if (request.consumed != null && left == null) {
+            journal.record(requested)
+            return null
+        }
+
+        request.reservation?.let { wanted ->
+            if (wanted.version == null) {
+                reservationService.create(userId, drugId, wanted.amount)
+            } else {
+                reservationService.changeTo(userId, drugId, wanted.amount, wanted.version)
+            }
+        }
+
+        journal.record(requested)
+        return currentState(drugId, userId)
+    }
+
+    /** Оба ресурса перечитываются после записи: до коммита новых версий никто не знает. */
+    private fun currentState(drugId: UUID, userId: UUID): SyncResultDTO? {
+        val drug = drugService.find(drugId, userId) ?: return null
+        return SyncResultDTO(
+            drug = medKitDrugOrchestrator.drug(drug.id, userId),
+            reservation = reservationService.find(userId, drugId)?.toDto()
+        )
+    }
+}

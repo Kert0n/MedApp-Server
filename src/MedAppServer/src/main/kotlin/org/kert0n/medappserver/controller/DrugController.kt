@@ -10,6 +10,8 @@ import jakarta.validation.constraints.Max
 import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.Size
 import org.kert0n.medappserver.api.IntakeRequest
+import org.kert0n.medappserver.api.SyncRequest
+import org.kert0n.medappserver.api.SyncResultDTO
 import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.api.DrugDTO
 import org.kert0n.medappserver.api.DrugPatchRequest
@@ -19,6 +21,7 @@ import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.CatalogueService
 import org.kert0n.medappserver.services.models.userId
+import org.kert0n.medappserver.services.orchestrators.DrugSyncOrchestrator
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
@@ -35,6 +38,7 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBod
 class DrugController(
     private val drugService: DrugService,
     private val medKitDrugOrchestrator: MedKitDrugOrchestrator,
+    private val drugSyncOrchestrator: DrugSyncOrchestrator,
     private val preconditions: Preconditions
 ) {
 
@@ -143,6 +147,32 @@ class DrugController(
         drugService.consume(drugId, request.quantity, authentication.userId, expected)
             ?: return noContentWithoutEtag()
         return medKitDrugOrchestrator.drug(drugId, authentication.userId).withEtag()
+    }
+
+    /**
+     * Пакетная синхронизация одной пачки: приём и бронь атомарно.
+     *
+     * `PUT` в путь с идентификатором от клиента, а не `POST`: повторный запрос обязан давать
+     * тот же результат, а не второе списание, и идентификатор в пути — это ровно обещание
+     * «повтори сколько угодно раз». Предусловия едут в теле: ресурса два, а `If-Match` один.
+     */
+    @PutMapping("/drugs/{drugId}/sync/{syncId}")
+    @ApiResponse(responseCode = "200", description = "Applied; both resources returned")
+    @ApiResponse(responseCode = "204", description = "Package ran out and was destroyed", content = [Content()])
+    @ApiResponse(responseCode = "400", description = "Amount exceeds the package, or the request asks for nothing", content = [Content()])
+    @ApiResponse(responseCode = "404", description = "Package does not exist or is not accessible", content = [Content()])
+    @ApiResponse(responseCode = "409", description = "A version is stale, or the sync id was used for a different request", content = [Content()])
+    fun synchroniseDrug(
+        authentication: Authentication,
+        @Parameter(description = "Package identifier") @PathVariable drugId: UUID,
+        @Parameter(description = "Client-chosen identifier of this synchronisation") @PathVariable syncId: UUID,
+        @SwaggerRequestBody(description = "Cumulative changes")
+        @Valid @RequestBody request: SyncRequest
+    ): ResponseEntity<SyncResultDTO> {
+        logger.debug("PUT /v1/drugs/{}/sync/{} by user {}", drugId, syncId, authentication.userId)
+        val result = drugSyncOrchestrator.synchronise(syncId, drugId, request, authentication.userId)
+            ?: return noContentWithoutEtag()
+        return ResponseEntity.ok(result)
     }
 
     /**

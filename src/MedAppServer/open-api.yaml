@@ -72,6 +72,56 @@ paths:
           description: If-Match is required
         "401":
           description: Authentication is required
+  /v1/drugs/{drugId}/sync/{syncId}:
+    put:
+      tags:
+      - Drugs
+      summary: Synchronise one package
+      description: |-
+        Applies an intake and a new reservation amount to one package in a single transaction, so no reader ever sees the package reduced while the reservation still claims the old share. Send cumulative values: `consumed` is the amount taken since the last synchronisation, `reservation.amount` is what the reservation should become. Versions travel in the body rather than in If-Match because two resources change at once.
+
+        Repeat the same request with the same `syncId` as often as you like: the second call changes nothing and answers with the current state. The same `syncId` with different content is refused with 409. Note the limit of that promise — the journal of applied synchronisations lives in the server's memory for 30 minutes and does not survive a restart, so a repeat after either will be applied again.
+      operationId: synchroniseDrug
+      parameters:
+      - name: drugId
+        in: path
+        description: Package identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: syncId
+        in: path
+        description: Client-chosen identifier of this synchronisation
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        description: Cumulative changes
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SyncRequest"
+        required: true
+      responses:
+        "200":
+          description: Applied; both resources returned
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SyncResultDTO"
+        "204":
+          description: Package ran out and was destroyed
+        "400":
+          description: "Amount exceeds the package, or the request asks for nothing"
+        "404":
+          description: Package does not exist or is not accessible
+        "409":
+          description: "A version is stale, or the sync id was used for a different\
+            \ request"
+        "401":
+          description: Authentication is required
   /v1/reservations:
     get:
       tags:
@@ -843,23 +893,43 @@ components:
           format: int64
           description: Opaque state token; send it back in If-Match
           example: 3
-    ReservationCreateRequest:
+    SyncRequest:
       type: object
-      description: Request to reserve part of a package
+      description: "Cumulative changes to one package: what was taken and what the\
+        \ reservation became"
       properties:
-        drugId:
-          type: string
-          format: uuid
-          description: Package identifier
+        consumed:
+          type: number
+          description: Amount taken since the last sync; omit if nothing was taken
+          example: 5.0
+          minimum: 0.0
+        drugVersion:
+          type: integer
+          format: int64
+          description: Package version the caller decided by
+          example: 3
+        reservation:
+          $ref: "#/components/schemas/SyncReservation"
+          description: New reservation state; omit to leave the reservation alone
+      required:
+      - drugVersion
+    SyncReservation:
+      type: object
+      description: What the reservation should become
+      properties:
         amount:
           type: number
-          description: "Reserved amount, greater than zero. It may exceed what is\
-            \ left in the package."
+          description: "Reserved amount, greater than zero; may exceed what is left"
           example: 20.0
           minimum: 0.0
+        version:
+          type: integer
+          format: int64
+          description: Reservation version the caller decided by; omit when creating
+            it
+          example: 7
       required:
       - amount
-      - drugId
     ReservationDTO:
       type: object
       description: How much of a package the caller claims for themselves
@@ -877,6 +947,33 @@ components:
           format: int64
           description: Opaque state token; send it back in If-Match
           example: 7
+    SyncResultDTO:
+      type: object
+      description: State of both resources after the synchronisation
+      properties:
+        drug:
+          $ref: "#/components/schemas/DrugDTO"
+          description: Package after the intake
+        reservation:
+          $ref: "#/components/schemas/ReservationDTO"
+          description: Reservation after the change; absent if the caller has none
+    ReservationCreateRequest:
+      type: object
+      description: Request to reserve part of a package
+      properties:
+        drugId:
+          type: string
+          format: uuid
+          description: Package identifier
+        amount:
+          type: number
+          description: "Reserved amount, greater than zero. It may exceed what is\
+            \ left in the package."
+          example: 20.0
+          minimum: 0.0
+      required:
+      - amount
+      - drugId
     MedKitCreatedDTO:
       type: object
       description: Created medicine kit

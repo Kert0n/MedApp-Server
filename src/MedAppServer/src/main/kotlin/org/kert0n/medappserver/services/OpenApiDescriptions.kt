@@ -60,6 +60,19 @@ val OPERATION_TEXTS: Map<String, OperationText> = mapOf(
             "is refused: a package cannot be refilled, so a second pack is a second package. Returns " +
             "no body when the package ran out and was destroyed."
     ),
+    "synchroniseDrug" to OperationText(
+        "Synchronise one package",
+        "Applies an intake and a new reservation amount to one package in a single transaction, so " +
+            "no reader ever sees the package reduced while the reservation still claims the old " +
+            "share. Send cumulative values: `consumed` is the amount taken since the last " +
+            "synchronisation, `reservation.amount` is what the reservation should become. Versions " +
+            "travel in the body rather than in If-Match because two resources change at once.\n\n" +
+            "Repeat the same request with the same `syncId` as often as you like: the second call " +
+            "changes nothing and answers with the current state. The same `syncId` with different " +
+            "content is refused with 409. Note the limit of that promise — the journal of applied " +
+            "synchronisations lives in the server's memory for 30 minutes and does not survive a " +
+            "restart, so a repeat after either will be applied again."
+    ),
     "moveDrug" to OperationText(
         "Move a drug to another medicine kit",
         "Transfers the drug between kits."
