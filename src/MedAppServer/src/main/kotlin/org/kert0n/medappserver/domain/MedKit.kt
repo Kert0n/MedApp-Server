@@ -55,15 +55,3 @@ data class MedKit(
     override fun hashCode(): Int = id.hashCode()
 }
 
-/**
- * Счётчики аптечки для списка.
- *
- * Отдельное значение, а не сам агрегат: чтобы показать «участников 3, препаратов 12», не
- * нужно поднимать ни участников, ни препараты, и поднимать их ради счётчика было бы ровно
- * тем, чего агрегатные границы избегают.
- */
-data class MedKitOverview(
-    val id: UUID,
-    val memberCount: Long,
-    val drugCount: Long
-)

@@ -8,7 +8,6 @@ import org.kert0n.medappserver.db.repository.MedKitMembershipRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.domain.MedKit
-import org.kert0n.medappserver.domain.MedKitOverview
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Component
 
@@ -30,10 +29,18 @@ class MedKitStore(
         return MedKit(row.id, memberships.findMemberIds(row.id))
     }
 
-    /** Идентификаторы аптечек участника: их состав вызывающему не нужен. */
-    fun findIdsOfUser(userId: UUID): List<UUID> = medKits.findIdsOfUser(userId)
-
-    fun overviewsOf(userId: UUID): List<MedKitOverview> = medKits.findOverviewsOfUser(userId)
+    /**
+     * Все аптечки участника — агрегатами и одним запросом.
+     *
+     * Строки членства приходят вместе со своими аптечками, поэтому состав собирается
+     * группировкой в памяти, а число обращений к базе не зависит от того, в скольких аптечках
+     * человек состоит.
+     */
+    fun findAllOfUser(userId: UUID): List<MedKit> =
+        medKits.findMembershipsOfUserKits(userId)
+            .groupBy { it.medKit.id }
+            .map { (id, memberships) -> MedKit(id, memberships.map { it.membershipKey.userId }.toSet()) }
+            .sortedBy { it.id }
 
     fun insert(medKit: MedKit) {
         val row = medKits.save(MedKitData(id = medKit.id))

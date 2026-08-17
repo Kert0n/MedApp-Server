@@ -4,7 +4,6 @@ import com.sksamuel.aedile.core.Cache
 import java.util.UUID
 import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.domain.MedKit
-import org.kert0n.medappserver.domain.MedKitOverview
 import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.services.security.SecurityService
 import org.slf4j.LoggerFactory
@@ -53,21 +52,17 @@ class MedKitService(
     }
 
     /**
-     * Идентификаторы аптечек участника.
+     * Все аптечки участника — целиком.
      *
-     * Только идентификаторы: состав аптечек не показывает ни один ответ, а раньше он всё
-     * равно поднимался — запросом на каждую аптечку.
+     * Раньше здесь было два чтения под двух вызывающих: идентификаторы для снимка и счётчики
+     * для списка. Оба ушли: экономия не в том, чтобы вернуть поменьше полей, а в том, чтобы не
+     * ходить в базу лишний раз, — а состав приходит тем же одним запросом, из которого счётчик
+     * участников получается сам.
      */
     @Transactional(readOnly = true)
-    fun idsOfUser(userId: UUID): List<UUID> {
+    fun allOfUser(userId: UUID): List<MedKit> {
         logger.debug("Finding all medkits for user: {}", userId)
-        return medKits.findIdsOfUser(userId)
-    }
-
-    @Transactional(readOnly = true)
-    fun overviews(userId: UUID): List<MedKitOverview> {
-        logger.debug("Finding medkit overviews for user: {}", userId)
-        return medKits.overviewsOf(userId)
+        return medKits.findAllOfUser(userId)
     }
 
     @Transactional(readOnly = true)

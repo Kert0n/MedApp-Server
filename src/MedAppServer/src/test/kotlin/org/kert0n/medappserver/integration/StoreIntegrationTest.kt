@@ -174,7 +174,7 @@ class StoreIntegrationTest {
         medKitService.create(outsider.id)
         dbHelper.flushAndClear()
 
-        assertEquals(listOf(mine.id), medKits.findIdsOfUser(alice.id))
+        assertEquals(listOf(mine.id), medKits.findAllOfUser(alice.id).map { it.id })
     }
 
     @Test
@@ -188,10 +188,12 @@ class StoreIntegrationTest {
         dbHelper.freshDrug(kit.id, 3.0)
         dbHelper.flushAndClear()
 
-        val overview = medKits.overviewsOf(alice.id).single()
+        // Аптечка приходит агрегатом: участники в ней самой, а пачки считает вызывающий по
+        // тому набору, который всё равно читал. Отдельного типа под счётчики больше нет.
+        val mine = medKits.findAllOfUser(alice.id).single()
 
-        assertEquals(2, overview.memberCount)
-        assertEquals(3, overview.drugCount)
+        assertEquals(2, mine.members.size)
+        assertEquals(3, drugs.findAllInMedKit(kit.id).size)
     }
 
     @Test
@@ -206,7 +208,7 @@ class StoreIntegrationTest {
 
         assertNull(medKits.findById(kit.id))
         assertNull(drugs.findById(drug.id), "препараты не переживают свою аптечку")
-        assertTrue(medKits.findIdsOfUser(alice.id).isEmpty())
+        assertTrue(medKits.findAllOfUser(alice.id).map { it.id }.isEmpty())
     }
 
     // ── Пользователи ─────────────────────────────────────────────────────────────
@@ -219,7 +221,7 @@ class StoreIntegrationTest {
         medKitService.create(outsider.id)
         dbHelper.flushAndClear()
 
-        assertEquals(listOf(mine.id), medKits.findIdsOfUser(alice.id))
+        assertEquals(listOf(mine.id), medKits.findAllOfUser(alice.id).map { it.id })
     }
 
     /**

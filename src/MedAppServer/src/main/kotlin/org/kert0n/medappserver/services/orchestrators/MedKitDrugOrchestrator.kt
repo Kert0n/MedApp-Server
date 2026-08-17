@@ -4,6 +4,8 @@ import java.util.UUID
 import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.api.DrugDTO
 import org.kert0n.medappserver.api.MedKitDTO
+import org.kert0n.medappserver.api.MedKitSummaryDTO
+import org.kert0n.medappserver.api.toSummaryDto
 import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.db.store.DrugStore
 import org.kert0n.medappserver.db.store.ReservationStore
@@ -106,6 +108,21 @@ class MedKitDrugOrchestrator(
             id = medKitId,
             drugs = drugsWithReservations(drugService.ofMedKit(medKitId)).toSet()
         )
+    }
+
+    /**
+     * Список аптечек вызывающего со счётчиками.
+     *
+     * Два чтения на весь ответ, сколько бы аптечек ни было: аптечки с участниками одним
+     * запросом, доступные упаковки — вторым. Отдельного типа под счётчики не нужно: оба набора
+     * здесь и так на руках.
+     */
+    @Transactional(readOnly = true)
+    fun medKitSummaries(userId: UUID): Set<MedKitSummaryDTO> {
+        val packagesPerMedKit = drugService.accessibleTo(userId).groupingBy { it.medKitId }.eachCount()
+        return medKitService.allOfUser(userId)
+            .map { it.toSummaryDto(packagesPerMedKit[it.id] ?: 0) }
+            .toSet()
     }
 
     /**

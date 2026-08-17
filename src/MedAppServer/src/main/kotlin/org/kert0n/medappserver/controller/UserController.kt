@@ -44,13 +44,8 @@ class UserController(
         val drugsByMedKit = accessible
             .map { it.toDto(reservationsByDrug[it.id].orEmpty()) }
             .groupBy { it.medKitId }
-        val medKits = medKitService.idsOfUser(authentication.userId)
-            .map { medKitId ->
-                MedKitDTO(
-                    id = medKitId,
-                    drugs = drugsByMedKit[medKitId].orEmpty().toSet()
-                )
-            }
+        val medKits = medKitService.allOfUser(authentication.userId)
+            .map { MedKitDTO(id = it.id, drugs = drugsByMedKit[it.id].orEmpty().toSet()) }
             .toSet()
         return UserSnapshotDTO(id = authentication.userId, medKits = medKits)
     }

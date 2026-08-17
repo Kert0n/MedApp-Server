@@ -3,7 +3,7 @@ package org.kert0n.medappserver.api
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.DrugTemplate
 import org.kert0n.medappserver.domain.FormType
-import org.kert0n.medappserver.domain.MedKitOverview
+import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.QuantityUnit
 import org.kert0n.medappserver.domain.Reservation
 
@@ -66,8 +66,15 @@ fun QuantityUnit.toDto(): VocabularyEntryDTO = VocabularyEntryDTO(id = id, name 
 
 fun FormType.toDto(): VocabularyEntryDTO = VocabularyEntryDTO(id = id, name = name)
 
-fun MedKitOverview.toDto(): MedKitSummaryDTO = MedKitSummaryDTO(
+/**
+ * Сводка аптечки для списка.
+ *
+ * Счётчики считаются по тому, что уже на руках: участники есть в самом агрегате, а число пачек
+ * приходит от вызывающего, который всё равно их читал. Считать это запросом в базу ради двух
+ * чисел незачем — дорого обращение, а не объект в памяти.
+ */
+fun MedKit.toSummaryDto(drugCount: Int): MedKitSummaryDTO = MedKitSummaryDTO(
     id = id,
-    userCount = memberCount,
-    drugCount = drugCount
+    userCount = members.size.toLong(),
+    drugCount = drugCount.toLong()
 )

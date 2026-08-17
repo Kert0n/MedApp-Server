@@ -10,7 +10,6 @@ import org.kert0n.medappserver.api.ReservationCreateRequest
 import org.kert0n.medappserver.api.ReservationPatchRequest
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.MedKit
-import org.kert0n.medappserver.domain.MedKitOverview
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.QuantityUnit
 import org.kert0n.medappserver.domain.Reservation
@@ -215,7 +214,8 @@ class ResourceApiContractTest {
     @Test
     fun `аптечка создаётся и перечисляется`() {
         whenever(medKitService.create(userId)).thenReturn(medKit)
-        whenever(medKitService.overviews(userId)).thenReturn(listOf(MedKitOverview(medKitId, 2, 17)))
+        whenever(medKitDrugOrchestrator.medKitSummaries(userId))
+            .thenReturn(setOf(org.kert0n.medappserver.api.MedKitSummaryDTO(medKitId, 2, 17)))
 
         mockMvc.perform(post(ApiRoutes.MED_KITS).with(asUser()))
             .andExpect(status().isCreated)
@@ -271,7 +271,7 @@ class ResourceApiContractTest {
 
     @Test
     fun `снимок пользователя лежит по пути me`() {
-        whenever(medKitService.idsOfUser(userId)).thenReturn(listOf(medKitId))
+        whenever(medKitService.allOfUser(userId)).thenReturn(listOf(medKit))
         whenever(drugService.accessibleTo(userId)).thenReturn(listOf(drug))
 
         mockMvc.perform(get(ApiRoutes.ME).with(asUser()))

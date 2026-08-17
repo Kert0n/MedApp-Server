@@ -64,28 +64,30 @@ class MedKitServiceTest {
         }
     }
 
-    // ── idsOfUser ──
+    // ── allOfUser ──
 
     @Test
-    fun `idsOfUser returns medkits of user`() {
+    fun `allOfUser returns medkits of user`() {
         val alice = dbHelper.freshUser("alice")
         medKitService.create(alice.id)
         medKitService.create(alice.id)
         dbHelper.flushAndClear()
 
-        assertEquals(2, medKitService.idsOfUser(alice.id).size)
+        assertEquals(2, medKitService.allOfUser(alice.id).size)
     }
 
     // ── findMedKitSummaries ──
 
     @Test
-    fun `overviews returns counters for user`() {
+    fun `allOfUser returns the kit with its members`() {
         val alice = dbHelper.freshUser("alice")
         medKitService.create(alice.id)
         dbHelper.flushAndClear()
 
-        val summaries = medKitService.overviews(alice.id)
-        assertEquals(1, summaries.size)
+        // Аптечка приходит агрегатом, поэтому счётчик участников получается из неё самой —
+        // отдельного запроса и отдельного типа под счётчики для этого не нужно.
+        val mine = medKitService.allOfUser(alice.id).single()
+        assertEquals(setOf(alice.id), mine.members)
     }
 
     // ── generateMedKitShareKey / joinMedKitByKey ──
@@ -101,9 +103,9 @@ class MedKitServiceTest {
         medKitService.joinByInvitation(key, joiner.id)
         dbHelper.flushAndClear()
 
-        val joinerKits = medKitService.idsOfUser(joiner.id)
+        val joinerKits = medKitService.allOfUser(joiner.id)
         assertEquals(1, joinerKits.size)
-        assertEquals(kit.id, joinerKits.first())
+        assertEquals(kit.id, joinerKits.first().id)
 
         // Key should be invalidated after use
         assertFailsWith<DomainRuleViolated> {
@@ -132,7 +134,7 @@ class MedKitServiceTest {
         medKitService.join(kit.id, bob.id)
         dbHelper.flushAndClear()
 
-        assertEquals(1, medKitService.idsOfUser(bob.id).size)
+        assertEquals(1, medKitService.allOfUser(bob.id).size)
     }
 
     @Test

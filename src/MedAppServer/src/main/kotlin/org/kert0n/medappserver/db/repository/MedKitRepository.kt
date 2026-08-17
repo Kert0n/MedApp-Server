@@ -11,40 +11,26 @@ import org.springframework.data.repository.query.Param
 interface MedKitRepository : JpaRepository<MedKitData, UUID> {
 
     /**
-     * Только идентификаторы аптечек участника.
+     * Аптечки участника целиком — одним запросом.
      *
-     * Снимку пользователя больше ничего и не нужно: препараты он берёт отдельным запросом, а
-     * участники аптечек в ответе не участвуют — поднимать их значило бы платить за то, чего
-     * никто не прочитает.
+     * Возвращаются строки членства, а не аптечки: каждая несёт свою аптечку присоединённой, и
+     * из набора таких строк агрегат собирается без единого дополнительного обращения. Урезанных
+     * форм под каждого вызывающего — только идентификаторы, только счётчики — больше нет: одно
+     * это чтение обслуживает и список аптечек, и снимок пользователя.
+     *
+     * Условие через `EXISTS`, а не по членству напрямую: нужны **все** участники аптечек
+     * вызывающего, иначе в агрегате оказался бы состав из одного человека.
      */
     @Query(
         """
-        SELECT m.membershipKey.medKitId FROM MedKitMembershipData m
-        WHERE m.membershipKey.userId = :userId
-        ORDER BY m.membershipKey.medKitId
-    """
-    )
-    fun findIdsOfUser(@Param("userId") userId: UUID): List<UUID>
-
-    /**
-     * Счётчики аптечек участника одним запросом.
-     *
-     * Считает база: поднимать участников и препараты, чтобы узнать, сколько их, значит
-     * грузить два чужих агрегата ради двух чисел.
-     */
-    @Query(
-        """
-        SELECT new org.kert0n.medappserver.domain.MedKitOverview(
-            mk.id,
-            (SELECT COUNT(m2) FROM MedKitMembershipData m2 WHERE m2.membershipKey.medKitId = mk.id),
-            (SELECT COUNT(d) FROM DrugData d WHERE d.medKit = mk))
-        FROM MedKitData mk
-        JOIN MedKitMembershipData m ON m.membershipKey.medKitId = mk.id
-        WHERE m.membershipKey.userId = :userId
+        SELECT m FROM MedKitMembershipData m
+        JOIN FETCH m.medKit mk
+        WHERE EXISTS (SELECT 1 FROM MedKitMembershipData mine
+                      WHERE mine.membershipKey.medKitId = mk.id AND mine.membershipKey.userId = :userId)
         ORDER BY mk.id
     """
     )
-    fun findOverviewsOfUser(@Param("userId") userId: UUID): List<org.kert0n.medappserver.domain.MedKitOverview>
+    fun findMembershipsOfUserKits(@Param("userId") userId: UUID): List<MedKitMembershipData>
 }
 
 interface MedKitMembershipRepository : JpaRepository<MedKitMembershipData, org.kert0n.medappserver.db.model.MedKitMembershipKey> {

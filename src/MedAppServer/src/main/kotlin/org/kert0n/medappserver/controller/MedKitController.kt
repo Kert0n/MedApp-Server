@@ -43,7 +43,7 @@ class MedKitController(
     @ApiResponse(responseCode = "200", description = "Kits returned")
     fun listMedKits(authentication: Authentication): Set<MedKitSummaryDTO> {
         logger.debug("GET /v1/med-kits by user {}", authentication.userId)
-        return medKitService.overviews(authentication.userId).map { it.toDto() }.toSet()
+        return medKitDrugOrchestrator.medKitSummaries(authentication.userId)
     }
 
     @GetMapping("/{medKitId}")
