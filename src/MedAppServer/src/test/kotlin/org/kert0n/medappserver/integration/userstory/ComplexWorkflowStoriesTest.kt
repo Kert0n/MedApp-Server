@@ -1,5 +1,6 @@
 package org.kert0n.medappserver.integration.userstory
 
+import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.User
@@ -91,8 +92,7 @@ class ComplexWorkflowStoriesTest {
 
         val allergyMeds = dbHelper.insert(
             Drug(
-                id = UUID.randomUUID(), name = "Allergy Meds", quantity = qty(60.0),
-                quantityUnit = "pills", medKitId = homeKit.id, formType = null,
+                id = UUID.randomUUID(), name = "Allergy Meds", quantity = Quantity(qty(60.0), dbHelper.unit()), medKitId = homeKit.id, formType = null,
                 category = null,
                 manufacturer = null,
                 country = null,
@@ -101,8 +101,7 @@ class ComplexWorkflowStoriesTest {
         )
         val painkillers = dbHelper.insert(
             Drug(
-                id = UUID.randomUUID(), name = "Painkillers", quantity = qty(100.0),
-                quantityUnit = "pills", medKitId = homeKit.id, formType = null,
+                id = UUID.randomUUID(), name = "Painkillers", quantity = Quantity(qty(100.0), dbHelper.unit()), medKitId = homeKit.id, formType = null,
                 category = null,
                 manufacturer = null,
                 country = null,
@@ -241,9 +240,8 @@ class ComplexWorkflowStoriesTest {
 
         // Alice adds 100 tablets to sourceKit
         val createDrugDto = DrugCreateRequest(
-            name = "LifePill", quantity = qty(100.0), quantityUnit = "tablets", formType = null, category = null,
-            manufacturer = null, country = null, description = null
-        )
+            name = "LifePill", quantity = qty(100.0), quantityUnitId = dbHelper.unit().id
+            )
         val drug = medKitDrugOrchestrator.createDrugInMedKit(sourceKit.id, createDrugDto, alice.id)
         dbHelper.flushAndClear()
 
@@ -312,7 +310,7 @@ class ComplexWorkflowStoriesTest {
         medKitService.joinMedKitByKey(shareKey, bob.id)
 
         // Alice creates a drug
-        val drug = drugService.create(DrugCreateRequest("Shared Meds", qty(10.0), "pcs"), kitA.id, alice.id)
+        val drug = drugService.create(DrugCreateRequest("Shared Meds", qty(10.0), dbHelper.unit().id), kitA.id, alice.id)
 
         // Bob creates a private kit
         val kitB = medKitService.createNew(bob.id)
@@ -336,7 +334,7 @@ class ComplexWorkflowStoriesTest {
         val kitA = medKitService.createNew(alice.id)
         medKitService.joinMedKitByKey(medKitService.generateMedKitShareKey(kitA.id, alice.id), bob.id)
 
-        val drug = drugService.create(DrugCreateRequest("Audit Meds", qty(10.0), "pcs"), kitA.id, alice.id)
+        val drug = drugService.create(DrugCreateRequest("Audit Meds", qty(10.0), dbHelper.unit().id), kitA.id, alice.id)
 
         // Both have plans
         drugService.createPlan(alice.id, drug.id, qty(5.0))
@@ -366,7 +364,7 @@ class ComplexWorkflowStoriesTest {
         entityManager.flush()
         entityManager.clear()
         val drug =
-            medKitDrugOrchestrator.createDrugInMedKit(kitA.id, DrugCreateRequest("Migrating Meds", qty(10.0), "pcs"), alice.id)
+            medKitDrugOrchestrator.createDrugInMedKit(kitA.id, DrugCreateRequest("Migrating Meds", qty(10.0), dbHelper.unit().id), alice.id)
 
         // ACT: Delete Kit A and migrate drugs to Kit B
         entityManager.flush()

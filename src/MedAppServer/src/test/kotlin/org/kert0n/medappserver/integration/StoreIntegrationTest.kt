@@ -145,7 +145,7 @@ class StoreIntegrationTest {
         val drug = dbHelper.freshDrug(kit.id, 50.0)
         dbHelper.flushAndClear()
 
-        assertQty(0.0, drugs.plannedTotalOf(drug.id))
+        assertQty(0.0, drugs.findById(drug.id)!!.plannedTotal)
     }
 
     // ── Аптечки и участники ──────────────────────────────────────────────────────

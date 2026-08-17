@@ -4,7 +4,6 @@ import jakarta.persistence.*
 import jakarta.validation.constraints.NotNull
 import org.kert0n.medappserver.domain.QUANTITY_PRECISION
 import org.kert0n.medappserver.domain.QUANTITY_SCALE
-import org.kert0n.medappserver.domain.toQuantityScale
 import java.io.Serializable
 import java.math.BigDecimal
 import java.util.*
@@ -47,13 +46,10 @@ class TreatmentPlanData(
     plannedAmount: BigDecimal
 ) {
 
-    /** Запланированное количество, нормализованное до масштаба колонки `NUMERIC(19,6)`. */
+    /** Запланированное количество; масштаб обеспечивает `domain.Quantity`. */
     @NotNull
     @Column(name = "planned_amount", nullable = false, precision = QUANTITY_PRECISION, scale = QUANTITY_SCALE)
-    var plannedAmount: BigDecimal = plannedAmount.toQuantityScale()
-        set(value) {
-            field = value.toQuantityScale()
-        }
+    var plannedAmount: BigDecimal = plannedAmount
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true

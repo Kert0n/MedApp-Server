@@ -5,7 +5,8 @@ import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
 import org.kert0n.medappserver.domain.QUANTITY_PRECISION
 import org.kert0n.medappserver.domain.QUANTITY_SCALE
-import org.kert0n.medappserver.domain.toQuantityScale
+import org.kert0n.medappserver.db.model.parsed.FormTypeData
+import org.kert0n.medappserver.db.model.parsed.QuantityUnitData
 import java.math.BigDecimal
 import java.util.*
 
@@ -36,14 +37,24 @@ class DrugData(
 
     quantity: BigDecimal,
 
+    /**
+     * Единица измерения — строка общего справочника, а не свободный текст.
+     *
+     * `EAGER`: единица нужна всегда, потому что без неё количество не имеет смысла. Читающие
+     * запросы забирают её `JOIN FETCH`, иначе список препаратов дал бы запрос на строку.
+     */
     @NotNull
-    @Size(max = 50)
-    @Column(name = "quantity_unit", nullable = false, length = 50)
-    var quantityUnit: String,
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(
+        name = "quantity_unit_id",
+        nullable = false,
+        foreignKey = ForeignKey(name = "user_drugs_quantity_unit_fkey")
+    )
+    var quantityUnit: QuantityUnitData,
 
-    @Size(max = 100)
-    @Column(name = "form_type", length = 100)
-    var formType: String?,
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "form_type_id", foreignKey = ForeignKey(name = "user_drugs_form_type_fkey"))
+    var formType: FormTypeData?,
 
     @Size(max = 200)
     @Column(name = "category", length = 200)
@@ -87,13 +98,15 @@ class DrugData(
 
 ) {
 
-    /** Остаток препарата, нормализованный до масштаба колонки `NUMERIC(19,6)`. */
+    /**
+     * Остаток препарата.
+     *
+     * Нормализующего сеттера здесь больше нет: масштаб — забота `domain.Quantity`, которая
+     * не бывает ненормализованной, а сюда значение приходит уже приведённым.
+     */
     @NotNull
     @Column(name = "quantity", nullable = false, precision = QUANTITY_PRECISION, scale = QUANTITY_SCALE)
-    var quantity: BigDecimal = quantity.toQuantityScale()
-        set(value) {
-            field = value.toQuantityScale()
-        }
+    var quantity: BigDecimal = quantity
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true

@@ -1,5 +1,6 @@
 package org.kert0n.medappserver.integration.userstory
 
+import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.Drug
@@ -67,7 +68,7 @@ class DrugMovementStoriesTest {
 
         val painkiller = Drug(
             id = UUID.randomUUID(), name = "Ibuprofen",
-            quantity = qty(60.0), quantityUnit = "tablets", formType = "tablet",
+            quantity = Quantity(qty(60.0), dbHelper.unit()),
             category = "painkiller", manufacturer = null, country = null,
             description = null, medKitId = homeKit.id
         )
@@ -122,7 +123,7 @@ class DrugMovementStoriesTest {
 
         val drugData = Drug(
             id = UUID.randomUUID(), name = "Medicine X",
-            quantity = qty(100.0), quantityUnit = "ml", formType = "liquid",
+            quantity = Quantity(qty(100.0), dbHelper.unit()),
             category = null, manufacturer = null, country = null,
             description = null, medKitId = medkit.id
         )
@@ -163,7 +164,7 @@ class DrugMovementStoriesTest {
         val medkit = medKitService.createNew(userData.id)
         val drugData = Drug(
             id = UUID.randomUUID(), name = "Expired Drug",
-            quantity = qty(50.0), quantityUnit = "tablets", formType = null,
+            quantity = Quantity(qty(50.0), dbHelper.unit()), formType = null,
             category = null, manufacturer = null, country = null,
             description = null, medKitId = medkit.id
         )
@@ -217,8 +218,7 @@ class DrugMovementStoriesTest {
         // Add drug to old kit
         val drugData = dbHelper.insert(
             Drug(
-                id = UUID.randomUUID(), name = "Special Meds", quantity = qty(90.0),
-                quantityUnit = "pills", medKitId = oldKit.id, formType = null,
+                id = UUID.randomUUID(), name = "Special Meds", quantity = Quantity(qty(90.0), dbHelper.unit()), medKitId = oldKit.id, formType = null,
                 category = null,
                 manufacturer = null,
                 country = null,
@@ -266,8 +266,7 @@ class DrugMovementStoriesTest {
         // Drug has 100 total
         val drugData = dbHelper.insert(
             Drug(
-                id = UUID.randomUUID(), name = "Shared Vitamins", quantity = qty(100.0),
-                quantityUnit = "pills", medKitId = kit.id, formType = null,
+                id = UUID.randomUUID(), name = "Shared Vitamins", quantity = Quantity(qty(100.0), dbHelper.unit()), medKitId = kit.id, formType = null,
                 category = null,
                 manufacturer = null,
                 country = null,
@@ -313,8 +312,7 @@ class DrugMovementStoriesTest {
 
         val drugDataToMove = dbHelper.insert(
             Drug(
-                id = UUID.randomUUID(), name = "Moving Pill", quantity = qty(10.0),
-                quantityUnit = "pills", medKitId = sourceKit.id, formType = null,
+                id = UUID.randomUUID(), name = "Moving Pill", quantity = Quantity(qty(10.0), dbHelper.unit()), medKitId = sourceKit.id, formType = null,
                 category = null,
                 manufacturer = null,
                 country = null,
@@ -324,8 +322,7 @@ class DrugMovementStoriesTest {
 
         val drugDataToStay = dbHelper.insert(
             Drug(
-                id = UUID.randomUUID(), name = "Staying Pill", quantity = qty(10.0),
-                quantityUnit = "pills", medKitId = sourceKit.id, formType = null,
+                id = UUID.randomUUID(), name = "Staying Pill", quantity = Quantity(qty(10.0), dbHelper.unit()), medKitId = sourceKit.id, formType = null,
                 category = null,
                 manufacturer = null,
                 country = null,

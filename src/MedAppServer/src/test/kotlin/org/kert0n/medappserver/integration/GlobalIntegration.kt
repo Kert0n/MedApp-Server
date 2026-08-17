@@ -1,5 +1,6 @@
 package org.kert0n.medappserver.integration
 
+import org.kert0n.medappserver.domain.Quantity
 import jakarta.persistence.EntityManager
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue

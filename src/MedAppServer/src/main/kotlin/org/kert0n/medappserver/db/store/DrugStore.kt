@@ -5,12 +5,21 @@ import java.util.UUID
 import org.kert0n.medappserver.db.model.DrugData
 import org.kert0n.medappserver.db.model.MedKitData
 import org.kert0n.medappserver.db.model.UserData
+import org.kert0n.medappserver.db.model.parsed.FormTypeData
+import org.kert0n.medappserver.db.model.parsed.QuantityUnitData
 import org.kert0n.medappserver.db.repository.DrugRepository
+import org.kert0n.medappserver.db.repository.FormTypeRepository
+import org.kert0n.medappserver.db.repository.QuantityUnitRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.TreatmentPlanRepository
+import org.kert0n.medappserver.db.repository.TreatmentPlanRow
 import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.domain.Drug
+import org.kert0n.medappserver.domain.Quantity
+import org.kert0n.medappserver.domain.QuantityUnit
 import org.kert0n.medappserver.domain.TreatmentPlan
+import org.kert0n.medappserver.domain.UnknownFormType
+import org.kert0n.medappserver.domain.UnknownQuantityUnit
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Component
 
@@ -26,7 +35,9 @@ class DrugStore(
     private val drugs: DrugRepository,
     private val plans: TreatmentPlanRepository,
     private val users: UserRepository,
-    private val medKits: MedKitRepository
+    private val medKits: MedKitRepository,
+    private val units: QuantityUnitRepository,
+    private val forms: FormTypeRepository
 ) {
 
     // ── Чтение ───────────────────────────────────────────────────────────────────
@@ -42,12 +53,12 @@ class DrugStore(
 
     fun findById(drugId: UUID): Drug? = drugs.findByIdOrNull(drugId)?.toDomain()
 
-    fun findPlansOf(userId: UUID): List<TreatmentPlan> = plans.findPlansOfUser(userId)
+    fun findPlansOf(userId: UUID): List<TreatmentPlan> = plans.findPlansOfUser(userId).map { it.toDomain() }
 
-    fun findPlan(userId: UUID, drugId: UUID): TreatmentPlan? = plans.findPlan(userId, drugId)
+    fun findPlan(userId: UUID, drugId: UUID): TreatmentPlan? = plans.findPlan(userId, drugId)?.toDomain()
 
-    fun plannedTotalOf(drugId: UUID): BigDecimal =
-        plans.findAllByPlanKeyDrugId(drugId).fold(BigDecimal.ZERO) { sum, row -> sum + row.plannedAmount }
+    private fun TreatmentPlanRow.toDomain() =
+        TreatmentPlan(userId, drugId, Quantity(plannedAmount, QuantityUnit(unitId, unitName)))
 
     // ── Команды ──────────────────────────────────────────────────────────────────
 
@@ -56,7 +67,13 @@ class DrugStore(
         drugs.lockAccessible(drugId, userId)?.toDomain()
 
     fun insert(drug: Drug) {
-        drugs.save(drug.toNewEntity(resolveMedKit(drug.medKitId)))
+        drugs.save(
+            drug.toNewEntity(
+                medKit = resolveMedKit(drug.medKitId),
+                unit = resolveUnit(drug.quantity.unit.id),
+                form = drug.formType?.let { resolveForm(it.id) }
+            )
+        )
     }
 
     /**
@@ -67,7 +84,7 @@ class DrugStore(
      */
     fun save(drug: Drug) {
         val entity = managed(drug.id)
-        drug.applyTo(entity, ::resolveUser, ::resolveMedKit)
+        drug.applyTo(entity, ::resolveUser, ::resolveMedKit, ::resolveUnit, ::resolveForm)
         drugs.save(entity)
     }
 
@@ -87,4 +104,10 @@ class DrugStore(
 
     private fun resolveMedKit(medKitId: UUID): MedKitData =
         medKits.findByIdOrNull(medKitId) ?: error("Medicine kit $medKitId disappeared while a drug was being written")
+
+    private fun resolveUnit(unitId: UUID): QuantityUnitData =
+        units.findByIdOrNull(unitId) ?: throw UnknownQuantityUnit()
+
+    private fun resolveForm(formId: UUID): FormTypeData =
+        forms.findByIdOrNull(formId) ?: throw UnknownFormType()
 }

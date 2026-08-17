@@ -1,5 +1,6 @@
 package org.kert0n.medappserver.integration.userstory
 
+import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.domain.Drug
@@ -75,9 +76,7 @@ class TreatmentPlanStoriesTest {
         val drugData = Drug(
             id = UUID.randomUUID(),
             name = "Treatment Drug",
-            quantity = qty(100.0),
-            quantityUnit = "tablets",
-            formType = null,
+            quantity = Quantity(qty(100.0), dbHelper.unit()),
             category = null,
             manufacturer = null,
             country = null,
@@ -131,9 +130,7 @@ class TreatmentPlanStoriesTest {
         val vitaminC = Drug(
             id = UUID.randomUUID(),
             name = "Vitamin C",
-            quantity = qty(100.0),
-            quantityUnit = "tablets",
-            formType = "tablet",
+            quantity = Quantity(qty(100.0), dbHelper.unit()),
             category = null,
             manufacturer = null,
             country = null,
@@ -179,9 +176,7 @@ class TreatmentPlanStoriesTest {
         val drugData = Drug(
             id = UUID.randomUUID(),
             name = "Paracetamol",
-            quantity = qty(100.0),
-            quantityUnit = "tablets",
-            formType = null,
+            quantity = Quantity(qty(100.0), dbHelper.unit()),
             category = null,
             manufacturer = null,
             country = null,
@@ -228,9 +223,7 @@ class TreatmentPlanStoriesTest {
         val drugData = Drug(
             id = UUID.randomUUID(),
             name = "Ibuprofen",
-            quantity = qty(50.0),
-            quantityUnit = "tablets",
-            formType = null,
+            quantity = Quantity(qty(50.0), dbHelper.unit()),
             category = null,
             manufacturer = null,
             country = null,
@@ -295,13 +288,13 @@ class TreatmentPlanStoriesTest {
         // Add family medications
         val aspirin = Drug(
             id = UUID.randomUUID(), name = "Children's Aspirin",
-            quantity = qty(200.0), quantityUnit = "tablets", formType = "chewable",
+            quantity = Quantity(qty(200.0), dbHelper.unit()),
             category = "painkiller", manufacturer = null, country = null,
             description = null, medKitId = familyKit.id
         )
         val vitamins = Drug(
             id = UUID.randomUUID(), name = "Multivitamins",
-            quantity = qty(90.0), quantityUnit = "tablets", formType = "tablet",
+            quantity = Quantity(qty(90.0), dbHelper.unit()),
             category = "supplement", manufacturer = null, country = null,
             description = null, medKitId = familyKit.id
         )

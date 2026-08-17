@@ -1,5 +1,6 @@
 package org.kert0n.medappserver.services.models
 
+import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.api.toDto
 import java.util.*
 import kotlin.test.assertEquals
@@ -114,7 +115,7 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         val drug = drugService.create(
-            DrugCreateRequest(name = "Aspirin", quantity = qty(100.0), quantityUnit = "mg"),
+            DrugCreateRequest(name = "Aspirin", quantity = qty(100.0), quantityUnitId = dbHelper.unit().id),
             kit.id, alice.id
         )
 
@@ -148,8 +149,7 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         val fullUpdate = DrugPatchRequest(
-            name = "New Name", quantity = qty(100.0), quantityUnit = "ml",
-            formType = "liquid", category = "cat", manufacturer = "man",
+            name = "New Name", quantity = qty(100.0), category = "cat", manufacturer = "man",
             country = "co", description = "desc"
         )
         drugService.update(drug.id, fullUpdate, alice.id)
@@ -158,8 +158,6 @@ class DrugServiceTest {
         val updated = drugService.requireById(drug.id)
         assertEquals("New Name", updated.name)
         assertQty(100.0, updated.quantity)
-        assertEquals("ml", updated.quantityUnit)
-        assertEquals("liquid", updated.formType)
         assertEquals("cat", updated.category)
         assertEquals("man", updated.manufacturer)
         assertEquals("co", updated.country)
@@ -264,7 +262,7 @@ class DrugServiceTest {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.createNew(alice.id)
         val drug = drugService.create(
-            DrugCreateRequest(name = "Drug", quantity = qty(100.0), quantityUnit = "mg"),
+            DrugCreateRequest(name = "Drug", quantity = qty(100.0), quantityUnitId = dbHelper.unit().id),
             kit.id, alice.id
         )
         drugService.createPlan(alice.id, drug.id, qty(25.0))

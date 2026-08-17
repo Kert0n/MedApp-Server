@@ -1,5 +1,6 @@
 package org.kert0n.medappserver.integration
 
+import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.User
@@ -98,7 +99,7 @@ class ErrorResponseShapeTest {
         val medKit = medKitService.createNew(user.id)
         val drug = dbHelper.insert(
             Drug(
-                medKitId = medKit.id, name = "Aspirin", quantity = qty(5.0), quantityUnit = "tab"
+                medKitId = medKit.id, name = "Aspirin", quantity = Quantity(qty(5.0), dbHelper.unit()),
             )
         )
 

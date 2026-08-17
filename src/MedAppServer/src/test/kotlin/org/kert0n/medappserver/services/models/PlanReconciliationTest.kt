@@ -1,5 +1,6 @@
 package org.kert0n.medappserver.services.models
 
+import org.kert0n.medappserver.domain.Quantity
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import org.junit.jupiter.api.Test

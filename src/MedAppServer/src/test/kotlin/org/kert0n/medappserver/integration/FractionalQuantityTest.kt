@@ -1,5 +1,6 @@
 package org.kert0n.medappserver.integration
 
+import org.kert0n.medappserver.domain.Quantity
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.db.repository.DrugRepository

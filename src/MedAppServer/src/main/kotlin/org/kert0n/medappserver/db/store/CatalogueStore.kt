@@ -1,27 +1,56 @@
 package org.kert0n.medappserver.db.store
 
 import java.util.UUID
-import org.kert0n.medappserver.db.model.parsed.VidalDrug
+import org.kert0n.medappserver.db.model.parsed.DrugTemplateData
+import org.kert0n.medappserver.db.repository.FormTypeRepository
+import org.kert0n.medappserver.db.repository.QuantityUnitRepository
 import org.kert0n.medappserver.db.repository.VidalDrugRepository
+import org.kert0n.medappserver.domain.DrugTemplate
+import org.kert0n.medappserver.domain.FormType
+import org.kert0n.medappserver.domain.QuantityUnit
+import org.kert0n.medappserver.domain.UnknownFormType
+import org.kert0n.medappserver.domain.UnknownQuantityUnit
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Component
 
 /**
- * Хранилище справочника.
+ * Хранилище справочника: карточки препаратов и общие словари единиц и форм.
  *
- * Единственное место, где наружу выходит сама сущность, а не доменный тип. Заводить для
- * карточки справочника отдельный тип не за что: правил у неё нет, менять её через приложение
- * нечем — справочник только читается и наполняется отдельным импортом. Форма и единица
- * измерения при этом остаются собой (`FormType`, `QuantityUnit`), а не превращаются в строки
- * на полпути.
- *
- * Связи отображены `EAGER`, поэтому за границей транзакции карточка ничего не догружает.
+ * Словари общие не на словах: те же строки, на которые ссылается препарат пользователя,
+ * поэтому «шт» в каталоге и «шт» у заведённого руками препарата — одна запись.
  */
 @Component
-class CatalogueStore(private val templates: VidalDrugRepository) {
+class CatalogueStore(
+    private val templates: VidalDrugRepository,
+    private val units: QuantityUnitRepository,
+    private val forms: FormTypeRepository
+) {
 
-    fun findById(id: UUID): VidalDrug? = templates.findByIdOrNull(id)
+    fun findTemplate(id: UUID): DrugTemplate? = templates.findByIdOrNull(id)?.toDomain()
 
-    fun search(term: String, likeTerm: String, limit: Int): List<VidalDrug> =
-        templates.fuzzySearch(term, likeTerm, limit)
+    fun searchTemplates(term: String, likeTerm: String, limit: Int): List<DrugTemplate> =
+        templates.fuzzySearch(term, likeTerm, limit).map { it.toDomain() }
+
+    fun quantityUnits(): List<QuantityUnit> = units.findAll().map { it.toDomain() }.sortedBy { it.name }
+
+    fun formTypes(): List<FormType> = forms.findAll().map { it.toDomain() }.sortedBy { it.name }
+
+    fun requireQuantityUnit(id: UUID): QuantityUnit =
+        units.findByIdOrNull(id)?.toDomain() ?: throw UnknownQuantityUnit()
+
+    fun requireFormType(id: UUID): FormType =
+        forms.findByIdOrNull(id)?.toDomain() ?: throw UnknownFormType()
+
+    private fun DrugTemplateData.toDomain() = DrugTemplate(
+        id = id,
+        name = name,
+        nameLat = nameLat,
+        activeSubstance = activeSubstance,
+        formType = formType?.toDomain(),
+        category = category,
+        quantityUnit = quantityUnit?.toDomain(),
+        manufacturer = manufacturer,
+        country = country,
+        description = description
+    )
 }

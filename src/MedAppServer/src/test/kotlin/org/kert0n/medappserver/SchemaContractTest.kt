@@ -28,8 +28,11 @@ class SchemaContractTest {
     fun `количества хранятся точным типом`() {
         val schema = Files.readString(SCHEMA)
 
-        listOf("quantity      numeric(19, 6)", "planned_amount numeric(19, 6)").forEach {
-            assertTrue(it in schema, "в схеме нет $it")
+        // Сравнение по колонке и типу, а не по строке целиком: выравнивание в файле меняется
+        // от соседних колонок, и тест не должен падать из-за пробелов.
+        val columns = Regex("""(\w+)\s+numeric\(19, 6\)""").findAll(schema).map { it.groupValues[1] }.toSet()
+        listOf("quantity", "planned_amount").forEach {
+            assertTrue(it in columns, "в схеме нет $it numeric(19, 6)")
         }
         assertFalse(
             "double precision" in schemaWithoutComments(),

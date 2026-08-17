@@ -14,6 +14,7 @@ import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.api.DrugDTO
 import org.kert0n.medappserver.api.DrugPatchRequest
 import org.kert0n.medappserver.api.DrugTemplateDTO
+import org.kert0n.medappserver.api.VocabularyEntryDTO
 import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.CatalogueService
@@ -175,5 +176,36 @@ class DrugTemplateController(
         logger.debug("GET /v1/drug-templates/{} by user {}", templateId, authentication.userId)
         return catalogueService.find(templateId)?.toDto()
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Drug template not found")
+    }
+}
+
+/**
+ * Общие словари: единицы измерения и формы выпуска.
+ *
+ * Препарат ссылается на них идентификатором, поэтому клиенту нужен список — иначе взять
+ * идентификатор неоткуда. Словари одни и те же и для каталога, и для заведённого руками
+ * препарата.
+ */
+@RestController
+@RequestMapping("/v1")
+@Tag(name = "Vocabularies", description = "Shared quantity units and dosage forms")
+class VocabularyController(
+    private val catalogueService: CatalogueService
+) {
+
+    private val logger = LoggerFactory.getLogger(VocabularyController::class.java)
+
+    @GetMapping("/quantity-units")
+    @ApiResponse(responseCode = "200", description = "Units returned")
+    fun listQuantityUnits(authentication: Authentication): List<VocabularyEntryDTO> {
+        logger.debug("GET /v1/quantity-units by user {}", authentication.userId)
+        return catalogueService.quantityUnits().map { it.toDto() }
+    }
+
+    @GetMapping("/form-types")
+    @ApiResponse(responseCode = "200", description = "Dosage forms returned")
+    fun listFormTypes(authentication: Authentication): List<VocabularyEntryDTO> {
+        logger.debug("GET /v1/form-types by user {}", authentication.userId)
+        return catalogueService.formTypes().map { it.toDto() }
     }
 }

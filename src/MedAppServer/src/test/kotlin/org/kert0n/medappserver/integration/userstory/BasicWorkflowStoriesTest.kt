@@ -1,5 +1,6 @@
 package org.kert0n.medappserver.integration.userstory
 
+import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.domain.Drug
@@ -77,9 +78,7 @@ class BasicWorkflowStoriesTest {
         val aspirin = Drug(
             id = UUID.randomUUID(),
             name = "Aspirin",
-            quantity = qty(100.0),
-            quantityUnit = "tablets",
-            formType = "tablet",
+            quantity = Quantity(qty(100.0), dbHelper.unit()),
             category = "painkiller",
             manufacturer = null,
             country = null,
@@ -91,9 +90,7 @@ class BasicWorkflowStoriesTest {
         val ibuprofen = Drug(
             id = UUID.randomUUID(),
             name = "Ibuprofen",
-            quantity = qty(50.0),
-            quantityUnit = "tablets",
-            formType = "tablet",
+            quantity = Quantity(qty(50.0), dbHelper.unit()),
             category = "painkiller",
             manufacturer = null,
             country = null,
@@ -134,9 +131,7 @@ class BasicWorkflowStoriesTest {
         val vitamins = Drug(
             id = UUID.randomUUID(),
             name = "Vitamin C",
-            quantity = qty(30.0),
-            quantityUnit = "tablets",
-            formType = null,
+            quantity = Quantity(qty(30.0), dbHelper.unit()),
             category = null,
             manufacturer = null,
             country = null,
@@ -193,9 +188,7 @@ class BasicWorkflowStoriesTest {
         val drugData = Drug(
             id = UUID.randomUUID(),
             name = "Test Drug",
-            quantity = qty(100.0),
-            quantityUnit = "ml",
-            formType = null,
+            quantity = Quantity(qty(100.0), dbHelper.unit()),
             category = null,
             manufacturer = null,
             country = null,
@@ -244,9 +237,7 @@ class BasicWorkflowStoriesTest {
         val drugData1 = Drug(
             id = UUID.randomUUID(),
             name = "Drug A",
-            quantity = qty(50.0),
-            quantityUnit = "tablets",
-            formType = null,
+            quantity = Quantity(qty(50.0), dbHelper.unit()),
             category = null,
             manufacturer = null,
             country = null,
@@ -256,9 +247,7 @@ class BasicWorkflowStoriesTest {
         val drugData2 = Drug(
             id = UUID.randomUUID(),
             name = "Drug B",
-            quantity = qty(100.0),
-            quantityUnit = "ml",
-            formType = null,
+            quantity = Quantity(qty(100.0), dbHelper.unit()),
             category = null,
             manufacturer = null,
             country = null,
@@ -312,9 +301,7 @@ class BasicWorkflowStoriesTest {
         val drugData = Drug(
             id = UUID.randomUUID(),
             name = "Limited Drug",
-            quantity = qty(30.0),
-            quantityUnit = "tablets",
-            formType = null,
+            quantity = Quantity(qty(30.0), dbHelper.unit()),
             category = null,
             manufacturer = null,
             country = null,

@@ -9,6 +9,7 @@ import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.DrugDetails
 import org.kert0n.medappserver.domain.TreatmentPlan
 import org.kert0n.medappserver.domain.NotAMember
+import org.kert0n.medappserver.domain.Quantity
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -21,7 +22,10 @@ import org.springframework.transaction.annotation.Transactional
  * тоже нет — они за `DrugStore`.
  */
 @Service
-class DrugService(private val drugs: DrugStore) {
+class DrugService(
+    private val drugs: DrugStore,
+    private val catalogue: CatalogueService
+) {
 
     private val logger = LoggerFactory.getLogger(DrugService::class.java)
 
@@ -75,9 +79,8 @@ class DrugService(private val drugs: DrugStore) {
         val drug = Drug(
             medKitId = medKitId,
             name = request.name,
-            quantity = request.quantity,
-            quantityUnit = request.quantityUnit,
-            formType = request.formType,
+            quantity = Quantity(request.quantity, catalogue.requireQuantityUnit(request.quantityUnitId)),
+            formType = request.formTypeId?.let { catalogue.requireFormType(it) },
             category = request.category,
             manufacturer = request.manufacturer,
             country = request.country,
@@ -93,12 +96,13 @@ class DrugService(private val drugs: DrugStore) {
         logger.debug("Updating drug: {}", drugId)
 
         var drug = lock(drugId, userId)
-        request.quantity?.let { drug = drug.changeQuantityTo(it) }
+        // Единица перевешивается первой: количество ниже собирается уже в ней.
+        request.quantityUnitId?.let { drug = drug.relabelUnitTo(catalogue.requireQuantityUnit(it)) }
+        request.quantity?.let { drug = drug.changeQuantityTo(Quantity(it, drug.quantity.unit)) }
         drug = drug.describe(
             DrugDetails(
                 name = request.name,
-                quantityUnit = request.quantityUnit,
-                formType = request.formType,
+                formType = request.formTypeId?.let { catalogue.requireFormType(it) },
                 category = request.category,
                 manufacturer = request.manufacturer,
                 country = request.country,
@@ -128,7 +132,8 @@ class DrugService(private val drugs: DrugStore) {
     fun consume(drugId: UUID, quantity: BigDecimal, userId: UUID): Drug? {
         logger.debug("Consuming {} of drug {}", quantity, drugId)
 
-        val left = lock(drugId, userId).consume(quantity)
+        val drug = lock(drugId, userId)
+        val left = drug.consume(Quantity(quantity, drug.quantity.unit))
         if (left == null) {
             drugs.delete(drugId)
             return null
@@ -153,7 +158,8 @@ class DrugService(private val drugs: DrugStore) {
     fun createPlan(userId: UUID, drugId: UUID, plannedAmount: BigDecimal): TreatmentPlan {
         logger.debug("Creating treatment plan for user {} and drug {}", userId, drugId)
 
-        val drug = lock(drugId, userId).createPlan(userId, plannedAmount)
+        val loaded = lock(drugId, userId)
+        val drug = loaded.createPlan(userId, Quantity(plannedAmount, loaded.quantity.unit))
         drugs.save(drug)
         return drug.requirePlanOf(userId)
     }
@@ -162,7 +168,8 @@ class DrugService(private val drugs: DrugStore) {
     fun changePlan(userId: UUID, drugId: UUID, plannedAmount: BigDecimal): TreatmentPlan {
         logger.debug("Updating treatment plan for user {} and drug {}", userId, drugId)
 
-        val drug = lock(drugId, userId).changePlan(userId, plannedAmount)
+        val loaded = lock(drugId, userId)
+        val drug = loaded.changePlan(userId, Quantity(plannedAmount, loaded.quantity.unit))
         drugs.save(drug)
         return drug.requirePlanOf(userId)
     }
@@ -184,7 +191,8 @@ class DrugService(private val drugs: DrugStore) {
     fun recordIntake(userId: UUID, drugId: UUID, quantityConsumed: BigDecimal): TreatmentPlan? {
         logger.debug("Recording intake for user {} and drug {}, quantity: {}", userId, drugId, quantityConsumed)
 
-        val outcome = lock(drugId, userId).applyIntake(userId, quantityConsumed)
+        val loaded = lock(drugId, userId)
+        val outcome = loaded.applyIntake(userId, Quantity(quantityConsumed, loaded.quantity.unit))
         val left = outcome.drug
         if (left == null) {
             drugs.delete(drugId)

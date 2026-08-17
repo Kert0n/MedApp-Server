@@ -49,6 +49,29 @@ CREATE TABLE user_med_kits
     CONSTRAINT user_med_kits_user_fkey FOREIGN KEY (user_id) REFERENCES users (id)
 );
 
+-- IF NOT EXISTS у этих двух таблиц не для красоты: их создаёт и наполняет дамп
+-- справочника (01-load-catalogue.sh), который применяется раньше. Без IF NOT EXISTS
+-- второй по порядку скрипт падал бы с "relation already exists" — проверено в обоих
+-- направлениях. Определения ниже совпадают с дамповыми, поэтому файл остаётся
+-- самодостаточным и когда дампа нет.
+CREATE TABLE IF NOT EXISTS form_types
+(
+    id   uuid         NOT NULL,
+    name varchar(100) NOT NULL,
+
+    CONSTRAINT form_types_pkey PRIMARY KEY (id),
+    CONSTRAINT form_types_name_key UNIQUE (name)
+);
+
+CREATE TABLE IF NOT EXISTS quantity_units
+(
+    id   uuid        NOT NULL,
+    name varchar(30) NOT NULL,
+
+    CONSTRAINT quantity_units_pkey PRIMARY KEY (id),
+    CONSTRAINT quantity_units_name_key UNIQUE (name)
+);
+
 -- Препарат в аптечке. Название и производитель — свободный текст, а не ссылка на
 -- справочник: препарат можно добавить руками, не найдя его в каталоге.
 CREATE TABLE user_drugs
@@ -57,17 +80,24 @@ CREATE TABLE user_drugs
     name          varchar(300)   NOT NULL,
     -- numeric, а не double precision: количество препарата — это точная величина, и половина
     -- таблетки не должна превращаться в 0.49999999999999994 при первом же делении.
-    quantity      numeric(19, 6) NOT NULL,
-    quantity_unit varchar(50)    NOT NULL,
-    form_type     varchar(100),
-    category      varchar(200),
-    manufacturer  varchar(300),
-    country       varchar(100),
-    description   text,
-    med_kit_id    uuid           NOT NULL,
+    quantity         numeric(19, 6) NOT NULL,
+    -- Единица измерения и форма — ссылки в тот же справочник, которым пользуется каталог:
+    -- «шт» у заведённого руками препарата и «шт» у карточки каталога должны быть одной
+    -- единицей, а не двумя одинаково написанными строками.
+    quantity_unit_id uuid           NOT NULL,
+    form_type_id     uuid,
+    category         varchar(200),
+    manufacturer     varchar(300),
+    country          varchar(100),
+    description      text,
+    med_kit_id       uuid           NOT NULL,
 
     CONSTRAINT user_drugs_pkey PRIMARY KEY (id),
-    CONSTRAINT user_drugs_med_kit_fkey FOREIGN KEY (med_kit_id) REFERENCES med_kits (id) ON DELETE CASCADE
+    CONSTRAINT user_drugs_med_kit_fkey FOREIGN KEY (med_kit_id) REFERENCES med_kits (id) ON DELETE CASCADE,
+    -- Без каскада: словарь переживает препараты, а препарат без единицы измерения
+    -- бессмыслен, поэтому удалить используемую единицу база не даст.
+    CONSTRAINT user_drugs_quantity_unit_fkey FOREIGN KEY (quantity_unit_id) REFERENCES quantity_units (id),
+    CONSTRAINT user_drugs_form_type_fkey FOREIGN KEY (form_type_id) REFERENCES form_types (id)
 );
 
 CREATE INDEX ix_user_drugs_name ON user_drugs (name);
@@ -93,29 +123,6 @@ CREATE INDEX ix_usings_drug_id ON usings (drug_id);
 -- ============================================================
 -- Справочник препаратов (данные из скраппера Vidal)
 -- ============================================================
-
--- IF NOT EXISTS у этих двух таблиц не для красоты: их создаёт и наполняет дамп
--- справочника (01-load-catalogue.sh), который применяется раньше. Без IF NOT EXISTS
--- второй по порядку скрипт падал бы с "relation already exists" — проверено в обоих
--- направлениях. Определения ниже совпадают с дамповыми, поэтому файл остаётся
--- самодостаточным и когда дампа нет.
-CREATE TABLE IF NOT EXISTS form_types
-(
-    id   uuid         NOT NULL,
-    name varchar(100) NOT NULL,
-
-    CONSTRAINT form_types_pkey PRIMARY KEY (id),
-    CONSTRAINT form_types_name_key UNIQUE (name)
-);
-
-CREATE TABLE IF NOT EXISTS quantity_units
-(
-    id   uuid        NOT NULL,
-    name varchar(30) NOT NULL,
-
-    CONSTRAINT quantity_units_pkey PRIMARY KEY (id),
-    CONSTRAINT quantity_units_name_key UNIQUE (name)
-);
 
 CREATE TABLE parsed_drugs
 (
