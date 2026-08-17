@@ -23,14 +23,12 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
 
 /**
- * Bounds on what a single authenticated request can ask for.
+ * Bounds on what a single authenticated request can ask for: unbounded `limit` reaches Postgres
+ * as `LIMIT -1` or becomes an out-of-memory lever, and an unbounded `description` is a column of
+ * Integer.MAX_VALUE.
  *
- * `limit` used to be unbounded: -1 reached Postgres as LIMIT -1 and came back as a 500,
- * and a large value was an out-of-memory lever. `description` had no length constraint at
- * all, with the column declared as Integer.MAX_VALUE.
- *
- * CatalogueService is mocked so this stays a test of the validation boundary: the real
- * query calls pg_trgm's similarity(), which does not exist on the H2 test database.
+ * CatalogueService is mocked so this stays a test of the validation boundary: the real query
+ * calls pg_trgm's similarity(), which H2 does not have.
  */
 @SpringBootTest
 @ActiveProfiles("test")

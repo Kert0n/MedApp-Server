@@ -8,9 +8,9 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
 
 /**
- * The registration secret used to be compared with `!=`, which stops at the first differing
- * character. This covers correctness of the replacement; the timing property itself is not
- * something a unit test can assert reliably, so it is documented on [SecurityService.secretsMatch].
+ * Correctness of the constant-time secret comparison — `!=` would stop at the first differing
+ * character. The timing property itself is not something a unit test can assert reliably; it is
+ * documented on [SecurityService.secretsMatch].
  */
 @SpringBootTest
 @ActiveProfiles("test")

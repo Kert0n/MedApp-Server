@@ -17,16 +17,14 @@ tags:
   description: Shared quantity units and dosage forms
 - name: Drug catalogue
   description: Reference catalogue used when adding a drug
-- name: Treatment plans
-  description: How much of a drug the user reserved for themselves
 - name: Medicine kits
   description: Shared medicine kits
 - name: Authentication
   description: Public endpoints for registration and token issuance
 - name: Drugs
   description: Drugs stored in medicine kits
-- name: Intakes
-  description: Recorded intakes of planned drugs
+- name: Reservations
+  description: How much of a package the caller claims for themselves
 paths:
   /v1/med-kits/{targetMedKitId}/drugs/{drugId}:
     put:
@@ -61,80 +59,52 @@ paths:
           description: Drug or target kit is not accessible
         "401":
           description: Authentication is required
-  /v1/intakes/{intakeId}:
-    put:
-      tags:
-      - Intakes
-      summary: Record an intake
-      description: "Not enabled yet: the endpoint answers 501. The final behaviour\
-        \ applies the intake once — repeating the request with the same identifier\
-        \ returns the first result instead of consuming again — and arrives together\
-        \ with optimistic concurrency."
-      operationId: recordIntake
-      parameters:
-      - name: intakeId
-        in: path
-        description: Client-generated intake identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        description: Intake details
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/IntakeRequest"
-        required: true
-      responses:
-        "501":
-          description: Intake is not enabled yet
-        "401":
-          description: Authentication is required
-  /v1/treatment-plans:
+  /v1/reservations:
     get:
       tags:
-      - Treatment plans
-      summary: List treatment plans
-      description: Returns every plan of the caller.
-      operationId: listTreatmentPlans
+      - Reservations
+      summary: List reservations
+      description: Returns every reservation of the caller.
+      operationId: listReservations
       responses:
         "200":
-          description: Plans returned
+          description: Reservations returned
           content:
             '*/*':
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/TreatmentPlanDTO"
+                  $ref: "#/components/schemas/ReservationDTO"
         "401":
           description: Authentication is required
     post:
       tags:
-      - Treatment plans
-      summary: Create a treatment plan
-      description: Reserves an amount of a drug for the caller.
-      operationId: createTreatmentPlan
+      - Reservations
+      summary: Reserve part of a package
+      description: "Claims an amount of the package for the caller. The amount may\
+        \ exceed what is left in the package: how much of their own reservation to\
+        \ keep is the owner's decision, not the server's."
+      operationId: createReservation
       requestBody:
-        description: Plan to create
+        description: Reservation to create
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/TreatmentPlanCreateRequest"
+              $ref: "#/components/schemas/ReservationCreateRequest"
         required: true
       responses:
         "201":
-          description: Plan created
+          description: Reservation created
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/TreatmentPlanDTO"
+                $ref: "#/components/schemas/ReservationDTO"
         "400":
-          description: Amount exceeds the available stock
+          description: Invalid amount
         "404":
-          description: Drug is not accessible
+          description: Package is not accessible
         "409":
-          description: Plan for this drug already exists
+          description: Reservation on this package already exists
         "401":
           description: Authentication is required
   /v1/med-kits:
@@ -258,42 +228,46 @@ paths:
           description: Invitation expired or unknown
         "401":
           description: Authentication is required
-  /v1/drugs/{drugId}/consumptions:
+  /v1/drugs/{drugId}/intakes:
     post:
       tags:
       - Drugs
-      summary: Consume a drug
-      description: Reduces the stock by the given amount outside any treatment plan.
-        Returns no body when the drug ran out and was removed.
-      operationId: consumeDrug
+      summary: Record an intake
+      description: "Takes the given amount out of the package — the only way its contents\
+        \ decrease. There is no distinction between a planned intake and an emergency\
+        \ one: what was taken reduces the package, and the reservation is the owner's\
+        \ to adjust. Taking more than the package holds is refused: a package cannot\
+        \ be refilled, so a second pack is a second package. Returns no body when\
+        \ the package ran out and was destroyed."
+      operationId: recordIntake
       parameters:
       - name: drugId
         in: path
-        description: Drug identifier
+        description: Package identifier
         required: true
         schema:
           type: string
           format: uuid
       requestBody:
-        description: Amount consumed
+        description: Amount taken
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ConsumptionRequest"
+              $ref: "#/components/schemas/IntakeRequest"
         required: true
       responses:
         "200":
-          description: Stock reduced
+          description: Package reduced
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/DrugDTO"
         "204":
-          description: Drug ran out and was removed
+          description: Package ran out and was destroyed
         "400":
-          description: Amount exceeds the stock
+          description: Amount exceeds what is left in the package
         "404":
-          description: Drug does not exist or is not accessible
+          description: Package does not exist or is not accessible
         "401":
           description: Authentication is required
   /v1/auth/token:
@@ -344,85 +318,86 @@ paths:
           description: Invalid registration secret
         "429":
           description: Too many registration attempts
-  /v1/treatment-plans/{drugId}:
+  /v1/reservations/{drugId}:
     get:
       tags:
-      - Treatment plans
-      summary: Get a treatment plan
-      description: Returns the caller's plan for the drug.
-      operationId: getTreatmentPlan
+      - Reservations
+      summary: Get a reservation
+      description: Returns the caller's reservation on the package.
+      operationId: getReservation
       parameters:
       - name: drugId
         in: path
-        description: Drug identifier
+        description: Package identifier
         required: true
         schema:
           type: string
           format: uuid
       responses:
         "200":
-          description: Plan found
+          description: Reservation found
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/TreatmentPlanDTO"
+                $ref: "#/components/schemas/ReservationDTO"
         "404":
-          description: No plan for this drug
+          description: No reservation on this package
         "401":
           description: Authentication is required
     delete:
       tags:
-      - Treatment plans
-      summary: Delete a treatment plan
-      description: Releases the reserved amount.
-      operationId: deleteTreatmentPlan
+      - Reservations
+      summary: Cancel a reservation
+      description: "Releases the claim. A reservation of zero does not exist, so cancelling\
+        \ is a deletion."
+      operationId: deleteReservation
       parameters:
       - name: drugId
         in: path
-        description: Drug identifier
+        description: Package identifier
         required: true
         schema:
           type: string
           format: uuid
       responses:
         "204":
-          description: Plan deleted
+          description: Reservation cancelled
         "404":
-          description: No plan for this drug
+          description: No reservation on this package
         "401":
           description: Authentication is required
     patch:
       tags:
-      - Treatment plans
-      summary: Change the planned amount
-      description: Sets a new planned amount for the drug.
-      operationId: patchTreatmentPlan
+      - Reservations
+      summary: Change the reserved amount
+      description: Sets a new reserved amount. It may exceed what is left in the package.
+      operationId: patchReservation
       parameters:
       - name: drugId
         in: path
-        description: Drug identifier
+        description: Package identifier
         required: true
         schema:
           type: string
           format: uuid
       requestBody:
-        description: New planned amount
+        description: New reserved amount
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/TreatmentPlanPatchRequest"
+              $ref: "#/components/schemas/ReservationPatchRequest"
         required: true
       responses:
         "200":
-          description: Plan updated
+          description: Reservation updated
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/TreatmentPlanDTO"
+                $ref: "#/components/schemas/ReservationDTO"
         "400":
-          description: Amount exceeds the available stock
+          description: Invalid amount
         "404":
-          description: No plan for this drug
+          description: No reservation on this package
         "401":
           description: Authentication is required
   /v1/drugs/{drugId}:
@@ -455,7 +430,7 @@ paths:
       tags:
       - Drugs
       summary: Delete a drug
-      description: Removes the drug and every treatment plan for it.
+      description: Destroys the package and every reservation placed on it.
       operationId: deleteDrug
       parameters:
       - name: drugId
@@ -475,9 +450,10 @@ paths:
     patch:
       tags:
       - Drugs
-      summary: Update a drug
-      description: Changes the given fields. Absent fields are left as they are; quantity
-        may only increase — use consumptions to reduce it.
+      summary: Update a package
+      description: "Changes the given fields; absent fields are left as they are.\
+        \ Quantity here is a correction of the record — you recounted the pack and\
+        \ saw a different number — not a refill, and it leaves reservations alone."
       operationId: patchDrug
       parameters:
       - name: drugId
@@ -573,11 +549,11 @@ paths:
       tags:
       - Medicine kits
       summary: Delete a medicine kit
-      description: "Deletes the kit for every participant, including its drugs and\
-        \ their treatment plans. Use when the physical kit no longer exists as a shared\
-        \ thing. Pass targetMedKitId to move the drugs into another kit of yours instead\
-        \ of discarding them. To leave a shared kit without destroying it, delete\
-        \ your membership instead."
+      description: "Deletes the kit for every participant, including its packages\
+        \ and the reservations on them. Use when the physical kit no longer exists\
+        \ as a shared thing. Pass targetMedKitId to move the drugs into another kit\
+        \ of yours instead of discarding them. To leave a shared kit without destroying\
+        \ it, delete your membership instead."
       operationId: deleteMedKit
       parameters:
       - name: medKitId
@@ -689,7 +665,7 @@ paths:
       tags:
       - Medicine kit memberships
       summary: Leave a medicine kit
-      description: Removes the caller from the kit together with their treatment plans
+      description: Removes the caller from the kit together with their reservations
         in it. The kit itself and other participants stay.
       operationId: leaveMedKit
       parameters:
@@ -725,14 +701,10 @@ components:
           type: number
           description: Current stock
           example: 100.0
-        plannedQuantity:
+        reservedQuantity:
           type: number
-          description: Sum of all treatment plans for this drug
-          example: 30.0
-        availableQuantity:
-          type: number
-          description: Stock not reserved by treatment plans
-          example: 70.0
+          description: Sum of all reservations on this package; may exceed the stock
+          example: 40.0
         quantityUnitId:
           type: string
           format: uuid
@@ -768,49 +740,34 @@ components:
           type: string
           format: uuid
           description: Medicine kit the drug belongs to
-    IntakeRequest:
+    ReservationCreateRequest:
       type: object
-      description: Recorded intake of a planned drug
+      description: Request to reserve part of a package
       properties:
         drugId:
           type: string
           format: uuid
-          description: Drug identifier
-        quantityConsumed:
+          description: Package identifier
+        amount:
           type: number
-          description: "Amount consumed, greater than zero"
-          example: 1.0
-          minimum: 0.0
-      required:
-      - drugId
-      - quantityConsumed
-    TreatmentPlanCreateRequest:
-      type: object
-      description: Request to reserve an amount of a drug
-      properties:
-        drugId:
-          type: string
-          format: uuid
-          description: Drug identifier
-        plannedAmount:
-          type: number
-          description: "Planned amount, greater than zero"
+          description: "Reserved amount, greater than zero. It may exceed what is\
+            \ left in the package."
           example: 20.0
           minimum: 0.0
       required:
+      - amount
       - drugId
-      - plannedAmount
-    TreatmentPlanDTO:
+    ReservationDTO:
       type: object
-      description: How much of a drug the user reserved for themselves
+      description: How much of a package the caller claims for themselves
       properties:
         drugId:
           type: string
           format: uuid
-          description: Drug the plan belongs to
-        plannedAmount:
+          description: Package the reservation is placed on
+        amount:
           type: number
-          description: Planned amount for the course
+          description: Reserved amount; may exceed what is left in the package
           example: 20.0
     MedKitCreatedDTO:
       type: object
@@ -902,13 +859,13 @@ components:
           items:
             $ref: "#/components/schemas/DrugDTO"
           uniqueItems: true
-    ConsumptionRequest:
+    IntakeRequest:
       type: object
-      description: Unplanned consumption of a drug
+      description: Amount taken out of the package
       properties:
         quantity:
           type: number
-          description: "Amount consumed, greater than zero"
+          description: "Amount taken, greater than zero"
           example: 2.0
           minimum: 0.0
       required:
@@ -931,17 +888,17 @@ components:
         key:
           type: string
           description: Generated secret key for authentication
-    TreatmentPlanPatchRequest:
+    ReservationPatchRequest:
       type: object
-      description: Request to change the planned amount
+      description: Request to change the reserved amount
       properties:
-        plannedAmount:
+        amount:
           type: number
-          description: "New planned amount, greater than zero"
+          description: "New reserved amount, greater than zero"
           example: 15.0
           minimum: 0.0
       required:
-      - plannedAmount
+      - amount
     DrugPatchRequest:
       type: object
       description: Partial update of a drug
@@ -954,9 +911,9 @@ components:
           minLength: 1
         quantity:
           type: number
-          description: "Corrected stock. Raising it adds to the shelf; lowering it\
-            \ means a recount found less than recorded, and treatment plans are scaled\
-            \ down to fit."
+          description: "Corrected stock: you recounted the package and saw a different\
+            \ number. This is a correction, not a refill — a new pack is a new package.\
+            \ Reservations are left alone."
           example: 120.0
           minimum: 0.0
         quantityUnitId:

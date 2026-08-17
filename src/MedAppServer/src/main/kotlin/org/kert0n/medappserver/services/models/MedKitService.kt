@@ -4,7 +4,6 @@ import com.sksamuel.aedile.core.Cache
 import java.util.UUID
 import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.domain.MedKit
-import org.kert0n.medappserver.domain.MedKitOverview
 import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.services.security.SecurityService
 import org.slf4j.LoggerFactory
@@ -14,9 +13,9 @@ import org.springframework.transaction.annotation.Transactional
 /**
  * Аптечка: жизненный цикл участников.
  *
- * Правила членства живут в `domain.medkit.MedKit`; здесь — транзакция, проверка доступа и
- * ключ приглашения. Ключ не доменное понятие: это одноразовый секрет с временем жизни, и
- * место ему рядом с тем, кто умеет его выдавать и хранить.
+ * Правила членства — в `domain.MedKit`; здесь транзакция, проверка доступа и ключ приглашения.
+ * Ключ не доменное понятие, а секрет с временем жизни, поэтому живёт рядом с тем, кто его
+ * выдаёт.
  */
 @Service
 class MedKitService(
@@ -52,22 +51,11 @@ class MedKitService(
         return medKit
     }
 
-    /**
-     * Идентификаторы аптечек участника.
-     *
-     * Только идентификаторы: состав аптечек не показывает ни один ответ, а раньше он всё
-     * равно поднимался — запросом на каждую аптечку.
-     */
+    /** Все аптечки участника — целиком и одним запросом. */
     @Transactional(readOnly = true)
-    fun idsOfUser(userId: UUID): List<UUID> {
+    fun allOfUser(userId: UUID): List<MedKit> {
         logger.debug("Finding all medkits for user: {}", userId)
-        return medKits.findIdsOfUser(userId)
-    }
-
-    @Transactional(readOnly = true)
-    fun overviews(userId: UUID): List<MedKitOverview> {
-        logger.debug("Finding medkit overviews for user: {}", userId)
-        return medKits.overviewsOf(userId)
+        return medKits.findAllOfUser(userId)
     }
 
     @Transactional(readOnly = true)
@@ -96,10 +84,9 @@ class MedKitService(
     }
 
     /**
-     * Выход участника.
+     * `null` — вышел последний, и аптечка удалена вместе с содержимым.
      *
-     * Возвращает `null`, когда вышел последний: аптечка удалена вместе с содержимым. Планы
-     * выходящего в препаратах этой аптечки — забота оркестратора, они лежат в чужом агрегате.
+     * Брони выходящего лежат в чужом агрегате: их убирает оркестратор.
      */
     @Transactional
     fun leave(medKitId: UUID, userId: UUID): MedKit? {
@@ -114,12 +101,7 @@ class MedKitService(
         return left
     }
 
-    /**
-     * Удаление аптечки.
-     *
-     * Доступ проверяется здесь, а не только у вызывающего: команда, удаляющая аптечку по
-     * одному идентификатору, рано или поздно будет вызвана и без проверки.
-     */
+    /** Доступ проверяется здесь: команда по одному идентификатору однажды придёт без проверки. */
     @Transactional
     fun delete(medKitId: UUID, userId: UUID) {
         requireAccessible(medKitId, userId)

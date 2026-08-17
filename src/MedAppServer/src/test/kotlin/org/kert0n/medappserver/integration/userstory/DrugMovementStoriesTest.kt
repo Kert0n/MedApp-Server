@@ -1,5 +1,6 @@
 package org.kert0n.medappserver.integration.userstory
 
+import org.kert0n.medappserver.services.models.ReservationService
 import jakarta.persistence.EntityManager
 import java.util.*
 import kotlin.test.*
@@ -7,7 +8,6 @@ import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.MedKit
-import org.kert0n.medappserver.domain.PlannedAmountExceedsStock
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.models.DrugService
@@ -32,6 +32,9 @@ class DrugMovementStoriesTest {
     private lateinit var entityManager: EntityManager
 
     @Autowired
+    private lateinit var reservationService: ReservationService
+
+    @Autowired
     private lateinit var drugService: DrugService
 
     @Autowired
@@ -41,11 +44,7 @@ class DrugMovementStoriesTest {
     private lateinit var medKitDrugOrchestrator: MedKitDrugOrchestrator
 
 
-    /**
-     * Story 11: Moving drugs between medkits preserves treatment plans
-     * 
-     * Validates: Drug move, treatment plan integrity
-     */
+    /** Story 11: a move keeps the reservations of everyone who still sees the pack. */
     @Test
     fun `Story 11 - Moving drug between medkits`() {
         val userData = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
@@ -63,8 +62,8 @@ class DrugMovementStoriesTest {
         dbHelper.insert(painkiller)
         entityManager.flush()
 
-        // Create treatment plan
-        drugService.createPlan(userData.id, painkiller.id, qty(20.0))
+        // Reserve a share
+        reservationService.create(userData.id, painkiller.id, qty(20.0))
         entityManager.flush()
 
         // Move drug to travel kit
@@ -85,19 +84,15 @@ class DrugMovementStoriesTest {
         val travelKitDrugs = drugService.ofMedKit(travelKit.id)
         assertEquals(1, travelKitDrugs.size)
 
-        // Treatment plan still exists
-        val plan = dbHelper.userPlan(userData.id, painkiller.id)
+        // The reservation survives
+        val plan = dbHelper.userReservation(userData.id, painkiller.id)
         assertNotNull(plan, "Treatment plan should survive drug move")
         assertQty(20.0, plan)
 
         println("✅ Story 11 passed: Drug moved between medkits with treatment plan intact")
     }
 
-    /**
-     * Story 12: Update treatment plan correctly checks available quantity
-     * 
-     * Validates: changing a plan does not double-count the caller's own plan
-     */
+    /** Story 12: a reservation may be raised freely — nothing weighs it against the pack. */
     @Test
     fun `Story 12 - Updating treatment plan correctly checks available quantity`() {
         val anna = User(id = UUID.randomUUID(), hashedKey = "anna_${UUID.randomUUID()}")
@@ -118,32 +113,27 @@ class DrugMovementStoriesTest {
         dbHelper.insert(drugData)
         entityManager.flush()
 
-        // Anna plans 40, Bob plans 30 (total 70, available 30)
-        drugService.createPlan(anna.id, drugData.id, qty(40.0))
-        drugService.createPlan(bob.id, drugData.id, qty(30.0))
+        // Anna reserves 40, Bob 30 — 70 of 100
+        reservationService.create(anna.id, drugData.id, qty(40.0))
+        reservationService.create(bob.id, drugData.id, qty(30.0))
         entityManager.flush()
 
-        // Anna should be able to increase her plan to 70 (available for her = 100 - 30 (bob) = 70)
-        val updated = drugService.changePlan(anna.id, drugData.id, qty(70.0))
-        assertQty(70.0, updated.plannedAmount)
+        val updated = reservationService.changeTo(anna.id, drugData.id, qty(70.0))
+        assertQty(70.0, updated.amount)
         entityManager.flush()
         entityManager.clear()
-        // Total planned should now be 100 (70 + 30)
-        assertQty(100.0, dbHelper.totalPlanned(drugData.id))
+        assertQty(100.0, dbHelper.reservedOnDrug(drugData.id))
 
-        // Anna should NOT be able to increase to 71 (exceeds available)
-        assertFailsWith<PlannedAmountExceedsStock> {
-            drugService.changePlan(anna.id, drugData.id, qty(71.0))
-        }
+        // Выше содержимого пачки тоже можно: 200 + 30 на сотню таблеток — законное состояние.
+        reservationService.changeTo(anna.id, drugData.id, qty(200.0))
+        entityManager.flush()
+        entityManager.clear()
+        assertQty(230.0, dbHelper.reservedOnDrug(drugData.id))
 
-        println("✅ Story 12 passed: Treatment plan update correctly checks available quantity")
+        println("✅ Story 12 passed: reservations are free to exceed the package")
     }
 
-    /**
-     * Story 13: Deleting a drug cascades to remove associated treatment plans
-     * 
-     * Validates: Cascade delete behavior, orphan removal
-     */
+    /** Story 13: a destroyed pack takes its reservations with it. */
     @Test
     fun `Story 13 - Deleting drug removes its treatment plans`() {
         val userData = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
@@ -159,13 +149,13 @@ class DrugMovementStoriesTest {
         dbHelper.insert(drugData)
         entityManager.flush()
 
-        // Create treatment plan
-        drugService.createPlan(userData.id, drugData.id, qty(25.0))
+        // Reserve a share
+        reservationService.create(userData.id, drugData.id, qty(25.0))
         entityManager.flush()
         entityManager.clear()
 
-        // Verify plan exists
-        val plan = dbHelper.userPlan(userData.id, drugData.id)
+        // Verify the reservation exists
+        val plan = dbHelper.userReservation(userData.id, drugData.id)
         assertNotNull(plan)
 
         // Delete the drug
@@ -177,17 +167,14 @@ class DrugMovementStoriesTest {
         val deletedDrug = dbHelper.drug(drugData.id)
         assertNull(deletedDrug)
 
-        // Treatment plan should also be gone (cascade)
-        val deletedPlan = dbHelper.userPlan(userData.id, drugData.id)
+        // The reservation is gone with it
+        val deletedPlan = dbHelper.userReservation(userData.id, drugData.id)
         assertNull(deletedPlan)
 
         println("✅ Story 13 passed: Deleting drug removed its treatment plans")
     }
 
-    /**
-     * Story 14: Migrating a drug to a private medkit strips access from former shared users
-     * * Validates: Migration Security Audit (The "Void Pointer" fix)
-     */
+    /** Story 14: migration into a narrower kit strips the reservations of those left out. */
     @Test
     fun `Story 14 - Moving shared drug to private medkit removes other users treatment plans`() {
         // Setup: Anna, Bob, and Charlie share an Old MedKit
@@ -214,10 +201,10 @@ class DrugMovementStoriesTest {
             )
         )
 
-        // Everyone creates a plan for 30 pills
-        drugService.createPlan(anna.id, drugData.id, qty(30.0))
-        drugService.createPlan(bob.id, drugData.id, qty(30.0))
-        drugService.createPlan(charlie.id, drugData.id, qty(30.0))
+        // Everyone reserves 30 pills
+        reservationService.create(anna.id, drugData.id, qty(30.0))
+        reservationService.create(bob.id, drugData.id, qty(30.0))
+        reservationService.create(charlie.id, drugData.id, qty(30.0))
 
         entityManager.flush()
         entityManager.clear()
@@ -228,69 +215,19 @@ class DrugMovementStoriesTest {
         entityManager.flush()
         entityManager.clear()
 
-        // Verify: Anna and Bob still have their plans. Charlie's plan was deleted.
-        assertNotNull(dbHelper.userPlan(anna.id, drugData.id), "Anna should keep her plan")
-        assertNotNull(dbHelper.userPlan(bob.id, drugData.id), "Bob should keep his plan")
+        // Verify: Anna and Bob keep their reservations, Charlie's is deleted.
+        assertNotNull(dbHelper.userReservation(anna.id, drugData.id), "Anna should keep her plan")
+        assertNotNull(dbHelper.userReservation(bob.id, drugData.id), "Bob should keep his plan")
         assertNull(
-            dbHelper.userPlan(charlie.id, drugData.id),
+            dbHelper.userReservation(charlie.id, drugData.id),
             "Charlie's plan MUST be deleted for security"
         )
 
         println("✅ Story 14 passed: Migration security successfully audited treatment plans")
     }
 
-    /**
-     * Story 15: Heavy consumption scales down shared treatment plans proportionally
-     * * Validates: plan reconciliation precision
-     */
-    @Test
-    fun `Story 15 - Consuming below reserved threshold scales plans proportionally`() {
-        val anna = dbHelper.insert(User(id = UUID.randomUUID(), hashedKey = "anna_${UUID.randomUUID()}"))
-        val bob = dbHelper.insert(User(id = UUID.randomUUID(), hashedKey = "bob_${UUID.randomUUID()}"))
 
-        val kit = medKitService.create(anna.id)
-        medKitService.joinByInvitation(medKitService.invite(kit.id, anna.id), bob.id)
-
-        // Drug has 100 total
-        val drugData = dbHelper.insert(
-            Drug(
-                id = UUID.randomUUID(), name = "Shared Vitamins", quantity = Quantity(qty(100.0), dbHelper.unit()), medKitId = kit.id, formType = null,
-                category = null,
-                manufacturer = null,
-                country = null,
-                description = null
-            )
-        )
-
-        // Anna plans 60, Bob plans 40. Total planned = 100.
-        drugService.createPlan(anna.id, drugData.id, qty(60.0))
-        drugService.createPlan(bob.id, drugData.id, qty(40.0))
-
-        entityManager.flush()
-        entityManager.clear()
-
-        // Bob consumes 50 pills (ignoring his plan limit for emergency)
-        // Drug quantity drops to 50.
-        // Factor should be: 50 / 100 = 0.5
-        drugService.consume(drugData.id, qty(50.0), bob.id)
-
-        entityManager.flush()
-        entityManager.clear()
-
-        val annaPlan = dbHelper.userPlan(anna.id, drugData.id)!!
-        val bobPlan = dbHelper.userPlan(bob.id, drugData.id)!!
-
-        // Plans should be exactly halved
-        assertQty(30.0, annaPlan, "Anna's plan should scale from 60 to 30")
-        assertQty(20.0, bobPlan, "Bob's plan should scale from 40 to 20")
-
-        println("✅ Story 15 passed: Treatment plans scaled proportionally after heavy consumption")
-    }
-
-    /**
-     * Story 16: Partial migration prevents orphan removal
-     * * Validates: Explicit `targetMedKit.drugs.add(drug)` fix
-     */
+    /** Story 16: moving one pack out of a kit leaves it and the others intact. */
     @Test
     fun `Story 16 - Moving single drug preserves it from orphan removal`() {
         val userData = dbHelper.insert(User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}"))
@@ -327,7 +264,7 @@ class DrugMovementStoriesTest {
         entityManager.flush()
         entityManager.clear()
 
-        // Verify it wasn't deleted by orphan removal during the move
+        // Verify the move did not destroy it
         val movedDrug = dbHelper.drug(drugDataToMove.id)
         assertNotNull(movedDrug, "Moved drug must not be deleted")
         assertEquals(targetKit.id, movedDrug.medKitId, "Drug should point to new kit")

@@ -35,12 +35,7 @@ class CatalogueService(private val catalogue: CatalogueStore) {
     @Transactional(readOnly = true)
     fun find(id: UUID): DrugTemplate? = catalogue.findTemplate(id)
 
-    /**
-     * Словари, из которых клиент выбирает единицу и форму.
-     *
-     * Без них идентификатор взять неоткуда: препарат теперь ссылается на общий справочник, а
-     * не носит свободный текст.
-     */
+    /** Словари, из которых клиент выбирает единицу и форму: препарат ссылается на них по id. */
     @Transactional(readOnly = true)
     fun quantityUnits(): List<QuantityUnit> = catalogue.quantityUnits()
 
@@ -54,9 +49,8 @@ class CatalogueService(private val catalogue: CatalogueStore) {
     fun requireFormType(id: UUID): FormType = catalogue.requireFormType(id)
 
     /**
-     * Границы лимита проверяет и контроллер, но полагаться только на него нельзя: `LIMIT -1`
-     * заканчивался ошибкой базы, а большой лимит — рычагом на память. Сервис вызывается не
-     * только из HTTP, поэтому предел живёт и здесь.
+     * Границы проверяет и контроллер, но сервис вызывается не только из HTTP: `LIMIT -1` —
+     * ошибка базы, а большой лимит — рычаг на память.
      */
     private fun clampLimit(limit: Int): Int = limit.coerceIn(MIN_LIMIT, MAX_LIMIT)
 

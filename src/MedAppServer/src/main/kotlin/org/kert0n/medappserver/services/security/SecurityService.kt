@@ -25,8 +25,7 @@ class SecurityService(
     @Value($$"${authentication.termInMinutes}") private val authenticationTerm: Long,
     @Value($$"${registration.timeout.BanNumber}") private val registrationNumber: Long,
     @Value($$"${authentication.throttle.maxAttempts:20}") private val maxLoginAttempts: Int,
-    // Both caches are Cache<String, Int>; qualify them so resolution does not rely on
-    // parameter-name matching.
+    // Both caches are Cache<String, Int>: qualified so resolution does not rely on names.
     @Qualifier("successfulRegistrationsCache") private val successfulRegistrationsCache: Cache<String, Int>,
     @Qualifier("loginAttemptsCache") private val loginAttemptsCache: Cache<String, Int>
 ) {
@@ -34,9 +33,8 @@ class SecurityService(
     private val secureRandom = SecureRandom()
 
     /**
-     * Ключ печатается в URL приглашения и уезжает в заголовок Basic, поэтому кодировка
-     * URL-safe и без набивки: символы `+`, `/` и `=` пришлось бы экранировать, а часть
-     * клиентов сделала бы это по-разному.
+     * Ключ печатается в URL приглашения и уезжает в заголовок Basic, поэтому URL-safe и без
+     * набивки: `+`, `/` и `=` пришлось бы экранировать, и клиенты сделали бы это по-разному.
      */
     fun generateKey(size: Int) = URL_SAFE_KEYS.encode(ByteArray(size).also { secureRandom.nextBytes(it) })
     fun check(raw: String, hashedPassword: String): Boolean = passwordEncoder.matches(raw, hashedPassword)
@@ -47,11 +45,9 @@ class SecurityService(
     /**
      * Compares two shared secrets without leaking how much of a candidate was correct.
      *
-     * `==` on strings stops at the first differing character, so response time depends on
-     * the length of the matching prefix. Both sides are hashed first because
-     * [MessageDigest.isEqual] itself returns early when lengths differ — hashing makes both
-     * inputs the same length, so neither the content nor the length of the expected secret
-     * shows through.
+     * `==` stops at the first differing character, so timing follows the matching prefix. Both
+     * sides are hashed because [MessageDigest.isEqual] returns early on a length mismatch —
+     * hashing equalises the lengths, hiding the size of the expected secret too.
      */
     fun secretsMatch(candidate: String, expected: String): Boolean = MessageDigest.isEqual(
         hashToken(candidate).toByteArray(StandardCharsets.UTF_8),
@@ -76,25 +72,18 @@ class SecurityService(
     /**
      * Cache key for a client address, so no address is used as a key verbatim.
      *
-     * Plain SHA-256 on purpose. A keyed digest would be more machinery for nothing here:
-     * entries expire within minutes, the cache is in-memory and dies with the process, and
-     * anyone able to read that heap can see the live connections anyway.
+     * Plain SHA-256 on purpose: entries expire within minutes, the cache dies with the process,
+     * and anyone able to read that heap sees the live connections anyway.
      */
     private fun addressCacheKey(clientAddress: String): String = hashToken(clientAddress)
 
     /**
      * Tracks successful registrations per client address to throttle automated signups.
      *
-     * Two imprecisions are accepted deliberately, because this only has to deter casual
-     * bots and is not a security boundary:
-     *  - the check happens before the increment, so concurrent requests can slip past the
-     *    limit together;
-     *  - the comparison is `<=`, so one registration more than [registrationNumber] is
-     *    allowed.
-     * Making this exact would need an atomic counter with a release on failed
-     * registration. That is not a coroutine or asynchrony question — an AtomicInteger
-     * would do — but it is extra machinery for no real gain here, so it is left out on
-     * purpose. Do not "fix" this without a reason.
+     * Two imprecisions are deliberate — this deters casual bots and is not a security boundary:
+     * the check precedes the increment, so concurrent requests slip past together, and `<=`
+     * allows one more than [registrationNumber]. Exactness would need an atomic counter with a
+     * release on failure: machinery for no real gain here. Do not "fix" without a reason.
      */
     fun validateRequest(ip: String): Boolean =
         (successfulRegistrationsCache.getOrNull(addressCacheKey(ip)) ?: 0) <= registrationNumber
@@ -102,17 +91,17 @@ class SecurityService(
     /**
      * Whether another token request from this address may proceed to authentication.
      *
-     * Unlike [validateRequest] this uses a strict comparison: it guards a real cost
-     * (a bcrypt verification per request) rather than merely deterring bots.
+     * Strict comparison, unlike [validateRequest]: this guards a real cost — a bcrypt
+     * verification per request — not just bots.
      */
     fun isLoginAllowed(clientAddress: String): Boolean =
         (loginAttemptsCache.getOrNull(addressCacheKey(clientAddress)) ?: 0) < maxLoginAttempts
 
     /**
-     * Counts a token request. Every attempt is counted, not just failures: a legitimate
-     * client asks for a token roughly once per token lifetime, so the limit is far above
-     * normal use, and counting all attempts also covers an attacker holding valid
-     * credentials.
+     * Counts a token request — every attempt, not just failures.
+     *
+     * A legitimate client asks roughly once per token lifetime, far below the limit, and
+     * counting all attempts also covers an attacker holding valid credentials.
      */
     fun recordLoginAttempt(clientAddress: String) {
         val key = addressCacheKey(clientAddress)
@@ -123,7 +112,7 @@ class SecurityService(
         val URL_SAFE_KEYS: Base64 = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT)
     }
 
-    // Creates or increases successful registration attempt from a client address
+    /** Counts one more successful registration from this address. */
     fun registerIncrease(ip: String) {
         val key = addressCacheKey(ip)
         val current = successfulRegistrationsCache.getOrNull(key)

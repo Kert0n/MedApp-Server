@@ -3,27 +3,26 @@ package org.kert0n.medappserver.api
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.DrugTemplate
 import org.kert0n.medappserver.domain.FormType
-import org.kert0n.medappserver.domain.MedKitOverview
+import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.QuantityUnit
-import org.kert0n.medappserver.domain.TreatmentPlan
+import org.kert0n.medappserver.domain.Reservation
 
 /**
  * Перевод доменных значений в публичный контракт.
  *
- * Отдельных форм чтения нет: DTO собирается из того же состояния, по которому агрегат
- * принимает решения, поэтому разойтись «сколько запланировано в ответе» и «сколько
- * запланировано в проверке» уже не могут.
+ * DTO собирается из того же состояния, по которому агрегат принимает решения, — отдельных форм
+ * чтения нет. Единица и форма отдаются парой «идентификатор и имя»: первый прислать обратно при
+ * правке, второе — нарисовать карточку без второго запроса.
  *
- * Единица измерения и форма отдаются парой «идентификатор и имя»: первый нужен, чтобы
- * прислать его обратно при следующей правке, второе — чтобы нарисовать карточку без второго
- * запроса.
+ * Упаковка идёт вместе с заявленными на неё бронями, доменными объектами: сама она про них не
+ * знает, а тип-носитель между доменом и DTO незачем. Сумма может превышать содержимое пачки —
+ * законное состояние.
  */
-fun Drug.toDto(): DrugDTO = DrugDTO(
+fun Drug.toDto(reservations: List<Reservation>): DrugDTO = DrugDTO(
     id = id,
     name = name,
     quantity = quantity.amount,
-    plannedQuantity = plannedTotal.amount,
-    availableQuantity = availableQuantity.amount,
+    reservedQuantity = reservations.sumOf { it.amount.amount },
     quantityUnitId = quantity.unit.id,
     quantityUnit = quantity.unit.name,
     formTypeId = formType?.id,
@@ -35,9 +34,9 @@ fun Drug.toDto(): DrugDTO = DrugDTO(
     medKitId = medKitId
 )
 
-fun TreatmentPlan.toDto(): TreatmentPlanDTO = TreatmentPlanDTO(
+fun Reservation.toDto(): ReservationDTO = ReservationDTO(
     drugId = drugId,
-    plannedAmount = plannedAmount.amount
+    amount = amount.amount
 )
 
 fun DrugTemplate.toDto(): DrugTemplateDTO = DrugTemplateDTO(
@@ -59,8 +58,14 @@ fun QuantityUnit.toDto(): VocabularyEntryDTO = VocabularyEntryDTO(id = id, name 
 
 fun FormType.toDto(): VocabularyEntryDTO = VocabularyEntryDTO(id = id, name = name)
 
-fun MedKitOverview.toDto(): MedKitSummaryDTO = MedKitSummaryDTO(
+/**
+ * Сводка аптечки для списка.
+ *
+ * Счётчики — по тому, что уже на руках: участники в агрегате, число пачек от вызывающего,
+ * который их всё равно читал. Отдельный запрос ради двух чисел незачем.
+ */
+fun MedKit.toSummaryDto(drugCount: Int): MedKitSummaryDTO = MedKitSummaryDTO(
     id = id,
-    userCount = memberCount,
-    drugCount = drugCount
+    userCount = members.size.toLong(),
+    drugCount = drugCount.toLong()
 )

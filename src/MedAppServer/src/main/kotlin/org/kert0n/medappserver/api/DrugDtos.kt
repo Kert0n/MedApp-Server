@@ -15,15 +15,14 @@ data class DrugDTO(
     val name: String,
     @Schema(description = "Current stock", example = "100.000000")
     val quantity: BigDecimal,
-    @Schema(description = "Sum of all treatment plans for this drug", example = "30.000000")
-    val plannedQuantity: BigDecimal,
     /**
-     * Раньше за этим числом ходили отдельным запросом `GET /drug/quantity/{id}`. Оно —
-     * разность двух соседних полей, и отдельный маршрут ради него означал второй поход в
-     * базу и возможность увидеть остаток и план из разных моментов времени.
+     * Сколько на эту пачку заявлено бронями.
+     *
+     * Справка, а не ограничение: заявленное может превышать остаток, и чью бронь ужать, решает
+     * её владелец, а не сервер.
      */
-    @Schema(description = "Stock not reserved by treatment plans", example = "70.000000")
-    val availableQuantity: BigDecimal,
+    @Schema(description = "Sum of all reservations on this package; may exceed the stock", example = "40.000000")
+    val reservedQuantity: BigDecimal,
     @Schema(description = "Quantity unit identifier")
     val quantityUnitId: UUID,
     @Schema(description = "Quantity unit name", example = "mg")
@@ -95,8 +94,9 @@ data class DrugPatchRequest(
 
     @field:DecimalMin(value = "0.0", inclusive = false)
     @Schema(
-        description = "Corrected stock. Raising it adds to the shelf; lowering it means a recount " +
-            "found less than recorded, and treatment plans are scaled down to fit.",
+        description = "Corrected stock: you recounted the package and saw a different number. " +
+            "This is a correction, not a refill — a new pack is a new package. Reservations are " +
+            "left alone.",
         example = "120.0"
     )
     val quantity: BigDecimal? = null,
@@ -124,22 +124,13 @@ data class DrugPatchRequest(
     val description: String? = null
 )
 
-@Schema(description = "Unplanned consumption of a drug")
-data class ConsumptionRequest(
-    @field:NotNull
-    @field:DecimalMin(value = "0.0", inclusive = false)
-    @Schema(description = "Amount consumed, greater than zero", example = "2.0", required = true)
-    val quantity: BigDecimal
-)
-
 @Schema(description = "Catalogue entry used as a template for a new drug")
 data class DrugTemplateDTO(
     @Schema(description = "Template identifier")
     val id: UUID,
     @Schema(description = "Drug name", example = "Аспирин")
     val name: String,
-    // Латинское название и действующее вещество — поля, по которым идёт поиск. Без них
-    // выдача не объясняет, почему запись нашлась.
+    // Поля, по которым идёт поиск: без них выдача не объясняет, почему запись нашлась.
     @Schema(description = "International name in Latin script", example = "Aspirin")
     val nameLat: String?,
     @Schema(description = "Active substance", example = "Acetylsalicylic acid")
@@ -165,8 +156,7 @@ data class DrugTemplateDTO(
 /**
  * Запись общего словаря — единица измерения или форма выпуска.
  *
- * Клиент выбирает из списка и присылает идентификатор: имя у одной и той же единицы должно
- * быть одно на всю систему, а не столько, сколько её написали руками.
+ * Клиент выбирает из списка и присылает идентификатор: имя у единицы одно на всю систему.
  */
 @Schema(description = "Shared vocabulary entry")
 data class VocabularyEntryDTO(

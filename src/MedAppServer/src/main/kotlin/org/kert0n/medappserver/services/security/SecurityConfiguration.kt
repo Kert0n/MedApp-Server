@@ -35,8 +35,7 @@ class SecurityConfiguration(
     /**
      * Отказ аутентификации отвечает problem+json, как и остальные ошибки.
      *
-     * Заголовка WWW-Authenticate по-прежнему нет намеренно: это мобильный API, и запрос
-     * учётных данных браузером здесь только мешал бы.
+     * Без WWW-Authenticate намеренно: это мобильный API, и окно браузера здесь только мешало бы.
      */
     private fun unauthorized() = AuthenticationEntryPoint { _, response, _ ->
         problems.write(response, HttpStatus.UNAUTHORIZED)
@@ -61,10 +60,9 @@ class SecurityConfiguration(
     }
 
     /**
-     * HTTP Basic is accepted **only** where a token is issued.
-     *
-     * It used to apply to every endpoint, which meant the long-lived registration key
-     * could be replayed on every request and the short token lifetime bought nothing.
+     * HTTP Basic is accepted **only** where a token is issued: anywhere else the long-lived
+     * registration key could be replayed per request and the short token lifetime would buy
+     * nothing.
      */
     @Bean
     @Order(1)
@@ -88,8 +86,7 @@ class SecurityConfiguration(
                 configurer.authenticationEntryPoint(unauthorized())
             }
             // Точку входа нужно задать и здесь: неверные учётные данные отвергает сам
-            // BasicAuthenticationFilter, и он отвечает своей точкой входа, а не общей —
-            // иначе на 401 от неверного пароля возвращалось бы пустое тело.
+            // BasicAuthenticationFilter — своей точкой входа, а не общей, и тело было бы пустым.
             .httpBasic { basic -> basic.authenticationEntryPoint(unauthorized()) }
             .build()
     }

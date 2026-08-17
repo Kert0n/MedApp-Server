@@ -13,20 +13,14 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.transaction.annotation.Transactional
 
-/**
- * Здесь остались только чтения планов.
- *
- * Создание, изменение, удаление и приём переехали в агрегат `Drug` и проверяются в
- * [DrugServiceTest]: у них общий инвариант — сумма планов не больше остатка, — и врозь он
- * не формулируется.
- */
+/** Чтения броней: своих, по упаковке и с 404 на отсутствующей. */
 @SpringBootTest
 @ActiveProfiles("test")
 @Transactional
-class TreatmentPlanServiceTest {
+class ReservationServiceTest {
 
     @Autowired
-    private lateinit var treatmentPlanService: TreatmentPlanService
+    private lateinit var reservationService: ReservationService
     @Autowired
     private lateinit var drugService: DrugService
     @Autowired
@@ -41,10 +35,10 @@ class TreatmentPlanServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        drugService.createPlan(alice.id, drug.id, qty(10.0))
+        reservationService.create(alice.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
-        assertEquals(1, treatmentPlanService.plansOf(alice.id).size)
+        assertEquals(1, reservationService.ofUser(alice.id).size)
     }
 
     @Test
@@ -54,10 +48,10 @@ class TreatmentPlanServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        drugService.createPlan(alice.id, drug.id, qty(10.0))
+        reservationService.create(alice.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
-        assertEquals(1, drugService.require(drug.id, alice.id).plans.size)
+        assertQty(10.0, dbHelper.userReservation(alice.id, drug.id))
     }
 
     @Test
@@ -68,7 +62,7 @@ class TreatmentPlanServiceTest {
         dbHelper.flushAndClear()
 
         assertFailsWith<DomainRuleViolated> {
-            treatmentPlanService.requirePlan(alice.id, drug.id)
+            reservationService.require(alice.id, drug.id)
         }
     }
 
@@ -79,11 +73,11 @@ class TreatmentPlanServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        drugService.createPlan(alice.id, drug.id, qty(30.0))
+        reservationService.create(alice.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
-        val dto = treatmentPlanService.requirePlan(alice.id, drug.id).toDto()
+        val dto = reservationService.require(alice.id, drug.id).toDto()
         assertEquals(drug.id, dto.drugId)
-        assertQty(30.0, dto.plannedAmount)
+        assertQty(30.0, dto.amount)
     }
 }

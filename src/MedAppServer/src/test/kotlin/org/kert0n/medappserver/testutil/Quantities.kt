@@ -7,9 +7,9 @@ import org.kert0n.medappserver.domain.QUANTITY_ROUNDING
 import org.kert0n.medappserver.domain.QUANTITY_SCALE
 
 /**
- * Количество из литерала теста. Через [BigDecimal.valueOf], а не через конструктор: `BigDecimal(0.1)`
- * даёт 0.1000000000000000055511151231257827, то есть ровно ту двоичную ошибку, ради ухода от
- * которой количества и переведены на numeric.
+ * Количество из литерала теста. Через [BigDecimal.valueOf], а не конструктором: `BigDecimal(0.1)`
+ * даёт 0.1000000000000000055511151231257827 — ровно ту двоичную ошибку, от которой ушли на
+ * numeric.
  */
 fun qty(value: Double): BigDecimal = BigDecimal.valueOf(value).setScale(QUANTITY_SCALE, QUANTITY_ROUNDING)
 

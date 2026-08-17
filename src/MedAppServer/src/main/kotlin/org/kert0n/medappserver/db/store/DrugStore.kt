@@ -3,64 +3,48 @@ package org.kert0n.medappserver.db.store
 import java.util.UUID
 import org.kert0n.medappserver.db.model.DrugData
 import org.kert0n.medappserver.db.model.MedKitData
-import org.kert0n.medappserver.db.model.UserData
 import org.kert0n.medappserver.db.model.parsed.FormTypeData
 import org.kert0n.medappserver.db.model.parsed.QuantityUnitData
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.FormTypeRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.QuantityUnitRepository
-import org.kert0n.medappserver.db.repository.TreatmentPlanRepository
-import org.kert0n.medappserver.db.repository.TreatmentPlanRow
-import org.kert0n.medappserver.db.repository.UserRepository
+import org.kert0n.medappserver.db.repository.ReservationRepository
 import org.kert0n.medappserver.domain.Drug
-import org.kert0n.medappserver.domain.Quantity
-import org.kert0n.medappserver.domain.QuantityUnit
-import org.kert0n.medappserver.domain.TreatmentPlan
 import org.kert0n.medappserver.domain.UnknownFormType
 import org.kert0n.medappserver.domain.UnknownQuantityUnit
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Component
 
 /**
- * Хранилище агрегата препарата.
+ * Хранилище агрегата упаковки.
  *
- * Наружу отдаёт и принимает только доменные типы: ни один сервис не видит ни сущностей, ни
- * репозиториев. Это и есть граница, ради которой раскладку разделили — за ней остаются и
- * отображение, и блокировки, и то, что план лечения хранится строкой с составным ключом.
+ * Наружу — только доменные типы: сервисы не видят ни сущностей, ни репозиториев. Броней здесь
+ * нет: упаковка ими не владеет, за ними ходят в `ReservationStore`.
  */
 @Component
 class DrugStore(
     private val drugs: DrugRepository,
-    private val plans: TreatmentPlanRepository,
-    private val users: UserRepository,
     private val medKits: MedKitRepository,
     private val units: QuantityUnitRepository,
-    private val forms: FormTypeRepository
+    private val forms: FormTypeRepository,
+    private val reservations: ReservationRepository
 ) {
 
     // ── Чтение ───────────────────────────────────────────────────────────────────
 
-    fun findAccessible(drugId: UUID, userId: UUID): Drug? =
-        drugs.findAccessibleWithPlans(drugId, userId)?.toDomain()
+    fun findAccessible(drugId: UUID, userId: UUID): Drug? = drugs.findAccessible(drugId, userId)?.toDomain()
 
-    fun findAllInMedKit(medKitId: UUID): List<Drug> =
-        drugs.findAllInMedKitWithPlans(medKitId).map { it.toDomain() }
+    fun findAllInMedKit(medKitId: UUID): List<Drug> = drugs.findAllInMedKit(medKitId).map { it.toDomain() }
 
-    fun findAllAccessibleTo(userId: UUID): List<Drug> =
-        drugs.findAllAccessibleWithPlans(userId).map { it.toDomain() }
+    fun findAllAccessibleTo(userId: UUID): List<Drug> = drugs.findAllAccessible(userId).map { it.toDomain() }
 
-    fun findById(drugId: UUID): Drug? = drugs.findByIdWithPlans(drugId)?.toDomain()
-
-    fun findPlansOf(userId: UUID): List<TreatmentPlan> = plans.findPlansOfUser(userId).map { it.toDomain() }
-
-    fun findPlan(userId: UUID, drugId: UUID): TreatmentPlan? = plans.findPlan(userId, drugId)?.toDomain()
+    fun findById(drugId: UUID): Drug? = drugs.findFullById(drugId)?.toDomain()
 
     // ── Команды ──────────────────────────────────────────────────────────────────
 
-    /** Загрузка под блокировкой строки: с неё начинается любая команда над препаратом. */
-    fun lockAccessible(drugId: UUID, userId: UUID): Drug? =
-        drugs.lockAccessible(drugId, userId)?.toDomain()
+    /** Загрузка под блокировкой строки: с неё начинается любая команда над упаковкой. */
+    fun lockAccessible(drugId: UUID, userId: UUID): Drug? = drugs.lockAccessible(drugId, userId)?.toDomain()
 
     fun insert(drug: Drug) {
         drugs.save(
@@ -80,42 +64,33 @@ class DrugStore(
      */
     fun save(drug: Drug) {
         val entity = managed(drug.id)
-        drug.applyTo(entity, ::resolveUser, ::resolveMedKit, ::resolveUnit, ::resolveForm)
+        drug.applyTo(entity, ::resolveMedKit, ::resolveUnit, ::resolveForm)
         drugs.save(entity)
     }
 
-    fun delete(drugId: UUID) {
-        drugs.findByIdOrNull(drugId)?.let { drugs.delete(it) }
-    }
-
-    fun deletePlansOfUserInMedKit(userId: UUID, medKitId: UUID) {
-        plans.deleteByUserIdAndMedKitId(userId, medKitId)
-    }
-
     /**
-     * Переносит все препараты аптечки в другую и убирает планы тех, кто её не видит.
+     * Уничтожение пачки.
      *
-     * Тот же исход, что дал бы поштучный `Drug.moveTo`, но постоянным числом запросов.
-     * Порядок важен: планы удаляются до переезда, пока препараты ещё привязаны к исходной
-     * аптечке и их можно выбрать одним условием.
+     * Брони уносит каскад внешнего ключа, но Hibernate о нём не знает: загруженные строки
+     * остались бы ссылаться на удалённую пачку и уронили бы ближайший flush. Это persistence, а
+     * не решение агрегата — сама упаковка про брони не знает.
      */
-    fun moveAllToMedKit(sourceMedKitId: UUID, targetMedKitId: UUID, accessibleUserIds: Set<UUID>) {
-        plans.deleteInMedKitExcept(sourceMedKitId, accessibleUserIds)
+    fun delete(drugId: UUID) {
+        val entity = drugs.findByIdOrNull(drugId) ?: return
+        reservations.deleteOfDrug(drugId)
+        drugs.delete(entity)
+    }
+
+    /** Все упаковки аптечки — в другую, одним запросом. Брони убирает вызывающий. */
+    fun moveAllToMedKit(sourceMedKitId: UUID, targetMedKitId: UUID) {
         drugs.moveAllToMedKit(sourceMedKitId, resolveMedKit(targetMedKitId))
     }
 
-    /** Строка плана несёт единицу своего препарата — из неё и собирается величина. */
-    private fun TreatmentPlanRow.toDomain() =
-        TreatmentPlan(userId, drugId, Quantity(plannedAmount, QuantityUnit(unitId, unitName)))
-
     private fun managed(drugId: UUID): DrugData =
-        drugs.findByIdOrNull(drugId) ?: error("Drug $drugId disappeared while it was locked")
-
-    private fun resolveUser(userId: UUID): UserData =
-        users.findByIdOrNull(userId) ?: error("User $userId disappeared while a plan was being written")
+        drugs.findByIdOrNull(drugId) ?: error("Упаковка $drugId исчезла во время записи")
 
     private fun resolveMedKit(medKitId: UUID): MedKitData =
-        medKits.findByIdOrNull(medKitId) ?: error("Medicine kit $medKitId disappeared while a drug was being written")
+        medKits.findByIdOrNull(medKitId) ?: error("Аптечка $medKitId исчезла во время записи упаковки")
 
     private fun resolveUnit(unitId: UUID): QuantityUnitData =
         units.findByIdOrNull(unitId) ?: throw UnknownQuantityUnit()

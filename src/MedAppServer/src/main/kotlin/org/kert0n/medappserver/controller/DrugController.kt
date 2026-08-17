@@ -9,7 +9,7 @@ import jakarta.validation.Valid
 import jakarta.validation.constraints.Max
 import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.Size
-import org.kert0n.medappserver.api.ConsumptionRequest
+import org.kert0n.medappserver.api.IntakeRequest
 import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.api.DrugDTO
 import org.kert0n.medappserver.api.DrugPatchRequest
@@ -46,14 +46,10 @@ class DrugController(
         @Parameter(description = "Drug identifier") @PathVariable drugId: UUID
     ): DrugDTO {
         logger.debug("GET /v1/drugs/{} by user {}", drugId, authentication.userId)
-        return drugService.require(drugId, authentication.userId).toDto()
+        return medKitDrugOrchestrator.drug(drugId, authentication.userId)
     }
 
-    /**
-     * Аптечка задаётся путём: препарат не существует сам по себе, он всегда лежит в аптечке.
-     * Раньше она приходила полем тела, и запрос выглядел так, будто препарат можно создать
-     * без неё.
-     */
+    /** Аптечка задаётся путём: упаковка не существует сама по себе, она всегда в аптечке. */
     @PostMapping("/med-kits/{medKitId}/drugs")
     @ResponseStatus(HttpStatus.CREATED)
     @ApiResponse(responseCode = "201", description = "Drug created")
@@ -67,7 +63,7 @@ class DrugController(
     ): DrugDTO {
         logger.debug("POST /v1/med-kits/{}/drugs by user {}", medKitId, authentication.userId)
         val created = medKitDrugOrchestrator.createDrugInMedKit(medKitId, request, authentication.userId)
-        return drugService.require(created.id, authentication.userId).toDto()
+        return medKitDrugOrchestrator.drug(created.id, authentication.userId)
     }
 
     /** PATCH, а не PUT: тело описывает изменение части полей, а не препарат целиком. */
@@ -83,7 +79,7 @@ class DrugController(
     ): DrugDTO {
         logger.debug("PATCH /v1/drugs/{} by user {}", drugId, authentication.userId)
         drugService.update(drugId, request, authentication.userId)
-        return drugService.require(drugId, authentication.userId).toDto()
+        return medKitDrugOrchestrator.drug(drugId, authentication.userId)
     }
 
     @DeleteMapping("/drugs/{drugId}")
@@ -99,24 +95,26 @@ class DrugController(
     }
 
     /**
-     * Расход — это создание записи о нём, поэтому POST в подчинённый ресурс, а не PUT в
-     * препарат. Ответ отсутствует, когда расход исчерпал препарат и тот удалён.
+     * Приём — запись о съеденном, поэтому POST в подчинённый ресурс, а не PUT в упаковку.
+     *
+     * Единственный способ уменьшить пачку; бронь её владелец правит отдельно. Ответа нет, когда
+     * приём опустошил пачку и та уничтожена.
      */
-    @PostMapping("/drugs/{drugId}/consumptions")
-    @ApiResponse(responseCode = "200", description = "Stock reduced")
-    @ApiResponse(responseCode = "204", description = "Drug ran out and was removed", content = [Content()])
-    @ApiResponse(responseCode = "400", description = "Amount exceeds the stock", content = [Content()])
-    @ApiResponse(responseCode = "404", description = "Drug does not exist or is not accessible", content = [Content()])
-    fun consumeDrug(
+    @PostMapping("/drugs/{drugId}/intakes")
+    @ApiResponse(responseCode = "200", description = "Package reduced")
+    @ApiResponse(responseCode = "204", description = "Package ran out and was destroyed", content = [Content()])
+    @ApiResponse(responseCode = "400", description = "Amount exceeds what is left in the package", content = [Content()])
+    @ApiResponse(responseCode = "404", description = "Package does not exist or is not accessible", content = [Content()])
+    fun recordIntake(
         authentication: Authentication,
-        @Parameter(description = "Drug identifier") @PathVariable drugId: UUID,
-        @SwaggerRequestBody(description = "Amount consumed")
-        @Valid @RequestBody request: ConsumptionRequest
+        @Parameter(description = "Package identifier") @PathVariable drugId: UUID,
+        @SwaggerRequestBody(description = "Amount taken")
+        @Valid @RequestBody request: IntakeRequest
     ): DrugDTO? {
-        logger.debug("POST /v1/drugs/{}/consumptions by user {}", drugId, authentication.userId)
-        // null означает, что препарат кончился и удалён этим списанием.
+        logger.debug("POST /v1/drugs/{}/intakes by user {}", drugId, authentication.userId)
+        // null означает, что пачка кончилась и уничтожена этим списанием.
         drugService.consume(drugId, request.quantity, authentication.userId) ?: return null
-        return drugService.find(drugId, authentication.userId)?.toDto()
+        return medKitDrugOrchestrator.drug(drugId, authentication.userId)
     }
 
     /**
@@ -133,7 +131,7 @@ class DrugController(
     ): DrugDTO {
         logger.debug("PUT /v1/med-kits/{}/drugs/{} by user {}", targetMedKitId, drugId, authentication.userId)
         medKitDrugOrchestrator.moveDrug(drugId, targetMedKitId, authentication.userId)
-        return drugService.require(drugId, authentication.userId).toDto()
+        return medKitDrugOrchestrator.drug(drugId, authentication.userId)
     }
 }
 
@@ -153,9 +151,8 @@ class DrugTemplateController(
         authentication: Authentication,
         @Parameter(description = "Search query")
         @RequestParam @Size(min = 1, max = 200) query: String,
-        // Границы указаны дважды намеренно. Проверяют их @Min/@Max, но springdoc не
-        // переносит их в схему параметра запроса, и без явной схемы опубликованный контракт
-        // умалчивал бы о пределе. Держать в согласии.
+        // Границы указаны дважды намеренно: проверяют их @Min/@Max, но springdoc не переносит
+        // их в схему параметра, и контракт умалчивал бы о пределе. Держать в согласии.
         @Parameter(
             description = "Maximum number of results",
             schema = Schema(type = "integer", format = "int32", minimum = "1", maximum = "50")
@@ -182,9 +179,8 @@ class DrugTemplateController(
 /**
  * Общие словари: единицы измерения и формы выпуска.
  *
- * Препарат ссылается на них идентификатором, поэтому клиенту нужен список — иначе взять
- * идентификатор неоткуда. Словари одни и те же и для каталога, и для заведённого руками
- * препарата.
+ * Упаковка ссылается на них идентификатором, поэтому клиенту нужен список. Словари одни и те же
+ * и для каталога, и для заведённой руками пачки.
  */
 @RestController
 @RequestMapping("/v1")

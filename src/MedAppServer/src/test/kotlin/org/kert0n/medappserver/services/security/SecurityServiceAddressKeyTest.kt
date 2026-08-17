@@ -10,9 +10,8 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
 
 /**
- * ARCHITECTURE.md and the README state that client addresses are only ever held in the
- * cache in hashed form. This pins that claim down, because it used to be false: the raw
- * address was the cache key.
+ * ARCHITECTURE.md and the README state that client addresses are only ever held in the cache in
+ * hashed form. This pins that claim down.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -51,8 +50,8 @@ class SecurityServiceAddressKeyTest {
         securityService.registerIncrease(address)
         val added = successfulRegistrationsCache.asDeferredMap().keys - before
 
-        // Both increments must land on the same derived key. If derivation were not
-        // stable, every call would create a fresh key and throttling would never trigger.
+        // Both increments must land on the same derived key: unstable derivation would mean a
+        // fresh key per call and no throttling at all.
         assertEquals(1, added.size, "two increments for one address produced keys: $added")
     }
 }

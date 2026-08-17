@@ -8,8 +8,8 @@ import org.springframework.jdbc.core.JdbcTemplate
 
 /**
  * Каскады проверяются в самой базе, а не только через JPA: bulk-удаление и удаление вне
- * приложения не проходят через persistence context, и без каскада на уровне FK они оставили бы
- * висящие строки планов и членства.
+ * приложения не идут через persistence context, и без каскада на FK оставили бы висящие брони
+ * и членство.
  */
 @PostgresIntegrationTest
 class CascadeSchemaTest {
@@ -25,10 +25,10 @@ class CascadeSchemaTest {
             FROM information_schema.referential_constraints
             WHERE constraint_schema = current_schema()
               AND constraint_name IN (
-                'usings_drug_fkey',
+                'reservations_drug_fkey',
                 'user_drugs_med_kit_fkey',
                 'user_med_kits_med_kit_fkey',
-                'usings_user_fkey',
+                'reservations_user_fkey',
                 'user_med_kits_user_fkey'
               )
             """.trimIndent()
@@ -37,11 +37,11 @@ class CascadeSchemaTest {
 
         assertEquals(
             mapOf(
-                "usings_drug_fkey" to "CASCADE",
+                "reservations_drug_fkey" to "CASCADE",
                 "user_drugs_med_kit_fkey" to "CASCADE",
                 "user_med_kits_med_kit_fkey" to "CASCADE",
                 // Пользователь не удаляется каскадом намеренно: аптечки общие.
-                "usings_user_fkey" to "NO ACTION",
+                "reservations_user_fkey" to "NO ACTION",
                 "user_med_kits_user_fkey" to "NO ACTION"
             ),
             rules

@@ -6,10 +6,9 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.tags.Tag
 import java.util.*
 import org.kert0n.medappserver.api.MedKitDTO
-import org.kert0n.medappserver.api.toDto
-import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.userId
+import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
 import org.slf4j.LoggerFactory
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.GetMapping
@@ -21,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController
 @Tag(name = "User", description = "The authenticated user")
 class UserController(
     private val medKitService: MedKitService,
-    private val drugService: DrugService
+    private val medKitDrugOrchestrator: MedKitDrugOrchestrator
 ) {
 
     private val logger = LoggerFactory.getLogger(UserController::class.java)
@@ -34,17 +33,11 @@ class UserController(
     @ApiResponse(responseCode = "200", description = "Snapshot returned", content = [Content(schema = Schema(implementation = UserSnapshotDTO::class))])
     fun getSnapshot(authentication: Authentication): UserSnapshotDTO {
         logger.debug("GET /v1/users/me by user {}", authentication.userId)
-        // Два запроса на весь снимок, сколько бы аптечек у пользователя ни было: препараты
-        // приходят одним, аптечки — вторым. Состав аптечек не запрашивается вовсе, в ответе
-        // его нет.
-        val drugsByMedKit = drugService.accessibleTo(authentication.userId).groupBy { it.medKitId }
-        val medKits = medKitService.idsOfUser(authentication.userId)
-            .map { medKitId ->
-                MedKitDTO(
-                    id = medKitId,
-                    drugs = drugsByMedKit[medKitId].orEmpty().map { it.toDto() }.toSet()
-                )
-            }
+        // Число запросов не зависит от того, сколько у человека аптечек и пачек.
+        val drugsByMedKit = medKitDrugOrchestrator.drugsAccessibleTo(authentication.userId)
+            .groupBy { it.medKitId }
+        val medKits = medKitService.allOfUser(authentication.userId)
+            .map { MedKitDTO(id = it.id, drugs = drugsByMedKit[it.id].orEmpty().toSet()) }
             .toSet()
         return UserSnapshotDTO(id = authentication.userId, medKits = medKits)
     }

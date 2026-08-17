@@ -8,7 +8,6 @@ import org.kert0n.medappserver.db.repository.MedKitMembershipRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.domain.MedKit
-import org.kert0n.medappserver.domain.MedKitOverview
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Component
 
@@ -30,10 +29,16 @@ class MedKitStore(
         return MedKit(row.id, memberships.findMemberIds(row.id))
     }
 
-    /** Идентификаторы аптечек участника: их состав вызывающему не нужен. */
-    fun findIdsOfUser(userId: UUID): List<UUID> = medKits.findIdsOfUser(userId)
-
-    fun overviewsOf(userId: UUID): List<MedKitOverview> = medKits.findOverviewsOfUser(userId)
+    /**
+     * Все аптечки участника — агрегатами и одним запросом.
+     *
+     * Строки членства приходят со своими аптечками, состав собирается группировкой в памяти.
+     */
+    fun findAllOfUser(userId: UUID): List<MedKit> =
+        medKits.findMembershipsOfUserKits(userId)
+            .groupBy { it.medKit.id }
+            .map { (id, memberships) -> MedKit(id, memberships.map { it.membershipKey.userId }.toSet()) }
+            .sortedBy { it.id }
 
     fun insert(medKit: MedKit) {
         val row = medKits.save(MedKitData(id = medKit.id))
@@ -57,11 +62,9 @@ class MedKitStore(
     /**
      * Удаление аптечки.
      *
-     * Препараты уносит база каскадом по внешнему ключу — тем самым, что описан в
-     * `db/schema.sql`. Членство пришлось бы унести тем же каскадом, но строки членства к
-     * этому моменту уже загружены и ссылаются на удаляемую аптечку: Hibernate увидел бы
-     * ссылку на исчезнувшую запись и упал бы на ближайшем flush. Поэтому они удаляются явно,
-     * а участников у аптечки столько, сколько людей ею пользуется, — обход дешёвый.
+     * Упаковки уносит каскад из `db/schema.sql`. Членство он унёс бы тоже, но эти строки уже
+     * загружены и ссылаются на удаляемую аптечку — Hibernate упал бы на ближайшем flush.
+     * Поэтому явно: участников столько, сколько людей ею пользуется, обход дешёвый.
      */
     fun delete(medKitId: UUID) {
         val row = medKits.findByIdOrNull(medKitId) ?: return
@@ -72,10 +75,9 @@ class MedKitStore(
     /**
      * Строка членства.
      *
-     * Ссылки берутся управляемыми сущностями, а не заглушками `getReferenceById`: заглушка на
-     * запись, ещё не дошедшую до базы, при первом же массовом запросе превращается в
-     * «ссылку на несохранённый объект» — Hibernate флашит контекст перед DML и видит прокси
-     * без строки за ним. Лишних запросов это не стоит: обе сущности уже в контексте.
+     * Ссылки — управляемые сущности, а не заглушки `getReferenceById`: заглушка на запись, ещё
+     * не дошедшую до базы, при первом массовом запросе превращается в «ссылку на несохранённый
+     * объект». Запросов это не стоит: обе сущности уже в контексте.
      */
     private fun membershipRow(medKit: MedKitData, userId: UUID) = MedKitMembershipData(
         membershipKey = MedKitMembershipKey(medKitId = medKit.id, userId = userId),

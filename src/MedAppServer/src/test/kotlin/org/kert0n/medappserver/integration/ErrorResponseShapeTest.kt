@@ -5,7 +5,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
+import org.kert0n.medappserver.api.ReservationCreateRequest
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.User
@@ -29,11 +29,8 @@ import org.springframework.web.context.WebApplicationContext
 import tools.jackson.databind.ObjectMapper
 
 /**
- * Error bodies must not describe what failed in terms of the caller's data.
- *
- * Before ApiExceptionHandler the default error body echoed the exception message, and
- * those messages contained drug ids and amounts — with include-message=always switched on
- * in production.
+ * Error bodies must not describe what failed in terms of the caller's data: the default body
+ * echoes the exception message, and those carry package ids and amounts.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -77,9 +74,8 @@ class ErrorResponseShapeTest {
             .andExpect(jsonPath("$.detail").value("Requested resource does not exist"))
             .andReturn().response.contentAsString
 
-        // The `instance` field carries the request URI, so it does contain the id the
-        // caller just sent. That is standard for RFC 9457 and discloses nothing new; what
-        // must not appear is the internal message or exception type.
+        // `instance` carries the request URI, so it repeats the id the caller just sent —
+        // standard for RFC 9457. What must not appear is the message or the exception type.
         assertFalse(body.contains("access denied"), "internal message leaked: $body")
         assertFalse(body.contains("Drug not found"), "internal message leaked: $body")
         assertFalse(body.contains("Exception"), "error body leaked an exception class: $body")
@@ -87,7 +83,8 @@ class ErrorResponseShapeTest {
 
     @Test
     fun `insufficient quantity does not disclose amounts`() {
-        // A real drug with 5 units in stock; ask for a plan of 500.
+        // Пачка на 5 таблеток, просим съесть 500: бронь больше остатка законна, так что утечку
+        // проверяем на том отказе, который остался.
         val user = dbHelper.insert(User(hashedKey = "{noop}k"))
         val medKit = medKitService.create(user.id)
         val drug = dbHelper.insert(
@@ -97,36 +94,41 @@ class ErrorResponseShapeTest {
         )
 
         val body = mockMvc.perform(
-            post(ApiRoutes.TREATMENT_PLANS)
+            post(ApiRoutes.intakes(drug.id))
                 .with(jwt().jwt { it.subject(user.id.toString()) })
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(TreatmentPlanCreateRequest(drug.id, qty(500.0))))
+                .content("""{"quantity":500.0}""")
         )
             .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.detail").value("Request cannot be processed"))
             .andReturn().response.contentAsString
 
-        assertFalse(body.contains("500"), "error body leaked the requested amount: $body")
-        assertFalse(body.contains("5.0"), "error body leaked the available amount: $body")
-        assertFalse(body.contains(drug.id.toString()), "error body leaked the drug id: $body")
+        // `instance` несёт путь запроса и нового не раскрывает, поэтому вырезан: иначе
+        // проверка ловит подстроку «500» в случайном UUID. В остальном теле не должно быть ни
+        // количеств, ни имени исключения.
+        val described = body.replace(Regex("\"instance\":\"[^\"]*\""), "")
+        assertFalse(described.contains("500"), "error body leaked the requested amount: $body")
+        assertFalse(described.contains("5.0"), "error body leaked the available amount: $body")
+        assertFalse(described.contains("Exception"), "error body leaked an exception class: $body")
     }
 
     @Test
     fun `body validation reports fields without echoing values`() {
         val userId = UUID.randomUUID()
-        // plannedAmount below the @DecimalMin("0.0") constraint.
-        val invalid = """{"drugId":"${UUID.randomUUID()}","plannedAmount":-42.5}"""
+        // amount below the @DecimalMin("0.0") constraint.
+        val invalid = """{"drugId":"${UUID.randomUUID()}","amount":-42.5}"""
 
         val body = mockMvc.perform(
-            post(ApiRoutes.TREATMENT_PLANS)
+            post(ApiRoutes.RESERVATIONS)
                 .with(jwt().jwt { it.subject(userId.toString()) })
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(invalid)
         )
             .andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.errors[0].field").value("plannedAmount"))
+            .andExpect(jsonPath("$.errors[0].field").value("amount"))
             .andReturn().response.contentAsString
 
-        assertTrue(body.contains("plannedAmount"), "field name should be reported: $body")
+        assertTrue(body.contains("amount"), "field name should be reported: $body")
         assertFalse(body.contains("-42.5"), "rejected value must not be echoed: $body")
     }
 }

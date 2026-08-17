@@ -1,5 +1,6 @@
 package org.kert0n.medappserver.integration
 
+import org.kert0n.medappserver.services.models.ReservationService
 import java.util.*
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -7,6 +8,7 @@ import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.db.store.DrugStore
+import org.kert0n.medappserver.db.store.ReservationStore
 import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.db.store.UserStore
 import org.kert0n.medappserver.services.models.DrugService
@@ -18,17 +20,17 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.transaction.annotation.Transactional
 
 /**
- * Граница хранилищ.
+ * Граница хранилищ: то, что отдаёт доменные значения.
  *
- * Раньше на этом месте лежали тесты репозиториев: они звали методы Spring Data и смотрели на
- * сущности. Теперь у приложения другая граница — хранилище, отдающее доменные значения, — и
- * проверять надо её: сервисы ниже уровня хранилища не заглядывают, а значит и тест не должен.
+ * Ниже неё сервисы не заглядывают — значит, и тест не должен: ни сущностей, ни Spring Data.
  */
 @PostgresIntegrationTest
 @Transactional
 class StoreIntegrationTest {
 
     @Autowired private lateinit var drugs: DrugStore
+    @Autowired private lateinit var reservations: ReservationStore
+    @Autowired private lateinit var reservationService: ReservationService
     @Autowired private lateinit var medKits: MedKitStore
     @Autowired private lateinit var users: UserStore
     @Autowired private lateinit var drugService: DrugService
@@ -38,19 +40,20 @@ class StoreIntegrationTest {
     // ── Препараты ────────────────────────────────────────────────────────────────
 
     @Test
-    fun `препараты аптечки читаются вместе со своими планами`() {
+    fun `упаковки аптечки читаются без броней — упаковка о них не знает`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.create(alice.id)
         val first = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.freshDrug(kit.id, 20.0)
-        drugService.createPlan(alice.id, first.id, qty(4.0))
+        reservationService.create(alice.id, first.id, qty(4.0))
         dbHelper.flushAndClear()
 
         val loaded = drugs.findAllInMedKit(kit.id)
 
         assertEquals(2, loaded.size)
-        assertQty(4.0, loaded.single { it.id == first.id }.plannedTotal)
-        assertQty(6.0, loaded.single { it.id == first.id }.availableQuantity)
+        assertQty(10.0, loaded.single { it.id == first.id }.quantity)
+        // Заявленное лежит в своём агрегате и читается отдельно.
+        assertQty(4.0, dbHelper.reservedOnDrug(first.id))
     }
 
     @Test
@@ -97,16 +100,16 @@ class StoreIntegrationTest {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.create(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 30.0)
-        drugService.createPlan(alice.id, drug.id, qty(10.0))
+        reservationService.create(alice.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
         val locked = drugs.lockAccessible(drug.id, alice.id)!!
 
         assertQty(30.0, locked.quantity)
-        assertQty(10.0, locked.plannedTotal)
+        assertQty(10.0, dbHelper.reservedOnDrug(locked.id))
     }
 
-    // ── Планы ────────────────────────────────────────────────────────────────────
+    // ── Брони ────────────────────────────────────────────────────────────────────
 
     @Test
     fun `планы участника собираются по всем препаратам`() {
@@ -114,38 +117,38 @@ class StoreIntegrationTest {
         val kit = medKitService.create(alice.id)
         val first = dbHelper.freshDrug(kit.id, 50.0)
         val second = dbHelper.freshDrug(kit.id, 50.0)
-        drugService.createPlan(alice.id, first.id, qty(5.0))
-        drugService.createPlan(alice.id, second.id, qty(7.0))
+        reservationService.create(alice.id, first.id, qty(5.0))
+        reservationService.create(alice.id, second.id, qty(7.0))
         dbHelper.flushAndClear()
 
-        val plans = drugs.findPlansOf(alice.id)
+        val mine = reservations.findAllOfUser(alice.id)
 
-        assertEquals(2, plans.size)
-        assertQty(5.0, plans.single { it.drugId == first.id }.plannedAmount)
+        assertEquals(2, mine.size)
+        assertQty(5.0, mine.single { it.drugId == first.id }.amount)
     }
 
     @Test
-    fun `чужой план не читается по паре участник-препарат`() {
+    fun `чужая бронь не читается по паре человек-упаковка`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
         val kit = medKitService.create(alice.id)
         medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 50.0)
-        drugService.createPlan(alice.id, drug.id, qty(5.0))
+        reservationService.create(alice.id, drug.id, qty(5.0))
         dbHelper.flushAndClear()
 
-        assertQty(5.0, drugs.findPlan(alice.id, drug.id)?.plannedAmount)
-        assertNull(drugs.findPlan(bob.id, drug.id), "у Боба плана нет")
+        assertQty(5.0, reservations.find(alice.id, drug.id)?.amount)
+        assertNull(reservations.find(bob.id, drug.id), "у Боба брони нет")
     }
 
     @Test
-    fun `сумма планов препарата без планов равна нулю`() {
+    fun `заявленное на упаковку без броней равно нулю`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.create(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 50.0)
         dbHelper.flushAndClear()
 
-        assertQty(0.0, drugs.findById(drug.id)!!.plannedTotal)
+        assertQty(0.0, dbHelper.reservedOnDrug(drug.id))
     }
 
     // ── Аптечки и участники ──────────────────────────────────────────────────────
@@ -169,7 +172,7 @@ class StoreIntegrationTest {
         medKitService.create(outsider.id)
         dbHelper.flushAndClear()
 
-        assertEquals(listOf(mine.id), medKits.findIdsOfUser(alice.id))
+        assertEquals(listOf(mine.id), medKits.findAllOfUser(alice.id).map { it.id })
     }
 
     @Test
@@ -183,10 +186,12 @@ class StoreIntegrationTest {
         dbHelper.freshDrug(kit.id, 3.0)
         dbHelper.flushAndClear()
 
-        val overview = medKits.overviewsOf(alice.id).single()
+        // Аптечка приходит агрегатом: участники в ней самой, а пачки считает вызывающий по
+        // тому набору, который всё равно читал.
+        val mine = medKits.findAllOfUser(alice.id).single()
 
-        assertEquals(2, overview.memberCount)
-        assertEquals(3, overview.drugCount)
+        assertEquals(2, mine.members.size)
+        assertEquals(3, drugs.findAllInMedKit(kit.id).size)
     }
 
     @Test
@@ -201,7 +206,7 @@ class StoreIntegrationTest {
 
         assertNull(medKits.findById(kit.id))
         assertNull(drugs.findById(drug.id), "препараты не переживают свою аптечку")
-        assertTrue(medKits.findIdsOfUser(alice.id).isEmpty())
+        assertTrue(medKits.findAllOfUser(alice.id).map { it.id }.isEmpty())
     }
 
     // ── Пользователи ─────────────────────────────────────────────────────────────
@@ -214,12 +219,12 @@ class StoreIntegrationTest {
         medKitService.create(outsider.id)
         dbHelper.flushAndClear()
 
-        assertEquals(listOf(mine.id), medKits.findIdsOfUser(alice.id))
+        assertEquals(listOf(mine.id), medKits.findAllOfUser(alice.id).map { it.id })
     }
 
     /**
-     * Массовый перенос обязан давать тот же исход, что и поштучный переезд через агрегат:
-     * препараты в целевой аптечке, планы участников без доступа исчезли, остальные целы.
+     * Массовый перенос обязан давать тот же исход, что поштучный переезд через агрегат: пачки в
+     * целевой аптечке, брони тех, кто её не видит, исчезли, остальные целы.
      */
     @Test
     fun `массовый перенос повторяет правило переезда препарата`() {
@@ -231,17 +236,18 @@ class StoreIntegrationTest {
 
         val first = dbHelper.freshDrug(source.id, 50.0)
         val second = dbHelper.freshDrug(source.id, 30.0)
-        drugService.createPlan(alice.id, first.id, qty(10.0))
-        drugService.createPlan(bob.id, first.id, qty(20.0))
+        reservationService.create(alice.id, first.id, qty(10.0))
+        reservationService.create(bob.id, first.id, qty(20.0))
         dbHelper.flushAndClear()
 
-        drugs.moveAllToMedKit(source.id, target.id, setOf(alice.id))
+        reservations.deleteInMedKitExcept(source.id, setOf(alice.id))
+        drugs.moveAllToMedKit(source.id, target.id)
         dbHelper.flushAndClear()
 
         assertEquals(target.id, dbHelper.requireDrug(first.id).medKitId)
         assertEquals(target.id, dbHelper.requireDrug(second.id).medKitId)
-        assertQty(10.0, dbHelper.userPlan(alice.id, first.id))
-        assertNull(dbHelper.userPlan(bob.id, first.id), "план без доступа не переезжает")
+        assertQty(10.0, dbHelper.userReservation(alice.id, first.id))
+        assertNull(dbHelper.userReservation(bob.id, first.id), "план без доступа не переезжает")
     }
 
     @Test

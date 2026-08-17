@@ -6,18 +6,18 @@ import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.api.IntakeRequest
 import org.kert0n.medappserver.api.MembershipCreateRequest
-import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
-import org.kert0n.medappserver.api.TreatmentPlanPatchRequest
+import org.kert0n.medappserver.api.ReservationCreateRequest
+import org.kert0n.medappserver.api.ReservationPatchRequest
+import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.MedKit
-import org.kert0n.medappserver.domain.MedKitOverview
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.QuantityUnit
-import org.kert0n.medappserver.domain.TreatmentPlan
+import org.kert0n.medappserver.domain.Reservation
 import org.kert0n.medappserver.services.models.CatalogueService
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.models.TreatmentPlanService
+import org.kert0n.medappserver.services.models.ReservationService
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
 import org.kert0n.medappserver.testutil.ApiRoutes
 import org.kert0n.medappserver.testutil.qty
@@ -55,7 +55,7 @@ class ResourceApiContractTest {
     @Autowired private lateinit var objectMapper: ObjectMapper
 
     @MockitoBean private lateinit var drugService: DrugService
-    @MockitoBean private lateinit var treatmentPlanService: TreatmentPlanService
+    @MockitoBean private lateinit var reservationService: ReservationService
     @MockitoBean private lateinit var medKitService: MedKitService
     @MockitoBean private lateinit var medKitDrugOrchestrator: MedKitDrugOrchestrator
     @MockitoBean private lateinit var catalogueService: CatalogueService
@@ -72,6 +72,7 @@ class ResourceApiContractTest {
         id = drugId, medKitId = medKitId, name = "Aspirin",
         quantity = Quantity(qty(100.0), unit)
     )
+    private val drugDto = drug.toDto(emptyList())
 
     @BeforeEach
     fun setup() {
@@ -86,21 +87,21 @@ class ResourceApiContractTest {
 
     @Test
     fun `препарат читается по своему пути`() {
-        whenever(drugService.require(drugId, userId)).thenReturn(drug)
+        whenever(medKitDrugOrchestrator.drug(drugId, userId)).thenReturn(drugDto)
 
         mockMvc.perform(get(ApiRoutes.drug(drugId)).with(asUser()))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.id").value(drugId.toString()))
             .andExpect(jsonPath("$.medKitId").value(medKitId.toString()))
-            // Доступный остаток приходит вместе с препаратом: раньше за ним ходили
-            // отдельным запросом и могли увидеть два несогласованных момента времени.
-            .andExpect(jsonPath("$.availableQuantity").exists())
+            // Заявленное бронями — справка, и она может превышать остаток.
+            .andExpect(jsonPath("$.reservedQuantity").exists())
+            .andExpect(jsonPath("$.availableQuantity").doesNotExist())
     }
 
     @Test
     fun `препарат создаётся в аптечке из пути`() {
         whenever(medKitDrugOrchestrator.createDrugInMedKit(eq(medKitId), any(), eq(userId))).thenReturn(drug)
-        whenever(drugService.require(drugId, userId)).thenReturn(drug)
+        whenever(medKitDrugOrchestrator.drug(drugId, userId)).thenReturn(drugDto)
         val body = DrugCreateRequest(name = "Aspirin", quantity = qty(100.0), quantityUnitId = unit.id)
 
         mockMvc.perform(
@@ -125,25 +126,28 @@ class ResourceApiContractTest {
     }
 
     @Test
-    fun `расход создаётся подчинённым ресурсом`() {
+    fun `приём создаётся подчинённым ресурсом упаковки`() {
         whenever(drugService.consume(eq(drugId), any(), eq(userId))).thenReturn(drug)
+        whenever(medKitDrugOrchestrator.drug(drugId, userId)).thenReturn(drugDto)
 
         mockMvc.perform(
-            post(ApiRoutes.consumptions(drugId)).with(asUser())
+            post(ApiRoutes.intakes(drugId)).with(asUser())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"quantity":2.0}""")
         )
             .andExpect(status().isOk)
+            .andExpect(jsonPath("$.id").value(drugId.toString()))
     }
 
     @Test
     fun `перенос выражен размещением препарата в целевой аптечке`() {
         val target = UUID.randomUUID()
         whenever(medKitDrugOrchestrator.moveDrug(drugId, target, userId)).thenReturn(drug)
-        whenever(drugService.require(drugId, userId)).thenReturn(drug)
+        whenever(medKitDrugOrchestrator.drug(drugId, userId)).thenReturn(drugDto)
 
         mockMvc.perform(put(ApiRoutes.drugIn(target, drugId)).with(asUser()))
             .andExpect(status().isOk)
+            .andExpect(jsonPath("$.id").value(drugId.toString()))
     }
 
     @Test
@@ -172,54 +176,40 @@ class ResourceApiContractTest {
             .andExpect(status().isBadRequest)
     }
 
-    // ── Планы лечения ────────────────────────────────────────────────────────────
+    // ── Брони ────────────────────────────────────────────────────────────────────
 
     @Test
     fun `план лечения создаётся и меняется`() {
-        val plan = TreatmentPlan(userId = userId, drugId = drugId, plannedAmount = Quantity(qty(20.0), unit))
-        whenever(drugService.createPlan(eq(userId), eq(drugId), any())).thenReturn(plan)
-        whenever(drugService.changePlan(eq(userId), eq(drugId), any())).thenReturn(plan)
-        whenever(treatmentPlanService.requirePlan(userId, drugId)).thenReturn(plan)
+        val plan = Reservation(userId = userId, drugId = drugId, amount = Quantity(qty(20.0), unit))
+        whenever(reservationService.create(eq(userId), eq(drugId), any())).thenReturn(plan)
+        whenever(reservationService.changeTo(eq(userId), eq(drugId), any())).thenReturn(plan)
+        whenever(reservationService.require(userId, drugId)).thenReturn(plan)
 
         mockMvc.perform(
-            post(ApiRoutes.TREATMENT_PLANS).with(asUser())
+            post(ApiRoutes.RESERVATIONS).with(asUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(TreatmentPlanCreateRequest(drugId, qty(20.0))))
+                .content(objectMapper.writeValueAsString(ReservationCreateRequest(drugId, qty(20.0))))
         )
             .andExpect(status().isCreated)
             .andExpect(jsonPath("$.drugId").value(drugId.toString()))
-            // Времени создания и изменения в контракте больше нет.
+            // Отметок времени в контракте нет.
             .andExpect(jsonPath("$.createdAt").doesNotExist())
             .andExpect(jsonPath("$.lastModified").doesNotExist())
 
         mockMvc.perform(
-            patch(ApiRoutes.treatmentPlan(drugId)).with(asUser())
+            patch(ApiRoutes.reservation(drugId)).with(asUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(TreatmentPlanPatchRequest(qty(15.0))))
+                .content(objectMapper.writeValueAsString(ReservationPatchRequest(qty(15.0))))
         )
             .andExpect(status().isOk)
     }
 
     @Test
     fun `план лечения удаляется`() {
-        doNothing().whenever(drugService).cancelPlan(userId, drugId)
+        doNothing().whenever(reservationService).cancel(userId, drugId)
 
-        mockMvc.perform(delete(ApiRoutes.treatmentPlan(drugId)).with(asUser()))
+        mockMvc.perform(delete(ApiRoutes.reservation(drugId)).with(asUser()))
             .andExpect(status().isNoContent)
-    }
-
-    // ── Приём ────────────────────────────────────────────────────────────────────
-
-    @Test
-    fun `приём опубликован, но пока не включён`() {
-        // Форма маршрута финальная, механизм идемпотентности приезжает вместе с
-        // версионностью. 501 честнее, чем PUT, который обещает идемпотентность и не даёт её.
-        mockMvc.perform(
-            put(ApiRoutes.intake(UUID.randomUUID())).with(asUser())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(IntakeRequest(drugId, qty(1.0))))
-        )
-            .andExpect(status().isNotImplemented)
     }
 
     // ── Аптечки и членство ───────────────────────────────────────────────────────
@@ -227,7 +217,8 @@ class ResourceApiContractTest {
     @Test
     fun `аптечка создаётся и перечисляется`() {
         whenever(medKitService.create(userId)).thenReturn(medKit)
-        whenever(medKitService.overviews(userId)).thenReturn(listOf(MedKitOverview(medKitId, 2, 17)))
+        whenever(medKitDrugOrchestrator.medKitSummaries(userId))
+            .thenReturn(setOf(org.kert0n.medappserver.api.MedKitSummaryDTO(medKitId, 2, 17)))
 
         mockMvc.perform(post(ApiRoutes.MED_KITS).with(asUser()))
             .andExpect(status().isCreated)
@@ -245,8 +236,7 @@ class ResourceApiContractTest {
 
         mockMvc.perform(post(ApiRoutes.invitations(medKitId)).with(asUser()))
             .andExpect(status().isCreated)
-            // Строка в теле не оставляет места ничему рядом: добавить срок жизни позже
-            // можно только сломав контракт.
+            // Объектом, а не строкой: рядом со строкой срок жизни добавить было бы некуда.
             .andExpect(jsonPath("$.key").value("invite-key"))
     }
 
@@ -283,7 +273,7 @@ class ResourceApiContractTest {
 
     @Test
     fun `снимок пользователя лежит по пути me`() {
-        whenever(medKitService.idsOfUser(userId)).thenReturn(listOf(medKitId))
+        whenever(medKitService.allOfUser(userId)).thenReturn(listOf(medKit))
         whenever(drugService.accessibleTo(userId)).thenReturn(listOf(drug))
 
         mockMvc.perform(get(ApiRoutes.ME).with(asUser()))

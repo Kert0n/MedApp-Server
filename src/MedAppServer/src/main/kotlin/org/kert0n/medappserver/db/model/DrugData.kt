@@ -11,11 +11,10 @@ import org.kert0n.medappserver.domain.QUANTITY_PRECISION
 import org.kert0n.medappserver.domain.QUANTITY_SCALE
 
 /**
- * Отображение препарата на таблицу `user_drugs`. Правил здесь нет.
+ * Отображение упаковки на `user_drugs`. Правил здесь нет — они в `domain.Drug`.
  *
- * Всё, что препарат решает, решает `domain.Drug`; сюда состояние переносится
- * маппером, а SQL из этого делает Hibernate. Поэтому `var` у свойств никого не смущает:
- * этот класс существует ровно затем, чтобы его поля заполняли снаружи.
+ * `var` у свойств — требование Hibernate: класс существует затем, чтобы маппер заполнял его
+ * поля снаружи.
  */
 @Entity
 @Table(
@@ -39,14 +38,7 @@ class DrugData(
     @Column(name = "quantity", nullable = false, precision = QUANTITY_PRECISION, scale = QUANTITY_SCALE)
     var quantity: BigDecimal,
 
-    /**
-     * Единица измерения — строка общего справочника, а не свободный текст.
-     *
-     * `EAGER`: единица нужна всегда, потому что без неё количество не имеет смысла. При
-     * загрузке сущности Hibernate забирает её тем же запросом; отдельный SELECT остаётся
-     * только у команд, которые берут строку под блокировкой — там fetch join несовместим с
-     * `FOR UPDATE`.
-     */
+    /** `EAGER`: без единицы количество не имеет смысла, поэтому она нужна всегда. */
     @NotNull
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(
@@ -80,26 +72,18 @@ class DrugData(
     @JoinColumn(
         name = "med_kit_id",
         nullable = false,
-        // Определение задано явно, чтобы схема, сгенерированная Hibernate в тестах, совпадала
-        // с db/schema.sql: иначе каскад проверялся бы только в одной из двух схем.
+        // Определение задано явно, чтобы схема Hibernate в тестах совпадала с db/schema.sql:
+        // иначе каскад проверялся бы только в одной из двух схем.
         foreignKey = ForeignKey(
             name = "user_drugs_med_kit_fkey",
             foreignKeyDefinition =
                 "FOREIGN KEY (med_kit_id) REFERENCES med_kits (id) ON DELETE CASCADE"
         )
     )
-    var medKit: MedKitData,
+    var medKit: MedKitData
 
-    /**
-     * Строки планов этого препарата.
-     *
-     * Каскад и `orphanRemoval` означают, что план не существует отдельно от препарата:
-     * добавление в набор создаёт строку, удаление из набора её удаляет, удаление препарата
-     * уносит планы с собой. Этим и пользуется обратная запись из домена.
-     */
-    @OneToMany(mappedBy = "drugData", fetch = FetchType.LAZY, cascade = [CascadeType.ALL], orphanRemoval = true)
-    var treatmentPlans: MutableSet<TreatmentPlanData> = mutableSetOf()
-
+    // Коллекции броней здесь нет: упаковка ими не владеет. Их исчезновение вслед за пачкой
+    // держит внешний ключ в `ReservationData`.
 ) {
 
     override fun equals(other: Any?): Boolean {

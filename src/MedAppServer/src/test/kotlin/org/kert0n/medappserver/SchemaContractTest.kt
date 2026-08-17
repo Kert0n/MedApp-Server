@@ -31,7 +31,7 @@ class SchemaContractTest {
         // Сравнение по колонке и типу, а не по строке целиком: выравнивание в файле меняется
         // от соседних колонок, и тест не должен падать из-за пробелов.
         val columns = Regex("""(\w+)\s+numeric\(19, 6\)""").findAll(schema).map { it.groupValues[1] }.toSet()
-        listOf("quantity", "planned_amount").forEach {
+        listOf("quantity", "amount").forEach {
             assertTrue(it in columns, "в схеме нет $it numeric(19, 6)")
         }
         assertFalse(
@@ -50,7 +50,7 @@ class SchemaContractTest {
         ).forEach { assertTrue(it in schema, "в схеме нет каскада: $it") }
 
         listOf(
-            "CONSTRAINT usings_user_fkey FOREIGN KEY (user_id) REFERENCES users (id),",
+            "CONSTRAINT reservations_user_fkey FOREIGN KEY (user_id) REFERENCES users (id),",
             "CONSTRAINT user_med_kits_user_fkey FOREIGN KEY (user_id) REFERENCES users (id)\n"
         ).forEach {
             assertTrue(

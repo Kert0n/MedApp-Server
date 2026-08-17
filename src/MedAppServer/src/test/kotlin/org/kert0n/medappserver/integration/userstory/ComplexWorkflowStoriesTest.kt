@@ -1,5 +1,6 @@
 package org.kert0n.medappserver.integration.userstory
 
+import org.kert0n.medappserver.services.models.ReservationService
 import jakarta.persistence.EntityManager
 import java.util.*
 import kotlin.test.assertEquals
@@ -34,6 +35,9 @@ class ComplexWorkflowStoriesTest {
     @Autowired
     private lateinit var dbHelper: DatabaseTestHelper
 
+    @Autowired
+    private lateinit var reservationService: ReservationService
+
 
     @Autowired
     private lateinit var entityManager: EntityManager
@@ -52,10 +56,8 @@ class ComplexWorkflowStoriesTest {
      * Story 17: The Roommate Saga (The Ultimate Stress Test)
      * * Validates:
      * - Multi-user sharing and permissions
-     * - Proportional quantity reduction of treatment plans during heavy consumption
-     * - Security stripping of treatment plans during single-drug moves
-     * - Security stripping of treatment plans during full kit migrations
-     * - Orphan removal prevention during migrations
+     * - Reservations survive an intake untouched, even past what is left in the package
+     * - Reservations of users who lose access are stripped, on single moves and full migrations
      * - Auto-deletion of MedKits when empty
      * - JPA L1 Cache integrity across complex interwoven workflows
      */
@@ -96,26 +98,24 @@ class ComplexWorkflowStoriesTest {
         entityManager.clear()
 
         // ==========================================
-        // PHASE 2: Everyone makes Treatment Plans
+        // PHASE 2: Everyone reserves a share
         // ==========================================
-        // Allergy Meds: 60 total. Alice (20), Bob (20), Charlie (20) = 60 planned.
-        drugService.createPlan(alice.id, allergyMeds.id, qty(20.0))
-        drugService.createPlan(bob.id, allergyMeds.id, qty(20.0))
-        drugService.createPlan(charlie.id, allergyMeds.id, qty(20.0))
+        // Allergy Meds: 60 total. Alice (20), Bob (20), Charlie (20) = 60 reserved.
+        reservationService.create(alice.id, allergyMeds.id, qty(20.0))
+        reservationService.create(bob.id, allergyMeds.id, qty(20.0))
+        reservationService.create(charlie.id, allergyMeds.id, qty(20.0))
 
-        // Painkillers: 100 total. Bob plans 30, Charlie plans 30.
-        drugService.createPlan(bob.id, painkillers.id, qty(30.0))
-        drugService.createPlan(charlie.id, painkillers.id, qty(30.0))
+        // Painkillers: 100 total. Bob reserves 30, Charlie reserves 30.
+        reservationService.create(bob.id, painkillers.id, qty(30.0))
+        reservationService.create(charlie.id, painkillers.id, qty(30.0))
 
         entityManager.flush()
         entityManager.clear()
 
         // ==========================================
-        // PHASE 3: Heavy Consumption & Auto-Scaling
+        // PHASE 3: Heavy Consumption
         // ==========================================
-        // Bob consumes 30 Allergy Meds. Stock drops from 60 to 30.
-        // Total planned was 60. Stock is now 30. Scale factor = 30/60 = 0.5.
-        // All plans (20) should auto-scale down to 10.
+        // Bob consumes 30 Allergy Meds: 60 in the pack becomes 30, while 60 stays reserved.
         drugService.consume(allergyMeds.id, qty(30.0), bob.id)
 
         entityManager.flush()
@@ -124,8 +124,9 @@ class ComplexWorkflowStoriesTest {
         val updatedAllergyMeds = dbHelper.requireDrug(allergyMeds.id)
         assertQty(30.0, updatedAllergyMeds.quantity, "Stock should be 30")
 
-        val aliceAllergyPlan = dbHelper.userPlan(alice.id, allergyMeds.id)!!
-        assertQty(10.0, aliceAllergyPlan, "Alice's plan should auto-scale to 10")
+        // Бронь не двигается: пачка уменьшилась, а сколько из своей брони оставить — дело Алисы.
+        val aliceAllergyReservation = dbHelper.userReservation(alice.id, allergyMeds.id)!!
+        assertQty(20.0, aliceAllergyReservation, "бронь Алисы осталась прежней")
 
         // ==========================================
         // PHASE 4: Single Drug Move (Security Audit)
@@ -141,9 +142,9 @@ class ComplexWorkflowStoriesTest {
         entityManager.flush()
         entityManager.clear()
 
-        // Verify Bob and Charlie lost their Painkiller plans because they can't see the Travel Kit
-        assertNull(dbHelper.userPlan(bob.id, painkillers.id), "Bob's plan must be deleted")
-        assertNull(dbHelper.userPlan(charlie.id, painkillers.id), "Charlie's plan must be deleted")
+        // Bob and Charlie cannot see the Travel Kit, so their reservations go with the pack
+        assertNull(dbHelper.userReservation(bob.id, painkillers.id), "Bob's reservation must be deleted")
+        assertNull(dbHelper.userReservation(charlie.id, painkillers.id), "Charlie's reservation must be deleted")
 
         val movedPainkillers = dbHelper.requireDrug(painkillers.id)
         assertEquals(travelKit.id, movedPainkillers.medKitId, "Drug successfully moved")
@@ -167,20 +168,20 @@ class ComplexWorkflowStoriesTest {
         // Verify Home Kit is dead
         assertNull(medKitStore.findById(homeKit.id), "Home kit must be completely deleted")
 
-        // Verify Allergy Meds moved safely without orphan removal
+        // Verify Allergy Meds survived the migration
         val migratedAllergyMeds = dbHelper.drug(allergyMeds.id)
         assertNotNull(migratedAllergyMeds, "Allergy meds must survive the migration")
         assertEquals(duoKit.id, migratedAllergyMeds.medKitId, "Allergy meds are in Duo Kit")
 
-        // Verify Charlie's Allergy Meds plan was stripped because he isn't in Duo Kit
+        // Charlie is not in Duo Kit, so his reservation is stripped
         assertNull(
-            dbHelper.userPlan(charlie.id, allergyMeds.id),
-            "Charlie's last plan must be deleted"
+            dbHelper.userReservation(charlie.id, allergyMeds.id),
+            "Charlie's last reservation must be deleted"
         )
 
-        // Verify Alice and Bob kept their 10.0 scaled plans
-        val finalAlicePlan = dbHelper.userPlan(alice.id, allergyMeds.id)!!
-        assertQty(10.0, finalAlicePlan, "Alice kept her plan through migration")
+        // Брони Алисы и Боба переехали как были
+        val finalAlicePlan = dbHelper.userReservation(alice.id, allergyMeds.id)!!
+        assertQty(20.0, finalAlicePlan, "бронь Алисы переехала неизменной")
 
         // ==========================================
         // PHASE 6: Last User Standing Auto-Cleanup
@@ -194,8 +195,8 @@ class ComplexWorkflowStoriesTest {
         val duoKitCheck1 = medKitStore.findById(duoKit.id)!!
         assertEquals(1, duoKitCheck1.members.size, "Only Alice remains")
 
-        // Alice leaves Duo Kit. Because she is the last user, the kit should auto-delete.
-        // (Using medKitService directly as medKitDrugOrchestrator might check for users first)
+        // Alice is the last one out, so the kit auto-deletes. medKitService directly: the
+        // orchestrator would clean up reservations that are already gone with the kit.
         medKitService.leave(duoKitCheck1.id, alice.id)
 
         entityManager.flush()
@@ -227,30 +228,29 @@ class ComplexWorkflowStoriesTest {
         val drug = medKitDrugOrchestrator.createDrugInMedKit(sourceKit.id, createDrugDto, alice.id)
         dbHelper.flushAndClear()
 
-        // Alice and Bob create treatment plans (40 each, total 80)
-        drugService.createPlan(alice.id, drug.id, qty(40.0))
-        drugService.createPlan(bob.id, drug.id, qty(40.0))
+        // Alice and Bob reserve 40 each, 80 of 100 in total
+        reservationService.create(alice.id, drug.id, qty(40.0))
+        reservationService.create(bob.id, drug.id, qty(40.0))
         dbHelper.flushAndClear()
 
-        // ── Phase 1: Alter treatment plan ──
-        // Bob increases his plan from 40 to 60.
-        // Allowed because 100 stock - 40 Alice = 60 available.
-        drugService.changePlan(bob.id, drug.id, qty(60.0))
+        // ── Phase 1: Alter a reservation ──
+        // Bob raises his from 40 to 60. Nothing checks it against the pack: that is his call.
+        reservationService.changeTo(bob.id, drug.id, qty(60.0))
         dbHelper.flushAndClear()
 
-        assertQty(60.0, dbHelper.userPlan(bob.id, drug.id)!!, "Bob's plan updated to 60")
-        assertQty(40.0, dbHelper.userPlan(alice.id, drug.id)!!, "Alice's plan unchanged at 40")
+        assertQty(60.0, dbHelper.userReservation(bob.id, drug.id)!!, "Bob's reservation is 60")
+        assertQty(40.0, dbHelper.userReservation(alice.id, drug.id)!!, "Alice's is unchanged at 40")
 
         // ── Phase 2: Alter Drug (The Spill) ──
-        // Alice spills half the bottle: 50 of the 100 are gone. A spill is consumption
-        // outside anyone's plan, so it goes through the consumption path — PATCH may only
-        // raise the stock. Plans must scale down by 50 / 100 = 0.5.
+        // Алиса разлила половину. Брони не двигаются: вместе они теперь превышают содержимое
+        // пачки, и это законное состояние — отвечают за него их владельцы.
         drugService.consume(drug.id, qty(50.0), alice.id)
         dbHelper.flushAndClear()
 
-        assertQty(50.0, dbHelper.drugQuantity(drug.id)!!, "Drug quantity updated to 50")
-        assertQty(20.0, dbHelper.userPlan(alice.id, drug.id)!!, "Alice scaled down (40 -> 20)")
-        assertQty(30.0, dbHelper.userPlan(bob.id, drug.id)!!, "Bob scaled down (60 -> 30)")
+        assertQty(50.0, dbHelper.drugQuantity(drug.id)!!, "в пачке осталось 50")
+        assertQty(40.0, dbHelper.userReservation(alice.id, drug.id)!!, "бронь Алисы не тронута")
+        assertQty(60.0, dbHelper.userReservation(bob.id, drug.id)!!, "бронь Боба не тронута")
+        assertQty(100.0, dbHelper.reservedOnDrug(drug.id), "заявлено больше, чем в пачке")
 
         // ── Phase 3: Move Drug ──
         // Alice moves the drug to targetKit (where Bob has no access).
@@ -260,26 +260,23 @@ class ComplexWorkflowStoriesTest {
         val movedDrug = dbHelper.requireDrug(drug.id)
         assertEquals(targetKit.id, movedDrug.medKitId, "Drug successfully moved to targetKit")
 
-        // The ultimate security check: Bob's plan must be gone
-        assertNull(dbHelper.userPlan(bob.id, drug.id), "Bob's plan MUST be stripped due to lost access")
-        assertQty(20.0, dbHelper.userPlan(alice.id, drug.id)!!, "Alice's plan remains intact")
+        // The security check: Bob lost access, so his reservation is gone
+        assertNull(dbHelper.userReservation(bob.id, drug.id), "Bob's reservation MUST be stripped")
+        assertQty(40.0, dbHelper.userReservation(alice.id, drug.id)!!, "бронь Алисы не тронута")
 
         // ── Phase 4: Privacy-by-Default Deletion ──
         // Alice deletes the drug completely.
         drugService.delete(drug.id, alice.id)
         dbHelper.flushAndClear()
 
-        // Verify absolute destruction
         assertNull(dbHelper.drugQuantity(drug.id), "Drug record completely purged")
-        assertNull(dbHelper.userPlan(alice.id, drug.id), "Alice's plan completely purged along with the drug")
+        assertNull(dbHelper.userReservation(alice.id, drug.id), "Alice's reservation purged with the pack")
 
-        println("✅ Story 18 passed: Updates, dynamic scaling, access stripping on move, and total deletion worked perfectly.")
+        println("✅ Story 18 passed: edits, access stripping on move, and total deletion")
     }
 
-    private fun createTestUser(name: String): User {
-        // Using repository directly to bypass any complex auth logic in UserService if necessary
-        return dbHelper.insert(User(id = UUID.randomUUID(), hashedKey = name))
-    }
+    private fun createTestUser(name: String): User =
+        dbHelper.insert(User(id = UUID.randomUUID(), hashedKey = name))
 
     @Test
     fun `Story 19 - Roommate can move drug even without personal treatment plan`() {
@@ -297,8 +294,7 @@ class ComplexWorkflowStoriesTest {
         // Bob creates a private kit
         val kitB = medKitService.create(bob.id)
 
-        // ACT: Bob moves the drug to his private kit
-        // This fails if the query uses an INNER JOIN on the 'usings' table
+        // ACT: Bob moves the drug to his private kit — he needs no reservation of his own
         assertDoesNotThrow {
             medKitDrugOrchestrator.moveDrug(drug.id, kitB.id, bob.id)
         }
@@ -318,9 +314,9 @@ class ComplexWorkflowStoriesTest {
 
         val drug = drugService.create(DrugCreateRequest("Audit Meds", qty(10.0), dbHelper.unit().id), kitA.id, alice.id)
 
-        // Both have plans
-        drugService.createPlan(alice.id, drug.id, qty(5.0))
-        drugService.createPlan(bob.id, drug.id, qty(2.0))
+        // Both reserve a share
+        reservationService.create(alice.id, drug.id, qty(5.0))
+        reservationService.create(bob.id, drug.id, qty(2.0))
 
         // Alice has a private kit (Bob is NOT in this one)
         val kitB = medKitService.create(alice.id)
@@ -330,11 +326,11 @@ class ComplexWorkflowStoriesTest {
         medKitDrugOrchestrator.moveDrug(drug.id, kitB.id, alice.id)
         entityManager.flush()
         entityManager.clear()
-        // VERIFY: Bob's plan is purged, Alice's remains
-        val alicePlan = dbHelper.userPlan(alice.id, drug.id)
-        val bobPlan = dbHelper.userPlan(bob.id, drug.id)
-        assertNotNull(alicePlan, "Alice should keep her plan")
-        assertNull(bobPlan, "Bob's plan must be deleted because he lost access to the drug")
+        // VERIFY: Bob's reservation is purged, Alice's remains
+        val aliceReservation = dbHelper.userReservation(alice.id, drug.id)
+        val bobReservation = dbHelper.userReservation(bob.id, drug.id)
+        assertNotNull(aliceReservation, "Alice keeps her reservation")
+        assertNull(bobReservation, "Bob's is deleted because he lost access to the pack")
     }
 
     @Test

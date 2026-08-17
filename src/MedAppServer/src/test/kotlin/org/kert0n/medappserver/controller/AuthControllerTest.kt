@@ -49,12 +49,11 @@ class AuthControllerTest {
         mockMvc = MockMvcBuilders.webAppContextSetup(context)
             .apply<DefaultMockMvcBuilder>(SecurityMockMvcConfigurers.springSecurity())
             .build()
-        // SecurityService is mocked, so the token-request throttle would otherwise see the
-        // default `false` and reject every token request with 429 before authentication.
-        // Throttling itself is covered by LoginThrottleTest.
+        // SecurityService is mocked: without this the throttle sees the default `false` and
+        // rejects every token request with 429. Throttling itself is LoginThrottleTest.
         whenever(securityService.isLoginAllowed(any())).thenReturn(true)
-        // Same reason: the registration secret comparison now goes through the service, and
-        // an unstubbed mock would answer `false` for a correct secret too.
+        // Same reason: the secret comparison goes through the service, and an unstubbed mock
+        // answers `false` even for a correct secret.
         whenever(securityService.secretsMatch(any(), any())).thenReturn(false)
         whenever(securityService.secretsMatch(eq("test-secret"), any())).thenReturn(true)
     }

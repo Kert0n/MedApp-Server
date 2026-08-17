@@ -103,21 +103,28 @@ CREATE TABLE user_drugs
 CREATE INDEX ix_user_drugs_name ON user_drugs (name);
 CREATE INDEX ix_user_drugs_med_kit_id ON user_drugs (med_kit_id);
 
--- План лечения: сколько препарата пользователь зарезервировал под себя. Расписание
--- приёма живёт на клиенте, здесь только количество.
-CREATE TABLE usings
+-- Бронь: сколько из этой упаковки человек считает своим. Расписание приёма живёт на клиенте,
+-- здесь только количество.
+--
+-- Бронь может превышать остаток упаковки, и никакого ограничения на этот счёт в схеме нет:
+-- сколько из своей брони оставить, решает её владелец, а не сервер.
+--
+-- Каскад по drug_id остаётся: бронь на выброшенную пачку бессмысленна. Но это правило
+-- целостности данных, а не владения — упаковка бронями не распоряжается и в своём агрегате их
+-- не держит.
+CREATE TABLE reservations
 (
-    user_id        uuid                        NOT NULL,
-    drug_id        uuid                        NOT NULL,
-    planned_amount numeric(19, 6)              NOT NULL,
+    user_id uuid           NOT NULL,
+    drug_id uuid           NOT NULL,
+    amount  numeric(19, 6) NOT NULL,
 
-    CONSTRAINT usings_pkey PRIMARY KEY (drug_id, user_id),
-    CONSTRAINT usings_user_fkey FOREIGN KEY (user_id) REFERENCES users (id),
-    CONSTRAINT usings_drug_fkey FOREIGN KEY (drug_id) REFERENCES user_drugs (id) ON DELETE CASCADE
+    CONSTRAINT reservations_pkey PRIMARY KEY (drug_id, user_id),
+    CONSTRAINT reservations_user_fkey FOREIGN KEY (user_id) REFERENCES users (id),
+    CONSTRAINT reservations_drug_fkey FOREIGN KEY (drug_id) REFERENCES user_drugs (id) ON DELETE CASCADE
 );
 
-CREATE INDEX ix_usings_user_id ON usings (user_id);
-CREATE INDEX ix_usings_drug_id ON usings (drug_id);
+CREATE INDEX ix_reservations_user_id ON reservations (user_id);
+CREATE INDEX ix_reservations_drug_id ON reservations (drug_id);
 
 
 -- ============================================================
