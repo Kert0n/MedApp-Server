@@ -7,8 +7,11 @@ import org.kert0n.medappserver.db.model.ReservationKey
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.ReservationRepository
 import org.kert0n.medappserver.db.repository.UserRepository
+import org.hibernate.exception.ConstraintViolationException
+import org.kert0n.medappserver.domain.DomainRuleViolated
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.Reservation
+import org.kert0n.medappserver.domain.ReservationAlreadyExists
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Component
 
@@ -60,7 +63,10 @@ class ReservationStore(
             amount = reservation.amount.amount
         )
         entityManager.persist(row)
-        entityManager.flush()
+        // Флаш здесь и ради версии, и ради отказа: пока запись не дошла до базы, о том, что
+        // такая бронь уже есть, знает только база — а узнать это на коммите поздно, там уже
+        // некому перевести нарушение ключа в правило.
+        flushTranslating(RESERVATION_KEY) { ReservationAlreadyExists() }
         return row.toDomain()
     }
 
@@ -103,4 +109,24 @@ class ReservationStore(
     private fun managed(userId: UUID, drugId: UUID): ReservationData =
         reservations.findByIdOrNull(ReservationKey(userId, drugId))
             ?: error("Бронь $userId/$drugId исчезла во время записи")
+
+    /**
+     * Флашит и переводит нарушение **названного** ограничения в доменный отказ.
+     *
+     * По имени, а не по типу исключения: перевод любого нарушения целостности в 409 спрятал бы
+     * настоящую поломку схемы за безобидным ответом. Незнакомое ограничение обязано остаться
+     * заметной серверной ошибкой.
+     */
+    private fun flushTranslating(constraint: String, refusal: () -> DomainRuleViolated) {
+        try {
+            entityManager.flush()
+        } catch (violation: ConstraintViolationException) {
+            if (violation.constraintName?.lowercase() == constraint) throw refusal()
+            throw violation
+        }
+    }
+
+    private companion object {
+        const val RESERVATION_KEY = "reservations_pkey"
+    }
 }

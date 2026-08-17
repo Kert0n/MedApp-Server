@@ -1,6 +1,7 @@
 package org.kert0n.medappserver.integration
 
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import org.junit.jupiter.api.Test
@@ -13,7 +14,9 @@ import org.kert0n.medappserver.api.SyncRequest
 import org.kert0n.medappserver.api.SyncReservation
 import org.kert0n.medappserver.domain.IntakeJournal
 import org.kert0n.medappserver.domain.Quantity
+import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.Reservation
+import org.kert0n.medappserver.domain.ReservationAlreadyExists
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.ReservationService
@@ -98,36 +101,6 @@ class ConcurrencyTest {
         assertNotNull(failure, "выход по устаревшему составу обязан быть отклонён")
         val left = assertNotNull(medKits.findById(kit.id), "аптечка на месте")
         assertEquals(setOf(alice.id), left.members, "в аптечке остался тот, кто не выходил")
-    }
-
-    /**
-     * Вступление в аптечку, которой уже нет.
-     *
-     * Приглашение живёт своё время и переживает саму аптечку: вступающий видит её состав, пока
-     * последний участник её удаляет. Проверяется исход — членства в несуществующей аптечке не
-     * остаётся.
-     *
-     * Держит это **внешний ключ, а не версия**: строка членства вставляется раньше, чем заявка
-     * на изменение корня доходит до базы, и падает первой. Замерено снятием обеих заявок —
-     * сценарий отвергается и без них, в отличие от трёх остальных. Цена известна: отказ
-     * приходит как нарушение целостности, а не как конфликт, и наружу это пока 500. Код ответа
-     * — предмет коммита про предусловия.
-     */
-    @Test
-    fun `вступление в удалённую аптечку отклоняется`() {
-        val alice = dbHelper.freshUser("alice")
-        val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.create(alice.id)
-
-        val failure = interleaved.lostUpdate(
-            read = { medKits.findById(kit.id)!! },
-            meanwhile = { orchestrator.delete(kit.id, alice.id, dbHelper.medKitVersion(kit.id)) },
-            write = { stale -> medKits.save(stale.join(bob.id)) }
-        )
-
-        assertNotNull(failure, "вступление в удалённую аптечку обязано быть отклонено")
-        assertNull(medKits.findById(kit.id), "аптечки нет")
-        assertEquals(emptyList(), medKits.findAllOfUser(bob.id), "и членства в ней тоже")
     }
 
     /**
@@ -351,5 +324,63 @@ class ConcurrencyTest {
 
         assertNotNull(failure, "синхронизация по устаревшей упаковке обязана быть отклонена")
         assertQty(20.0, dbHelper.userReservation(alice.id, drug.id)!!, "бронь не тронута")
+    }
+
+    // ── Ожидаемые гонки создания ─────────────────────────────────────────────────
+
+    /**
+     * Две одновременные брони на одну пачку: одна ложится, вторая получает правило.
+     *
+     * Проверка «уже есть?» перед вставкой ловит только последовательный случай — одновременный
+     * доходит до базы, и там нарушается первичный ключ. Это ожидаемый исход гонки, а не поломка
+     * сервера, поэтому перевод идёт по **имени** ограничения: `reservations_pkey` значит «такая
+     * бронь уже есть», а незнакомое ограничение обязано остаться серверной ошибкой.
+     */
+    @Test
+    fun `одновременное заведение брони отвергается правилом, а не пятисоткой`() {
+        val alice = dbHelper.freshUser("alice")
+        val kit = medKitService.create(alice.id)
+        val drug = dbHelper.freshDrug(kit.id, 100.0)
+
+        val failure = interleaved.lostUpdate(
+            read = { drugService.require(drug.id, alice.id) },
+            meanwhile = { orchestrator.createReservation(alice.id, drug.id, qty(20.0)) },
+            write = { visible -> reservations.insert(Reservation(alice.id, drug.id, visible.quantity)) }
+        )
+
+        assertIs<ReservationAlreadyExists>(
+            assertNotNull(failure, "вторая бронь обязана быть отклонена"),
+            "гонка создания — правило домена, а не сбой сервера"
+        )
+        assertQty(20.0, dbHelper.userReservation(alice.id, drug.id)!!, "осталась первая бронь")
+    }
+
+    /**
+     * Вступление в аптечку, которой уже нет, отвечает «нет такой аптечки».
+     *
+     * Здесь целостность держит внешний ключ, а не версия: строка членства вставляется раньше,
+     * чем заявка на изменение корня доходит до базы. Замерено снятием обеих заявок у аптечки —
+     * сценарий отвергается и без них, в отличие от остальных гонок. Раньше отказ приходил
+     * наружу нарушением целостности, то есть пятисоткой; теперь — тем же, чем отвечает любая
+     * недоступная аптечка.
+     */
+    @Test
+    fun `вступление в удалённую аптечку отвечает как на недоступную`() {
+        val alice = dbHelper.freshUser("alice")
+        val bob = dbHelper.freshUser("bob")
+        val kit = medKitService.create(alice.id)
+
+        val failure = interleaved.lostUpdate(
+            read = { medKits.findById(kit.id)!! },
+            meanwhile = { orchestrator.delete(kit.id, alice.id, dbHelper.medKitVersion(kit.id)) },
+            write = { stale -> medKits.save(stale.join(bob.id)) }
+        )
+
+        assertIs<NotAMember>(
+            assertNotNull(failure, "вступление обязано быть отклонено"),
+            "исчезнувшая аптечка — это 404, а не сбой сервера"
+        )
+        assertNull(medKits.findById(kit.id), "аптечки нет")
+        assertEquals(emptyList(), medKits.findAllOfUser(bob.id), "и членства в ней тоже")
     }
 }

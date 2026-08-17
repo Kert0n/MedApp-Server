@@ -9,7 +9,10 @@ import org.kert0n.medappserver.db.model.MedKitMembershipKey
 import org.kert0n.medappserver.db.repository.MedKitMembershipRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.UserRepository
+import org.hibernate.exception.ConstraintViolationException
+import org.kert0n.medappserver.domain.DomainRuleViolated
 import org.kert0n.medappserver.domain.MedKit
+import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.StaleAggregateVersion
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Component
@@ -89,7 +92,12 @@ class MedKitStore(
         if (gone.isNotEmpty()) memberships.deleteMembers(medKit.id, gone)
 
         val added = medKit.members - stored
-        if (added.isNotEmpty()) memberships.saveAll(added.map { membershipRow(row, it) })
+        if (added.isNotEmpty()) {
+            memberships.saveAll(added.map { membershipRow(row, it) })
+            // Аптечка могла исчезнуть, пока вступающий смотрел на её состав: внешний ключ это
+            // поймает, но на коммите — там уже некому сказать, что аптечки просто нет.
+            flushTranslating(MEMBERSHIP_KIT_FK) { NotAMember() }
+        }
     }
 
     /**
@@ -112,9 +120,28 @@ class MedKitStore(
      * не дошедшую до базы, при первом массовом запросе превращается в «ссылку на несохранённый
      * объект». Запросов это не стоит: обе сущности уже в контексте.
      */
+    /**
+     * Флашит и переводит нарушение **названного** ограничения в доменный отказ.
+     *
+     * По имени, а не по типу исключения: перевод любого нарушения целостности в отказ клиенту
+     * спрятал бы настоящую поломку схемы. Незнакомое ограничение остаётся серверной ошибкой.
+     */
+    private fun flushTranslating(constraint: String, refusal: () -> DomainRuleViolated) {
+        try {
+            entityManager.flush()
+        } catch (violation: ConstraintViolationException) {
+            if (violation.constraintName?.lowercase() == constraint) throw refusal()
+            throw violation
+        }
+    }
+
     private fun membershipRow(medKit: MedKitData, userId: UUID) = MedKitMembershipData(
         membershipKey = MedKitMembershipKey(medKitId = medKit.id, userId = userId),
         medKit = medKit,
         user = users.findByIdOrNull(userId) ?: error("Пользователь $userId исчез во время записи членства")
     )
+
+    private companion object {
+        const val MEMBERSHIP_KIT_FK = "user_med_kits_med_kit_fkey"
+    }
 }
