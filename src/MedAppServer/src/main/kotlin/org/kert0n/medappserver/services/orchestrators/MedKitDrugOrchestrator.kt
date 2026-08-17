@@ -2,12 +2,15 @@ package org.kert0n.medappserver.services.orchestrators
 
 import java.util.UUID
 import org.kert0n.medappserver.api.DrugCreateRequest
+import org.kert0n.medappserver.api.DrugDTO
 import org.kert0n.medappserver.api.MedKitDTO
+import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.db.store.DrugStore
 import org.kert0n.medappserver.db.store.ReservationStore
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
+import org.kert0n.medappserver.services.models.ReservationService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -23,7 +26,7 @@ import org.springframework.transaction.annotation.Transactional
 @Service
 class MedKitDrugOrchestrator(
     private val drugService: DrugService,
-    private val drugViews: DrugViewOrchestrator,
+    private val reservationService: ReservationService,
     private val medKitService: MedKitService,
     private val drugs: DrugStore,
     private val reservations: ReservationStore
@@ -101,7 +104,18 @@ class MedKitDrugOrchestrator(
         medKitService.requireAccessible(medKitId, userId)
         return MedKitDTO(
             id = medKitId,
-            drugs = drugViews.viewsOfMedKit(medKitId).toSet()
+            drugs = drugsWithReservations(drugService.ofMedKit(medKitId)).toSet()
         )
+    }
+
+    /**
+     * Упаковки вместе с бронями на них.
+     *
+     * Брони читаются одним запросом на весь набор, сколько бы пачек ни было, и группируются в
+     * памяти: дорого обращение в базу, а не объект в памяти.
+     */
+    private fun drugsWithReservations(packages: List<Drug>): List<DrugDTO> {
+        val byDrug = reservationService.onDrugs(packages.map { it.id }).groupBy { it.drugId }
+        return packages.map { it.toDto(byDrug[it.id].orEmpty()) }
     }
 }

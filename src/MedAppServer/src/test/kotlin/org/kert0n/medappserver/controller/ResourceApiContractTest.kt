@@ -18,7 +18,6 @@ import org.kert0n.medappserver.services.models.CatalogueService
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.ReservationService
-import org.kert0n.medappserver.services.orchestrators.DrugViewOrchestrator
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
 import org.kert0n.medappserver.testutil.ApiRoutes
 import org.kert0n.medappserver.testutil.qty
@@ -59,7 +58,6 @@ class ResourceApiContractTest {
     @MockitoBean private lateinit var reservationService: ReservationService
     @MockitoBean private lateinit var medKitService: MedKitService
     @MockitoBean private lateinit var medKitDrugOrchestrator: MedKitDrugOrchestrator
-    @MockitoBean private lateinit var drugViews: DrugViewOrchestrator
     @MockitoBean private lateinit var catalogueService: CatalogueService
 
     private lateinit var mockMvc: MockMvc
@@ -70,11 +68,6 @@ class ResourceApiContractTest {
 
     private val medKit = MedKit(medKitId, setOf(userId))
     private val unit = QuantityUnit(UUID.randomUUID(), "mg")
-    private val drugDto = org.kert0n.medappserver.api.DrugDTO(
-        id = drugId, name = "Aspirin", quantity = qty(100.0), reservedQuantity = qty(0.0),
-        quantityUnitId = UUID.randomUUID(), quantityUnit = "mg", formTypeId = null, formType = null,
-        category = null, manufacturer = null, country = null, description = null, medKitId = medKitId
-    )
     private val drug = Drug(
         id = drugId, medKitId = medKitId, name = "Aspirin",
         quantity = Quantity(qty(100.0), unit)
@@ -93,7 +86,7 @@ class ResourceApiContractTest {
 
     @Test
     fun `препарат читается по своему пути`() {
-        whenever(drugViews.view(drugId, userId)).thenReturn(drugDto)
+        whenever(drugService.require(drugId, userId)).thenReturn(drug)
 
         mockMvc.perform(get(ApiRoutes.drug(drugId)).with(asUser()))
             .andExpect(status().isOk)
@@ -108,7 +101,7 @@ class ResourceApiContractTest {
     @Test
     fun `препарат создаётся в аптечке из пути`() {
         whenever(medKitDrugOrchestrator.createDrugInMedKit(eq(medKitId), any(), eq(userId))).thenReturn(drug)
-        whenever(drugViews.view(drugId, userId)).thenReturn(drugDto)
+        whenever(drugService.require(drugId, userId)).thenReturn(drug)
         val body = DrugCreateRequest(name = "Aspirin", quantity = qty(100.0), quantityUnitId = unit.id)
 
         mockMvc.perform(
@@ -135,7 +128,7 @@ class ResourceApiContractTest {
     @Test
     fun `приём создаётся подчинённым ресурсом упаковки`() {
         whenever(drugService.consume(eq(drugId), any(), eq(userId))).thenReturn(drug)
-        whenever(drugViews.view(drugId, userId)).thenReturn(drugDto)
+        whenever(drugService.require(drugId, userId)).thenReturn(drug)
 
         mockMvc.perform(
             post(ApiRoutes.intakes(drugId)).with(asUser())
@@ -149,7 +142,7 @@ class ResourceApiContractTest {
     fun `перенос выражен размещением препарата в целевой аптечке`() {
         val target = UUID.randomUUID()
         whenever(medKitDrugOrchestrator.moveDrug(drugId, target, userId)).thenReturn(drug)
-        whenever(drugViews.view(drugId, userId)).thenReturn(drugDto)
+        whenever(drugService.require(drugId, userId)).thenReturn(drug)
 
         mockMvc.perform(put(ApiRoutes.drugIn(target, drugId)).with(asUser()))
             .andExpect(status().isOk)

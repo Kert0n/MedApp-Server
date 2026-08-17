@@ -267,7 +267,7 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         // Заявленное приходит извне упаковки: сама она про брони не знает.
-        val dto = drugService.require(drug.id, alice.id).toDto(dbHelper.reservedOnDrug(drug.id))
+        val dto = drugService.require(drug.id, alice.id).toDto(reservationService.onDrug(drug.id))
         assertQty(100.0, dto.quantity)
         assertQty(25.0, dto.reservedQuantity)
     }

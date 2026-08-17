@@ -57,6 +57,10 @@ class ReservationService(
     @Transactional(readOnly = true)
     fun onDrugs(drugIds: Collection<UUID>): List<Reservation> = reservations.findAllOfDrugs(drugIds)
 
+    /** Брони на одну упаковку. */
+    @Transactional(readOnly = true)
+    fun onDrug(drugId: UUID): List<Reservation> = reservations.findAllOfDrugs(listOf(drugId))
+
     // ── Команды ──────────────────────────────────────────────────────────────────
 
     @Transactional

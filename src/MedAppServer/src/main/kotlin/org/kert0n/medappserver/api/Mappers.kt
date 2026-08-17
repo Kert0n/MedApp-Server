@@ -5,7 +5,6 @@ import org.kert0n.medappserver.domain.DrugTemplate
 import org.kert0n.medappserver.domain.FormType
 import org.kert0n.medappserver.domain.MedKitOverview
 import org.kert0n.medappserver.domain.QuantityUnit
-import java.math.BigDecimal
 import org.kert0n.medappserver.domain.Reservation
 
 /**
@@ -19,11 +18,19 @@ import org.kert0n.medappserver.domain.Reservation
  * прислать его обратно при следующей правке, второе — чтобы нарисовать карточку без второго
  * запроса.
  */
-fun Drug.toDto(reservedQuantity: BigDecimal): DrugDTO = DrugDTO(
+/**
+ * Упаковка в ответе — вместе с бронями, которые на неё заявлены.
+ *
+ * Брони передаются как есть, доменными объектами: сама упаковка про них не знает, а заводить
+ * между доменом и DTO ещё один тип-носитель незачем — `data class` затем и нужен, чтобы его
+ * свободно передавать. Вызывающий отдаёт брони именно этой пачки; сумма может превышать её
+ * содержимое, и это законное состояние.
+ */
+fun Drug.toDto(reservations: List<Reservation>): DrugDTO = DrugDTO(
     id = id,
     name = name,
     quantity = quantity.amount,
-    reservedQuantity = reservedQuantity,
+    reservedQuantity = reservations.sumOf { it.amount.amount },
     quantityUnitId = quantity.unit.id,
     quantityUnit = quantity.unit.name,
     formTypeId = formType?.id,

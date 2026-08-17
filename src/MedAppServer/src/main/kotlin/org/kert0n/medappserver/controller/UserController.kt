@@ -6,7 +6,9 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.tags.Tag
 import java.util.*
 import org.kert0n.medappserver.api.MedKitDTO
-import org.kert0n.medappserver.services.orchestrators.DrugViewOrchestrator
+import org.kert0n.medappserver.api.toDto
+import org.kert0n.medappserver.services.models.DrugService
+import org.kert0n.medappserver.services.models.ReservationService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.userId
 import org.slf4j.LoggerFactory
@@ -20,7 +22,8 @@ import org.springframework.web.bind.annotation.RestController
 @Tag(name = "User", description = "The authenticated user")
 class UserController(
     private val medKitService: MedKitService,
-    private val drugViews: DrugViewOrchestrator
+    private val drugService: DrugService,
+    private val reservationService: ReservationService
 ) {
 
     private val logger = LoggerFactory.getLogger(UserController::class.java)
@@ -33,10 +36,14 @@ class UserController(
     @ApiResponse(responseCode = "200", description = "Snapshot returned", content = [Content(schema = Schema(implementation = UserSnapshotDTO::class))])
     fun getSnapshot(authentication: Authentication): UserSnapshotDTO {
         logger.debug("GET /v1/users/me by user {}", authentication.userId)
-        // Два запроса на весь снимок, сколько бы аптечек у пользователя ни было: препараты
-        // приходят одним, аптечки — вторым. Состав аптечек не запрашивается вовсе, в ответе
-        // его нет.
-        val drugsByMedKit = drugViews.viewsAccessibleTo(authentication.userId).groupBy { it.medKitId }
+        // Три запроса на весь снимок, сколько бы аптечек и пачек у человека ни было:
+        // упаковки, брони на них и идентификаторы аптечек. Состав аптечек не запрашивается
+        // вовсе — в ответе его нет.
+        val accessible = drugService.accessibleTo(authentication.userId)
+        val reservationsByDrug = reservationService.onDrugs(accessible.map { it.id }).groupBy { it.drugId }
+        val drugsByMedKit = accessible
+            .map { it.toDto(reservationsByDrug[it.id].orEmpty()) }
+            .groupBy { it.medKitId }
         val medKits = medKitService.idsOfUser(authentication.userId)
             .map { medKitId ->
                 MedKitDTO(
