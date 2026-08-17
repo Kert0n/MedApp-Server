@@ -125,14 +125,6 @@ data class DrugPatchRequest(
     val description: String? = null
 )
 
-@Schema(description = "Unplanned consumption of a drug")
-data class ConsumptionRequest(
-    @field:NotNull
-    @field:DecimalMin(value = "0.0", inclusive = false)
-    @Schema(description = "Amount consumed, greater than zero", example = "2.0", required = true)
-    val quantity: BigDecimal
-)
-
 @Schema(description = "Catalogue entry used as a template for a new drug")
 data class DrugTemplateDTO(
     @Schema(description = "Template identifier")

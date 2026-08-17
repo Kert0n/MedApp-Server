@@ -35,9 +35,9 @@ fun Drug.toDto(reservedQuantity: BigDecimal): DrugDTO = DrugDTO(
     medKitId = medKitId
 )
 
-fun Reservation.toDto(): TreatmentPlanDTO = TreatmentPlanDTO(
+fun Reservation.toDto(): ReservationDTO = ReservationDTO(
     drugId = drugId,
-    plannedAmount = amount.amount
+    amount = amount.amount
 )
 
 fun DrugTemplate.toDto(): DrugTemplateDTO = DrugTemplateDTO(

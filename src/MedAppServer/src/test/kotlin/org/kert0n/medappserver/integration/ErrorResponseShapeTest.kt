@@ -5,7 +5,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
+import org.kert0n.medappserver.api.ReservationCreateRequest
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.User
@@ -98,7 +98,7 @@ class ErrorResponseShapeTest {
         )
 
         val body = mockMvc.perform(
-            post(ApiRoutes.consumptions(drug.id))
+            post(ApiRoutes.intakes(drug.id))
                 .with(jwt().jwt { it.subject(user.id.toString()) })
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"quantity":500.0}""")
@@ -120,20 +120,20 @@ class ErrorResponseShapeTest {
     @Test
     fun `body validation reports fields without echoing values`() {
         val userId = UUID.randomUUID()
-        // plannedAmount below the @DecimalMin("0.0") constraint.
-        val invalid = """{"drugId":"${UUID.randomUUID()}","plannedAmount":-42.5}"""
+        // amount below the @DecimalMin("0.0") constraint.
+        val invalid = """{"drugId":"${UUID.randomUUID()}","amount":-42.5}"""
 
         val body = mockMvc.perform(
-            post(ApiRoutes.TREATMENT_PLANS)
+            post(ApiRoutes.RESERVATIONS)
                 .with(jwt().jwt { it.subject(userId.toString()) })
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(invalid)
         )
             .andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.errors[0].field").value("plannedAmount"))
+            .andExpect(jsonPath("$.errors[0].field").value("amount"))
             .andReturn().response.contentAsString
 
-        assertTrue(body.contains("plannedAmount"), "field name should be reported: $body")
+        assertTrue(body.contains("amount"), "field name should be reported: $body")
         assertFalse(body.contains("-42.5"), "rejected value must not be echoed: $body")
     }
 }

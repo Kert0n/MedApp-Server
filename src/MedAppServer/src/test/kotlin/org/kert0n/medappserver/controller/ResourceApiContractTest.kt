@@ -6,8 +6,8 @@ import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.api.IntakeRequest
 import org.kert0n.medappserver.api.MembershipCreateRequest
-import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
-import org.kert0n.medappserver.api.TreatmentPlanPatchRequest
+import org.kert0n.medappserver.api.ReservationCreateRequest
+import org.kert0n.medappserver.api.ReservationPatchRequest
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.MedKitOverview
@@ -133,12 +133,12 @@ class ResourceApiContractTest {
     }
 
     @Test
-    fun `расход создаётся подчинённым ресурсом`() {
+    fun `приём создаётся подчинённым ресурсом упаковки`() {
         whenever(drugService.consume(eq(drugId), any(), eq(userId))).thenReturn(drug)
         whenever(drugViews.view(drugId, userId)).thenReturn(drugDto)
 
         mockMvc.perform(
-            post(ApiRoutes.consumptions(drugId)).with(asUser())
+            post(ApiRoutes.intakes(drugId)).with(asUser())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"quantity":2.0}""")
         )
@@ -191,9 +191,9 @@ class ResourceApiContractTest {
         whenever(reservationService.require(userId, drugId)).thenReturn(plan)
 
         mockMvc.perform(
-            post(ApiRoutes.TREATMENT_PLANS).with(asUser())
+            post(ApiRoutes.RESERVATIONS).with(asUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(TreatmentPlanCreateRequest(drugId, qty(20.0))))
+                .content(objectMapper.writeValueAsString(ReservationCreateRequest(drugId, qty(20.0))))
         )
             .andExpect(status().isCreated)
             .andExpect(jsonPath("$.drugId").value(drugId.toString()))
@@ -202,9 +202,9 @@ class ResourceApiContractTest {
             .andExpect(jsonPath("$.lastModified").doesNotExist())
 
         mockMvc.perform(
-            patch(ApiRoutes.treatmentPlan(drugId)).with(asUser())
+            patch(ApiRoutes.reservation(drugId)).with(asUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(TreatmentPlanPatchRequest(qty(15.0))))
+                .content(objectMapper.writeValueAsString(ReservationPatchRequest(qty(15.0))))
         )
             .andExpect(status().isOk)
     }
@@ -213,22 +213,8 @@ class ResourceApiContractTest {
     fun `план лечения удаляется`() {
         doNothing().whenever(reservationService).cancel(userId, drugId)
 
-        mockMvc.perform(delete(ApiRoutes.treatmentPlan(drugId)).with(asUser()))
+        mockMvc.perform(delete(ApiRoutes.reservation(drugId)).with(asUser()))
             .andExpect(status().isNoContent)
-    }
-
-    // ── Приём ────────────────────────────────────────────────────────────────────
-
-    @Test
-    fun `приём опубликован, но пока не включён`() {
-        // Форма маршрута финальная, механизм идемпотентности приезжает вместе с
-        // версионностью. 501 честнее, чем PUT, который обещает идемпотентность и не даёт её.
-        mockMvc.perform(
-            put(ApiRoutes.intake(UUID.randomUUID())).with(asUser())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(IntakeRequest(drugId, qty(1.0))))
-        )
-            .andExpect(status().isNotImplemented)
     }
 
     // ── Аптечки и членство ───────────────────────────────────────────────────────

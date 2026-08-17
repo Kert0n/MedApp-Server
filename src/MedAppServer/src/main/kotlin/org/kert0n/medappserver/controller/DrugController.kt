@@ -9,7 +9,7 @@ import jakarta.validation.Valid
 import jakarta.validation.constraints.Max
 import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.Size
-import org.kert0n.medappserver.api.ConsumptionRequest
+import org.kert0n.medappserver.api.IntakeRequest
 import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.api.DrugDTO
 import org.kert0n.medappserver.api.DrugPatchRequest
@@ -101,21 +101,24 @@ class DrugController(
     }
 
     /**
-     * Расход — это создание записи о нём, поэтому POST в подчинённый ресурс, а не PUT в
-     * препарат. Ответ отсутствует, когда расход исчерпал препарат и тот удалён.
+     * Приём — это запись о съеденном, поэтому POST в подчинённый ресурс, а не PUT в упаковку.
+     *
+     * Единственный способ уменьшить пачку. Различия «приём по плану» и «расход вне плана»
+     * больше нет: съеденное уменьшает упаковку, а бронь её владелец правит отдельно. Ответа
+     * нет, когда приём опустошил пачку и та уничтожена.
      */
-    @PostMapping("/drugs/{drugId}/consumptions")
-    @ApiResponse(responseCode = "200", description = "Stock reduced")
-    @ApiResponse(responseCode = "204", description = "Drug ran out and was removed", content = [Content()])
-    @ApiResponse(responseCode = "400", description = "Amount exceeds the stock", content = [Content()])
-    @ApiResponse(responseCode = "404", description = "Drug does not exist or is not accessible", content = [Content()])
-    fun consumeDrug(
+    @PostMapping("/drugs/{drugId}/intakes")
+    @ApiResponse(responseCode = "200", description = "Package reduced")
+    @ApiResponse(responseCode = "204", description = "Package ran out and was destroyed", content = [Content()])
+    @ApiResponse(responseCode = "400", description = "Amount exceeds what is left in the package", content = [Content()])
+    @ApiResponse(responseCode = "404", description = "Package does not exist or is not accessible", content = [Content()])
+    fun recordIntake(
         authentication: Authentication,
-        @Parameter(description = "Drug identifier") @PathVariable drugId: UUID,
-        @SwaggerRequestBody(description = "Amount consumed")
-        @Valid @RequestBody request: ConsumptionRequest
+        @Parameter(description = "Package identifier") @PathVariable drugId: UUID,
+        @SwaggerRequestBody(description = "Amount taken")
+        @Valid @RequestBody request: IntakeRequest
     ): DrugDTO? {
-        logger.debug("POST /v1/drugs/{}/consumptions by user {}", drugId, authentication.userId)
+        logger.debug("POST /v1/drugs/{}/intakes by user {}", drugId, authentication.userId)
         // null означает, что пачка кончилась и уничтожена этим списанием.
         drugService.consume(drugId, request.quantity, authentication.userId) ?: return null
         return drugViews.view(drugId, authentication.userId)

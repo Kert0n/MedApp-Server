@@ -48,18 +48,22 @@ val OPERATION_TEXTS: Map<String, OperationText> = mapOf(
         "Creates a drug in the given kit."
     ),
     "patchDrug" to OperationText(
-        "Update a drug",
-        "Changes the given fields. Absent fields are left as they are; quantity may only increase — " +
-            "use consumptions to reduce it."
+        "Update a package",
+        "Changes the given fields; absent fields are left as they are. Quantity here is a correction " +
+            "of the record — you recounted the pack and saw a different number — not a refill, and it " +
+            "leaves reservations alone."
     ),
     "deleteDrug" to OperationText(
         "Delete a drug",
-        "Removes the drug and every treatment plan for it."
+        "Destroys the package and every reservation placed on it."
     ),
-    "consumeDrug" to OperationText(
-        "Consume a drug",
-        "Reduces the stock by the given amount outside any treatment plan. Returns no body when the " +
-            "drug ran out and was removed."
+    "recordIntake" to OperationText(
+        "Record an intake",
+        "Takes the given amount out of the package — the only way its contents decrease. There is no " +
+            "distinction between a planned intake and an emergency one: what was taken reduces the " +
+            "package, and the reservation is the owner's to adjust. Taking more than the package holds " +
+            "is refused: a package cannot be refilled, so a second pack is a second package. Returns " +
+            "no body when the package ran out and was destroyed."
     ),
     "moveDrug" to OperationText(
         "Move a drug to another medicine kit",
@@ -85,32 +89,28 @@ val OPERATION_TEXTS: Map<String, OperationText> = mapOf(
         "Returns a single catalogue entry."
     ),
 
-    // ── Планы лечения и приёмы ───────────────────────────────────────────────────
-    "listTreatmentPlans" to OperationText(
-        "List treatment plans",
-        "Returns every plan of the caller."
+    // ── Брони ────────────────────────────────────────────────────────────────────
+    "listReservations" to OperationText(
+        "List reservations",
+        "Returns every reservation of the caller."
     ),
-    "getTreatmentPlan" to OperationText(
-        "Get a treatment plan",
-        "Returns the caller's plan for the drug."
+    "getReservation" to OperationText(
+        "Get a reservation",
+        "Returns the caller's reservation on the package."
     ),
-    "createTreatmentPlan" to OperationText(
-        "Create a treatment plan",
-        "Reserves an amount of a drug for the caller."
+    "createReservation" to OperationText(
+        "Reserve part of a package",
+        "Claims an amount of the package for the caller. The amount may exceed what is left in the " +
+            "package: how much of their own reservation to keep is the owner's decision, not the " +
+            "server's."
     ),
-    "patchTreatmentPlan" to OperationText(
-        "Change the planned amount",
-        "Sets a new planned amount for the drug."
+    "patchReservation" to OperationText(
+        "Change the reserved amount",
+        "Sets a new reserved amount. It may exceed what is left in the package."
     ),
-    "deleteTreatmentPlan" to OperationText(
-        "Delete a treatment plan",
-        "Releases the reserved amount."
-    ),
-    "recordIntake" to OperationText(
-        "Record an intake",
-        "Not enabled yet: the endpoint answers 501. The final behaviour applies the intake once — " +
-            "repeating the request with the same identifier returns the first result instead of " +
-            "consuming again — and arrives together with optimistic concurrency."
+    "deleteReservation" to OperationText(
+        "Cancel a reservation",
+        "Releases the claim. A reservation of zero does not exist, so cancelling is a deletion."
     ),
 
     // ── Аптечки и членство ───────────────────────────────────────────────────────
@@ -132,7 +132,7 @@ val OPERATION_TEXTS: Map<String, OperationText> = mapOf(
     ),
     "deleteMedKit" to OperationText(
         "Delete a medicine kit",
-        "Deletes the kit for every participant, including its drugs and their treatment plans. Use when " +
+        "Deletes the kit for every participant, including its packages and the reservations on them. Use when " +
             "the physical kit no longer exists as a shared thing. Pass targetMedKitId to move the drugs " +
             "into another kit of yours instead of discarding them. To leave a shared kit without " +
             "destroying it, delete your membership instead."
@@ -143,7 +143,7 @@ val OPERATION_TEXTS: Map<String, OperationText> = mapOf(
     ),
     "leaveMedKit" to OperationText(
         "Leave a medicine kit",
-        "Removes the caller from the kit together with their treatment plans in it. The kit itself and " +
+        "Removes the caller from the kit together with their reservations in it. The kit itself and " +
             "other participants stay."
     ),
 

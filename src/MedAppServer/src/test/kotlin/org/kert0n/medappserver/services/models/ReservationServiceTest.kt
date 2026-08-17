@@ -84,6 +84,6 @@ class ReservationServiceTest {
 
         val dto = reservationService.require(alice.id, drug.id).toDto()
         assertEquals(drug.id, dto.drugId)
-        assertQty(30.0, dto.plannedAmount)
+        assertQty(30.0, dto.amount)
     }
 }
