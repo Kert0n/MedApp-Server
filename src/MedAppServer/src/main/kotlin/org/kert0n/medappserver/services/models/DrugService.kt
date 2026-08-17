@@ -9,17 +9,17 @@ import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.DrugDetails
 import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.Quantity
-import org.kert0n.medappserver.domain.TreatmentPlan
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
 /**
- * Единственный вход к агрегату препарата — вместе с его планами лечения.
+ * Единственный вход к агрегату упаковки.
  *
  * Каждая команда устроена одинаково: взять состояние под блокировкой, вызвать метод домена,
- * отдать результат хранилищу. Правил здесь нет — они в `domain.Drug`; строк и запросов
- * тоже нет — они за `DrugStore`.
+ * отдать результат хранилищу. Правил здесь нет — они в `domain.Drug`; строк и запросов тоже
+ * нет — они за `DrugStore`. Броней здесь нет вовсе: ими распоряжается их владелец через
+ * `ReservationService`.
  */
 @Service
 class DrugService(
@@ -117,10 +117,11 @@ class DrugService(
     }
 
     /**
-     * Списывает количество вне плана лечения.
+     * Списывает съеденное.
      *
-     * `null` означает «препарат кончился и удалён этим списанием», а не «не найден»:
-     * недоступный препарат отвергается 404 ещё до списания.
+     * `null` означает «упаковка кончилась и уничтожена этим списанием», а не «не найдена»:
+     * недоступная упаковка отвергается 404 ещё до списания. Различия «приём по плану» и
+     * «расход вне плана» больше нет: съеденное уменьшает пачку, и всё.
      */
     @Transactional
     fun consume(drugId: UUID, quantity: BigDecimal, userId: UUID): Drug? {
@@ -136,63 +137,18 @@ class DrugService(
         return left
     }
 
-    /** Переезд препарата в другую аптечку вместе с судьбой планов. */
-    @Transactional
-    fun moveTo(drugId: UUID, targetMedKitId: UUID, accessibleUserIds: Set<UUID>, userId: UUID): Drug {
-        logger.debug("Moving drug {} to medkit {}", drugId, targetMedKitId)
-
-        val moved = lock(drugId, userId).moveTo(targetMedKitId, accessibleUserIds)
-        drugs.save(moved)
-        return moved
-    }
-
-    // ── Команды планов лечения ───────────────────────────────────────────────────
-
-    @Transactional
-    fun createPlan(userId: UUID, drugId: UUID, plannedAmount: BigDecimal): TreatmentPlan {
-        logger.debug("Creating treatment plan for user {} and drug {}", userId, drugId)
-
-        val loaded = lock(drugId, userId)
-        val drug = loaded.createPlan(userId, Quantity(plannedAmount, loaded.quantity.unit))
-        drugs.save(drug)
-        return drug.requirePlanOf(userId)
-    }
-
-    @Transactional
-    fun changePlan(userId: UUID, drugId: UUID, plannedAmount: BigDecimal): TreatmentPlan {
-        logger.debug("Updating treatment plan for user {} and drug {}", userId, drugId)
-
-        val loaded = lock(drugId, userId)
-        val drug = loaded.changePlan(userId, Quantity(plannedAmount, loaded.quantity.unit))
-        drugs.save(drug)
-        return drug.requirePlanOf(userId)
-    }
-
-    @Transactional
-    fun cancelPlan(userId: UUID, drugId: UUID) {
-        logger.debug("Deleting treatment plan for user {} and drug {}", userId, drugId)
-
-        drugs.save(lock(drugId, userId).cancelPlan(userId))
-    }
-
     /**
-     * Списывает приём с плана и с остатка препарата.
+     * Переезд упаковки в другую аптечку.
      *
-     * `null` означает «план исчерпан» либо «препарат кончился», а не «план не найден»:
-     * отсутствующий план отвергается 404 ещё до списания.
+     * Судьба броней решается не здесь: они в чужом агрегате, и убрать те, что потеряли доступ,
+     * — работа межагрегатного сценария.
      */
     @Transactional
-    fun recordIntake(userId: UUID, drugId: UUID, quantityConsumed: BigDecimal): TreatmentPlan? {
-        logger.debug("Recording intake for user {} and drug {}, quantity: {}", userId, drugId, quantityConsumed)
+    fun moveTo(drugId: UUID, targetMedKitId: UUID, userId: UUID): Drug {
+        logger.debug("Moving drug {} to medkit {}", drugId, targetMedKitId)
 
-        val loaded = lock(drugId, userId)
-        val outcome = loaded.applyIntake(userId, Quantity(quantityConsumed, loaded.quantity.unit))
-        val left = outcome.drug
-        if (left == null) {
-            drugs.delete(drugId)
-            return null
-        }
-        drugs.save(left)
-        return outcome.plan
+        val moved = lock(drugId, userId).moveTo(targetMedKitId)
+        drugs.save(moved)
+        return moved
     }
 }

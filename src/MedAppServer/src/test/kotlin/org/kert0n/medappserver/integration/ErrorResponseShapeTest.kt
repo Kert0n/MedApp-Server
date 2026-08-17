@@ -87,7 +87,8 @@ class ErrorResponseShapeTest {
 
     @Test
     fun `insufficient quantity does not disclose amounts`() {
-        // A real drug with 5 units in stock; ask for a plan of 500.
+        // Пачка на 5 таблеток; просим съесть 500. Бронь больше остатка теперь законна,
+        // поэтому утечку проверяем на том отказе, который остался.
         val user = dbHelper.insert(User(hashedKey = "{noop}k"))
         val medKit = medKitService.create(user.id)
         val drug = dbHelper.insert(
@@ -97,17 +98,23 @@ class ErrorResponseShapeTest {
         )
 
         val body = mockMvc.perform(
-            post(ApiRoutes.TREATMENT_PLANS)
+            post(ApiRoutes.consumptions(drug.id))
                 .with(jwt().jwt { it.subject(user.id.toString()) })
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(TreatmentPlanCreateRequest(drug.id, qty(500.0))))
+                .content("""{"quantity":500.0}""")
         )
             .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.detail").value("Request cannot be processed"))
             .andReturn().response.contentAsString
 
-        assertFalse(body.contains("500"), "error body leaked the requested amount: $body")
-        assertFalse(body.contains("5.0"), "error body leaked the available amount: $body")
-        assertFalse(body.contains(drug.id.toString()), "error body leaked the drug id: $body")
+        // `instance` несёт путь запроса — стандартное поле RFC 9457, и идентификатор пачки в
+        // нём нового не раскрывает. Проверяется всё остальное: в описании отказа не должно
+        // быть ни количеств, ни имени исключения. Раньше эта проверка смотрела на тело
+        // целиком и однажды совпала со случайным UUID, в котором нашлась подстрока «500».
+        val described = body.replace(Regex("\"instance\":\"[^\"]*\""), "")
+        assertFalse(described.contains("500"), "error body leaked the requested amount: $body")
+        assertFalse(described.contains("5.0"), "error body leaked the available amount: $body")
+        assertFalse(described.contains("Exception"), "error body leaked an exception class: $body")
     }
 
     @Test

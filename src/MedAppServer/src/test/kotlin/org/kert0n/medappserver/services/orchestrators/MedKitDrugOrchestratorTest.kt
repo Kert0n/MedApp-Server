@@ -13,7 +13,7 @@ import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.domain.DomainRuleViolated
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.models.TreatmentPlanService
+import org.kert0n.medappserver.services.models.ReservationService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
@@ -38,7 +38,7 @@ class MedKitDrugOrchestratorTest {
     @Autowired
     private lateinit var medKitService: MedKitService
     @Autowired
-    private lateinit var treatmentPlanService: TreatmentPlanService
+    private lateinit var reservationService: ReservationService
     @Autowired
     private lateinit var dbHelper: DatabaseTestHelper
 
@@ -101,15 +101,15 @@ class MedKitDrugOrchestratorTest {
         val drug = dbHelper.freshDrug(sourceKit.id, 50.0)
         dbHelper.flushAndClear()
 
-        drugService.createPlan(alice.id, drug.id, qty(10.0))
-        drugService.createPlan(bob.id, drug.id, qty(10.0))
+        reservationService.create(alice.id, drug.id, qty(10.0))
+        reservationService.create(bob.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
         medKitDrugOrchestrator.moveDrug(drug.id, targetKit.id, alice.id)
         dbHelper.flushAndClear()
 
-        assertNull(dbHelper.userPlan(bob.id, drug.id))
-        assertNotNull(dbHelper.userPlan(alice.id, drug.id))
+        assertNull(dbHelper.userReservation(bob.id, drug.id))
+        assertNotNull(dbHelper.userReservation(alice.id, drug.id))
     }
 
     @Test
@@ -155,7 +155,7 @@ class MedKitDrugOrchestratorTest {
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        drugService.createPlan(bob.id, drug.id, qty(10.0))
+        reservationService.create(bob.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
         medKitDrugOrchestrator.leaveMedKit(kit.id, bob.id)
@@ -215,15 +215,15 @@ class MedKitDrugOrchestratorTest {
         val drug = dbHelper.freshDrug(oldKit.id, 90.0)
         dbHelper.flushAndClear()
 
-        drugService.createPlan(alice.id, drug.id, qty(30.0))
-        drugService.createPlan(charlie.id, drug.id, qty(30.0))
+        reservationService.create(alice.id, drug.id, qty(30.0))
+        reservationService.create(charlie.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
         medKitDrugOrchestrator.delete(oldKit.id, alice.id, newKit.id)
         dbHelper.flushAndClear()
 
-        assertNotNull(dbHelper.userPlan(alice.id, drug.id))
-        assertNull(dbHelper.userPlan(charlie.id, drug.id))
+        assertNotNull(dbHelper.userReservation(alice.id, drug.id))
+        assertNull(dbHelper.userReservation(charlie.id, drug.id))
     }
 
     @Test

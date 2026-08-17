@@ -3,8 +3,8 @@ package org.kert0n.medappserver.services.orchestrators
 import java.util.UUID
 import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.api.MedKitDTO
-import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.db.store.DrugStore
+import org.kert0n.medappserver.db.store.ReservationStore
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
@@ -23,8 +23,10 @@ import org.springframework.transaction.annotation.Transactional
 @Service
 class MedKitDrugOrchestrator(
     private val drugService: DrugService,
+    private val drugViews: DrugViewOrchestrator,
     private val medKitService: MedKitService,
-    private val drugs: DrugStore
+    private val drugs: DrugStore,
+    private val reservations: ReservationStore
 ) {
 
     private val logger = LoggerFactory.getLogger(MedKitDrugOrchestrator::class.java)
@@ -38,43 +40,45 @@ class MedKitDrugOrchestrator(
     }
 
     /**
-     * Перенос препарата.
+     * Перенос упаковки.
      *
-     * Кто увидит препарат после переезда, знает целевая аптечка; что при этом станет с
-     * планами — препарат. Поэтому список участников берётся у одного агрегата и передаётся
-     * другому.
+     * Кто увидит пачку после переезда, знает целевая аптечка; брони тех, кто её не видит,
+     * исчезают. Три агрегата в одном сценарии — потому он и здесь: упаковка переезжает,
+     * аптечка называет состав, брони убираются массово.
      */
     @Transactional
     fun moveDrug(drugId: UUID, targetMedKitId: UUID, userId: UUID): Drug {
         logger.debug("Moving drug {} to medkit {}", drugId, targetMedKitId)
         val target = medKitService.requireAccessible(targetMedKitId, userId)
-        return drugService.moveTo(drugId, target.id, target.members, userId)
+        val moved = drugService.moveTo(drugId, target.id, userId)
+        reservations.deleteOfDrugExcept(drugId, target.members)
+        return moved
     }
 
     /**
      * Выход из аптечки.
      *
-     * Членство меняет аптечка, а планы выходящего лежат в препаратах — в чужих агрегатах, и
-     * их там может быть много. Поэтому планы удаляются одним запросом, а не обходом
-     * препаратов: поднимать каждый ради одной строки незачем.
+     * Членство меняет аптечка, а брони выходящего лежат на упаковках — в чужих агрегатах, и их
+     * там может быть много. Поэтому брони удаляются одним запросом, а не обходом упаковок:
+     * поднимать каждую ради одной строки незачем.
      */
     @Transactional
     fun leaveMedKit(medKitId: UUID, userId: UUID) {
         logger.debug("Removing user {} from medkit {}", userId, medKitId)
         val left = medKitService.leave(medKitId, userId)
-        // Аптечки не стало — планы ушли вместе с препаратами по каскаду.
+        // Аптечки не стало — брони ушли вместе с упаковками по каскаду.
         if (left != null) {
-            drugs.deletePlansOfUserInMedKit(userId, medKitId)
+            reservations.deleteOfUserInMedKit(userId, medKitId)
         }
     }
 
     /**
      * Удаление аптечки, при желании — с переносом препаратов.
      *
-     * Без переноса препараты уходят каскадом вместе с аптечкой. С переносом действует то же
-     * правило, что и при переезде одного препарата, — планы тех, кто целевую аптечку не
-     * видит, исчезают, — но выражено оно двумя запросами вместо команды на препарат: аптечка
-     * со ста препаратами не должна стоить ста загрузок с блокировкой.
+     * Без переноса упаковки уходят каскадом вместе с аптечкой. С переносом действует то же
+     * правило, что и при переезде одной пачки, — брони тех, кто целевую аптечку не видит,
+     * исчезают, — но выражено оно двумя запросами вместо команды на упаковку: аптечка со ста
+     * пачками не должна стоить ста загрузок с блокировкой.
      */
     @Transactional
     fun delete(medKitId: UUID, userId: UUID, transferToMedKitId: UUID? = null) {
@@ -83,7 +87,9 @@ class MedKitDrugOrchestrator(
 
         if (transferToMedKitId != null) {
             val target = medKitService.requireAccessible(transferToMedKitId, userId)
-            drugs.moveAllToMedKit(medKitId, target.id, target.members)
+            // Порядок важен: брони выбираются по исходной аптечке, пока упаковки ещё в ней.
+            reservations.deleteInMedKitExcept(medKitId, target.members)
+            drugs.moveAllToMedKit(medKitId, target.id)
         }
 
         medKitService.delete(medKitId, userId)
@@ -95,7 +101,7 @@ class MedKitDrugOrchestrator(
         medKitService.requireAccessible(medKitId, userId)
         return MedKitDTO(
             id = medKitId,
-            drugs = drugService.ofMedKit(medKitId).map { it.toDto() }.toSet()
+            drugs = drugViews.viewsOfMedKit(medKitId).toSet()
         )
     }
 }

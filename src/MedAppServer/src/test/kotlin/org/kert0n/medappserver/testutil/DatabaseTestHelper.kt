@@ -6,6 +6,7 @@ import java.util.*
 import org.kert0n.medappserver.db.model.parsed.QuantityUnitData
 import org.kert0n.medappserver.db.repository.QuantityUnitRepository
 import org.kert0n.medappserver.db.store.DrugStore
+import org.kert0n.medappserver.db.store.ReservationStore
 import org.kert0n.medappserver.db.store.UserStore
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.Quantity
@@ -25,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional
 class DatabaseTestHelper(
     private val users: UserStore,
     private val drugs: DrugStore,
+    private val reservations: ReservationStore,
     private val quantityUnits: QuantityUnitRepository,
     private val entityManager: EntityManager
 ) {
@@ -89,6 +91,16 @@ class DatabaseTestHelper(
 
     // Проверки, существенные для privacy-by-default: `null` означает, что записи больше нет.
     fun drugQuantity(id: UUID): BigDecimal? = drugs.findById(id)?.quantity?.amount
-    fun totalPlanned(id: UUID): BigDecimal? = drugs.findById(id)?.plannedTotal?.amount
-    fun userPlan(userId: UUID, drugId: UUID): BigDecimal? = drugs.findPlan(userId, drugId)?.plannedAmount?.amount
+
+    /**
+     * Сколько на упаковку заявлено бронями.
+     *
+     * Считается снаружи упаковки, потому что упаковка про брони не знает. Может превышать её
+     * остаток — это нормальное состояние, а не повод для проверки.
+     */
+    fun reservedOnDrug(id: UUID): BigDecimal =
+        reservations.findAllOfDrugs(listOf(id)).sumOf { it.amount.amount }
+
+    fun userReservation(userId: UUID, drugId: UUID): BigDecimal? =
+        reservations.find(userId, drugId)?.amount?.amount
 }

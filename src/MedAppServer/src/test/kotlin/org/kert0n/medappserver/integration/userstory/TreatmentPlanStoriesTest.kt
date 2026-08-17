@@ -1,5 +1,6 @@
 package org.kert0n.medappserver.integration.userstory
 
+import org.kert0n.medappserver.services.models.ReservationService
 import jakarta.persistence.EntityManager
 import java.util.*
 import kotlin.test.assertEquals
@@ -10,7 +11,6 @@ import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.domain.Drug
-import org.kert0n.medappserver.domain.PlannedAmountExceedsStock
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.models.DrugService
@@ -38,6 +38,9 @@ class TreatmentPlanStoriesTest {
 
     @Autowired
     private lateinit var entityManager: EntityManager
+
+    @Autowired
+    private lateinit var reservationService: ReservationService
 
     @Autowired
     private lateinit var drugService: DrugService
@@ -74,18 +77,18 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
 
         // Create treatment plan for 30 tablets
-        val plan = drugService.createPlan(userId = userData.id, drugData.id, qty(30.0))
+        val plan = reservationService.create(userId = userData.id, drugData.id, qty(30.0))
         assertNotNull(plan)
         entityManager.flush()
 
         // Verify plan was created
-        val createdPlan = dbHelper.userPlan(userData.id, drugData.id)
+        val createdPlan = dbHelper.userReservation(userData.id, drugData.id)
         assertNotNull(createdPlan, "Plan should be created")
         assertQty(30.0, createdPlan, "Planned amount should be 30")
 
         // Record some intakes
-        drugService.recordIntake(userData.id, drugData.id, qty(5.0))
-        drugService.recordIntake(userData.id, drugData.id, qty(5.0))
+        drugService.consume(drugData.id, qty(5.0), userData.id)
+        drugService.consume(drugData.id, qty(5.0), userData.id)
         entityManager.flush()
         entityManager.clear()
 
@@ -128,19 +131,19 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
 
         // Anna creates a treatment plan for 40 tablets
-        drugService.createPlan(anna.id, vitaminC.id, qty(40.0))
+        reservationService.create(anna.id, vitaminC.id, qty(40.0))
         entityManager.flush()
 
         // Bob creates a treatment plan for 50 tablets (should succeed: 100 - 40 = 60 available)
-        drugService.createPlan(bob.id, vitaminC.id, qty(50.0))
+        reservationService.create(bob.id, vitaminC.id, qty(50.0))
         entityManager.flush()
         entityManager.clear()
         // Total planned = 90, should match sumPlannedAmount
-        assertQty(90.0, dbHelper.totalPlanned(vitaminC.id), "Total planned should be 90")
+        assertQty(90.0, dbHelper.reservedOnDrug(vitaminC.id), "Total planned should be 90")
 
         // Verify each user has their own plan
-        val annaPlan = dbHelper.userPlan(anna.id, vitaminC.id)
-        val bobPlan = dbHelper.userPlan(bob.id, vitaminC.id)
+        val annaPlan = dbHelper.userReservation(anna.id, vitaminC.id)
+        val bobPlan = dbHelper.userReservation(bob.id, vitaminC.id)
         assertNotNull(annaPlan)
         assertNotNull(bobPlan)
         assertQty(40.0, annaPlan)
@@ -149,105 +152,7 @@ class TreatmentPlanStoriesTest {
         println("✅ Story 7 passed: Multiple users created treatment plans on shared drug")
     }
 
-    /**
-     * Story 8: Drug quantity reduction cascades to treatment plans
-     * 
-     * Validates: plan reconciliation, proportional reduction of plans
-     */
-    @Test
-    fun `Story 8 - Reducing drug quantity adjusts treatment plans proportionally`() {
-        val userData = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
-        dbHelper.insert(userData)
-        val medkit = medKitService.create(userData.id)
 
-        val drugData = Drug(
-            id = UUID.randomUUID(),
-            name = "Paracetamol",
-            quantity = Quantity(qty(100.0), dbHelper.unit()),
-            category = null,
-            manufacturer = null,
-            country = null,
-            description = null,
-            medKitId = medkit.id
-        )
-        dbHelper.insert(drugData)
-        entityManager.flush()
-
-        // Create plan for 80 tablets
-        drugService.createPlan(userData.id, drugData.id, qty(80.0))
-        entityManager.flush()
-        entityManager.clear()
-
-        // Consume 50 tablets (drug goes to 50, but plan is 80 > 50)
-        // reconciliation should scale the plan down
-        drugService.consume(drugData.id, qty(50.0), userData.id)
-        entityManager.flush()
-        entityManager.clear()
-
-        val updatedDrug = dbHelper.drug(drugData.id)
-        assertNotNull(updatedDrug)
-        assertQty(50.0, updatedDrug.quantity)
-
-        // Plan should be reduced proportionally: 80 * (50/80) = 50
-        val updatedPlan = dbHelper.userPlan(userData.id, drugData.id)
-        assertNotNull(updatedPlan)
-        assertTrue(updatedPlan <= qty(50.0), "Plan should be reduced to fit available quantity")
-
-        println("✅ Story 8 passed: Drug quantity reduction cascaded to treatment plans")
-    }
-
-    /**
-     * Story 9: Cannot create treatment plan exceeding available quantity
-     * 
-     * Validates: Planned quantity validation, error handling
-     */
-    @Test
-    fun `Story 9 - Cannot over-plan drug quantity`() {
-        val userData = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
-        dbHelper.insert(userData)
-        val medkit = medKitService.create(userData.id)
-
-        val drugData = Drug(
-            id = UUID.randomUUID(),
-            name = "Ibuprofen",
-            quantity = Quantity(qty(50.0), dbHelper.unit()),
-            category = null,
-            manufacturer = null,
-            country = null,
-            description = null,
-            medKitId = medkit.id
-        )
-        dbHelper.insert(drugData)
-        entityManager.flush()
-
-        // Try to create a plan for 60 tablets when only 50 available
-        assertFailsWith<PlannedAmountExceedsStock> {
-            drugService.createPlan(userData.id, drugData.id, qty(60.0))
-        }
-
-        // Create a plan for 30
-        drugService.createPlan(userData.id, drugData.id, qty(30.0))
-        entityManager.flush()
-
-        // Another user tries to plan 25 (only 20 available: 50 - 30 = 20)
-        val userData2 = User(id = UUID.randomUUID(), hashedKey = "user2_${UUID.randomUUID()}")
-        dbHelper.insert(userData2)
-        val shareKey = medKitService.invite(medkit.id, userData.id)
-        medKitService.joinByInvitation(shareKey, userData2.id)
-        entityManager.flush()
-        entityManager.clear()
-        assertFailsWith<PlannedAmountExceedsStock> {
-            drugService.createPlan(userData2.id, drugData.id, qty(25.0))
-        }
-
-        // But 20 should work
-        drugService.createPlan(userData2.id, drugData.id, qty(20.0))
-        entityManager.flush()
-        entityManager.clear()
-        assertQty(50.0, dbHelper.totalPlanned(drugData.id))
-
-        println("✅ Story 9 passed: Cannot over-plan drug quantity")
-    }
 
     /**
      * Story 10: Complete family medkit lifecycle
@@ -290,20 +195,20 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
 
         // Everyone gets treatment plans for vitamins: 30 each
-        drugService.createPlan(mom.id, vitamins.id, qty(30.0))
-        drugService.createPlan(dad.id, vitamins.id, qty(30.0))
-        drugService.createPlan(child.id, vitamins.id, qty(30.0))
+        reservationService.create(mom.id, vitamins.id, qty(30.0))
+        reservationService.create(dad.id, vitamins.id, qty(30.0))
+        reservationService.create(child.id, vitamins.id, qty(30.0))
         entityManager.flush()
         entityManager.clear()
         // Total planned = 90 (full supply)
-        assertQty(90.0, dbHelper.totalPlanned(vitamins.id))
+        assertQty(90.0, dbHelper.reservedOnDrug(vitamins.id))
 
         // Everyone takes their daily vitamin
-        drugService.recordIntake(mom.id, vitamins.id, qty(1.0))
+        drugService.consume(vitamins.id, qty(1.0), mom.id)
         entityManager.flush()
-        drugService.recordIntake(dad.id, vitamins.id, qty(1.0))
+        drugService.consume(vitamins.id, qty(1.0), dad.id)
         entityManager.flush()
-        drugService.recordIntake(child.id, vitamins.id, qty(1.0))
+        drugService.consume(vitamins.id, qty(1.0), child.id)
         entityManager.flush()
         entityManager.clear()
 

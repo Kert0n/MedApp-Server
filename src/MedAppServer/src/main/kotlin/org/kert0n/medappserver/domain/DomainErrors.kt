@@ -14,20 +14,20 @@ sealed class DomainRuleViolated(message: String) : RuntimeException(message)
 /** Количество должно быть строго положительным. */
 class InvalidQuantity : DomainRuleViolated("Quantity must be greater than zero")
 
-/** Списать больше, чем есть, нельзя. */
+/**
+ * Списать больше, чем в упаковке, нельзя.
+ *
+ * Это не защита от клиента, а физика: столько таблеток в пачке не было. Пополнения у упаковки
+ * не бывает — новая пачка это новая упаковка, — поэтому перерасход означает, что разошлись не
+ * числа, а представления о том, из какой пачки ели.
+ */
 class InsufficientStock : DomainRuleViolated("Amount exceeds the stock")
 
-/** Сумма планов не может превысить остаток. */
-class PlannedAmountExceedsStock : DomainRuleViolated("Planned amount exceeds the available stock")
+/** У человека уже есть бронь на эту упаковку: её надо менять, а не заводить вторую. */
+class ReservationAlreadyExists : DomainRuleViolated("Reservation already exists for this user and drug")
 
-/** Приём не может быть больше собственного плана. */
-class IntakeExceedsPlan : DomainRuleViolated("Intake exceeds the planned amount")
-
-/** У пользователя уже есть план на этот препарат: его надо менять, а не заводить второй. */
-class TreatmentPlanAlreadyExists : DomainRuleViolated("Treatment plan already exists for this user and drug")
-
-/** Плана нет. */
-class NoSuchTreatmentPlan : DomainRuleViolated("There is no such treatment plan")
+/** Брони нет. */
+class NoSuchReservation : DomainRuleViolated("There is no such reservation")
 
 /** Пользователь не участник этой аптечки — или самой аптечки нет. */
 class NotAMember : DomainRuleViolated("Medicine kit is not accessible")
@@ -46,9 +46,6 @@ class NegativeQuantity : DomainRuleViolated("Quantity must not be negative")
 
 /** Величины в разных единицах измерения несравнимы и не складываются. */
 class QuantityUnitMismatch : DomainRuleViolated("Quantities must share the same unit")
-
-/** План принадлежит другому препарату. */
-class ForeignTreatmentPlan : DomainRuleViolated("Treatment plan belongs to another drug")
 
 /** Единицы измерения с таким идентификатором в справочнике нет. */
 class UnknownQuantityUnit : DomainRuleViolated("Unknown quantity unit")

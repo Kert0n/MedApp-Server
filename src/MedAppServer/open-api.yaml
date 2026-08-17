@@ -725,14 +725,10 @@ components:
           type: number
           description: Current stock
           example: 100.0
-        plannedQuantity:
+        reservedQuantity:
           type: number
-          description: Sum of all treatment plans for this drug
-          example: 30.0
-        availableQuantity:
-          type: number
-          description: Stock not reserved by treatment plans
-          example: 70.0
+          description: Sum of all reservations on this package; may exceed the stock
+          example: 40.0
         quantityUnitId:
           type: string
           format: uuid
@@ -954,9 +950,9 @@ components:
           minLength: 1
         quantity:
           type: number
-          description: "Corrected stock. Raising it adds to the shelf; lowering it\
-            \ means a recount found less than recorded, and treatment plans are scaled\
-            \ down to fit."
+          description: "Corrected stock: you recounted the package and saw a different\
+            \ number. This is a correction, not a refill — a new pack is a new package.\
+            \ Reservations are left alone."
           example: 120.0
           minimum: 0.0
         quantityUnitId:

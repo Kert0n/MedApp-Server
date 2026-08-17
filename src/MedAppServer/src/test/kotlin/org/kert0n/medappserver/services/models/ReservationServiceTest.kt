@@ -23,10 +23,10 @@ import org.springframework.transaction.annotation.Transactional
 @SpringBootTest
 @ActiveProfiles("test")
 @Transactional
-class TreatmentPlanServiceTest {
+class ReservationServiceTest {
 
     @Autowired
-    private lateinit var treatmentPlanService: TreatmentPlanService
+    private lateinit var reservationService: ReservationService
     @Autowired
     private lateinit var drugService: DrugService
     @Autowired
@@ -41,10 +41,10 @@ class TreatmentPlanServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        drugService.createPlan(alice.id, drug.id, qty(10.0))
+        reservationService.create(alice.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
-        assertEquals(1, treatmentPlanService.plansOf(alice.id).size)
+        assertEquals(1, reservationService.ofUser(alice.id).size)
     }
 
     @Test
@@ -54,10 +54,10 @@ class TreatmentPlanServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        drugService.createPlan(alice.id, drug.id, qty(10.0))
+        reservationService.create(alice.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
-        assertEquals(1, drugService.require(drug.id, alice.id).plans.size)
+        assertQty(10.0, dbHelper.userReservation(alice.id, drug.id))
     }
 
     @Test
@@ -68,7 +68,7 @@ class TreatmentPlanServiceTest {
         dbHelper.flushAndClear()
 
         assertFailsWith<DomainRuleViolated> {
-            treatmentPlanService.requirePlan(alice.id, drug.id)
+            reservationService.require(alice.id, drug.id)
         }
     }
 
@@ -79,10 +79,10 @@ class TreatmentPlanServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        drugService.createPlan(alice.id, drug.id, qty(30.0))
+        reservationService.create(alice.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
-        val dto = treatmentPlanService.requirePlan(alice.id, drug.id).toDto()
+        val dto = reservationService.require(alice.id, drug.id).toDto()
         assertEquals(drug.id, dto.drugId)
         assertQty(30.0, dto.plannedAmount)
     }

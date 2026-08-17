@@ -15,15 +15,15 @@ data class DrugDTO(
     val name: String,
     @Schema(description = "Current stock", example = "100.000000")
     val quantity: BigDecimal,
-    @Schema(description = "Sum of all treatment plans for this drug", example = "30.000000")
-    val plannedQuantity: BigDecimal,
     /**
-     * Раньше за этим числом ходили отдельным запросом `GET /drug/quantity/{id}`. Оно —
-     * разность двух соседних полей, и отдельный маршрут ради него означал второй поход в
-     * базу и возможность увидеть остаток и план из разных моментов времени.
+     * Сколько на эту пачку заявлено бронями.
+     *
+     * Справка, а не ограничение: заявленное может превышать остаток, и это нормальное
+     * состояние — чью бронь ужать, решает её владелец, а не сервер. «Доступного остатка» как
+     * понятия больше нет, поэтому и поля такого нет.
      */
-    @Schema(description = "Stock not reserved by treatment plans", example = "70.000000")
-    val availableQuantity: BigDecimal,
+    @Schema(description = "Sum of all reservations on this package; may exceed the stock", example = "40.000000")
+    val reservedQuantity: BigDecimal,
     @Schema(description = "Quantity unit identifier")
     val quantityUnitId: UUID,
     @Schema(description = "Quantity unit name", example = "mg")
@@ -95,8 +95,9 @@ data class DrugPatchRequest(
 
     @field:DecimalMin(value = "0.0", inclusive = false)
     @Schema(
-        description = "Corrected stock. Raising it adds to the shelf; lowering it means a recount " +
-            "found less than recorded, and treatment plans are scaled down to fit.",
+        description = "Corrected stock: you recounted the package and saw a different number. " +
+            "This is a correction, not a refill — a new pack is a new package. Reservations are " +
+            "left alone.",
         example = "120.0"
     )
     val quantity: BigDecimal? = null,

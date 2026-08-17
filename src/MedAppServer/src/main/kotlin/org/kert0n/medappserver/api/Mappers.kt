@@ -5,7 +5,8 @@ import org.kert0n.medappserver.domain.DrugTemplate
 import org.kert0n.medappserver.domain.FormType
 import org.kert0n.medappserver.domain.MedKitOverview
 import org.kert0n.medappserver.domain.QuantityUnit
-import org.kert0n.medappserver.domain.TreatmentPlan
+import java.math.BigDecimal
+import org.kert0n.medappserver.domain.Reservation
 
 /**
  * Перевод доменных значений в публичный контракт.
@@ -18,12 +19,11 @@ import org.kert0n.medappserver.domain.TreatmentPlan
  * прислать его обратно при следующей правке, второе — чтобы нарисовать карточку без второго
  * запроса.
  */
-fun Drug.toDto(): DrugDTO = DrugDTO(
+fun Drug.toDto(reservedQuantity: BigDecimal): DrugDTO = DrugDTO(
     id = id,
     name = name,
     quantity = quantity.amount,
-    plannedQuantity = plannedTotal.amount,
-    availableQuantity = availableQuantity.amount,
+    reservedQuantity = reservedQuantity,
     quantityUnitId = quantity.unit.id,
     quantityUnit = quantity.unit.name,
     formTypeId = formType?.id,
@@ -35,9 +35,9 @@ fun Drug.toDto(): DrugDTO = DrugDTO(
     medKitId = medKitId
 )
 
-fun TreatmentPlan.toDto(): TreatmentPlanDTO = TreatmentPlanDTO(
+fun Reservation.toDto(): TreatmentPlanDTO = TreatmentPlanDTO(
     drugId = drugId,
-    plannedAmount = plannedAmount.amount
+    plannedAmount = amount.amount
 )
 
 fun DrugTemplate.toDto(): DrugTemplateDTO = DrugTemplateDTO(

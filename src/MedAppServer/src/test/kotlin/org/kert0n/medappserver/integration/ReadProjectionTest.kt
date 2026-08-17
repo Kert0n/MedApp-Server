@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.models.TreatmentPlanService
+import org.kert0n.medappserver.services.models.ReservationService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -27,7 +27,7 @@ import org.springframework.transaction.annotation.Transactional
 class ReadProjectionTest {
 
     @Autowired private lateinit var drugService: DrugService
-    @Autowired private lateinit var treatmentPlanService: TreatmentPlanService
+    @Autowired private lateinit var reservationService: ReservationService
     @Autowired private lateinit var medKitService: MedKitService
     @Autowired private lateinit var dbHelper: DatabaseTestHelper
 
@@ -39,31 +39,28 @@ class ReadProjectionTest {
         medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
 
-        drugService.createPlan(alice.id, drug.id, qty(30.0))
-        drugService.createPlan(bob.id, drug.id, qty(20.0))
+        reservationService.create(alice.id, drug.id, qty(30.0))
+        reservationService.create(bob.id, drug.id, qty(20.0))
         dbHelper.flushAndClear()
 
         val view = drugService.require(drug.id, alice.id)
 
         assertQty(100.0, view.quantity)
-        assertQty(50.0, view.plannedTotal)
-        // Доступный остаток — разность, посчитанная от той же пары чисел, а не отдельным
-        // запросом: иначе можно было увидеть остаток и планы из разных моментов времени.
-        assertQty(50.0, view.availableQuantity)
+        // Заявленное считается снаружи: упаковка про брони не знает и знать не должна.
+        assertQty(50.0, dbHelper.reservedOnDrug(drug.id))
     }
 
     @Test
-    fun `препарат без планов отдаёт нулевую сумму, а не отсутствие строки`() {
+    fun `упаковка без броней отдаёт нулевую сумму, а не отсутствие строки`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.create(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 7.0)
         dbHelper.flushAndClear()
 
-        // Джойн с планами внешний: препарат без единого плана обязан остаться в выдаче.
         val view = drugService.require(drug.id, alice.id)
 
-        assertQty(0.0, view.plannedTotal)
-        assertQty(7.0, view.availableQuantity)
+        assertQty(7.0, view.quantity)
+        assertQty(0.0, dbHelper.reservedOnDrug(drug.id))
     }
 
     @Test
@@ -106,11 +103,11 @@ class ReadProjectionTest {
         val bob = dbHelper.freshUser("bob")
         medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
-        drugService.createPlan(alice.id, drug.id, qty(30.0))
+        reservationService.create(alice.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
-        assertQty(30.0, treatmentPlanService.requirePlan(alice.id, drug.id).plannedAmount)
+        assertQty(30.0, reservationService.require(alice.id, drug.id).amount)
         // Препарат общий, план — личный: Боб видит препарат, но не чужой план.
-        assertNull(treatmentPlanService.findPlan(bob.id, drug.id), "чужой план не читается")
+        assertNull(reservationService.find(bob.id, drug.id), "чужой план не читается")
     }
 }

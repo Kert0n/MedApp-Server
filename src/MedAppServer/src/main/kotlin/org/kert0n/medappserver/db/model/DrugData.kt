@@ -11,7 +11,7 @@ import org.kert0n.medappserver.domain.QUANTITY_PRECISION
 import org.kert0n.medappserver.domain.QUANTITY_SCALE
 
 /**
- * Отображение препарата на таблицу `user_drugs`. Правил здесь нет.
+ * Отображение упаковки на таблицу `user_drugs`. Правил здесь нет.
  *
  * Всё, что препарат решает, решает `domain.Drug`; сюда состояние переносится
  * маппером, а SQL из этого делает Hibernate. Поэтому `var` у свойств никого не смущает:
@@ -88,18 +88,11 @@ class DrugData(
                 "FOREIGN KEY (med_kit_id) REFERENCES med_kits (id) ON DELETE CASCADE"
         )
     )
-    var medKit: MedKitData,
+    var medKit: MedKitData
 
-    /**
-     * Строки планов этого препарата.
-     *
-     * Каскад и `orphanRemoval` означают, что план не существует отдельно от препарата:
-     * добавление в набор создаёт строку, удаление из набора её удаляет, удаление препарата
-     * уносит планы с собой. Этим и пользуется обратная запись из домена.
-     */
-    @OneToMany(mappedBy = "drugData", fetch = FetchType.LAZY, cascade = [CascadeType.ALL], orphanRemoval = true)
-    var treatmentPlans: MutableSet<TreatmentPlanData> = mutableSetOf()
-
+    // Коллекции броней здесь нет намеренно: упаковка ими не владеет и о них не знает.
+    // Исчезновение брони вслед за пачкой держит внешний ключ в `ReservationData`, а не
+    // каскад агрегата.
 ) {
 
     override fun equals(other: Any?): Boolean {

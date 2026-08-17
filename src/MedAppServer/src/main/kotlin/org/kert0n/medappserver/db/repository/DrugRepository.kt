@@ -13,54 +13,50 @@ import org.springframework.data.repository.query.Param
 /**
  * Строки препаратов. Наружу этот интерфейс не выходит — им пользуется только `DrugStore`.
  *
- * Читающие запросы забирают препарат вместе с его планами: сумму запланированного считает
- * домен по собственной коллекции, поэтому отдельного вычисляемого столбца больше нет.
- * Доступ проверяется соединением с членством, а не коллекцией участников внутри аптечки.
+ * Читающие запросы забирают только саму упаковку: броней она не держит, и присоединять их
+ * незачем. Доступ проверяется соединением с членством, а не коллекцией участников внутри
+ * аптечки.
  */
 interface DrugRepository : JpaRepository<DrugData, UUID> {
 
     @Query(
         """
-        SELECT DISTINCT d FROM DrugData d
-        LEFT JOIN FETCH d.treatmentPlans
+        SELECT d FROM DrugData d
         WHERE d.id = :drugId
           AND EXISTS (SELECT 1 FROM MedKitMembershipData m
                       WHERE m.membershipKey.medKitId = d.medKit.id AND m.membershipKey.userId = :userId)
     """
     )
-    fun findAccessibleWithPlans(@Param("drugId") drugId: UUID, @Param("userId") userId: UUID): DrugData?
+    fun findAccessible(@Param("drugId") drugId: UUID, @Param("userId") userId: UUID): DrugData?
 
     /** Препарат целиком, без проверки доступа: её делает вызывающий, когда она нужна. */
     @Query(
         """
-        SELECT DISTINCT d FROM DrugData d
-        LEFT JOIN FETCH d.treatmentPlans
+        SELECT d FROM DrugData d
         WHERE d.id = :drugId
     """
     )
-    fun findByIdWithPlans(@Param("drugId") drugId: UUID): DrugData?
+    fun findFullById(@Param("drugId") drugId: UUID): DrugData?
 
     @Query(
         """
-        SELECT DISTINCT d FROM DrugData d
-        LEFT JOIN FETCH d.treatmentPlans
+        SELECT d FROM DrugData d
         WHERE d.medKit.id = :medKitId
         ORDER BY d.name
     """
     )
-    fun findAllInMedKitWithPlans(@Param("medKitId") medKitId: UUID): List<DrugData>
+    fun findAllInMedKit(@Param("medKitId") medKitId: UUID): List<DrugData>
 
     /** Все препараты всех аптечек участника — одним запросом, для снимка. */
     @Query(
         """
-        SELECT DISTINCT d FROM DrugData d
-        LEFT JOIN FETCH d.treatmentPlans
+        SELECT d FROM DrugData d
         WHERE EXISTS (SELECT 1 FROM MedKitMembershipData m
                       WHERE m.membershipKey.medKitId = d.medKit.id AND m.membershipKey.userId = :userId)
         ORDER BY d.name
     """
     )
-    fun findAllAccessibleWithPlans(@Param("userId") userId: UUID): List<DrugData>
+    fun findAllAccessible(@Param("userId") userId: UUID): List<DrugData>
 
     /**
      * Перевод всех препаратов аптечки в другую — одним запросом.

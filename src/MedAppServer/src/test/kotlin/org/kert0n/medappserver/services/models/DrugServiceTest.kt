@@ -12,11 +12,9 @@ import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.domain.DomainRuleViolated
 import org.kert0n.medappserver.domain.InsufficientStock
-import org.kert0n.medappserver.domain.IntakeExceedsPlan
 import org.kert0n.medappserver.domain.InvalidQuantity
 import org.kert0n.medappserver.domain.NotAMember
-import org.kert0n.medappserver.domain.PlannedAmountExceedsStock
-import org.kert0n.medappserver.domain.TreatmentPlanAlreadyExists
+import org.kert0n.medappserver.domain.ReservationAlreadyExists
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -35,7 +33,7 @@ class DrugServiceTest {
     @Autowired
     private lateinit var medKitService: MedKitService
     @Autowired
-    private lateinit var treatmentPlanService: TreatmentPlanService
+    private lateinit var reservationService: ReservationService
     @Autowired
     private lateinit var drugRepository: DrugRepository
     @Autowired
@@ -98,12 +96,12 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        assertEquals(0, treatmentPlanService.plansOf(alice.id).size)
+        assertEquals(0, reservationService.ofUser(alice.id).size)
 
-        drugService.createPlan(alice.id, drug.id, qty(10.0))
+        reservationService.create(alice.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
-        assertEquals(1, treatmentPlanService.plansOf(alice.id).size)
+        assertEquals(1, reservationService.ofUser(alice.id).size)
     }
 
     // ── create ──
@@ -179,26 +177,28 @@ class DrugServiceTest {
 
     /**
      * Пересчёт учёта вниз: пользователь пересчитал упаковку и увидел меньше, чем числилось.
-     * Планы сжимаются тем же правилом, что и при списании, потому что агрегат загружен
-     * целиком и решение принимается по всем планам сразу.
+     * Брони при этом не двигаются ни на сколько. Раньше сервер ужимал их пропорционально, и
+     * это было решением за владельца: сколько из своей брони оставить, решает он.
      */
     @Test
-    fun `update decreasing quantity scales the plans down`() {
+    fun `update decreasing quantity leaves reservations alone`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
         val kit = medKitService.create(alice.id)
         medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
-        drugService.createPlan(alice.id, drug.id, qty(60.0))
-        drugService.createPlan(bob.id, drug.id, qty(40.0))
+        reservationService.create(alice.id, drug.id, qty(60.0))
+        reservationService.create(bob.id, drug.id, qty(40.0))
         dbHelper.flushAndClear()
 
         drugService.update(drug.id, DrugPatchRequest(quantity = qty(50.0)), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(50.0, dbHelper.drugQuantity(drug.id)!!)
-        assertQty(30.0, dbHelper.userPlan(alice.id, drug.id)!!)
-        assertQty(20.0, dbHelper.userPlan(bob.id, drug.id)!!)
+        assertQty(60.0, dbHelper.userReservation(alice.id, drug.id)!!)
+        assertQty(40.0, dbHelper.userReservation(bob.id, drug.id)!!)
+        // Заявлено сто на пачку из пятидесяти — законное состояние, а не повод для пересчёта.
+        assertQty(100.0, dbHelper.reservedOnDrug(drug.id))
     }
 
     @Test
@@ -253,170 +253,22 @@ class DrugServiceTest {
         }
     }
 
-    // ── toDrugDTO ──
+    // ── Представление ──
 
     @Test
-    fun `toDrugDTO includes planned quantity`() {
+    fun `представление упаковки несёт заявленное бронями`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.create(alice.id)
         val drug = drugService.create(
             DrugCreateRequest(name = "Drug", quantity = qty(100.0), quantityUnitId = dbHelper.unit().id),
             kit.id, alice.id
         )
-        drugService.createPlan(alice.id, drug.id, qty(25.0))
+        reservationService.create(alice.id, drug.id, qty(25.0))
         dbHelper.flushAndClear()
 
-        // DTO собирается только из формы чтения: сумма планов приходит из запроса, а не из
-        // поля сущности, которое после изменения планов в той же транзакции устаревало.
-        val dto = drugService.require(drug.id, alice.id).toDto()
-        assertQty(25.0, dto.plannedQuantity)
+        // Заявленное приходит извне упаковки: сама она про брони не знает.
+        val dto = drugService.require(drug.id, alice.id).toDto(dbHelper.reservedOnDrug(drug.id))
         assertQty(100.0, dto.quantity)
-        assertQty(75.0, dto.availableQuantity)
-    }
-
-    // ── Планы лечения: часть того же агрегата ────────────────────────────────────
-
-    @Test
-    fun `createPlan reserves the amount for the user`() {
-        val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
-        val drug = dbHelper.freshDrug(kit.id, 100.0)
-        dbHelper.flushAndClear()
-
-        val plan = drugService.createPlan(alice.id, drug.id, qty(30.0))
-
-        assertQty(30.0, plan.plannedAmount)
-        assertEquals(alice.id, plan.userId)
-        assertQty(30.0, dbHelper.userPlan(alice.id, drug.id))
-    }
-
-    @Test
-    fun `createPlan refuses a second plan of the same user`() {
-        val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
-        val drug = dbHelper.freshDrug(kit.id, 100.0)
-        dbHelper.flushAndClear()
-
-        drugService.createPlan(alice.id, drug.id, qty(30.0))
-        dbHelper.flushAndClear()
-
-        assertThrows<TreatmentPlanAlreadyExists> {
-            drugService.createPlan(alice.id, drug.id, qty(20.0))
-        }
-    }
-
-    @Test
-    fun `createPlan refuses to reserve more than the stock`() {
-        val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
-        val drug = dbHelper.freshDrug(kit.id, 50.0)
-        dbHelper.flushAndClear()
-
-        assertThrows<PlannedAmountExceedsStock> {
-            drugService.createPlan(alice.id, drug.id, qty(100.0))
-        }
-    }
-
-    @Test
-    fun `changePlan updates the planned amount`() {
-        val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
-        val drug = dbHelper.freshDrug(kit.id, 100.0)
-        dbHelper.flushAndClear()
-
-        drugService.createPlan(alice.id, drug.id, qty(30.0))
-        dbHelper.flushAndClear()
-
-        assertQty(50.0, drugService.changePlan(alice.id, drug.id, qty(50.0)).plannedAmount)
-    }
-
-    @Test
-    fun `changePlan counts other participants but not itself`() {
-        val alice = dbHelper.freshUser("alice")
-        val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.create(alice.id)
-        medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
-        val drug = dbHelper.freshDrug(kit.id, 100.0)
-        dbHelper.flushAndClear()
-
-        drugService.createPlan(alice.id, drug.id, qty(50.0))
-        drugService.createPlan(bob.id, drug.id, qty(30.0))
-        dbHelper.flushAndClear()
-
-        // Своё прежнее значение Бобу не мешает: 100 - 50 Алисы = 50 доступно ему.
-        assertQty(50.0, drugService.changePlan(bob.id, drug.id, qty(50.0)).plannedAmount)
-        dbHelper.flushAndClear()
-
-        assertThrows<PlannedAmountExceedsStock> {
-            drugService.changePlan(bob.id, drug.id, qty(60.0))
-        }
-    }
-
-    @Test
-    fun `cancelPlan removes the plan`() {
-        val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
-        val drug = dbHelper.freshDrug(kit.id, 100.0)
-        dbHelper.flushAndClear()
-
-        drugService.createPlan(alice.id, drug.id, qty(30.0))
-        dbHelper.flushAndClear()
-
-        drugService.cancelPlan(alice.id, drug.id)
-        dbHelper.flushAndClear()
-
-        assertNull(dbHelper.userPlan(alice.id, drug.id))
-    }
-
-    // ── Приём ────────────────────────────────────────────────────────────────────
-
-    @Test
-    fun `recordIntake reduces both the stock and the plan`() {
-        val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
-        val drug = dbHelper.freshDrug(kit.id, 100.0)
-        dbHelper.flushAndClear()
-
-        drugService.createPlan(alice.id, drug.id, qty(30.0))
-        dbHelper.flushAndClear()
-
-        val remaining = drugService.recordIntake(alice.id, drug.id, qty(10.0))
-
-        assertNotNull(remaining)
-        assertQty(20.0, remaining.plannedAmount)
-        assertQty(90.0, dbHelper.requireDrug(drug.id).quantity)
-    }
-
-    @Test
-    fun `recordIntake refuses more than the plan holds`() {
-        val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
-        val drug = dbHelper.freshDrug(kit.id, 100.0)
-        dbHelper.flushAndClear()
-
-        drugService.createPlan(alice.id, drug.id, qty(10.0))
-        dbHelper.flushAndClear()
-
-        assertThrows<IntakeExceedsPlan> {
-            drugService.recordIntake(alice.id, drug.id, qty(15.0))
-        }
-    }
-
-    @Test
-    fun `recordIntake exhausting the plan removes it`() {
-        val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
-        val drug = dbHelper.freshDrug(kit.id, 20.0)
-        dbHelper.flushAndClear()
-
-        drugService.createPlan(alice.id, drug.id, qty(10.0))
-        dbHelper.flushAndClear()
-
-        val remaining = drugService.recordIntake(alice.id, drug.id, qty(10.0))
-        dbHelper.flushAndClear()
-
-        assertNull(remaining)
-        assertNull(dbHelper.userPlan(alice.id, drug.id))
-        assertQty(10.0, dbHelper.drugQuantity(drug.id)!!)
+        assertQty(25.0, dto.reservedQuantity)
     }
 }

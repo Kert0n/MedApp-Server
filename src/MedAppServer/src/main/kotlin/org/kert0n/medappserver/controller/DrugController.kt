@@ -19,6 +19,7 @@ import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.CatalogueService
 import org.kert0n.medappserver.services.models.userId
+import org.kert0n.medappserver.services.orchestrators.DrugViewOrchestrator
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
@@ -33,6 +34,7 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBod
 @Tag(name = "Drugs", description = "Drugs stored in medicine kits")
 class DrugController(
     private val drugService: DrugService,
+    private val drugViews: DrugViewOrchestrator,
     private val medKitDrugOrchestrator: MedKitDrugOrchestrator
 ) {
 
@@ -46,7 +48,7 @@ class DrugController(
         @Parameter(description = "Drug identifier") @PathVariable drugId: UUID
     ): DrugDTO {
         logger.debug("GET /v1/drugs/{} by user {}", drugId, authentication.userId)
-        return drugService.require(drugId, authentication.userId).toDto()
+        return drugViews.view(drugId, authentication.userId)
     }
 
     /**
@@ -67,7 +69,7 @@ class DrugController(
     ): DrugDTO {
         logger.debug("POST /v1/med-kits/{}/drugs by user {}", medKitId, authentication.userId)
         val created = medKitDrugOrchestrator.createDrugInMedKit(medKitId, request, authentication.userId)
-        return drugService.require(created.id, authentication.userId).toDto()
+        return drugViews.view(created.id, authentication.userId)
     }
 
     /** PATCH, а не PUT: тело описывает изменение части полей, а не препарат целиком. */
@@ -83,7 +85,7 @@ class DrugController(
     ): DrugDTO {
         logger.debug("PATCH /v1/drugs/{} by user {}", drugId, authentication.userId)
         drugService.update(drugId, request, authentication.userId)
-        return drugService.require(drugId, authentication.userId).toDto()
+        return drugViews.view(drugId, authentication.userId)
     }
 
     @DeleteMapping("/drugs/{drugId}")
@@ -114,9 +116,9 @@ class DrugController(
         @Valid @RequestBody request: ConsumptionRequest
     ): DrugDTO? {
         logger.debug("POST /v1/drugs/{}/consumptions by user {}", drugId, authentication.userId)
-        // null означает, что препарат кончился и удалён этим списанием.
+        // null означает, что пачка кончилась и уничтожена этим списанием.
         drugService.consume(drugId, request.quantity, authentication.userId) ?: return null
-        return drugService.find(drugId, authentication.userId)?.toDto()
+        return drugViews.view(drugId, authentication.userId)
     }
 
     /**
@@ -133,7 +135,7 @@ class DrugController(
     ): DrugDTO {
         logger.debug("PUT /v1/med-kits/{}/drugs/{} by user {}", targetMedKitId, drugId, authentication.userId)
         medKitDrugOrchestrator.moveDrug(drugId, targetMedKitId, authentication.userId)
-        return drugService.require(drugId, authentication.userId).toDto()
+        return drugViews.view(drugId, authentication.userId)
     }
 }
 
