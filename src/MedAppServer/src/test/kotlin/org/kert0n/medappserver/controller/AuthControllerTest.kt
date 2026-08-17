@@ -1,10 +1,11 @@
 package org.kert0n.medappserver.controller
 
+import java.util.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.domain.User
-import org.kert0n.medappserver.services.security.AuthenticatedUserService
 import org.kert0n.medappserver.services.models.UserService
+import org.kert0n.medappserver.services.security.AuthenticatedUserService
 import org.kert0n.medappserver.services.security.SecurityService
 import org.kert0n.medappserver.testutil.ApiRoutes
 import org.mockito.kotlin.any
@@ -24,7 +25,6 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.*
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
-import java.util.*
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")

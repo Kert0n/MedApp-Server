@@ -53,8 +53,6 @@ interface TreatmentPlanRepository : JpaRepository<TreatmentPlanData, TreatmentPl
     )
     fun findPlan(@Param("userId") userId: UUID, @Param("drugId") drugId: UUID): TreatmentPlanRow?
 
-    fun findAllByPlanKeyDrugId(drugId: UUID): List<TreatmentPlanData>
-
     /**
      * Массовое удаление планов участника внутри аптечки — путь выхода из неё.
      *

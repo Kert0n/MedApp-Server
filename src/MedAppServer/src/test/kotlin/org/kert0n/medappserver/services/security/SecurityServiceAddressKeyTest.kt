@@ -1,13 +1,13 @@
 package org.kert0n.medappserver.services.security
 
 import com.sksamuel.aedile.core.Cache
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 /**
  * ARCHITECTURE.md and the README state that client addresses are only ever held in the

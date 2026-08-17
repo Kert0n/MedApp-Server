@@ -1,6 +1,5 @@
 package org.kert0n.medappserver.db.store
 
-import java.math.BigDecimal
 import java.util.UUID
 import org.kert0n.medappserver.db.model.DrugData
 import org.kert0n.medappserver.db.model.MedKitData
@@ -9,8 +8,8 @@ import org.kert0n.medappserver.db.model.parsed.FormTypeData
 import org.kert0n.medappserver.db.model.parsed.QuantityUnitData
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.FormTypeRepository
-import org.kert0n.medappserver.db.repository.QuantityUnitRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
+import org.kert0n.medappserver.db.repository.QuantityUnitRepository
 import org.kert0n.medappserver.db.repository.TreatmentPlanRepository
 import org.kert0n.medappserver.db.repository.TreatmentPlanRow
 import org.kert0n.medappserver.db.repository.UserRepository
@@ -57,9 +56,6 @@ class DrugStore(
 
     fun findPlan(userId: UUID, drugId: UUID): TreatmentPlan? = plans.findPlan(userId, drugId)?.toDomain()
 
-    private fun TreatmentPlanRow.toDomain() =
-        TreatmentPlan(userId, drugId, Quantity(plannedAmount, QuantityUnit(unitId, unitName)))
-
     // ── Команды ──────────────────────────────────────────────────────────────────
 
     /** Загрузка под блокировкой строки: с неё начинается любая команда над препаратом. */
@@ -95,6 +91,10 @@ class DrugStore(
     fun deletePlansOfUserInMedKit(userId: UUID, medKitId: UUID) {
         plans.deleteByUserIdAndMedKitId(userId, medKitId)
     }
+
+    /** Строка плана несёт единицу своего препарата — из неё и собирается величина. */
+    private fun TreatmentPlanRow.toDomain() =
+        TreatmentPlan(userId, drugId, Quantity(plannedAmount, QuantityUnit(unitId, unitName)))
 
     private fun managed(drugId: UUID): DrugData =
         drugs.findByIdOrNull(drugId) ?: error("Drug $drugId disappeared while it was locked")

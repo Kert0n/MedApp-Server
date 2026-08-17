@@ -1,19 +1,19 @@
 package org.kert0n.medappserver.integration
 
-import org.kert0n.medappserver.PostgresIntegrationTest
 import jakarta.persistence.EntityManager
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.kert0n.medappserver.db.model.parsed.FormTypeData
+import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.db.model.parsed.DrugTemplateData
+import org.kert0n.medappserver.db.model.parsed.FormTypeData
 import org.kert0n.medappserver.db.repository.VidalDrugRepository
 import org.kert0n.medappserver.services.models.CatalogueService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.support.TransactionTemplate
-import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertTrue
 
 /**
  * Integration tests for DrugTemplateData fuzzy search.

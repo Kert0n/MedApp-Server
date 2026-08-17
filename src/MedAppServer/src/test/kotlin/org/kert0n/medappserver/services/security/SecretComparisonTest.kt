@@ -1,11 +1,11 @@
 package org.kert0n.medappserver.services.security
 
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 /**
  * The registration secret used to be compared with `!=`, which stops at the first differing

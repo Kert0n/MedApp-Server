@@ -1,10 +1,10 @@
 package org.kert0n.medappserver
 
-import org.junit.jupiter.api.Test
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import org.junit.jupiter.api.Test
 
 /**
  * Схема — контракт создания с нуля, а не история изменений.

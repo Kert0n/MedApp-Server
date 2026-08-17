@@ -77,6 +77,16 @@ class DatabaseTestHelper(
         entityManager.clear()
     }
 
+    /**
+     * Препарат без проверки доступа.
+     *
+     * В приложении такого чтения нет — там доступ проверяется всегда; тесту же нужно
+     * убедиться, что строки не стало, безотносительно того, кто спрашивает.
+     */
+    fun drug(id: UUID): Drug? = drugs.findById(id)
+
+    fun requireDrug(id: UUID): Drug = drug(id) ?: error("Препарат $id не найден")
+
     // Проверки, существенные для privacy-by-default: `null` означает, что записи больше нет.
     fun drugQuantity(id: UUID): BigDecimal? = drugs.findById(id)?.quantity?.amount
     fun totalPlanned(id: UUID): BigDecimal? = drugs.findById(id)?.plannedTotal?.amount

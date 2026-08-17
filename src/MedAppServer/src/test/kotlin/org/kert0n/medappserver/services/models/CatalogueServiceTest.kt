@@ -1,14 +1,14 @@
 package org.kert0n.medappserver.services.models
 
-import org.junit.jupiter.api.Test
-import org.kert0n.medappserver.domain.DrugTemplate
-import org.kert0n.medappserver.db.store.CatalogueStore
-import org.mockito.kotlin.*
 import java.util.*
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import org.junit.jupiter.api.Test
+import org.kert0n.medappserver.db.store.CatalogueStore
+import org.kert0n.medappserver.domain.DrugTemplate
+import org.mockito.kotlin.*
 
 class CatalogueServiceTest {
 

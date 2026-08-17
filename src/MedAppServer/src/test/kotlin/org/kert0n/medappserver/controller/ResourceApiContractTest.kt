@@ -1,7 +1,6 @@
 package org.kert0n.medappserver.controller
 
-import org.kert0n.medappserver.domain.Quantity
-import org.kert0n.medappserver.domain.QuantityUnit
+import java.util.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.api.DrugCreateRequest
@@ -10,13 +9,15 @@ import org.kert0n.medappserver.api.MembershipCreateRequest
 import org.kert0n.medappserver.api.TreatmentPlanCreateRequest
 import org.kert0n.medappserver.api.TreatmentPlanPatchRequest
 import org.kert0n.medappserver.domain.Drug
-import org.kert0n.medappserver.domain.TreatmentPlan
 import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.MedKitOverview
+import org.kert0n.medappserver.domain.Quantity
+import org.kert0n.medappserver.domain.QuantityUnit
+import org.kert0n.medappserver.domain.TreatmentPlan
+import org.kert0n.medappserver.services.models.CatalogueService
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.TreatmentPlanService
-import org.kert0n.medappserver.services.models.CatalogueService
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
 import org.kert0n.medappserver.testutil.ApiRoutes
 import org.kert0n.medappserver.testutil.qty
@@ -38,7 +39,6 @@ import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
 import tools.jackson.databind.ObjectMapper
-import java.util.*
 
 /**
  * Опубликованная поверхность API.

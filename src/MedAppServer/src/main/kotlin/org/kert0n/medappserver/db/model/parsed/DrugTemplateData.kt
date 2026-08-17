@@ -3,8 +3,8 @@ package org.kert0n.medappserver.db.model.parsed
 import jakarta.persistence.*
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
-import org.hibernate.annotations.GeneratedColumn
 import java.util.*
+import org.hibernate.annotations.GeneratedColumn
 
 /**
  * Каталог препаратов, по которому ищет приложение.

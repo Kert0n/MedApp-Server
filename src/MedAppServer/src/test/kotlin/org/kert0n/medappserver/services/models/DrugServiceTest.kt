@@ -1,7 +1,5 @@
 package org.kert0n.medappserver.services.models
 
-import org.kert0n.medappserver.domain.Quantity
-import org.kert0n.medappserver.api.toDto
 import java.util.*
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -10,12 +8,15 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.api.DrugPatchRequest
+import org.kert0n.medappserver.api.toDto
+import org.kert0n.medappserver.db.repository.DrugRepository
+import org.kert0n.medappserver.domain.DomainRuleViolated
 import org.kert0n.medappserver.domain.InsufficientStock
-import org.kert0n.medappserver.domain.InvalidQuantity
 import org.kert0n.medappserver.domain.IntakeExceedsPlan
+import org.kert0n.medappserver.domain.InvalidQuantity
+import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.PlannedAmountExceedsStock
 import org.kert0n.medappserver.domain.TreatmentPlanAlreadyExists
-import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -23,7 +24,6 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.transaction.annotation.Transactional
-import org.kert0n.medappserver.domain.DomainRuleViolated
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -44,10 +44,10 @@ class DrugServiceTest {
     // ── findById ──
 
     @Test
-    fun `findById throws NOT_FOUND for non-existent drug`() {
-        assertThrows<DomainRuleViolated> {
-            drugService.requireById(UUID.randomUUID())
-        }
+    fun `несуществующий препарат неотличим от недоступного`() {
+        val alice = dbHelper.freshUser("alice")
+
+        assertThrows<NotAMember> { drugService.require(UUID.randomUUID(), alice.id) }
     }
 
     // ── findByIdForUser / findByIdForUserForUpdate ──
@@ -138,7 +138,7 @@ class DrugServiceTest {
         drugService.update(drug.id, emptyUpdate, alice.id)
         dbHelper.flushAndClear()
 
-        assertQty(10.0, drugService.requireById(drug.id).quantity)
+        assertQty(10.0, dbHelper.requireDrug(drug.id).quantity)
     }
 
     @Test
@@ -155,7 +155,7 @@ class DrugServiceTest {
         drugService.update(drug.id, fullUpdate, alice.id)
         dbHelper.flushAndClear()
 
-        val updated = drugService.requireById(drug.id)
+        val updated = dbHelper.requireDrug(drug.id)
         assertEquals("New Name", updated.name)
         assertQty(100.0, updated.quantity)
         assertEquals("cat", updated.category)
@@ -225,9 +225,7 @@ class DrugServiceTest {
         drugService.delete(drug.id, alice.id)
         dbHelper.flushAndClear()
 
-        assertThrows<DomainRuleViolated> {
-            drugService.requireById(drug.id)
-        }
+        assertNull(dbHelper.drug(drug.id))
     }
 
     // ── consumeDrug ──
@@ -386,7 +384,7 @@ class DrugServiceTest {
 
         assertNotNull(remaining)
         assertQty(20.0, remaining.plannedAmount)
-        assertQty(90.0, drugService.requireById(drug.id).quantity)
+        assertQty(90.0, dbHelper.requireDrug(drug.id).quantity)
     }
 
     @Test

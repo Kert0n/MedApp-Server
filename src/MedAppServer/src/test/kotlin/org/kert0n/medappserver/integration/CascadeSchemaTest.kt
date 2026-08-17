@@ -1,10 +1,10 @@
 package org.kert0n.medappserver.integration
 
+import kotlin.test.assertEquals
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.jdbc.core.JdbcTemplate
-import kotlin.test.assertEquals
 
 /**
  * Каскады проверяются в самой базе, а не только через JPA: bulk-удаление и удаление вне

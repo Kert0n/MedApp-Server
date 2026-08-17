@@ -7,9 +7,9 @@ import org.kert0n.medappserver.api.DrugPatchRequest
 import org.kert0n.medappserver.db.store.DrugStore
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.DrugDetails
-import org.kert0n.medappserver.domain.TreatmentPlan
 import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.Quantity
+import org.kert0n.medappserver.domain.TreatmentPlan
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -18,7 +18,7 @@ import org.springframework.transaction.annotation.Transactional
  * Единственный вход к агрегату препарата — вместе с его планами лечения.
  *
  * Каждая команда устроена одинаково: взять состояние под блокировкой, вызвать метод домена,
- * отдать результат хранилищу. Правил здесь нет — они в `domain.drug.Drug`; строк и запросов
+ * отдать результат хранилищу. Правил здесь нет — они в `domain.Drug`; строк и запросов
  * тоже нет — они за `DrugStore`.
  */
 @Service
@@ -54,12 +54,6 @@ class DrugService(
         logger.debug("Reading all drugs available to user {}", userId)
         return drugs.findAllAccessibleTo(userId)
     }
-
-    @Transactional(readOnly = true)
-    fun findById(drugId: UUID): Drug? = drugs.findById(drugId)
-
-    @Transactional(readOnly = true)
-    fun requireById(drugId: UUID): Drug = findById(drugId) ?: throw notFound()
 
     /**
      * Недоступный препарат и несуществующий отвечают одинаково: иначе по коду ответа можно

@@ -1,10 +1,10 @@
 package org.kert0n.medappserver.testutil
 
-import org.kert0n.medappserver.domain.QUANTITY_ROUNDING
-import org.kert0n.medappserver.domain.QUANTITY_SCALE
 import java.math.BigDecimal
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import org.kert0n.medappserver.domain.QUANTITY_ROUNDING
+import org.kert0n.medappserver.domain.QUANTITY_SCALE
 
 /**
  * Количество из литерала теста. Через [BigDecimal.valueOf], а не через конструктор: `BigDecimal(0.1)`

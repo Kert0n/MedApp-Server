@@ -1,7 +1,5 @@
 package org.kert0n.medappserver.services.orchestrators
 
-import org.kert0n.medappserver.domain.Quantity
-import org.kert0n.medappserver.db.store.MedKitStore
 import java.util.*
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -11,8 +9,8 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertDoesNotThrow
 import org.junit.jupiter.api.assertThrows
 import org.kert0n.medappserver.api.DrugCreateRequest
-import org.kert0n.medappserver.db.repository.DrugRepository
-import org.kert0n.medappserver.db.repository.MedKitRepository
+import org.kert0n.medappserver.db.store.MedKitStore
+import org.kert0n.medappserver.domain.DomainRuleViolated
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.models.TreatmentPlanService
@@ -22,7 +20,6 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.transaction.annotation.Transactional
-import org.kert0n.medappserver.domain.DomainRuleViolated
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -42,8 +39,6 @@ class MedKitDrugOrchestratorTest {
     private lateinit var medKitService: MedKitService
     @Autowired
     private lateinit var treatmentPlanService: TreatmentPlanService
-    @Autowired
-    private lateinit var drugRepository: DrugRepository
     @Autowired
     private lateinit var dbHelper: DatabaseTestHelper
 
@@ -134,7 +129,7 @@ class MedKitDrugOrchestratorTest {
             medKitDrugOrchestrator.moveDrug(drug.id, kitB.id, bob.id)
         }
 
-        assertEquals(kitB.id, drugService.requireById(drug.id).medKitId)
+        assertEquals(kitB.id, dbHelper.requireDrug(drug.id).medKitId)
     }
 
     @Test
@@ -203,7 +198,7 @@ class MedKitDrugOrchestratorTest {
         dbHelper.flushAndClear()
 
         assertNull(medKitStore.findById(kitA.id))
-        val survivingDrug = drugService.findById(drug.id)
+        val survivingDrug = dbHelper.drug(drug.id)
         assertNotNull(survivingDrug)
         assertEquals(kitB.id, survivingDrug.medKitId)
     }

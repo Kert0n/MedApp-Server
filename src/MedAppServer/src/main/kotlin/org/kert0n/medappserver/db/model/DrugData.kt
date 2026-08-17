@@ -3,17 +3,17 @@ package org.kert0n.medappserver.db.model
 import jakarta.persistence.*
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
-import org.kert0n.medappserver.domain.QUANTITY_PRECISION
-import org.kert0n.medappserver.domain.QUANTITY_SCALE
-import org.kert0n.medappserver.db.model.parsed.FormTypeData
-import org.kert0n.medappserver.db.model.parsed.QuantityUnitData
 import java.math.BigDecimal
 import java.util.*
+import org.kert0n.medappserver.db.model.parsed.FormTypeData
+import org.kert0n.medappserver.db.model.parsed.QuantityUnitData
+import org.kert0n.medappserver.domain.QUANTITY_PRECISION
+import org.kert0n.medappserver.domain.QUANTITY_SCALE
 
 /**
  * Отображение препарата на таблицу `user_drugs`. Правил здесь нет.
  *
- * Всё, что препарат решает, решает `domain.drug.Drug`; сюда состояние переносится
+ * Всё, что препарат решает, решает `domain.Drug`; сюда состояние переносится
  * маппером, а SQL из этого делает Hibernate. Поэтому `var` у свойств никого не смущает:
  * этот класс существует ровно затем, чтобы его поля заполняли снаружи.
  */
@@ -35,13 +35,17 @@ class DrugData(
     @Column(name = "name", nullable = false, length = 300)
     var name: String,
 
-    quantity: BigDecimal,
+    @NotNull
+    @Column(name = "quantity", nullable = false, precision = QUANTITY_PRECISION, scale = QUANTITY_SCALE)
+    var quantity: BigDecimal,
 
     /**
      * Единица измерения — строка общего справочника, а не свободный текст.
      *
-     * `EAGER`: единица нужна всегда, потому что без неё количество не имеет смысла. Читающие
-     * запросы забирают её `JOIN FETCH`, иначе список препаратов дал бы запрос на строку.
+     * `EAGER`: единица нужна всегда, потому что без неё количество не имеет смысла. При
+     * загрузке сущности Hibernate забирает её тем же запросом; отдельный SELECT остаётся
+     * только у команд, которые берут строку под блокировкой — там fetch join несовместим с
+     * `FOR UPDATE`.
      */
     @NotNull
     @ManyToOne(fetch = FetchType.EAGER)
@@ -97,16 +101,6 @@ class DrugData(
     var treatmentPlans: MutableSet<TreatmentPlanData> = mutableSetOf()
 
 ) {
-
-    /**
-     * Остаток препарата.
-     *
-     * Нормализующего сеттера здесь больше нет: масштаб — забота `domain.Quantity`, которая
-     * не бывает ненормализованной, а сюда значение приходит уже приведённым.
-     */
-    @NotNull
-    @Column(name = "quantity", nullable = false, precision = QUANTITY_PRECISION, scale = QUANTITY_SCALE)
-    var quantity: BigDecimal = quantity
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true

@@ -40,9 +40,7 @@ data class Drug(
 
     /** Сколько препарата разобрано планами. */
     val plannedTotal: Quantity
-        get() = plans.fold(Quantity(java.math.BigDecimal.ZERO, quantity.unit)) { sum, plan ->
-            sum + plan.plannedAmount
-        }
+        get() = plans.fold(quantity.zero()) { sum, plan -> sum + plan.plannedAmount }
 
     /** Остаток, не занятый ни одним планом. */
     val availableQuantity: Quantity
@@ -82,14 +80,6 @@ data class Drug(
         requirePlanOf(userId)
         return copy(plans = plans.filterNot { it.userId == userId })
     }
-
-    /**
-     * Убирает план пользователя, если он есть.
-     *
-     * Отличается от [cancelPlan] тем, что отсутствие плана здесь не ошибка: это не решение
-     * владельца плана, а следствие того, что доступ к препарату пропал.
-     */
-    fun revokePlanOf(userId: UUID): Drug = copy(plans = plans.filterNot { it.userId == userId })
 
     // ── Остаток ──────────────────────────────────────────────────────────────────
 

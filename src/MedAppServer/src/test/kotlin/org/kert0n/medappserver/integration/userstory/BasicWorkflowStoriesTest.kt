@@ -1,10 +1,5 @@
 package org.kert0n.medappserver.integration.userstory
 
-import org.kert0n.medappserver.domain.Quantity
-import org.kert0n.medappserver.testutil.DatabaseTestHelper
-import org.kert0n.medappserver.db.store.MedKitStore
-import org.kert0n.medappserver.domain.Drug
-import org.kert0n.medappserver.domain.User
 import jakarta.persistence.EntityManager
 import java.util.*
 import kotlin.test.assertEquals
@@ -13,14 +8,14 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
-import org.kert0n.medappserver.db.model.DrugData
-import org.kert0n.medappserver.db.model.UserData
-import org.kert0n.medappserver.db.repository.DrugRepository
-import org.kert0n.medappserver.db.repository.MedKitRepository
-import org.kert0n.medappserver.db.repository.UserRepository
+import org.kert0n.medappserver.db.store.MedKitStore
+import org.kert0n.medappserver.domain.Drug
+import org.kert0n.medappserver.domain.Quantity
+import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.models.DrugService
 import org.kert0n.medappserver.services.models.MedKitService
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
+import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
@@ -39,9 +34,6 @@ class BasicWorkflowStoriesTest {
 
     private lateinit var dbHelper: DatabaseTestHelper
 
-
-    @Autowired
-    private lateinit var drugRepository: DrugRepository
 
     @Autowired
     private lateinit var entityManager: EntityManager
@@ -106,11 +98,11 @@ class BasicWorkflowStoriesTest {
         entityManager.clear()
 
         // Check inventory
-        val updatedAspirin = drugService.findById(aspirin.id)
+        val updatedAspirin = dbHelper.drug(aspirin.id)
         assertNotNull(updatedAspirin)
         assertQty(98.0, updatedAspirin.quantity, "Should have 98 tablets left")
 
-        val drugs = drugRepository.findAllByMedKitId(homeMedkit.id)
+        val drugs = drugService.ofMedKit(homeMedkit.id)
         assertEquals(2, drugs.size, "Should have 2 drugs in medkit")
 
         println("✅ Story 1 passed: Anna successfully created medkit and managed drugs")
@@ -215,7 +207,7 @@ class BasicWorkflowStoriesTest {
         assertTrue(updatedMedkit.members.contains(anna.id))
 
         // Drug still exists
-        val remainingDrug = drugService.findById(drugData.id)
+        val remainingDrug = dbHelper.drug(drugData.id)
         assertNotNull(remainingDrug, "Drug should still exist")
 
         println("✅ Story 3 passed: Bob left medkit, cleanup successful")
@@ -271,7 +263,7 @@ class BasicWorkflowStoriesTest {
         entityManager.clear()
 
         // Verify migration
-        val drugsInNew = drugRepository.findAllByMedKitId(newMedkit.id)
+        val drugsInNew = drugService.ofMedKit(newMedkit.id)
         assertEquals(2, drugsInNew.size, "All drugs should be in new medkit")
         val drugNames = drugsInNew.map { drug -> drug.name }
         assertTrue(drugNames.contains("Drug A"))
@@ -319,7 +311,7 @@ class BasicWorkflowStoriesTest {
         entityManager.clear()
 
         // Drug quantity should be exactly zero
-        val updatedDrug = drugService.findById(drugData.id)
+        val updatedDrug = dbHelper.drug(drugData.id)
         // Must be deleted
         assertNull(updatedDrug)
 

@@ -1,10 +1,10 @@
 package org.kert0n.medappserver.db.repository
 
+import java.util.*
 import org.kert0n.medappserver.db.model.parsed.DrugTemplateData
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
-import java.util.*
 
 interface VidalDrugRepository : JpaRepository<DrugTemplateData, UUID> {
 

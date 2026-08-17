@@ -1,9 +1,10 @@
 package org.kert0n.medappserver.integration
 
-import org.kert0n.medappserver.testutil.ApiRoutes
+import java.util.UUID
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.services.models.CatalogueService
+import org.kert0n.medappserver.testutil.ApiRoutes
 import org.mockito.kotlin.any
 import org.mockito.kotlin.whenever
 import org.springframework.beans.factory.annotation.Autowired
@@ -20,7 +21,6 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
-import java.util.UUID
 
 /**
  * Bounds on what a single authenticated request can ask for.

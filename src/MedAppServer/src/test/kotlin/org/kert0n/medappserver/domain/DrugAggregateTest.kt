@@ -1,14 +1,13 @@
 package org.kert0n.medappserver.domain
 
-import org.kert0n.medappserver.domain.Quantity
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
+import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
 
@@ -142,11 +141,8 @@ class DrugAggregateTest {
     }
 
     @Test
-    fun `отмена несуществующего плана — ошибка, отзыв — нет`() {
-        val drug = drug(100.0)
-
-        assertFailsWith<NoSuchTreatmentPlan> { drug.cancelPlan(alice) }
-        assertEquals(drug, drug.revokePlanOf(alice))
+    fun `отмена несуществующего плана — ошибка`() {
+        assertFailsWith<NoSuchTreatmentPlan> { drug(100.0).cancelPlan(alice) }
     }
 
     // ── Приём ────────────────────────────────────────────────────────────────────

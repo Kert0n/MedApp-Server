@@ -1,11 +1,11 @@
 package org.kert0n.medappserver.services.security
 
-import org.junit.jupiter.api.Test
-import org.springframework.mock.env.MockEnvironment
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
+import org.junit.jupiter.api.Test
+import org.springframework.mock.env.MockEnvironment
 
 /**
  * Прод не должен подниматься с секретом-заглушкой из git.

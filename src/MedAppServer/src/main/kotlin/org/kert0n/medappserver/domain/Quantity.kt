@@ -39,6 +39,9 @@ class Quantity(amount: BigDecimal, val unit: QuantityUnit) : Comparable<Quantity
 
     val isPositive: Boolean get() = amount.signum() > 0
 
+    /** Ноль в той же единице: с него начинается сложение величин. */
+    fun zero(): Quantity = Quantity(BigDecimal.ZERO, unit)
+
     operator fun plus(other: Quantity): Quantity = Quantity(amount + sameUnit(other), unit)
 
     operator fun minus(other: Quantity): Quantity = Quantity(amount - sameUnit(other), unit)
