@@ -383,4 +383,47 @@ class ConcurrencyTest {
         assertNull(medKits.findById(kit.id), "аптечки нет")
         assertEquals(emptyList(), medKits.findAllOfUser(bob.id), "и членства в ней тоже")
     }
+
+    // ── Массовый перенос ─────────────────────────────────────────────────────────
+
+    /**
+     * Удаление аптечки с переносом держит состав целевой так же, как поштучный переезд.
+     *
+     * Отдельный тест, а не повторение предыдущего: между заявкой на состав и коммитом здесь
+     * стоит массовый `UPDATE` с `clearAutomatically`, который чистит persistence context. Живёт
+     * ли зарегистрированная проверка версии после очистки — вопрос к Hibernate, и отвечать на
+     * него надо замером, а не чтением документации по памяти.
+     */
+    @Test
+    fun `удаление с переносом против выхода из целевой аптечки отклоняется`() {
+        val alice = dbHelper.freshUser("alice")
+        val bob = dbHelper.freshUser("bob")
+        val source = medKitService.create(alice.id)
+        medKitService.join(source.id, bob.id)
+        val target = medKitService.create(alice.id)
+        medKitService.join(target.id, bob.id)
+
+        val drug = dbHelper.freshDrug(source.id, 100.0)
+        reservationService.create(bob.id, drug.id, qty(20.0))
+        val sourceVersion = dbHelper.medKitVersion(source.id)
+
+        val failure = interleaved.lostUpdate(
+            read = {
+                val kit = medKits.findById(target.id)!!
+                medKits.requireUnchanged(kit)
+                kit
+            },
+            meanwhile = { orchestrator.leaveMedKit(target.id, bob.id, dbHelper.medKitVersion(target.id)) },
+            write = { stale ->
+                reservations.deleteInMedKitExcept(source.id, stale.members)
+                drugs.moveAllToMedKit(source.id, stale.id)
+                medKits.requireUnchanged(stale)
+                medKitService.delete(source.id, alice.id, sourceVersion)
+            }
+        )
+
+        assertNotNull(failure, "перенос по устаревшему составу обязан быть отклонён")
+        assertEquals(source.id, dbHelper.requireDrug(drug.id).medKitId, "пачка осталась в исходной")
+        assertNotNull(dbHelper.userReservation(bob.id, drug.id), "бронь Боба цела")
+    }
 }

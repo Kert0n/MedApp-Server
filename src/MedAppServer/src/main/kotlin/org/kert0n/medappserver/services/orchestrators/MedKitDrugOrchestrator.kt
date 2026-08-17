@@ -110,6 +110,12 @@ class MedKitDrugOrchestrator(
      * Без переноса содержимое уходит каскадом. С переносом действует то же правило, что при
      * переезде одной пачки, но двумя запросами: аптечка со ста пачками не должна стоить ста
      * загрузок.
+     *
+     * Состав целевой аптечки требуется дважды, и это не перестраховка. **Замерено:** массовый
+     * `UPDATE` с `clearAutomatically` очищает persistence context и уносит вместе с ним
+     * зарегистрированную проверку версии — снял из сценария один этот запрос, и та же гонка
+     * стала отвергаться. Поэтому состав перепроверяется после него, уже по свежему чтению;
+     * держится это на том, что `requireUnchanged` сравнивает версию со снимком явно.
      */
     @Transactional
     fun delete(medKitId: UUID, userId: UUID, expectedVersion: Long, transferToMedKitId: UUID? = null) {
@@ -123,6 +129,7 @@ class MedKitDrugOrchestrator(
             // Порядок важен: брони выбираются по исходной аптечке, пока упаковки ещё в ней.
             reservations.deleteInMedKitExcept(medKitId, target.members)
             drugs.moveAllToMedKit(medKitId, target.id)
+            medKits.requireUnchanged(target)
         }
 
         medKitService.delete(medKitId, userId, expectedVersion)
