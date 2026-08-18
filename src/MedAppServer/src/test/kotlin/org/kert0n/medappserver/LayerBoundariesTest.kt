@@ -90,4 +90,68 @@ class LayerBoundariesTest {
             "деление на «один агрегат» и «больше одного» — по свойству реализации, а не по сценарию"
         )
     }
+
+    /**
+     * Фасад одного ресурса не может быть подпрограммой другого.
+     *
+     * Так и вышло в прошлый раз: сценарий понадобился двум входам, и один фасад позвал другой.
+     * Признак неустойчивой границы — общее должно уезжать вниз, к оркестратору или к самому
+     * агрегату, а не расти вбок.
+     */
+    @Test
+    fun `фасады не зовут друг друга`() {
+        val facades = sources.filter { it.parent.name == "application" }
+        assertTrue(facades.isNotEmpty(), "прикладных сервисов не найдено — тест смотрит не туда")
+
+        facades.forEach { file ->
+            val foreign = Regex("^import org\\.kert0n\\.medappserver\\.services\\.application\\.(\\w+)", RegexOption.MULTILINE)
+                .findAll(Files.readString(file))
+                .map { it.groupValues[1] }
+                .toList()
+
+            assertEquals(emptyList(), foreign, "${file.name} зовёт чужой прикладной сервис: $foreign")
+        }
+    }
+
+    /**
+     * Оркестратор про клиента не знает.
+     *
+     * Знание о клиенте стекается в прикладной слой, и **поэтому** за его толщиной следят особо.
+     * Если позволить ему протечь ниже, кандидат в боги просто сменит имя.
+     */
+    @Test
+    fun `оркестратор не знает про контракт`() {
+        val orchestrators = sources.filter { it.parent.name == "orchestrator" }
+        assertTrue(orchestrators.isNotEmpty(), "оркестраторов не найдено — тест смотрит не туда")
+
+        orchestrators.forEach { file ->
+            assertTrue(
+                !Regex("^import org\\.kert0n\\.medappserver\\.api\\.", RegexOption.MULTILINE)
+                    .containsMatchIn(Files.readString(file)),
+                "${file.name} импортирует api: домен на входе, домен на выходе"
+            )
+        }
+    }
+
+    /**
+     * Транзакцией владеет фасад, всё ниже — её требует.
+     *
+     * Пока объявления стояли на обоих уровнях, границу открывал тот, кого позвали первым, и
+     * держалось это на `REQUIRED` по умолчанию.
+     */
+    @Test
+    fun `границу транзакции открывает только прикладной слой`() {
+        sources
+            .filter { it.parent.name == "aggregate" || it.parent.name == "orchestrator" }
+            .forEach { file ->
+                val owning = Regex("@Transactional(?!\\(propagation = MANDATORY)")
+                    .findAll(Files.readString(file))
+                    .count()
+
+                assertEquals(
+                    0, owning,
+                    "${file.name} открывает транзакцию: ниже фасада полагается propagation = MANDATORY"
+                )
+            }
+    }
 }
