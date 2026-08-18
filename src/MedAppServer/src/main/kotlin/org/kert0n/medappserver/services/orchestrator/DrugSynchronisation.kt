@@ -7,6 +7,7 @@ import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Propagation.MANDATORY
 import org.springframework.transaction.annotation.Transactional
 
 /**
@@ -33,7 +34,7 @@ class DrugSynchronisation(
      * Тогда бронь не трогается вовсе: применять её некуда, она ушла вместе с упаковкой. Это не
      * ошибка, а законный исход.
      */
-    @Transactional
+    @Transactional(propagation = MANDATORY)
     fun apply(
         drug: Drug,
         userId: UUID,

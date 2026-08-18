@@ -1,11 +1,13 @@
 package org.kert0n.medappserver.controller
 
 import org.kert0n.medappserver.domain.DomainRuleViolated
+import org.kert0n.medappserver.domain.InvalidRegistrationSecret
 import org.kert0n.medappserver.domain.NoSuchReservation
 import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.ConflictingSync
 import org.kert0n.medappserver.domain.ReservationAlreadyExists
 import org.kert0n.medappserver.domain.StaleSyncVersion
+import org.kert0n.medappserver.domain.TooManyRegistrations
 import org.kert0n.medappserver.domain.StaleAggregateVersion
 import org.springframework.http.HttpStatus
 import org.springframework.orm.ObjectOptimisticLockingFailureException
@@ -50,6 +52,9 @@ class ApiExceptionHandler {
             is StaleAggregateVersion -> HttpStatus.PRECONDITION_FAILED
             // Версии синхронизации приезжают телом, поэтому это конфликт, а не предусловие.
             is StaleSyncVersion -> HttpStatus.CONFLICT
+            // Секрет регистрации не совпал: отвечаем как на запрет, а не как на ошибку формы.
+            is InvalidRegistrationSecret -> HttpStatus.FORBIDDEN
+            is TooManyRegistrations -> HttpStatus.TOO_MANY_REQUESTS
             // Тот же идентификатор синхронизации с другим содержимым: одно из двух не то.
             is ConflictingSync -> HttpStatus.CONFLICT
             else -> HttpStatus.BAD_REQUEST

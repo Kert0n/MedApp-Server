@@ -5,6 +5,7 @@ import org.kert0n.medappserver.domain.Intake
 import org.kert0n.medappserver.db.store.IntakeStore
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Propagation.MANDATORY
 import org.springframework.transaction.annotation.Transactional
 
 /**
@@ -30,7 +31,7 @@ class IntakeService(private val journal: IntakeStore) {
      * Тот же идентификатор с другим содержимым запросом не является: одно из двух не то, и
      * решить, какое именно, может только клиент.
      */
-    @Transactional(readOnly = true)
+    @Transactional(propagation = MANDATORY, readOnly = true)
     fun alreadyApplied(intake: Intake): Boolean {
         val previous = journal.find(intake.id) ?: return false
         if (!intake.isRepeatOf(previous)) throw ConflictingSync()
@@ -39,6 +40,6 @@ class IntakeService(private val journal: IntakeStore) {
     }
 
     /** Отмечает выполненное. Запись появится только после коммита — этим занят сам журнал. */
-    @Transactional
+    @Transactional(propagation = MANDATORY)
     fun record(intake: Intake) = journal.record(intake)
 }

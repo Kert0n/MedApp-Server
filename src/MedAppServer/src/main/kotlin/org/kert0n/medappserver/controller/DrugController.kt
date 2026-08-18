@@ -18,7 +18,7 @@ import org.kert0n.medappserver.api.DrugPatchRequest
 import org.kert0n.medappserver.api.DrugTemplateDTO
 import org.kert0n.medappserver.api.VocabularyEntryDTO
 import org.kert0n.medappserver.api.toDto
-import org.kert0n.medappserver.services.aggregate.CatalogueService
+import org.kert0n.medappserver.services.application.CatalogueApplicationService
 import org.kert0n.medappserver.services.aggregate.userId
 import org.kert0n.medappserver.services.application.DrugApplicationService
 import org.slf4j.LoggerFactory
@@ -203,7 +203,7 @@ class DrugController(
 @RequestMapping("/v1/drug-templates")
 @Tag(name = "Drug catalogue", description = "Reference catalogue used when adding a drug")
 class DrugTemplateController(
-    private val catalogueService: CatalogueService
+    private val catalogue: CatalogueApplicationService
 ) {
 
     private val logger = LoggerFactory.getLogger(DrugTemplateController::class.java)
@@ -224,7 +224,7 @@ class DrugTemplateController(
         @RequestParam(defaultValue = "10") @Min(1) @Max(50) limit: Int
     ): List<DrugTemplateDTO> {
         logger.debug("GET /v1/drug-templates by user {}", authentication.userId)
-        return catalogueService.fuzzySearch(query, limit).map { it.toDto() }
+        return catalogue.search(query, limit)
     }
 
     @GetMapping("/{templateId}")
@@ -235,7 +235,7 @@ class DrugTemplateController(
         @Parameter(description = "Template identifier") @PathVariable templateId: UUID
     ): DrugTemplateDTO {
         logger.debug("GET /v1/drug-templates/{} by user {}", templateId, authentication.userId)
-        return catalogueService.find(templateId)?.toDto()
+        return catalogue.template(templateId)
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Drug template not found")
     }
 }
@@ -250,7 +250,7 @@ class DrugTemplateController(
 @RequestMapping("/v1")
 @Tag(name = "Vocabularies", description = "Shared quantity units and dosage forms")
 class VocabularyController(
-    private val catalogueService: CatalogueService
+    private val catalogue: CatalogueApplicationService
 ) {
 
     private val logger = LoggerFactory.getLogger(VocabularyController::class.java)
@@ -259,13 +259,13 @@ class VocabularyController(
     @ApiResponse(responseCode = "200", description = "Units returned")
     fun listQuantityUnits(authentication: Authentication): List<VocabularyEntryDTO> {
         logger.debug("GET /v1/quantity-units by user {}", authentication.userId)
-        return catalogueService.quantityUnits().map { it.toDto() }
+        return catalogue.quantityUnits()
     }
 
     @GetMapping("/form-types")
     @ApiResponse(responseCode = "200", description = "Dosage forms returned")
     fun listFormTypes(authentication: Authentication): List<VocabularyEntryDTO> {
         logger.debug("GET /v1/form-types by user {}", authentication.userId)
-        return catalogueService.formTypes().map { it.toDto() }
+        return catalogue.formTypes()
     }
 }

@@ -141,5 +141,7 @@ class DatabaseTestHelper(
     /** `null` — брони ещё нет, и предъявлять её версию нечем. */
     fun reservationVersionOrNull(userId: UUID, drugId: UUID): Long? = reservations.find(userId, drugId)?.version
 
+    fun medKit(medKitId: UUID): MedKit? = medKits.findById(medKitId)
+
     fun medKitVersion(medKitId: UUID): Long = medKits.findById(medKitId)?.version ?: error("Аптечки $medKitId нет")
 }

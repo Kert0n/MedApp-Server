@@ -168,7 +168,7 @@ class ConcurrencyTest {
      * успела записать, и `UPDATE ... WHERE version = 3` не задевает ни одной строки.
      */
     @Test
-    fun `откатившаяся синхронизация не остаётся в журнале`() {
+    fun `синхронизация по устаревшей версии отвергается`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
         val kit = dbHelper.freshMedKit(alice.id)
@@ -191,15 +191,14 @@ class ConcurrencyTest {
 
         assertNotNull(failure, "синхронизация по устаревшей версии обязана быть отклонена")
         assertQty(70.0, dbHelper.drugQuantity(drug.id)!!, "в пачке результат победившей команды")
-        assertFalse(
-            intakes.alreadyApplied(
-                Intake(syncId, drug.id, alice.id, consumed = Quantity(qty(5.0), dbHelper.unit()))
-            ),
-            "неудачной попытки в журнале быть не должно"
-        )
     }
 
-    /** И повтор того же запроса после отказа применяется по-настоящему, а не отвечает согласием. */
+    /**
+     * Повтор после отказа применяется по-настоящему, а не отвечает согласием.
+     *
+     * Это и есть проверка того, что откатившаяся попытка не осталась в журнале: спросить журнал
+     * напрямую нельзя — он за своим сервисом, — а видно это по результату.
+     */
     @Test
     fun `повтор после отката списывает по-настоящему`() {
         val alice = dbHelper.freshUser("alice")

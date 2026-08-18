@@ -8,6 +8,7 @@ import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Propagation.MANDATORY
 import org.springframework.transaction.annotation.Transactional
 
 /**
@@ -33,7 +34,7 @@ class DrugRelocation(
      * требует, чтобы он дожил до коммита. Иначе вышедший в этот момент участник сохранил бы
      * бронь на пачку, которую больше не видит.
      */
-    @Transactional
+    @Transactional(propagation = MANDATORY)
     fun moveOne(drugId: UUID, target: MedKit, userId: UUID, expectedVersion: Long): Drug {
         medKitService.requireUnchanged(target)
         val moved = drugService.moveTo(drugId, target.id, userId, expectedVersion)
@@ -52,7 +53,7 @@ class DrugRelocation(
      * Поэтому состав перепроверяется после него, уже по свежему чтению; держится это на том,
      * что `requireUnchanged` сравнивает версию со снимком явно.
      */
-    @Transactional
+    @Transactional(propagation = MANDATORY)
     fun moveAll(sourceMedKitId: UUID, target: MedKit) {
         medKitService.requireUnchanged(target)
         // Порядок важен: брони выбираются по исходной аптечке, пока упаковки ещё в ней.

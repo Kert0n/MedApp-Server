@@ -52,6 +52,12 @@ class NotAMember : DomainRuleViolated("Medicine kit is not accessible")
 /** Пользователь уже участник: вступать второй раз нечего. */
 class AlreadyMember : DomainRuleViolated("User is already a member of this medicine kit")
 
+/** Секрет регистрации не совпал: заводить пользователя не по чему. */
+class InvalidRegistrationSecret : DomainRuleViolated("Registration secret does not match")
+
+/** С этого адреса уже зарегистрировались столько раз, сколько разрешено. */
+class TooManyRegistrations : DomainRuleViolated("Too many registrations from this address")
+
 /** Пользователь без ключа не существует. */
 class InvalidCredentials : DomainRuleViolated("Credentials must not be blank")
 

@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Propagation.MANDATORY
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 
@@ -19,7 +20,7 @@ class UserService(
 
     private val logger = LoggerFactory.getLogger(UserService::class.java)
 
-    @Transactional
+    @Transactional(propagation = MANDATORY)
     fun registerNewUser(login: UUID, password: String, ip: String): User {
         logger.debug("Register new user {}", login)
         val user = User(id = login, hashedKey = securityService.hashPassword(password))
@@ -28,11 +29,11 @@ class UserService(
         return user
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(propagation = MANDATORY, readOnly = true)
     fun requireById(id: UUID): User =
         findById(id) ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "User not found")
 
-    @Transactional(readOnly = true)
+    @Transactional(propagation = MANDATORY, readOnly = true)
     fun findById(id: UUID): User? {
         logger.debug("Find user by id {}", id)
         return users.findById(id)

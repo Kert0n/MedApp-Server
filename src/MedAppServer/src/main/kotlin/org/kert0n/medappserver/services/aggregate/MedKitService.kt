@@ -8,6 +8,7 @@ import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.services.security.SecurityService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Propagation.MANDATORY
 import org.springframework.transaction.annotation.Transactional
 
 /**
@@ -26,7 +27,7 @@ class MedKitService(
 
     private val logger = LoggerFactory.getLogger(MedKitService::class.java)
 
-    @Transactional
+    @Transactional(propagation = MANDATORY)
     fun create(userId: UUID): MedKit {
         logger.debug("Creating new medkit for user: {}", userId)
         val medKit = MedKit(members = setOf(userId))
@@ -35,11 +36,11 @@ class MedKitService(
     }
 
     /** Аптечка или `null`, если её нет. */
-    @Transactional(readOnly = true)
+    @Transactional(propagation = MANDATORY, readOnly = true)
     fun findById(medKitId: UUID): MedKit? = medKits.findById(medKitId)
 
     /** Аптечка или 404. */
-    @Transactional(readOnly = true)
+    @Transactional(propagation = MANDATORY, readOnly = true)
     fun requireById(medKitId: UUID): MedKit = findById(medKitId) ?: throw NotAMember()
 
     /**
@@ -48,12 +49,12 @@ class MedKitService(
      * Порядок проверок значим: сначала доступ, потом версия — иначе по коду ответа узнавалось бы
      * существование чужой аптечки.
      */
-    @Transactional(readOnly = true)
+    @Transactional(propagation = MANDATORY, readOnly = true)
     fun requireAccessibleAt(medKitId: UUID, userId: UUID, expectedVersion: Long): MedKit =
         requireAccessible(medKitId, userId).also { it.requireVersion(expectedVersion) }
 
     /** Аптечка, доступная вызывающему, или 404 — недоступная и несуществующая неотличимы. */
-    @Transactional(readOnly = true)
+    @Transactional(propagation = MANDATORY, readOnly = true)
     fun requireAccessible(medKitId: UUID, userId: UUID): MedKit {
         logger.debug("Finding medkit {} for user {}", medKitId, userId)
         val medKit = requireById(medKitId)
@@ -62,14 +63,14 @@ class MedKitService(
     }
 
     /** Все аптечки участника — целиком и одним запросом. */
-    @Transactional(readOnly = true)
+    @Transactional(propagation = MANDATORY, readOnly = true)
     fun allOfUser(userId: UUID): List<MedKit> {
         logger.debug("Finding all medkits for user: {}", userId)
         return medKits.findAllOfUser(userId)
     }
 
     /** Состав удерживается до коммита: приглашать в аптечку, из которой уже вышел, нельзя. */
-    @Transactional
+    @Transactional(propagation = MANDATORY)
     fun invite(medKitId: UUID, userId: UUID): String {
         logger.debug("Sharing medkit {} by user: {}", medKitId, userId)
         medKits.requireUnchanged(requireAccessible(medKitId, userId))
@@ -79,7 +80,7 @@ class MedKitService(
         return key
     }
 
-    @Transactional
+    @Transactional(propagation = MANDATORY)
     fun join(medKitId: UUID, userId: UUID): MedKit {
         logger.debug("Adding user {} to medkit {}", userId, medKitId)
         val joined = requireById(medKitId).join(userId)
@@ -87,7 +88,7 @@ class MedKitService(
         return joined
     }
 
-    @Transactional
+    @Transactional(propagation = MANDATORY)
     fun joinByInvitation(key: String, userId: UUID): MedKit {
         val medKitId = medKitTokenCache.getOrNull(securityService.hashToken(key))
             ?: throw NotAMember()
@@ -99,7 +100,7 @@ class MedKitService(
      *
      * Брони выходящего лежат в чужом агрегате: их убирает оркестратор.
      */
-    @Transactional
+    @Transactional(propagation = MANDATORY)
     fun leave(medKitId: UUID, userId: UUID, expectedVersion: Long): MedKit? {
         logger.debug("Removing user {} from medkit {}", userId, medKitId)
         val left = requireAccessibleAt(medKitId, userId, expectedVersion).leave(userId)
@@ -118,11 +119,11 @@ class MedKitService(
      * Для тех, кто решает **по составу, а меняет другое**: переезд упаковки смотрит, кто её
      * увидит после переезда, и убирает брони остальных.
      */
-    @Transactional
+    @Transactional(propagation = MANDATORY)
     fun requireUnchanged(medKit: MedKit) = medKits.requireUnchanged(medKit)
 
     /** Доступ проверяется здесь: команда по одному идентификатору однажды придёт без проверки. */
-    @Transactional
+    @Transactional(propagation = MANDATORY)
     fun delete(medKitId: UUID, userId: UUID, expectedVersion: Long) {
         requireAccessibleAt(medKitId, userId, expectedVersion)
         medKits.delete(medKitId)
