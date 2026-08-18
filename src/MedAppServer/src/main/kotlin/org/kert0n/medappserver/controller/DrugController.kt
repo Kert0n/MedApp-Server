@@ -18,11 +18,9 @@ import org.kert0n.medappserver.api.DrugPatchRequest
 import org.kert0n.medappserver.api.DrugTemplateDTO
 import org.kert0n.medappserver.api.VocabularyEntryDTO
 import org.kert0n.medappserver.api.toDto
-import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.CatalogueService
 import org.kert0n.medappserver.services.aggregate.userId
-import org.kert0n.medappserver.services.orchestrators.DrugSyncOrchestrator
-import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
+import org.kert0n.medappserver.services.application.DrugApplicationService
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -36,9 +34,7 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBod
 @RequestMapping("/v1")
 @Tag(name = "Drugs", description = "Drugs stored in medicine kits")
 class DrugController(
-    private val drugService: DrugService,
-    private val medKitDrugOrchestrator: MedKitDrugOrchestrator,
-    private val drugSyncOrchestrator: DrugSyncOrchestrator,
+    private val drugs: DrugApplicationService,
     private val preconditions: Preconditions
 ) {
 
@@ -52,7 +48,7 @@ class DrugController(
         @Parameter(description = "Drug identifier") @PathVariable drugId: UUID
     ): ResponseEntity<DrugDTO> {
         logger.debug("GET /v1/drugs/{} by user {}", drugId, authentication.userId)
-        return medKitDrugOrchestrator.drug(drugId, authentication.userId).withEtag()
+        return drugs.read(drugId, authentication.userId).withEtag()
     }
 
     /** Аптечка задаётся путём: упаковка не существует сама по себе, она всегда в аптечке. */
@@ -67,8 +63,7 @@ class DrugController(
         @Valid @RequestBody request: DrugCreateRequest
     ): ResponseEntity<DrugDTO> {
         logger.debug("POST /v1/med-kits/{}/drugs by user {}", medKitId, authentication.userId)
-        val created = medKitDrugOrchestrator.createDrugInMedKit(medKitId, request, authentication.userId)
-        return medKitDrugOrchestrator.drug(created.id, authentication.userId).createdWithEtag()
+        return drugs.createInMedKit(medKitId, request, authentication.userId).createdWithEtag()
     }
 
     /** PATCH, а не PUT: тело описывает изменение части полей, а не препарат целиком. */
@@ -91,8 +86,8 @@ class DrugController(
         @Valid @RequestBody request: DrugPatchRequest
     ): ResponseEntity<DrugDTO> {
         logger.debug("PATCH /v1/drugs/{} by user {}", drugId, authentication.userId)
-        drugService.update(drugId, request, authentication.userId, preconditions.requiredMatch(ifMatch))
-        return medKitDrugOrchestrator.drug(drugId, authentication.userId).withEtag()
+        return drugs.update(drugId, request, authentication.userId, preconditions.requiredMatch(ifMatch))
+            .withEtag()
     }
 
     @DeleteMapping("/drugs/{drugId}")
@@ -113,7 +108,7 @@ class DrugController(
         @RequestHeader(value = Preconditions.IF_MATCH, required = false) ifMatch: String?
     ) {
         logger.debug("DELETE /v1/drugs/{} by user {}", drugId, authentication.userId)
-        drugService.delete(drugId, authentication.userId, preconditions.requiredMatch(ifMatch))
+        drugs.delete(drugId, authentication.userId, preconditions.requiredMatch(ifMatch))
     }
 
     /**
@@ -144,9 +139,9 @@ class DrugController(
         logger.debug("POST /v1/drugs/{}/intakes by user {}", drugId, authentication.userId)
         val expected = preconditions.requiredMatch(ifMatch)
         // Пустая пачка уничтожена этим приёмом: тега у того, чего нет, тоже нет.
-        drugService.consume(drugId, request.quantity, authentication.userId, expected)
-            ?: return noContentWithoutEtag()
-        return medKitDrugOrchestrator.drug(drugId, authentication.userId).withEtag()
+        return drugs.recordIntake(drugId, request.quantity, authentication.userId, expected)
+            ?.withEtag()
+            ?: noContentWithoutEtag()
     }
 
     /**
@@ -170,7 +165,7 @@ class DrugController(
         @Valid @RequestBody request: SyncRequest
     ): ResponseEntity<SyncResultDTO> {
         logger.debug("PUT /v1/drugs/{}/sync/{} by user {}", drugId, syncId, authentication.userId)
-        val result = drugSyncOrchestrator.synchronise(syncId, drugId, request, authentication.userId)
+        val result = drugs.synchronise(syncId, drugId, request, authentication.userId)
             ?: return noContentWithoutEtag()
         return ResponseEntity.ok(result)
     }
@@ -198,10 +193,9 @@ class DrugController(
     ): ResponseEntity<DrugDTO> {
         logger.debug("PUT /v1/med-kits/{}/drugs/{} by user {}", targetMedKitId, drugId, authentication.userId)
         // Предъявляется версия упаковки: переезжает она, а аптечка только называет состав.
-        medKitDrugOrchestrator.moveDrug(
+        return drugs.moveToMedKit(
             drugId, targetMedKitId, authentication.userId, preconditions.requiredMatch(ifMatch)
-        )
-        return medKitDrugOrchestrator.drug(drugId, authentication.userId).withEtag()
+        ).withEtag()
     }
 }
 

@@ -14,16 +14,19 @@ import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.MedKitService
-import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
+import org.kert0n.medappserver.services.application.MedKitApplicationService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.transaction.annotation.Transactional
+import org.kert0n.medappserver.services.application.DrugApplicationService
 
 @PostgresIntegrationTest
 @Transactional
 class BasicWorkflowStoriesTest {
+
+    @Autowired private lateinit var drugs: DrugApplicationService
 
     @Autowired
 
@@ -45,7 +48,7 @@ class BasicWorkflowStoriesTest {
     private lateinit var medKitService: MedKitService
 
     @Autowired
-    private lateinit var medKitDrugOrchestrator: MedKitDrugOrchestrator
+    private lateinit var medKits: MedKitApplicationService
 
     /**
      * Story 1: Anna creates her first medkit and adds some drugs
@@ -196,7 +199,7 @@ class BasicWorkflowStoriesTest {
         assertEquals(2, loadedMedkit.members.size)
 
         // Bob leaves (drugs stay)
-        medKitDrugOrchestrator.leaveMedKit(medkit.id, bob.id, dbHelper.medKitVersion(medkit.id))
+        medKits.leave(medkit.id, bob.id, dbHelper.medKitVersion(medkit.id))
         entityManager.flush()
         entityManager.clear()
 
@@ -258,7 +261,7 @@ class BasicWorkflowStoriesTest {
         assertEquals(2, medKitService.allOfUser(userData.id).size)
 
         // Delete old medkit and move drugs
-        medKitDrugOrchestrator.delete(oldMedkit.id, userData.id, dbHelper.medKitVersion(oldMedkit.id), newMedkit.id)
+        medKits.delete(oldMedkit.id, userData.id, dbHelper.medKitVersion(oldMedkit.id), newMedkit.id)
         entityManager.flush()
         entityManager.clear()
 

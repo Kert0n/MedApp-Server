@@ -11,11 +11,12 @@ import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.InsufficientStock
 import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.MedKitService
-import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
+import org.kert0n.medappserver.services.application.MedKitApplicationService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
+import org.kert0n.medappserver.services.application.DrugApplicationService
 
 /**
  * Упавшая команда не оставляет следов.
@@ -30,8 +31,9 @@ class RollbackTest {
     @Autowired private lateinit var drugService: DrugService
     @Autowired private lateinit var reservationService: ReservationService
     @Autowired private lateinit var medKitService: MedKitService
-    @Autowired private lateinit var orchestrator: MedKitDrugOrchestrator
+    @Autowired private lateinit var medKits: MedKitApplicationService
     @Autowired private lateinit var dbHelper: DatabaseTestHelper
+    @Autowired private lateinit var drugs: DrugApplicationService
 
     /**
      * Бронь больше остатка допустима, поэтому откат проверяется на том правиле, которое
@@ -63,7 +65,7 @@ class RollbackTest {
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         reservationService.create(alice.id, drug.id, qty(4.0))
 
-        assertFailsWith<NotAMember> { orchestrator.moveDrug(drug.id, foreign.id, alice.id, dbHelper.drugVersion(drug.id)) }
+        assertFailsWith<NotAMember> { drugs.moveToMedKit(drug.id, foreign.id, alice.id, dbHelper.drugVersion(drug.id)) }
 
         val stored = dbHelper.requireDrug(drug.id)
         assertEquals(kit.id, stored.medKitId, "упаковка осталась в своей аптечке")
@@ -77,7 +79,7 @@ class RollbackTest {
         val kit = medKitService.create(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 10.0)
 
-        assertFailsWith<NotAMember> { orchestrator.delete(kit.id, eve.id, dbHelper.medKitVersion(kit.id)) }
+        assertFailsWith<NotAMember> { medKits.delete(kit.id, eve.id, dbHelper.medKitVersion(kit.id)) }
 
         assertNotNull(medKitService.findById(kit.id), "аптечка на месте")
         assertNotNull(dbHelper.drug(drug.id), "препарат на месте")

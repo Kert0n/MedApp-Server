@@ -18,6 +18,7 @@ import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.transaction.annotation.Transactional
+import org.kert0n.medappserver.services.application.MedKitApplicationService
 
 /**
  * Граница хранилищ: то, что отдаёт доменные значения.
@@ -28,14 +29,15 @@ import org.springframework.transaction.annotation.Transactional
 @Transactional
 class StoreIntegrationTest {
 
-    @Autowired private lateinit var drugs: DrugStore
-    @Autowired private lateinit var reservations: ReservationStore
+    @Autowired private lateinit var drugStore: DrugStore
+    @Autowired private lateinit var reservationStore: ReservationStore
     @Autowired private lateinit var reservationService: ReservationService
-    @Autowired private lateinit var medKits: MedKitStore
+    @Autowired private lateinit var medKitStore: MedKitStore
     @Autowired private lateinit var users: UserStore
     @Autowired private lateinit var drugService: DrugService
     @Autowired private lateinit var medKitService: MedKitService
     @Autowired private lateinit var dbHelper: DatabaseTestHelper
+    @Autowired private lateinit var medKits: MedKitApplicationService
 
     // ── Препараты ────────────────────────────────────────────────────────────────
 
@@ -48,7 +50,7 @@ class StoreIntegrationTest {
         reservationService.create(alice.id, first.id, qty(4.0))
         dbHelper.flushAndClear()
 
-        val loaded = drugs.findAllInMedKit(kit.id)
+        val loaded = drugStore.findAllInMedKit(kit.id)
 
         assertEquals(2, loaded.size)
         assertQty(10.0, loaded.single { it.id == first.id }.quantity)
@@ -62,7 +64,7 @@ class StoreIntegrationTest {
         val kit = medKitService.create(alice.id)
         dbHelper.flushAndClear()
 
-        assertTrue(drugs.findAllInMedKit(kit.id).isEmpty())
+        assertTrue(drugStore.findAllInMedKit(kit.id).isEmpty())
     }
 
     @Test
@@ -73,8 +75,8 @@ class StoreIntegrationTest {
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
-        assertEquals(drug.id, drugs.findAccessible(drug.id, alice.id)?.id)
-        assertNull(drugs.findAccessible(drug.id, eve.id), "чужая аптечка не читается")
+        assertEquals(drug.id, drugStore.findAccessible(drug.id, alice.id)?.id)
+        assertNull(drugStore.findAccessible(drug.id, eve.id), "чужая аптечка не читается")
     }
 
     @Test
@@ -89,7 +91,7 @@ class StoreIntegrationTest {
         dbHelper.freshDrug(foreign.id, 3.0)
         dbHelper.flushAndClear()
 
-        val accessible = drugs.findAllAccessibleTo(alice.id)
+        val accessible = drugStore.findAllAccessibleTo(alice.id)
 
         assertEquals(2, accessible.size)
         assertTrue(accessible.none { it.medKitId == foreign.id })
@@ -107,7 +109,7 @@ class StoreIntegrationTest {
         reservationService.create(alice.id, second.id, qty(7.0))
         dbHelper.flushAndClear()
 
-        val mine = reservations.findAllOfUser(alice.id)
+        val mine = reservationStore.findAllOfUser(alice.id)
 
         assertEquals(2, mine.size)
         assertQty(5.0, mine.single { it.drugId == first.id }.amount)
@@ -123,8 +125,8 @@ class StoreIntegrationTest {
         reservationService.create(alice.id, drug.id, qty(5.0))
         dbHelper.flushAndClear()
 
-        assertQty(5.0, reservations.find(alice.id, drug.id)?.amount)
-        assertNull(reservations.find(bob.id, drug.id), "у Боба брони нет")
+        assertQty(5.0, reservationStore.find(alice.id, drug.id)?.amount)
+        assertNull(reservationStore.find(bob.id, drug.id), "у Боба брони нет")
     }
 
     @Test
@@ -145,7 +147,7 @@ class StoreIntegrationTest {
         val kit = medKitService.create(alice.id)
         dbHelper.flushAndClear()
 
-        val loaded = medKits.findById(kit.id)!!
+        val loaded = medKitStore.findById(kit.id)!!
 
         assertEquals(setOf(alice.id), loaded.members)
     }
@@ -158,7 +160,7 @@ class StoreIntegrationTest {
         medKitService.create(outsider.id)
         dbHelper.flushAndClear()
 
-        assertEquals(listOf(mine.id), medKits.findAllOfUser(alice.id).map { it.id })
+        assertEquals(listOf(mine.id), medKitStore.findAllOfUser(alice.id).map { it.id })
     }
 
     @Test
@@ -174,10 +176,10 @@ class StoreIntegrationTest {
 
         // Аптечка приходит агрегатом: участники в ней самой, а пачки считает вызывающий по
         // тому набору, который всё равно читал.
-        val mine = medKits.findAllOfUser(alice.id).single()
+        val mine = medKitStore.findAllOfUser(alice.id).single()
 
         assertEquals(2, mine.members.size)
-        assertEquals(3, drugs.findAllInMedKit(kit.id).size)
+        assertEquals(3, drugStore.findAllInMedKit(kit.id).size)
     }
 
     @Test
@@ -187,12 +189,12 @@ class StoreIntegrationTest {
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
-        medKits.delete(kit.id)
+        medKitStore.delete(kit.id)
         dbHelper.flushAndClear()
 
-        assertNull(medKits.findById(kit.id))
-        assertNull(drugs.findById(drug.id), "препараты не переживают свою аптечку")
-        assertTrue(medKits.findAllOfUser(alice.id).map { it.id }.isEmpty())
+        assertNull(medKitStore.findById(kit.id))
+        assertNull(drugStore.findById(drug.id), "препараты не переживают свою аптечку")
+        assertTrue(medKitStore.findAllOfUser(alice.id).map { it.id }.isEmpty())
     }
 
     // ── Пользователи ─────────────────────────────────────────────────────────────
@@ -205,7 +207,7 @@ class StoreIntegrationTest {
         medKitService.create(outsider.id)
         dbHelper.flushAndClear()
 
-        assertEquals(listOf(mine.id), medKits.findAllOfUser(alice.id).map { it.id })
+        assertEquals(listOf(mine.id), medKitStore.findAllOfUser(alice.id).map { it.id })
     }
 
     /**
@@ -226,8 +228,8 @@ class StoreIntegrationTest {
         reservationService.create(bob.id, first.id, qty(20.0))
         dbHelper.flushAndClear()
 
-        reservations.deleteInMedKitExcept(source.id, setOf(alice.id))
-        drugs.moveAllToMedKit(source.id, target.id)
+        reservationStore.deleteInMedKitExcept(source.id, setOf(alice.id))
+        drugStore.moveAllToMedKit(source.id, target.id)
         dbHelper.flushAndClear()
 
         assertEquals(target.id, dbHelper.requireDrug(first.id).medKitId)

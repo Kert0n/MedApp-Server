@@ -13,10 +13,11 @@ import org.kert0n.medappserver.domain.InsufficientStock
 import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.services.aggregate.ReservationService
-import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
+import org.kert0n.medappserver.services.application.MedKitApplicationService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
+import org.kert0n.medappserver.services.application.DrugApplicationService
 
 /**
  * Когда версия агрегата двигается, а когда нет.
@@ -34,9 +35,10 @@ class VersionRulesTest {
     @Autowired private lateinit var drugService: DrugService
     @Autowired private lateinit var reservationService: ReservationService
     @Autowired private lateinit var medKitService: MedKitService
-    @Autowired private lateinit var orchestrator: MedKitDrugOrchestrator
-    @Autowired private lateinit var medKits: MedKitStore
+    @Autowired private lateinit var medKits: MedKitApplicationService
+    @Autowired private lateinit var medKitStore: MedKitStore
     @Autowired private lateinit var dbHelper: DatabaseTestHelper
+    @Autowired private lateinit var drugs: DrugApplicationService
 
     // ── Упаковка ─────────────────────────────────────────────────────────────────
 
@@ -85,8 +87,8 @@ class VersionRulesTest {
         val drug = dbHelper.freshDrug(kit.id, 100.0)
 
         val before = dbHelper.requireDrug(drug.id).version
-        orchestrator.drug(drug.id, alice.id)
-        orchestrator.drugsAccessibleTo(alice.id)
+        drugs.read(drug.id, alice.id)
+        drugs.accessibleTo(alice.id)
 
         assertEquals(before, dbHelper.requireDrug(drug.id).version)
     }
@@ -162,7 +164,7 @@ class VersionRulesTest {
         medKitService.join(kit.id, bob.id)
 
         val before = requireKit(kit.id).version
-        orchestrator.leaveMedKit(kit.id, bob.id, dbHelper.medKitVersion(kit.id))
+        medKits.leave(kit.id, bob.id, dbHelper.medKitVersion(kit.id))
 
         assertTrue(requireKit(kit.id).version > before, "версия аптечки обязана сдвинуться")
     }
@@ -200,7 +202,7 @@ class VersionRulesTest {
         val firstBefore = dbHelper.requireDrug(first.id).version
         val secondBefore = dbHelper.requireDrug(second.id).version
 
-        orchestrator.delete(source.id, alice.id, dbHelper.medKitVersion(source.id), target.id)
+        medKits.delete(source.id, alice.id, dbHelper.medKitVersion(source.id), target.id)
 
         val movedFirst = dbHelper.requireDrug(first.id)
         val movedSecond = dbHelper.requireDrug(second.id)
@@ -209,5 +211,5 @@ class VersionRulesTest {
         assertTrue(movedSecond.version > secondBefore, "версия второй упаковки обязана сдвинуться")
     }
 
-    private fun requireKit(medKitId: UUID) = assertNotNull(medKits.findById(medKitId), "аптечка исчезла")
+    private fun requireKit(medKitId: UUID) = assertNotNull(medKitStore.findById(medKitId), "аптечка исчезла")
 }

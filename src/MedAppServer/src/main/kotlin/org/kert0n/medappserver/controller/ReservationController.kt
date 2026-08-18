@@ -10,9 +10,8 @@ import org.kert0n.medappserver.api.ReservationCreateRequest
 import org.kert0n.medappserver.api.ReservationDTO
 import org.kert0n.medappserver.api.ReservationPatchRequest
 import org.kert0n.medappserver.api.toDto
-import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.kert0n.medappserver.services.aggregate.userId
-import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
+import org.kert0n.medappserver.services.application.ReservationApplicationService
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -28,8 +27,7 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBod
 @RequestMapping("/v1/reservations")
 @Tag(name = "Reservations", description = "How much of a package the caller claims for themselves")
 class ReservationController(
-    private val reservationService: ReservationService,
-    private val medKitDrugOrchestrator: MedKitDrugOrchestrator,
+    private val reservations: ReservationApplicationService,
     private val preconditions: Preconditions
 ) {
 
@@ -39,7 +37,7 @@ class ReservationController(
     @ApiResponse(responseCode = "200", description = "Reservations returned")
     fun listReservations(authentication: Authentication): List<ReservationDTO> {
         logger.debug("GET /v1/reservations by user {}", authentication.userId)
-        return reservationService.ofUser(authentication.userId).map { it.toDto() }
+        return reservations.ofUser(authentication.userId)
     }
 
     @GetMapping("/{drugId}")
@@ -50,7 +48,7 @@ class ReservationController(
         @Parameter(description = "Package identifier") @PathVariable drugId: UUID
     ): ResponseEntity<ReservationDTO> {
         logger.debug("GET /v1/reservations/{} by user {}", drugId, authentication.userId)
-        return reservationService.require(authentication.userId, drugId).toDto().withEtag()
+        return reservations.read(authentication.userId, drugId).withEtag()
     }
 
     @PostMapping
@@ -66,9 +64,8 @@ class ReservationController(
         logger.debug("POST /v1/reservations by user {} on drug {}", authentication.userId, request.drugId)
         // Предусловия нет: создание ничего не перезаписывает, а вторая бронь на ту же пачку
         // отвергается сама по себе — 409 приходит от правила, а не от версии.
-        return medKitDrugOrchestrator
-            .createReservation(authentication.userId, request.drugId, request.amount)
-            .toDto()
+        return reservations
+            .create(authentication.userId, request.drugId, request.amount)
             .createdWithEtag()
     }
 
@@ -91,9 +88,8 @@ class ReservationController(
         @Valid @RequestBody request: ReservationPatchRequest
     ): ResponseEntity<ReservationDTO> {
         logger.debug("PATCH /v1/reservations/{} by user {}", drugId, authentication.userId)
-        return reservationService
+        return reservations
             .changeTo(authentication.userId, drugId, request.amount, preconditions.requiredMatch(ifMatch))
-            .toDto()
             .withEtag()
     }
 
@@ -115,6 +111,6 @@ class ReservationController(
         @RequestHeader(value = Preconditions.IF_MATCH, required = false) ifMatch: String?
     ) {
         logger.debug("DELETE /v1/reservations/{} by user {}", drugId, authentication.userId)
-        reservationService.cancel(authentication.userId, drugId, preconditions.requiredMatch(ifMatch))
+        reservations.cancel(authentication.userId, drugId, preconditions.requiredMatch(ifMatch))
     }
 }

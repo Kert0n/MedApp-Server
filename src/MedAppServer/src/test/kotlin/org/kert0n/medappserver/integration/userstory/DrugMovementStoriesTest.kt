@@ -12,16 +12,19 @@ import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.MedKitService
-import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
+import org.kert0n.medappserver.services.application.MedKitApplicationService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.transaction.annotation.Transactional
+import org.kert0n.medappserver.services.application.DrugApplicationService
 
 @PostgresIntegrationTest
 @Transactional
 class DrugMovementStoriesTest {
+
+    @Autowired private lateinit var drugs: DrugApplicationService
 
     @Autowired
 
@@ -41,7 +44,7 @@ class DrugMovementStoriesTest {
     private lateinit var medKitService: MedKitService
 
     @Autowired
-    private lateinit var medKitDrugOrchestrator: MedKitDrugOrchestrator
+    private lateinit var medKits: MedKitApplicationService
 
 
     /** Story 11: a move keeps the reservations of everyone who still sees the pack. */
@@ -67,7 +70,7 @@ class DrugMovementStoriesTest {
         entityManager.flush()
 
         // Move drug to travel kit
-        medKitDrugOrchestrator.moveDrug(painkiller.id, travelKit.id, userData.id, dbHelper.drugVersion(painkiller.id))
+        drugs.moveToMedKit(painkiller.id, travelKit.id, userData.id, dbHelper.drugVersion(painkiller.id))
         entityManager.flush()
         entityManager.clear()
 
@@ -210,7 +213,7 @@ class DrugMovementStoriesTest {
         entityManager.clear()
 
         // Anna deletes the old kit and migrates to the new kit
-        medKitDrugOrchestrator.delete(oldKit.id, anna.id, dbHelper.medKitVersion(oldKit.id), newKit.id)
+        medKits.delete(oldKit.id, anna.id, dbHelper.medKitVersion(oldKit.id), newKit.id)
 
         entityManager.flush()
         entityManager.clear()
@@ -259,7 +262,7 @@ class DrugMovementStoriesTest {
         entityManager.clear()
 
         // Move ONLY one drug
-        medKitDrugOrchestrator.moveDrug(drugDataToMove.id, targetKit.id, userData.id, dbHelper.drugVersion(drugDataToMove.id))
+        drugs.moveToMedKit(drugDataToMove.id, targetKit.id, userData.id, dbHelper.drugVersion(drugDataToMove.id))
 
         entityManager.flush()
         entityManager.clear()

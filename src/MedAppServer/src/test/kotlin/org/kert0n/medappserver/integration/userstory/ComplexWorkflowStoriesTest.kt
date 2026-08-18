@@ -16,16 +16,19 @@ import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.MedKitService
-import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
+import org.kert0n.medappserver.services.application.MedKitApplicationService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.transaction.annotation.Transactional
+import org.kert0n.medappserver.services.application.DrugApplicationService
 
 @PostgresIntegrationTest
 @Transactional
 class ComplexWorkflowStoriesTest {
+
+    @Autowired private lateinit var drugs: DrugApplicationService
 
     @Autowired
 
@@ -49,7 +52,7 @@ class ComplexWorkflowStoriesTest {
     private lateinit var medKitService: MedKitService
 
     @Autowired
-    private lateinit var medKitDrugOrchestrator: MedKitDrugOrchestrator
+    private lateinit var medKits: MedKitApplicationService
 
 
     /**
@@ -137,7 +140,7 @@ class ComplexWorkflowStoriesTest {
         entityManager.flush()
         entityManager.clear()
 
-        medKitDrugOrchestrator.moveDrug(painkillers.id, travelKit.id, alice.id, dbHelper.drugVersion(painkillers.id))
+        drugs.moveToMedKit(painkillers.id, travelKit.id, alice.id, dbHelper.drugVersion(painkillers.id))
 
         entityManager.flush()
         entityManager.clear()
@@ -160,7 +163,7 @@ class ComplexWorkflowStoriesTest {
         entityManager.clear()
 
         // Perform the complex deletion migration
-        medKitDrugOrchestrator.delete(homeKit.id, alice.id, dbHelper.medKitVersion(homeKit.id), duoKit.id)
+        medKits.delete(homeKit.id, alice.id, dbHelper.medKitVersion(homeKit.id), duoKit.id)
 
         entityManager.flush()
         entityManager.clear()
@@ -187,7 +190,7 @@ class ComplexWorkflowStoriesTest {
         // PHASE 6: Last User Standing Auto-Cleanup
         // ==========================================
         // Bob leaves Duo Kit
-        medKitDrugOrchestrator.leaveMedKit(duoKit.id, bob.id, dbHelper.medKitVersion(duoKit.id))
+        medKits.leave(duoKit.id, bob.id, dbHelper.medKitVersion(duoKit.id))
 
         entityManager.flush()
         entityManager.clear()
@@ -225,7 +228,7 @@ class ComplexWorkflowStoriesTest {
         val createDrugDto = DrugCreateRequest(
             name = "LifePill", quantity = qty(100.0), quantityUnitId = dbHelper.unit().id
             )
-        val drug = medKitDrugOrchestrator.createDrugInMedKit(sourceKit.id, createDrugDto, alice.id)
+        val drug = drugs.createInMedKit(sourceKit.id, createDrugDto, alice.id)
         dbHelper.flushAndClear()
 
         // Alice and Bob reserve 40 each, 80 of 100 in total
@@ -254,7 +257,7 @@ class ComplexWorkflowStoriesTest {
 
         // ── Phase 3: Move Drug ──
         // Alice moves the drug to targetKit (where Bob has no access).
-        medKitDrugOrchestrator.moveDrug(drug.id, targetKit.id, alice.id, dbHelper.drugVersion(drug.id))
+        drugs.moveToMedKit(drug.id, targetKit.id, alice.id, dbHelper.drugVersion(drug.id))
         dbHelper.flushAndClear()
 
         val movedDrug = dbHelper.requireDrug(drug.id)
@@ -296,7 +299,7 @@ class ComplexWorkflowStoriesTest {
 
         // ACT: Bob moves the drug to his private kit — he needs no reservation of his own
         assertDoesNotThrow {
-            medKitDrugOrchestrator.moveDrug(drug.id, kitB.id, bob.id, dbHelper.drugVersion(drug.id))
+            drugs.moveToMedKit(drug.id, kitB.id, bob.id, dbHelper.drugVersion(drug.id))
         }
 
         // VERIFY: Drug moved
@@ -323,7 +326,7 @@ class ComplexWorkflowStoriesTest {
         entityManager.flush()
         entityManager.clear()
         // ACT: Move drug to private kit
-        medKitDrugOrchestrator.moveDrug(drug.id, kitB.id, alice.id, dbHelper.drugVersion(drug.id))
+        drugs.moveToMedKit(drug.id, kitB.id, alice.id, dbHelper.drugVersion(drug.id))
         entityManager.flush()
         entityManager.clear()
         // VERIFY: Bob's reservation is purged, Alice's remains
@@ -342,12 +345,12 @@ class ComplexWorkflowStoriesTest {
         entityManager.flush()
         entityManager.clear()
         val drug =
-            medKitDrugOrchestrator.createDrugInMedKit(kitA.id, DrugCreateRequest("Migrating Meds", qty(10.0), dbHelper.unit().id), alice.id)
+            drugs.createInMedKit(kitA.id, DrugCreateRequest("Migrating Meds", qty(10.0), dbHelper.unit().id), alice.id)
 
         // ACT: Delete Kit A and migrate drugs to Kit B
         entityManager.flush()
         entityManager.clear()
-        medKitDrugOrchestrator.delete(kitA.id, alice.id, dbHelper.medKitVersion(kitA.id), kitB.id)
+        medKits.delete(kitA.id, alice.id, dbHelper.medKitVersion(kitA.id), kitB.id)
         entityManager.flush()
         entityManager.clear()
         // VERIFY: Kit A is gone, but the drug survives in Kit B
