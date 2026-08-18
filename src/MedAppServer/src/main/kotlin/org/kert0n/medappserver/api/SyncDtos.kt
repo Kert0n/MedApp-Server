@@ -3,6 +3,7 @@ package org.kert0n.medappserver.api
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.Valid
 import jakarta.validation.constraints.DecimalMin
+import jakarta.validation.constraints.Digits
 import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotNull
 import java.math.BigDecimal
@@ -22,7 +23,8 @@ import java.math.BigDecimal
 data class SyncRequest(
     /** Дельта: сколько съедено с прошлой синхронизации. `null` — приёма не было. */
     @field:DecimalMin(value = "0.0", inclusive = false)
-    @Schema(description = "Amount taken since the last sync; omit if nothing was taken", example = "5.0")
+    @field:Digits(integer = 13, fraction = 6)
+    @Schema(description = "Amount taken since the last sync; omit if nothing was taken", example = "5.0", maximum = QUANTITY_MAX, multipleOf = QUANTITY_STEP)
     val consumed: BigDecimal? = null,
 
     @field:NotNull
@@ -45,7 +47,8 @@ data class SyncRequest(
 data class SyncReservation(
     @field:NotNull
     @field:DecimalMin(value = "0.0", inclusive = false)
-    @Schema(description = "Reserved amount, greater than zero; may exceed what is left", example = "20.0", required = true)
+    @field:Digits(integer = 13, fraction = 6)
+    @Schema(description = "Reserved amount, greater than zero; may exceed what is left", example = "20.0", required = true, maximum = QUANTITY_MAX, multipleOf = QUANTITY_STEP)
     val amount: BigDecimal,
 
     /** `null` — брони ещё нет, её заводит этот же запрос. */

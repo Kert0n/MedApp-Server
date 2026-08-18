@@ -3,6 +3,7 @@ package org.kert0n.medappserver.api
 import io.swagger.v3.oas.annotations.media.Schema
 import org.kert0n.medappserver.controller.Versioned
 import jakarta.validation.constraints.DecimalMin
+import jakarta.validation.constraints.Digits
 import jakarta.validation.constraints.NotNull
 import java.math.BigDecimal
 import java.util.UUID
@@ -36,11 +37,12 @@ data class ReservationCreateRequest(
 
     @field:NotNull
     @field:DecimalMin(value = "0.0", inclusive = false)
+    @field:Digits(integer = 13, fraction = 6)
     @Schema(
         description = "Reserved amount, greater than zero. It may exceed what is left in the package.",
         example = "20.0",
         required = true
-    )
+    , maximum = QUANTITY_MAX, multipleOf = QUANTITY_STEP)
     val amount: BigDecimal
 )
 
@@ -52,7 +54,8 @@ data class ReservationCreateRequest(
 data class ReservationPatchRequest(
     @field:NotNull
     @field:DecimalMin(value = "0.0", inclusive = false)
-    @Schema(description = "New reserved amount, greater than zero", example = "15.0", required = true)
+    @field:Digits(integer = 13, fraction = 6)
+    @Schema(description = "New reserved amount, greater than zero", example = "15.0", required = true, maximum = QUANTITY_MAX, multipleOf = QUANTITY_STEP)
     val amount: BigDecimal
 )
 
@@ -61,6 +64,7 @@ data class ReservationPatchRequest(
 data class IntakeRequest(
     @field:NotNull
     @field:DecimalMin(value = "0.0", inclusive = false)
-    @Schema(description = "Amount taken, greater than zero", example = "2.0", required = true)
+    @field:Digits(integer = 13, fraction = 6)
+    @Schema(description = "Amount taken, greater than zero", example = "2.0", required = true, maximum = QUANTITY_MAX, multipleOf = QUANTITY_STEP)
     val quantity: BigDecimal
 )

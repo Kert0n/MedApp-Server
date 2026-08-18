@@ -902,7 +902,9 @@ components:
           type: number
           description: Amount taken since the last sync; omit if nothing was taken
           example: 5.0
+          maximum: 9999999999999.999999
           minimum: 0.0
+          multipleOf: 0.0000010
         drugVersion:
           type: integer
           format: int64
@@ -922,7 +924,9 @@ components:
           type: number
           description: "Reserved amount, greater than zero; may exceed what is left"
           example: 20.0
+          maximum: 9999999999999.999999
           minimum: 0.0
+          multipleOf: 0.0000010
         version:
           type: integer
           format: int64
@@ -972,7 +976,9 @@ components:
           description: "Reserved amount, greater than zero. It may exceed what is\
             \ left in the package."
           example: 20.0
+          maximum: 9999999999999.999999
           minimum: 0.0
+          multipleOf: 0.0000010
       required:
       - amount
       - drugId
@@ -1006,7 +1012,9 @@ components:
           type: number
           description: "Initial stock, greater than zero"
           example: 100.0
+          maximum: 9999999999999.999999
           minimum: 0.0
+          multipleOf: 0.0000010
         quantityUnitId:
           type: string
           format: uuid
@@ -1079,7 +1087,9 @@ components:
           type: number
           description: "Amount taken, greater than zero"
           example: 2.0
+          maximum: 9999999999999.999999
           minimum: 0.0
+          multipleOf: 0.0000010
       required:
       - quantity
     TokenResponse:
@@ -1108,7 +1118,9 @@ components:
           type: number
           description: "New reserved amount, greater than zero"
           example: 15.0
+          maximum: 9999999999999.999999
           minimum: 0.0
+          multipleOf: 0.0000010
       required:
       - amount
     DrugPatchRequest:
@@ -1127,7 +1139,9 @@ components:
             \ number. This is a correction, not a refill — a new pack is a new package.\
             \ Reservations are left alone."
           example: 120.0
+          maximum: 9999999999999.999999
           minimum: 0.0
+          multipleOf: 0.0000010
         quantityUnitId:
           type: string
           format: uuid

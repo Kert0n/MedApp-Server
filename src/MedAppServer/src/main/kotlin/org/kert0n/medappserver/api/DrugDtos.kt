@@ -3,12 +3,26 @@ package org.kert0n.medappserver.api
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.AssertTrue
-import org.kert0n.medappserver.controller.Versioned
 import jakarta.validation.constraints.DecimalMin
+import jakarta.validation.constraints.Digits
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
 import java.math.BigDecimal
 import java.util.UUID
+import org.kert0n.medappserver.controller.Versioned
+
+/**
+ * Числовая граница контракта, та же, что у колонок: `numeric(19, 6)`.
+ *
+ * Указана в схемах отдельно от `@Digits` намеренно. Проверяет её валидация, но springdoc не
+ * переносит `@Digits` в опубликованную схему — без этих двух атрибутов контракт умалчивал бы о
+ * правиле, которое сервер применяет. Согласие с `QUANTITY_PRECISION` и `QUANTITY_SCALE`
+ * сторожит тест.
+ */
+const val QUANTITY_MAX: String = "9999999999999.999999"
+
+/** Шаг величины: шесть знаков после точки. */
+const val QUANTITY_STEP: Double = 0.000001
 
 @Schema(description = "Drug stock and descriptive fields")
 data class DrugDTO(
@@ -64,7 +78,8 @@ data class DrugCreateRequest(
 
     @field:NotNull
     @field:DecimalMin(value = "0.0", inclusive = false)
-    @Schema(description = "Initial stock, greater than zero", example = "100.0", required = true)
+    @field:Digits(integer = 13, fraction = 6)
+    @Schema(description = "Initial stock, greater than zero", example = "100.0", required = true, maximum = QUANTITY_MAX, multipleOf = QUANTITY_STEP)
     val quantity: BigDecimal,
 
     @field:NotNull
@@ -107,12 +122,13 @@ data class DrugPatchRequest(
     val name: String? = null,
 
     @field:DecimalMin(value = "0.0", inclusive = false)
+    @field:Digits(integer = 13, fraction = 6)
     @Schema(
         description = "Corrected stock: you recounted the package and saw a different number. " +
             "This is a correction, not a refill — a new pack is a new package. Reservations are " +
             "left alone.",
         example = "120.0"
-    )
+    , maximum = QUANTITY_MAX, multipleOf = QUANTITY_STEP)
     val quantity: BigDecimal? = null,
 
     @Schema(description = "Quantity unit identifier from the shared vocabulary")
