@@ -20,13 +20,18 @@ import org.springframework.transaction.annotation.Transactional
  * Доступ к упаковке проверяется первым: бронировать можно только то, что видно. Единицу
  * величины приносит `DrugService` — бронь в «штуках вообще» смысла не имеет.
  *
+ * Оба основания решения удерживаются до коммита: это правило **о брони**, поэтому живёт здесь,
+ * а не у вызывающего. Иначе один и тот же сценарий пришлось бы повторять всем, кто заводит
+ * бронь, — и повторяют его двое: контроллер брони и синхронизация упаковки.
+ *
  * Команды возвращают **записанное** состояние, а не посчитанное: версию двигает Hibernate, и
  * доменная копия, сделанная до записи, несёт устаревший токен.
  */
 @Service
 class ReservationService(
     private val reservations: ReservationStore,
-    private val drugs: DrugService
+    private val drugs: DrugService,
+    private val medKits: MedKitService
 ) {
 
     private val logger = LoggerFactory.getLogger(ReservationService::class.java)
@@ -63,11 +68,20 @@ class ReservationService(
 
     // ── Команды ──────────────────────────────────────────────────────────────────
 
+    /**
+     * Заведение брони.
+     *
+     * Упаковка и состав её аптечки удерживаются до коммита. Иначе бронь появляется у того, кто
+     * в этот момент вышел из аптечки, или на пачке, которая успела уехать в недоступную, — и
+     * живёт там, потому что уборщики броней отработали раньше, чем она была заведена.
+     */
     @Transactional
     fun create(userId: UUID, drugId: UUID, amount: BigDecimal): Reservation {
         logger.debug("Creating reservation of user {} on drug {}", userId, drugId)
 
         val drug = drugs.require(drugId, userId)
+        drugs.requireUnchanged(drug)
+        medKits.requireUnchanged(medKits.requireAccessible(drug.medKitId, userId))
         if (reservations.find(userId, drugId) != null) throw ReservationAlreadyExists()
 
         val reservation = Reservation(userId, drugId, Quantity(amount, drug.quantity.unit))

@@ -428,4 +428,34 @@ class ConcurrencyTest {
         assertEquals(source.id, dbHelper.requireDrug(drug.id).medKitId, "пачка осталась в исходной")
         assertNotNull(dbHelper.userReservation(bob.id, drug.id), "бронь Боба цела")
     }
+
+    /**
+     * Заведение брони действительно удерживает упаковку, а не только умеет это в принципе.
+     *
+     * Остальные гонки проверяют механизм на уровне хранилища и до самой команды не доходят —
+     * снял гарды из `ReservationService.create`, и ни один тест не заметил. Здесь команда
+     * зовётся целиком, а обе аптечки доступны Бобу: доступ к пачке после переезда сохраняется,
+     * и отвергнуть заведение может **только** удержание версии упаковки.
+     */
+    @Test
+    fun `заведение брони удерживает упаковку, по которой решало`() {
+        val alice = dbHelper.freshUser("alice")
+        val bob = dbHelper.freshUser("bob")
+        val source = medKitService.create(alice.id)
+        medKitService.join(source.id, bob.id)
+        val target = medKitService.create(alice.id)
+        medKitService.join(target.id, bob.id)
+        val drug = dbHelper.freshDrug(source.id, 100.0)
+
+        val failure = interleaved.lostUpdate(
+            // Упаковка попадает в persistence context до чужой записи: команда ниже увидит её
+            // со старой версией и обязана на этом споткнуться.
+            read = { drugStore.findAccessible(drug.id, bob.id)!! },
+            meanwhile = { drugs.moveToMedKit(drug.id, target.id, alice.id, dbHelper.drugVersion(drug.id)) },
+            write = { reservationsApp.create(bob.id, drug.id, qty(20.0)) }
+        )
+
+        assertNotNull(failure, "бронь по устаревшей упаковке обязана быть отклонена")
+        assertNull(dbHelper.userReservation(bob.id, drug.id), "брони не осталось")
+    }
 }

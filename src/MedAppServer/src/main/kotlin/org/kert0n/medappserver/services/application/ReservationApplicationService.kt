@@ -14,17 +14,11 @@ import org.springframework.transaction.annotation.Transactional
 /**
  * Всё, что клиент делает со своей бронью.
  *
- * Заведение брони трогает три агрегата, изменение — один, и снаружи эта разница не видна:
- * контроллер брони разговаривает только отсюда.
+ * Тонкий: переводит в DTO и владеет транзакцией. Правила заведения — у самой брони, потому что
+ * они о ней, а не о том, кто её заказал.
  */
 @Service
-class ReservationApplicationService(
-    private val reservationService: ReservationService,
-    private val drugService: DrugService,
-    private val medKitService: MedKitService
-) {
-
-    private val logger = LoggerFactory.getLogger(ReservationApplicationService::class.java)
+class ReservationApplicationService(private val reservationService: ReservationService) {
 
     @Transactional(readOnly = true)
     fun ofUser(userId: UUID): List<ReservationDTO> = reservationService.ofUser(userId).map { it.toDto() }
@@ -32,21 +26,9 @@ class ReservationApplicationService(
     @Transactional(readOnly = true)
     fun read(userId: UUID, drugId: UUID): ReservationDTO = reservationService.require(userId, drugId).toDto()
 
-    /**
-     * Заведение брони: решение принимается по упаковке и по составу её аптечки.
-     *
-     * Оба удерживаются до коммита. Иначе бронь появляется у того, кто в этот момент вышел из
-     * аптечки, или на пачке, которая успела уехать в недоступную, — и живёт там, потому что
-     * уборщики броней отработали раньше, чем она была заведена.
-     */
     @Transactional
-    fun create(userId: UUID, drugId: UUID, amount: BigDecimal): ReservationDTO {
-        logger.debug("Creating reservation of user {} on drug {}", userId, drugId)
-        val drug = drugService.require(drugId, userId)
-        drugService.requireUnchanged(drug)
-        medKitService.requireUnchanged(medKitService.requireAccessible(drug.medKitId, userId))
-        return reservationService.create(userId, drugId, amount).toDto()
-    }
+    fun create(userId: UUID, drugId: UUID, amount: BigDecimal): ReservationDTO =
+        reservationService.create(userId, drugId, amount).toDto()
 
     @Transactional
     fun changeTo(userId: UUID, drugId: UUID, amount: BigDecimal, expectedVersion: Long): ReservationDTO =

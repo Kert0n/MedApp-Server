@@ -37,7 +37,6 @@ class DrugApplicationService(
     private val drugService: DrugService,
     private val reservationService: ReservationService,
     private val medKitService: MedKitService,
-    private val reservations: ReservationApplicationService,
     private val journal: IntakeJournal
 ) {
 
@@ -168,9 +167,9 @@ class DrugApplicationService(
         asSyncConflict {
             request.reservation?.let { wanted ->
                 if (wanted.version == null) {
-                    reservations.create(userId, drugId, wanted.amount)
+                    reservationService.create(userId, drugId, wanted.amount)
                 } else {
-                    reservations.changeTo(userId, drugId, wanted.amount, wanted.version)
+                    reservationService.changeTo(userId, drugId, wanted.amount, wanted.version)
                 }
             }
         }
