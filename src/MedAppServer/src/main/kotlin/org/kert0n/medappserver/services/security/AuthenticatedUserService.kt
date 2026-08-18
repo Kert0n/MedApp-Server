@@ -1,7 +1,7 @@
 package org.kert0n.medappserver.services.security
 
 import java.util.UUID
-import org.kert0n.medappserver.services.models.UserService
+import org.kert0n.medappserver.services.aggregate.UserService
 import org.springframework.security.core.userdetails.UserDetails
 import org.springframework.security.core.userdetails.UserDetailsService
 import org.springframework.security.core.userdetails.UsernameNotFoundException

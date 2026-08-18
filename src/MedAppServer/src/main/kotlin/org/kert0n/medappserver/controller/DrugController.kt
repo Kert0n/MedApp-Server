@@ -18,9 +18,9 @@ import org.kert0n.medappserver.api.DrugPatchRequest
 import org.kert0n.medappserver.api.DrugTemplateDTO
 import org.kert0n.medappserver.api.VocabularyEntryDTO
 import org.kert0n.medappserver.api.toDto
-import org.kert0n.medappserver.services.models.DrugService
-import org.kert0n.medappserver.services.models.CatalogueService
-import org.kert0n.medappserver.services.models.userId
+import org.kert0n.medappserver.services.aggregate.DrugService
+import org.kert0n.medappserver.services.aggregate.CatalogueService
+import org.kert0n.medappserver.services.aggregate.userId
 import org.kert0n.medappserver.services.orchestrators.DrugSyncOrchestrator
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
 import org.slf4j.LoggerFactory

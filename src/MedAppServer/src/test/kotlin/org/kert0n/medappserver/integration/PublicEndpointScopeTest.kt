@@ -4,7 +4,7 @@ import java.util.UUID
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.domain.User
-import org.kert0n.medappserver.services.models.UserService
+import org.kert0n.medappserver.services.aggregate.UserService
 import org.kert0n.medappserver.services.security.AuthenticatedUserService
 import org.kert0n.medappserver.testutil.ApiRoutes
 import org.mockito.kotlin.whenever

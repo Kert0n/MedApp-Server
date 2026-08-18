@@ -1,4 +1,4 @@
-package org.kert0n.medappserver.services.models
+package org.kert0n.medappserver.services.aggregate
 
 import com.sksamuel.aedile.core.Cache
 import java.util.UUID

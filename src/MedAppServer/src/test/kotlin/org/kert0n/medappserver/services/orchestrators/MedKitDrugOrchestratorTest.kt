@@ -11,9 +11,9 @@ import org.junit.jupiter.api.assertThrows
 import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.domain.DomainRuleViolated
-import org.kert0n.medappserver.services.models.DrugService
-import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.models.ReservationService
+import org.kert0n.medappserver.services.aggregate.DrugService
+import org.kert0n.medappserver.services.aggregate.MedKitService
+import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired

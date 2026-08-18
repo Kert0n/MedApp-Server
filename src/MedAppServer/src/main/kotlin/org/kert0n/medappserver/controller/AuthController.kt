@@ -11,7 +11,7 @@ import jakarta.servlet.http.HttpServletRequest
 import java.util.*
 import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.OpenApiConfiguration
-import org.kert0n.medappserver.services.models.UserService
+import org.kert0n.medappserver.services.aggregate.UserService
 import org.kert0n.medappserver.services.security.RegistrationSecret
 import org.kert0n.medappserver.services.security.SecurityService
 import org.springframework.http.HttpStatus

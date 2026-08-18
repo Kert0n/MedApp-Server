@@ -6,8 +6,8 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.models.ReservationService
+import org.kert0n.medappserver.services.aggregate.MedKitService
+import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.kert0n.medappserver.testutil.ApiRoutes
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.qty

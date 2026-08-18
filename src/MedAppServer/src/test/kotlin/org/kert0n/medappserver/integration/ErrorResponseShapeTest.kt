@@ -44,7 +44,7 @@ class ErrorResponseShapeTest {
 
     @Autowired
 
-    private lateinit var medKitService: org.kert0n.medappserver.services.models.MedKitService
+    private lateinit var medKitService: org.kert0n.medappserver.services.aggregate.MedKitService
 
 
     @Autowired

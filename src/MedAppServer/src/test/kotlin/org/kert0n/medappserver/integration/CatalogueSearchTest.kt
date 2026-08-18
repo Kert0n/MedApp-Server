@@ -10,7 +10,7 @@ import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.db.model.parsed.DrugTemplateData
 import org.kert0n.medappserver.db.model.parsed.FormTypeData
 import org.kert0n.medappserver.db.repository.VidalDrugRepository
-import org.kert0n.medappserver.services.models.CatalogueService
+import org.kert0n.medappserver.services.aggregate.CatalogueService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.support.TransactionTemplate

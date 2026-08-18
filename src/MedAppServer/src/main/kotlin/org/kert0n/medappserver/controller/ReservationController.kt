@@ -10,8 +10,8 @@ import org.kert0n.medappserver.api.ReservationCreateRequest
 import org.kert0n.medappserver.api.ReservationDTO
 import org.kert0n.medappserver.api.ReservationPatchRequest
 import org.kert0n.medappserver.api.toDto
-import org.kert0n.medappserver.services.models.ReservationService
-import org.kert0n.medappserver.services.models.userId
+import org.kert0n.medappserver.services.aggregate.ReservationService
+import org.kert0n.medappserver.services.aggregate.userId
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus

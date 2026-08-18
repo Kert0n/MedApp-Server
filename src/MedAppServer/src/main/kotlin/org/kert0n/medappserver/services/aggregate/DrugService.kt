@@ -1,4 +1,4 @@
-package org.kert0n.medappserver.services.models
+package org.kert0n.medappserver.services.aggregate
 
 import java.math.BigDecimal
 import java.util.UUID

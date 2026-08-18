@@ -11,8 +11,8 @@ import org.kert0n.medappserver.api.MedKitDTO
 import org.kert0n.medappserver.api.MedKitSummaryDTO
 import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.api.MembershipCreateRequest
-import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.models.userId
+import org.kert0n.medappserver.services.aggregate.MedKitService
+import org.kert0n.medappserver.services.aggregate.userId
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus

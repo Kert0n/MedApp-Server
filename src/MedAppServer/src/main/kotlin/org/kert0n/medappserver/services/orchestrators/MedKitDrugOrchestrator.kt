@@ -10,9 +10,9 @@ import org.kert0n.medappserver.api.toSummaryDto
 import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.Reservation
-import org.kert0n.medappserver.services.models.DrugService
-import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.models.ReservationService
+import org.kert0n.medappserver.services.aggregate.DrugService
+import org.kert0n.medappserver.services.aggregate.MedKitService
+import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional

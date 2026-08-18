@@ -14,10 +14,10 @@ import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.QuantityUnit
 import org.kert0n.medappserver.domain.Reservation
-import org.kert0n.medappserver.services.models.CatalogueService
-import org.kert0n.medappserver.services.models.DrugService
-import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.models.ReservationService
+import org.kert0n.medappserver.services.aggregate.CatalogueService
+import org.kert0n.medappserver.services.aggregate.DrugService
+import org.kert0n.medappserver.services.aggregate.MedKitService
+import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
 import org.kert0n.medappserver.testutil.ApiRoutes
 import org.kert0n.medappserver.testutil.qty

@@ -1,4 +1,4 @@
-package org.kert0n.medappserver.services.models
+package org.kert0n.medappserver.services.aggregate
 
 import java.util.UUID
 import org.kert0n.medappserver.db.store.UserStore

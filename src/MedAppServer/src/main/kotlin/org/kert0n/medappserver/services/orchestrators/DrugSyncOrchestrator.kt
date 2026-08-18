@@ -10,8 +10,8 @@ import org.kert0n.medappserver.domain.IntakeJournal
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.StaleAggregateVersion
 import org.kert0n.medappserver.domain.StaleSyncVersion
-import org.kert0n.medappserver.services.models.DrugService
-import org.kert0n.medappserver.services.models.ReservationService
+import org.kert0n.medappserver.services.aggregate.DrugService
+import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional

@@ -3,8 +3,8 @@ package org.kert0n.medappserver.integration
 import java.util.UUID
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.kert0n.medappserver.services.models.CatalogueService
-import org.kert0n.medappserver.services.models.MedKitService
+import org.kert0n.medappserver.services.aggregate.CatalogueService
+import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.testutil.ApiRoutes
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.mockito.kotlin.any
