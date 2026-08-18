@@ -24,8 +24,7 @@ import org.springframework.transaction.annotation.Transactional
 class MedKitApplicationService(
     private val medKitService: MedKitService,
     private val drugService: DrugService,
-    private val reservationService: ReservationService,
-    private val drugs: DrugApplicationService
+    private val reservationService: ReservationService
 ) {
 
     private val logger = LoggerFactory.getLogger(MedKitApplicationService::class.java)
@@ -35,21 +34,16 @@ class MedKitApplicationService(
 
     /** Аптечка вместе с содержимым: сама аптечка знает участников, упаковки — себя. */
     @Transactional(readOnly = true)
-    fun read(medKitId: UUID, userId: UUID): MedKitDTO =
-        medKitService.requireAccessible(medKitId, userId).toDto(drugs.ofMedKit(medKitId).toSet())
-
-    /**
-     * Список аптечек со счётчиками — два чтения на весь ответ, сколько бы их ни было.
-     *
-     * Отдельного типа под счётчики не нужно: оба набора здесь и так на руках.
-     */
-    @Transactional(readOnly = true)
-    fun summaries(userId: UUID): Set<MedKitSummaryDTO> {
-        val packagesPerMedKit = drugService.accessibleTo(userId).groupingBy { it.medKitId }.eachCount()
-        return medKitService.allOfUser(userId)
-            .map { it.toSummaryDto(packagesPerMedKit[it.id] ?: 0) }
-            .toSet()
+    fun read(medKitId: UUID, userId: UUID): MedKitDTO {
+        val medKit = medKitService.requireAccessible(medKitId, userId)
+        val packages = drugService.ofMedKit(medKitId)
+        return medKit.toDto(packages.toDto(reservationService.onDrugs(packages.map { it.id })).toSet())
     }
+
+    /** Список аптечек со счётчиками — два чтения на весь ответ, сколько бы их ни было. */
+    @Transactional(readOnly = true)
+    fun summaries(userId: UUID): Set<MedKitSummaryDTO> =
+        medKitService.allOfUser(userId).toSummaryDto(drugService.accessibleTo(userId))
 
     @Transactional
     fun invite(medKitId: UUID, userId: UUID): InvitationDTO =

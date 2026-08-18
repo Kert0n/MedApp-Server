@@ -18,6 +18,7 @@ import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
 import org.kert0n.medappserver.services.application.DrugApplicationService
+import org.kert0n.medappserver.services.application.UserApplicationService
 
 /**
  * Когда версия агрегата двигается, а когда нет.
@@ -39,6 +40,7 @@ class VersionRulesTest {
     @Autowired private lateinit var medKitStore: MedKitStore
     @Autowired private lateinit var dbHelper: DatabaseTestHelper
     @Autowired private lateinit var drugs: DrugApplicationService
+    @Autowired private lateinit var users: UserApplicationService
 
     // ── Упаковка ─────────────────────────────────────────────────────────────────
 
@@ -88,7 +90,7 @@ class VersionRulesTest {
 
         val before = dbHelper.requireDrug(drug.id).version
         drugs.read(drug.id, alice.id)
-        drugs.accessibleTo(alice.id)
+        users.snapshot(alice.id)
 
         assertEquals(before, dbHelper.requireDrug(drug.id).version)
     }

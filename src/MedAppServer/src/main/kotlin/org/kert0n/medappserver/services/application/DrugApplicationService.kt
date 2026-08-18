@@ -52,16 +52,10 @@ class DrugApplicationService(
      * контроллеру нужен готовый ответ, а не два агрегата.
      */
     @Transactional(readOnly = true)
-    fun read(drugId: UUID, userId: UUID): DrugDTO =
-        withReservations(listOf(drugService.require(drugId, userId))).single()
-
-    /** Все доступные упаковки — для снимка пользователя. */
-    @Transactional(readOnly = true)
-    fun accessibleTo(userId: UUID): List<DrugDTO> = withReservations(drugService.accessibleTo(userId))
-
-    /** Содержимое одной аптечки — для её сервиса. */
-    @Transactional(readOnly = true)
-    fun ofMedKit(medKitId: UUID): List<DrugDTO> = withReservations(drugService.ofMedKit(medKitId))
+    fun read(drugId: UUID, userId: UUID): DrugDTO {
+        val drug = drugService.require(drugId, userId)
+        return drug.toDto(reservationService.onDrugs(listOf(drug.id)))
+    }
 
     // ── Команды ──────────────────────────────────────────────────────────────────
 
@@ -207,9 +201,4 @@ class DrugApplicationService(
         )
     }
 
-    /** Брони читаются одним запросом на весь набор и группируются в памяти. */
-    private fun withReservations(packages: List<Drug>): List<DrugDTO> {
-        val byDrug = reservationService.onDrugs(packages.map { it.id }).groupBy { it.drugId }
-        return packages.map { it.toDto(byDrug[it.id].orEmpty()) }
-    }
 }
