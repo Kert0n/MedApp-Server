@@ -3,25 +3,26 @@ package org.kert0n.medappserver.db.store
 import com.sksamuel.aedile.core.Cache
 import java.util.UUID
 import org.kert0n.medappserver.domain.Intake
-import org.kert0n.medappserver.domain.IntakeJournal
 import org.springframework.stereotype.Component
 import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronizationManager
 
 /**
- * Журнал синхронизаций поверх кеша.
+ * Хранилище агрегата приёма — такое же, как остальные, только за ним кеш, а не таблица.
  *
- * Лежит среди хранилищ, потому что это и есть хранилище агрегата — граница, за которой сервис
- * не знает, чем всё держится. То, что за ней память процесса, а не таблица, — решение о
- * приватности, а не о слое: приём слишком личное, чтобы копить его строками (см. `Intake`).
+ * Порта в домене под это нет намеренно: граница агрегата — само хранилище, а чем оно держится,
+ * его дело. Интерфейс поверх одной реализации добавлял бы слой, ничего не разделяя, и уводил бы
+ * решение о хранении в домен, которому оно не принадлежит.
  *
- * Отсюда и цена, названная в описании операции: после перезапуска сервера повтор старого
- * запроса журналу неизвестен и спишет второй раз.
+ * Кеш, а не таблица, — решение о приватности: приём слишком личное, чтобы копить его строками
+ * ради технической задачи «не списать дважды» (см. `Intake`). Отсюда и цена, названная в
+ * описании операции: после перезапуска сервера повтор старого запроса неизвестен и спишет
+ * второй раз.
  */
 @Component
-class IntakeJournalStore(private val journal: Cache<UUID, Intake>) : IntakeJournal {
+class IntakeStore(private val journal: Cache<UUID, Intake>) {
 
-    override fun find(id: UUID): Intake? = journal.getOrNull(id)
+    fun find(id: UUID): Intake? = journal.getOrNull(id)
 
     /**
      * Запись появляется только после успешного коммита.
@@ -36,7 +37,7 @@ class IntakeJournalStore(private val journal: Cache<UUID, Intake>) : IntakeJourn
      * времени. Здесь он её не увидит: он либо проиграет на версии и повторится, либо придёт,
      * когда первый уже закоммитился.
      */
-    override fun record(intake: Intake) {
+    fun record(intake: Intake) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
             journal[intake.id] = intake
             return

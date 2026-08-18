@@ -1,5 +1,6 @@
 package org.kert0n.medappserver.integration
 
+import kotlin.test.assertFalse
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
@@ -12,8 +13,9 @@ import org.kert0n.medappserver.db.store.ReservationStore
 import java.util.UUID
 import org.kert0n.medappserver.api.SyncRequest
 import org.kert0n.medappserver.api.SyncReservation
-import org.kert0n.medappserver.domain.IntakeJournal
+import org.kert0n.medappserver.services.aggregate.IntakeService
 import org.kert0n.medappserver.domain.Quantity
+import org.kert0n.medappserver.domain.Intake
 import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.Reservation
 import org.kert0n.medappserver.domain.ReservationAlreadyExists
@@ -51,7 +53,7 @@ class ConcurrencyTest {
     @Autowired private lateinit var reservationStore: ReservationStore
     @Autowired private lateinit var dbHelper: DatabaseTestHelper
     @Autowired private lateinit var drugs: DrugApplicationService
-    @Autowired private lateinit var journal: IntakeJournal
+    @Autowired private lateinit var intakes: IntakeService
     @Autowired private lateinit var interleaved: InterleavedTransactions
     @Autowired private lateinit var reservationsApp: ReservationApplicationService
 
@@ -189,7 +191,12 @@ class ConcurrencyTest {
 
         assertNotNull(failure, "синхронизация по устаревшей версии обязана быть отклонена")
         assertQty(70.0, dbHelper.drugQuantity(drug.id)!!, "в пачке результат победившей команды")
-        assertNull(journal.find(syncId), "неудачной попытки в журнале быть не должно")
+        assertFalse(
+            intakes.alreadyApplied(
+                Intake(syncId, drug.id, alice.id, consumed = Quantity(qty(5.0), dbHelper.unit()))
+            ),
+            "неудачной попытки в журнале быть не должно"
+        )
     }
 
     /** И повтор того же запроса после отказа применяется по-настоящему, а не отвечает согласием. */

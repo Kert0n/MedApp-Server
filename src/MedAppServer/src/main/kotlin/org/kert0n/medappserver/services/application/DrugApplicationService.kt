@@ -8,14 +8,12 @@ import org.kert0n.medappserver.api.DrugPatchRequest
 import org.kert0n.medappserver.api.SyncRequest
 import org.kert0n.medappserver.api.SyncResultDTO
 import org.kert0n.medappserver.api.toDto
-import org.kert0n.medappserver.domain.ConflictingSync
-import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.Intake
-import org.kert0n.medappserver.domain.IntakeJournal
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.StaleAggregateVersion
 import org.kert0n.medappserver.domain.StaleSyncVersion
 import org.kert0n.medappserver.services.aggregate.DrugService
+import org.kert0n.medappserver.services.aggregate.IntakeService
 import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.slf4j.LoggerFactory
@@ -37,7 +35,7 @@ class DrugApplicationService(
     private val drugService: DrugService,
     private val reservationService: ReservationService,
     private val medKitService: MedKitService,
-    private val journal: IntakeJournal
+    private val intakes: IntakeService
 ) {
 
     private val logger = LoggerFactory.getLogger(DrugApplicationService::class.java)
@@ -139,11 +137,7 @@ class DrugApplicationService(
             reservedTo = request.reservation?.let { Quantity(it.amount, drug.quantity.unit) }
         )
 
-        journal.find(syncId)?.let { previous ->
-            if (!requested.isRepeatOf(previous)) throw ConflictingSync()
-            logger.debug("Sync {} is a repeat, answering with the current state", syncId)
-            return currentState(drugId, userId)
-        }
+        if (intakes.alreadyApplied(requested)) return currentState(drugId, userId)
 
         // Версии синхронизации приехали телом, а не в `If-Match`, поэтому их несовпадение это
         // конфликт состояния, а не невыполненное предусловие запроса: 409, а не 412.
@@ -160,7 +154,7 @@ class DrugApplicationService(
 
         // Пачки не стало — брони на ней тоже: правку несуществующей брони применять некуда.
         if (request.consumed != null && left == null) {
-            journal.record(requested)
+            intakes.record(requested)
             return null
         }
 
@@ -174,7 +168,7 @@ class DrugApplicationService(
             }
         }
 
-        journal.record(requested)
+        intakes.record(requested)
         return currentState(drugId, userId)
     }
 
