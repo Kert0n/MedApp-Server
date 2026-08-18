@@ -10,6 +10,7 @@ import org.kert0n.medappserver.api.toSummaryDto
 import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.services.aggregate.ReservationService
+import org.kert0n.medappserver.services.orchestrator.DrugRelocation
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -24,7 +25,8 @@ import org.springframework.transaction.annotation.Transactional
 class MedKitApplicationService(
     private val medKitService: MedKitService,
     private val drugService: DrugService,
-    private val reservationService: ReservationService
+    private val reservationService: ReservationService,
+    private val relocation: DrugRelocation
 ) {
 
     private val logger = LoggerFactory.getLogger(MedKitApplicationService::class.java)
@@ -75,28 +77,15 @@ class MedKitApplicationService(
      * Удаление аптечки, при желании — с переносом упаковок.
      *
      * Без переноса содержимое уходит каскадом. С переносом действует то же правило, что при
-     * переезде одной пачки, но двумя запросами: аптечка со ста пачками не должна стоить ста
-     * загрузок.
-     *
-     * Состав целевой аптечки требуется дважды, и это не перестраховка. **Замерено:** массовый
-     * `UPDATE` с `clearAutomatically` очищает persistence context и уносит вместе с ним
-     * зарегистрированную проверку версии — снял из сценария один этот запрос, и та же гонка
-     * стала отвергаться. Поэтому состав перепроверяется после него, уже по свежему чтению;
-     * держится это на том, что `requireUnchanged` сравнивает версию со снимком явно.
+     * переезде одной пачки, поэтому и живёт оно в одном месте на оба случая.
      */
     @Transactional
     fun delete(medKitId: UUID, userId: UUID, expectedVersion: Long, transferToMedKitId: UUID? = null) {
         logger.debug("Deleting medkit {} (transfer to {})", medKitId, transferToMedKitId)
         medKitService.requireAccessibleAt(medKitId, userId, expectedVersion)
 
-        if (transferToMedKitId != null) {
-            val target = medKitService.requireAccessible(transferToMedKitId, userId)
-            // Тот же состав, что и при переносе одной пачки, — и то же требование к нему.
-            medKitService.requireUnchanged(target)
-            // Порядок важен: брони выбираются по исходной аптечке, пока упаковки ещё в ней.
-            reservationService.dropInMedKitExcept(medKitId, target.members)
-            drugService.moveAllToMedKit(medKitId, target.id)
-            medKitService.requireUnchanged(target)
+        transferToMedKitId?.let {
+            relocation.moveAll(medKitId, medKitService.requireAccessible(it, userId))
         }
 
         medKitService.delete(medKitId, userId, expectedVersion)

@@ -16,6 +16,8 @@ import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.IntakeService
 import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.services.aggregate.ReservationService
+import org.kert0n.medappserver.services.orchestrator.DrugRelocation
+import org.kert0n.medappserver.services.orchestrator.DrugSynchronisation
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -35,7 +37,9 @@ class DrugApplicationService(
     private val drugService: DrugService,
     private val reservationService: ReservationService,
     private val medKitService: MedKitService,
-    private val intakes: IntakeService
+    private val intakes: IntakeService,
+    private val relocation: DrugRelocation,
+    private val synchronisation: DrugSynchronisation
 ) {
 
     private val logger = LoggerFactory.getLogger(DrugApplicationService::class.java)
@@ -86,23 +90,11 @@ class DrugApplicationService(
         return read(drugId, userId)
     }
 
-    /**
-     * Перенос упаковки.
-     *
-     * Три агрегата в одном сценарии: пачка переезжает, аптечка называет состав, брони тех, кто
-     * её больше не видит, убираются массово.
-     *
-     * Состав аптечки здесь — основание решения, а не то, что меняется: `requireUnchanged`
-     * требует, чтобы он дожил до коммита. Иначе вышедший в этот момент участник сохранил бы
-     * бронь на пачку, которую больше не видит.
-     */
     @Transactional
     fun moveToMedKit(drugId: UUID, targetMedKitId: UUID, userId: UUID, expectedVersion: Long): DrugDTO {
         logger.debug("Moving drug {} to medkit {}", drugId, targetMedKitId)
         val target = medKitService.requireAccessible(targetMedKitId, userId)
-        medKitService.requireUnchanged(target)
-        drugService.moveTo(drugId, target.id, userId, expectedVersion)
-        reservationService.dropOnDrugExcept(drugId, target.members)
+        relocation.moveOne(drugId, target, userId, expectedVersion)
         return read(drugId, userId)
     }
 
@@ -140,36 +132,22 @@ class DrugApplicationService(
         if (intakes.alreadyApplied(requested)) return currentState(drugId, userId)
 
         // Версии синхронизации приехали телом, а не в `If-Match`, поэтому их несовпадение это
-        // конфликт состояния, а не невыполненное предусловие запроса: 409, а не 412.
-        asSyncConflict {
-            drug.requireVersion(request.drugVersion)
-            // Без приёма упаковка не записывается, и её версия сама себя не проверит: сравнение
-            // выше осталось бы украшением, а переезд или смена единицы прошли бы мимо.
-            if (request.consumed == null) drugService.requireUnchanged(drug)
-        }
-
+        // конфликт состояния, а не невыполненное предусловие запроса: 409, а не 412. Различие
+        // контрактное, поэтому перевод стоит здесь, а не там, где отказ рождается.
         val left = asSyncConflict {
-            request.consumed?.let { drugService.consume(drugId, it, userId, request.drugVersion) }
-        }
-
-        // Пачки не стало — брони на ней тоже: правку несуществующей брони применять некуда.
-        if (request.consumed != null && left == null) {
-            intakes.record(requested)
-            return null
-        }
-
-        asSyncConflict {
-            request.reservation?.let { wanted ->
-                if (wanted.version == null) {
-                    reservationService.create(userId, drugId, wanted.amount)
-                } else {
-                    reservationService.changeTo(userId, drugId, wanted.amount, wanted.version)
-                }
-            }
+            synchronisation.apply(
+                drug = drug,
+                userId = userId,
+                consumed = requested.consumed,
+                reservedTo = requested.reservedTo,
+                expectedDrugVersion = request.drugVersion,
+                expectedReservationVersion = request.reservation?.version
+            )
         }
 
         intakes.record(requested)
-        return currentState(drugId, userId)
+        // Пачки не стало — отдавать нечего.
+        return if (left == null) null else currentState(drugId, userId)
     }
 
     /**
