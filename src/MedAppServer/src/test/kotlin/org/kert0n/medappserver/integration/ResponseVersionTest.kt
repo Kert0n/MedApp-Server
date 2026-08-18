@@ -58,7 +58,7 @@ class ResponseVersionTest {
     @Test
     fun `PATCH брони отдаёт версию, записанную в базу`() {
         val world = world()
-        reservationService.create(world.userId, world.drugId, qty(20.0))
+        dbHelper.reserve(world.userId, world.drugId, qty(20.0))
 
         val response = mockMvc.perform(patchReservation(world, "30.0", dbHelper.reservationVersion(world.userId, world.drugId)))
             .andExpect(status().isOk)
@@ -73,7 +73,7 @@ class ResponseVersionTest {
     @Test
     fun `тегом из ответа PATCH сразу делается следующая команда`() {
         val world = world()
-        reservationService.create(world.userId, world.drugId, qty(20.0))
+        dbHelper.reserve(world.userId, world.drugId, qty(20.0))
 
         val first = mockMvc.perform(patchReservation(world, "30.0", dbHelper.reservationVersion(world.userId, world.drugId)))
             .andExpect(status().isOk)
@@ -134,7 +134,7 @@ class ResponseVersionTest {
     @Test
     fun `синхронизация отдаёт версии, записанные в базу`() {
         val world = world()
-        reservationService.create(world.userId, world.drugId, qty(50.0))
+        dbHelper.reserve(world.userId, world.drugId, qty(50.0))
 
         val body = mockMvc.perform(
             put("${ApiRoutes.drug(world.drugId)}/sync/${UUID.randomUUID()}")
@@ -172,7 +172,7 @@ class ResponseVersionTest {
 
     private fun world(): World {
         val owner = dbHelper.freshUser("alice")
-        val kit = medKitService.create(owner.id)
+        val kit = dbHelper.freshMedKit(owner.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         return World(owner.id, drug.id)
     }

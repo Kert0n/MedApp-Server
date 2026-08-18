@@ -56,7 +56,7 @@ class DrugSyncTest {
     @Test
     fun `приём и бронь применяются одним запросом`() {
         val world = world()
-        reservationService.create(world.userId, world.drugId, qty(50.0))
+        dbHelper.reserve(world.userId, world.drugId, qty(50.0))
 
         mockMvc.perform(world.sync(UUID.randomUUID(), consumed = "5.0", reservedTo = "45.0"))
             .andExpect(status().isOk)
@@ -113,7 +113,7 @@ class DrugSyncTest {
     @Test
     fun `отказ приёма не применяет и бронь`() {
         val world = world()
-        reservationService.create(world.userId, world.drugId, qty(50.0))
+        dbHelper.reserve(world.userId, world.drugId, qty(50.0))
 
         mockMvc.perform(world.sync(UUID.randomUUID(), consumed = "500.0", reservedTo = "45.0"))
             .andExpect(status().isBadRequest)
@@ -126,7 +126,7 @@ class DrugSyncTest {
     @Test
     fun `устаревшая версия брони не даёт применить приём`() {
         val world = world()
-        reservationService.create(world.userId, world.drugId, qty(50.0))
+        dbHelper.reserve(world.userId, world.drugId, qty(50.0))
         val staleReservationVersion = dbHelper.reservationVersion(world.userId, world.drugId) + 1
 
         mockMvc.perform(
@@ -200,7 +200,7 @@ class DrugSyncTest {
     @Test
     fun `приём, опустошивший пачку, уносит и бронь`() {
         val world = world()
-        reservationService.create(world.userId, world.drugId, qty(50.0))
+        dbHelper.reserve(world.userId, world.drugId, qty(50.0))
 
         mockMvc.perform(world.sync(UUID.randomUUID(), consumed = "100.0", reservedTo = "10.0"))
             .andExpect(status().isNoContent)
@@ -248,7 +248,7 @@ class DrugSyncTest {
 
     private fun world(): World {
         val owner = dbHelper.freshUser("alice")
-        val kit = medKitService.create(owner.id)
+        val kit = dbHelper.freshMedKit(owner.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         return World(owner.id, drug.id)
     }

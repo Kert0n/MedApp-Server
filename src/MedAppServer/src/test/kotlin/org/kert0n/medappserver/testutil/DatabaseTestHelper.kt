@@ -12,7 +12,11 @@ import org.kert0n.medappserver.db.store.UserStore
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.QuantityUnit
+import org.kert0n.medappserver.domain.MedKit
+import org.kert0n.medappserver.domain.Reservation
 import org.kert0n.medappserver.domain.User
+import org.kert0n.medappserver.services.aggregate.MedKitService
+import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
 
@@ -30,6 +34,8 @@ class DatabaseTestHelper(
     private val reservations: ReservationStore,
     private val medKits: MedKitStore,
     private val quantityUnits: QuantityUnitRepository,
+    private val medKitService: MedKitService,
+    private val reservationService: ReservationService,
     private val entityManager: EntityManager
 ) {
     @Transactional
@@ -61,6 +67,25 @@ class DatabaseTestHelper(
         drugs.insert(drug)
         return drug
     }
+
+    /**
+     * Аптечка с одним участником — под подготовку сценария.
+     *
+     * Подготовка идёт отсюда, а не прямым вызовом сервиса агрегата: агрегат транзакцию не
+     * открывает, а этот помощник — открывает. Действие, которое тест **проверяет**, зовётся
+     * через фасад: тем же входом, что и приложение.
+     */
+    @Transactional
+    fun freshMedKit(ownerId: UUID): MedKit = medKitService.create(ownerId)
+
+    /** Вступление без приглашения: тесту нужен состав, а не проверка ключа. */
+    @Transactional
+    fun join(medKitId: UUID, userId: UUID): MedKit = medKitService.join(medKitId, userId)
+
+    /** Бронь под подготовку сценария. */
+    @Transactional
+    fun reserve(userId: UUID, drugId: UUID, amount: BigDecimal): Reservation =
+        reservationService.create(userId, drugId, amount)
 
     /** Кладёт заранее собранный препарат: тестам нужны свои имена и количества. */
     @Transactional

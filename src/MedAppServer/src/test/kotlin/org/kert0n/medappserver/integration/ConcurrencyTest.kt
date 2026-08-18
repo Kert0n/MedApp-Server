@@ -68,13 +68,13 @@ class ConcurrencyTest {
     fun `приём по устаревшему остатку отклоняется`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.create(alice.id)
-        medKitService.join(kit.id, bob.id)
+        val kit = dbHelper.freshMedKit(alice.id)
+        dbHelper.join(kit.id, bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
 
         val failure = interleaved.lostUpdate(
             read = { drugStore.findAccessible(drug.id, alice.id)!! },
-            meanwhile = { drugService.consume(drug.id, qty(30.0), bob.id, dbHelper.drugVersion(drug.id)) },
+            meanwhile = { drugs.recordIntake(drug.id, qty(30.0), bob.id, dbHelper.drugVersion(drug.id)) },
             write = { stale -> drugStore.save(stale.consume(Quantity(qty(10.0), stale.quantity.unit))!!) }
         )
 
@@ -93,8 +93,8 @@ class ConcurrencyTest {
     fun `выход по устаревшему составу отклоняется`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.create(alice.id)
-        medKitService.join(kit.id, bob.id)
+        val kit = dbHelper.freshMedKit(alice.id)
+        dbHelper.join(kit.id, bob.id)
 
         val failure = interleaved.lostUpdate(
             read = { medKitStore.findById(kit.id)!! },
@@ -126,13 +126,13 @@ class ConcurrencyTest {
     fun `перенос против выхода из целевой аптечки отклоняется`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val source = medKitService.create(alice.id)
-        medKitService.join(source.id, bob.id)
-        val target = medKitService.create(alice.id)
-        medKitService.join(target.id, bob.id)
+        val source = dbHelper.freshMedKit(alice.id)
+        dbHelper.join(source.id, bob.id)
+        val target = dbHelper.freshMedKit(alice.id)
+        dbHelper.join(target.id, bob.id)
 
         val drug = dbHelper.freshDrug(source.id, 100.0)
-        reservationService.create(bob.id, drug.id, qty(20.0))
+        dbHelper.reserve(bob.id, drug.id, qty(20.0))
 
         val failure = interleaved.lostUpdate(
             read = {
@@ -171,8 +171,8 @@ class ConcurrencyTest {
     fun `откатившаяся синхронизация не остаётся в журнале`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.create(alice.id)
-        medKitService.join(kit.id, bob.id)
+        val kit = dbHelper.freshMedKit(alice.id)
+        dbHelper.join(kit.id, bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         val staleVersion = dbHelper.drugVersion(drug.id)
         val syncId = UUID.randomUUID()
@@ -181,7 +181,7 @@ class ConcurrencyTest {
             // Упаковка попадает в persistence context до чужой записи: дальше синхронизация
             // увидит именно её, со своей версией 3.
             read = { drugStore.findAccessible(drug.id, alice.id)!! },
-            meanwhile = { drugService.consume(drug.id, qty(30.0), bob.id, staleVersion) },
+            meanwhile = { drugs.recordIntake(drug.id, qty(30.0), bob.id, staleVersion) },
             write = {
                 drugs.synchronise(
                     syncId, drug.id, SyncRequest(consumed = qty(5.0), drugVersion = staleVersion), alice.id
@@ -204,15 +204,15 @@ class ConcurrencyTest {
     fun `повтор после отката списывает по-настоящему`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.create(alice.id)
-        medKitService.join(kit.id, bob.id)
+        val kit = dbHelper.freshMedKit(alice.id)
+        dbHelper.join(kit.id, bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         val staleVersion = dbHelper.drugVersion(drug.id)
         val syncId = UUID.randomUUID()
 
         interleaved.lostUpdate(
             read = { drugStore.findAccessible(drug.id, alice.id)!! },
-            meanwhile = { drugService.consume(drug.id, qty(30.0), bob.id, staleVersion) },
+            meanwhile = { drugs.recordIntake(drug.id, qty(30.0), bob.id, staleVersion) },
             write = {
                 drugs.synchronise(
                     syncId, drug.id, SyncRequest(consumed = qty(5.0), drugVersion = staleVersion), alice.id
@@ -252,8 +252,8 @@ class ConcurrencyTest {
     fun `бронь против выхода из аптечки не остаётся без доступа`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.create(alice.id)
-        medKitService.join(kit.id, bob.id)
+        val kit = dbHelper.freshMedKit(alice.id)
+        dbHelper.join(kit.id, bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
 
         val failure = interleaved.lostUpdate(
@@ -276,9 +276,9 @@ class ConcurrencyTest {
     fun `бронь против переноса упаковки не остаётся без доступа`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val shared = medKitService.create(alice.id)
-        medKitService.join(shared.id, bob.id)
-        val private = medKitService.create(alice.id)
+        val shared = dbHelper.freshMedKit(alice.id)
+        dbHelper.join(shared.id, bob.id)
+        val private = dbHelper.freshMedKit(alice.id)
         val drug = dbHelper.freshDrug(shared.id, 100.0)
 
         val failure = interleaved.lostUpdate(
@@ -308,16 +308,16 @@ class ConcurrencyTest {
     fun `синхронизация только брони против правки упаковки отклоняется`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.create(alice.id)
-        medKitService.join(kit.id, bob.id)
+        val kit = dbHelper.freshMedKit(alice.id)
+        dbHelper.join(kit.id, bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
-        reservationService.create(alice.id, drug.id, qty(20.0))
+        dbHelper.reserve(alice.id, drug.id, qty(20.0))
         val staleDrugVersion = dbHelper.drugVersion(drug.id)
         val reservationVersion = dbHelper.reservationVersion(alice.id, drug.id)
 
         val failure = interleaved.lostUpdate(
             read = { drugStore.findAccessible(drug.id, alice.id)!! },
-            meanwhile = { drugService.consume(drug.id, qty(30.0), bob.id, staleDrugVersion) },
+            meanwhile = { drugs.recordIntake(drug.id, qty(30.0), bob.id, staleDrugVersion) },
             write = {
                 drugs.synchronise(
                     UUID.randomUUID(),
@@ -348,7 +348,7 @@ class ConcurrencyTest {
     @Test
     fun `одновременное заведение брони отвергается правилом, а не пятисоткой`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
+        val kit = dbHelper.freshMedKit(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
 
         val failure = interleaved.lostUpdate(
@@ -377,7 +377,7 @@ class ConcurrencyTest {
     fun `вступление в удалённую аптечку отвечает как на недоступную`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.create(alice.id)
+        val kit = dbHelper.freshMedKit(alice.id)
 
         val failure = interleaved.lostUpdate(
             read = { medKitStore.findById(kit.id)!! },
@@ -407,13 +407,13 @@ class ConcurrencyTest {
     fun `удаление с переносом против выхода из целевой аптечки отклоняется`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val source = medKitService.create(alice.id)
-        medKitService.join(source.id, bob.id)
-        val target = medKitService.create(alice.id)
-        medKitService.join(target.id, bob.id)
+        val source = dbHelper.freshMedKit(alice.id)
+        dbHelper.join(source.id, bob.id)
+        val target = dbHelper.freshMedKit(alice.id)
+        dbHelper.join(target.id, bob.id)
 
         val drug = dbHelper.freshDrug(source.id, 100.0)
-        reservationService.create(bob.id, drug.id, qty(20.0))
+        dbHelper.reserve(bob.id, drug.id, qty(20.0))
         val sourceVersion = dbHelper.medKitVersion(source.id)
 
         val failure = interleaved.lostUpdate(
@@ -448,10 +448,10 @@ class ConcurrencyTest {
     fun `заведение брони удерживает упаковку, по которой решало`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val source = medKitService.create(alice.id)
-        medKitService.join(source.id, bob.id)
-        val target = medKitService.create(alice.id)
-        medKitService.join(target.id, bob.id)
+        val source = dbHelper.freshMedKit(alice.id)
+        dbHelper.join(source.id, bob.id)
+        val target = dbHelper.freshMedKit(alice.id)
+        dbHelper.join(target.id, bob.id)
         val drug = dbHelper.freshDrug(source.id, 100.0)
 
         val failure = interleaved.lostUpdate(

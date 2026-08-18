@@ -18,6 +18,7 @@ import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
 import org.kert0n.medappserver.services.application.DrugApplicationService
+import org.kert0n.medappserver.services.application.ReservationApplicationService
 import org.kert0n.medappserver.services.application.UserApplicationService
 
 /**
@@ -40,6 +41,7 @@ class VersionRulesTest {
     @Autowired private lateinit var medKitStore: MedKitStore
     @Autowired private lateinit var dbHelper: DatabaseTestHelper
     @Autowired private lateinit var drugs: DrugApplicationService
+    @Autowired private lateinit var reservationsApp: ReservationApplicationService
     @Autowired private lateinit var users: UserApplicationService
 
     // ── Упаковка ─────────────────────────────────────────────────────────────────
@@ -47,11 +49,11 @@ class VersionRulesTest {
     @Test
     fun `приём двигает версию упаковки`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
+        val kit = dbHelper.freshMedKit(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
 
         val before = dbHelper.requireDrug(drug.id).version
-        drugService.consume(drug.id, qty(10.0), alice.id, dbHelper.drugVersion(drug.id))
+        drugs.recordIntake(drug.id, qty(10.0), alice.id, dbHelper.drugVersion(drug.id))
 
         assertTrue(dbHelper.requireDrug(drug.id).version > before, "версия обязана сдвинуться")
     }
@@ -59,11 +61,11 @@ class VersionRulesTest {
     @Test
     fun `исправление количества двигает версию упаковки`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
+        val kit = dbHelper.freshMedKit(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
 
         val before = dbHelper.requireDrug(drug.id).version
-        drugService.update(drug.id, DrugPatchRequest(quantity = qty(80.0)), alice.id, dbHelper.drugVersion(drug.id))
+        drugs.update(drug.id, DrugPatchRequest(quantity = qty(80.0)), alice.id, dbHelper.drugVersion(drug.id))
 
         assertTrue(dbHelper.requireDrug(drug.id).version > before, "версия обязана сдвинуться")
     }
@@ -72,11 +74,13 @@ class VersionRulesTest {
     @Test
     fun `отклонённая команда версию не двигает`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
+        val kit = dbHelper.freshMedKit(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 5.0)
 
         val before = dbHelper.requireDrug(drug.id).version
-        assertFailsWith<InsufficientStock> { drugService.consume(drug.id, qty(50.0), alice.id, dbHelper.drugVersion(drug.id)) }
+        assertFailsWith<InsufficientStock> {
+            drugs.recordIntake(drug.id, qty(50.0), alice.id, dbHelper.drugVersion(drug.id))
+        }
 
         assertEquals(before, dbHelper.requireDrug(drug.id).version, "версия после отказа та же")
     }
@@ -85,7 +89,7 @@ class VersionRulesTest {
     @Test
     fun `чтение версию не двигает`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
+        val kit = dbHelper.freshMedKit(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
 
         val before = dbHelper.requireDrug(drug.id).version
@@ -100,17 +104,17 @@ class VersionRulesTest {
     @Test
     fun `изменение брони двигает её версию, но не версию упаковки`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
+        val kit = dbHelper.freshMedKit(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
-        reservationService.create(alice.id, drug.id, qty(20.0))
+        dbHelper.reserve(alice.id, drug.id, qty(20.0))
 
-        val reservationBefore = reservationService.require(alice.id, drug.id).version
+        val reservationBefore = dbHelper.reservationVersion(alice.id, drug.id)
         val drugBefore = dbHelper.requireDrug(drug.id).version
 
-        reservationService.changeTo(alice.id, drug.id, qty(30.0), dbHelper.reservationVersion(alice.id, drug.id))
+        reservationsApp.changeTo(alice.id, drug.id, qty(30.0), dbHelper.reservationVersion(alice.id, drug.id))
 
         assertTrue(
-            reservationService.require(alice.id, drug.id).version > reservationBefore,
+            dbHelper.reservationVersion(alice.id, drug.id) > reservationBefore,
             "версия брони обязана сдвинуться"
         )
         assertEquals(
@@ -123,16 +127,16 @@ class VersionRulesTest {
     @Test
     fun `приём версию брони не двигает`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
+        val kit = dbHelper.freshMedKit(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
-        reservationService.create(alice.id, drug.id, qty(20.0))
+        dbHelper.reserve(alice.id, drug.id, qty(20.0))
 
-        val before = reservationService.require(alice.id, drug.id).version
-        drugService.consume(drug.id, qty(10.0), alice.id, dbHelper.drugVersion(drug.id))
+        val before = dbHelper.reservationVersion(alice.id, drug.id)
+        drugs.recordIntake(drug.id, qty(10.0), alice.id, dbHelper.drugVersion(drug.id))
 
         assertEquals(
             before,
-            reservationService.require(alice.id, drug.id).version,
+            dbHelper.reservationVersion(alice.id, drug.id),
             "бронь не изменилась: сервер её не трогает"
         )
     }
@@ -150,10 +154,10 @@ class VersionRulesTest {
     fun `вступление двигает версию аптечки, хотя её строка не менялась`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.create(alice.id)
+        val kit = dbHelper.freshMedKit(alice.id)
 
         val before = requireKit(kit.id).version
-        medKitService.join(kit.id, bob.id)
+        dbHelper.join(kit.id, bob.id)
 
         assertTrue(requireKit(kit.id).version > before, "версия аптечки обязана сдвинуться")
     }
@@ -162,8 +166,8 @@ class VersionRulesTest {
     fun `выход участника двигает версию аптечки`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.create(alice.id)
-        medKitService.join(kit.id, bob.id)
+        val kit = dbHelper.freshMedKit(alice.id)
+        dbHelper.join(kit.id, bob.id)
 
         val before = requireKit(kit.id).version
         medKits.leave(kit.id, bob.id, dbHelper.medKitVersion(kit.id))
@@ -174,11 +178,11 @@ class VersionRulesTest {
     @Test
     fun `отклонённое вступление версию аптечки не двигает`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
+        val kit = dbHelper.freshMedKit(alice.id)
 
         val before = requireKit(kit.id).version
         assertFailsWith<org.kert0n.medappserver.domain.AlreadyMember> {
-            medKitService.join(kit.id, alice.id)
+            dbHelper.join(kit.id, alice.id)
         }
 
         assertEquals(before, requireKit(kit.id).version, "версия после отказа та же")
@@ -196,8 +200,8 @@ class VersionRulesTest {
     @Test
     fun `массовый перенос двигает версии переехавших упаковок`() {
         val alice = dbHelper.freshUser("alice")
-        val source = medKitService.create(alice.id)
-        val target = medKitService.create(alice.id)
+        val source = dbHelper.freshMedKit(alice.id)
+        val target = dbHelper.freshMedKit(alice.id)
         val first = dbHelper.freshDrug(source.id, 10.0)
         val second = dbHelper.freshDrug(source.id, 20.0)
 

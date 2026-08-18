@@ -87,7 +87,7 @@ class ErrorResponseShapeTest {
         // Пачка на 5 таблеток, просим съесть 500: бронь больше остатка законна, так что утечку
         // проверяем на том отказе, который остался.
         val user = dbHelper.insert(User(hashedKey = "{noop}k"))
-        val medKit = medKitService.create(user.id)
+        val medKit = dbHelper.freshMedKit(user.id)
         val drug = dbHelper.insert(
             Drug(
                 medKitId = medKit.id, name = "Aspirin", quantity = Quantity(qty(5.0), dbHelper.unit()),

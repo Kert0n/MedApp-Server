@@ -196,7 +196,7 @@ class PreconditionMatrixTest {
     @Test
     fun `аптечка и бронь тоже отдают теги`() {
         val world = world()
-        reservationService.create(world.userId, world.drugId, qty(20.0))
+        dbHelper.reserve(world.userId, world.drugId, qty(20.0))
 
         mockMvc.perform(get(ApiRoutes.medKit(world.medKitId)).with(world.caller()))
             .andExpect(status().isOk)
@@ -254,7 +254,7 @@ class PreconditionMatrixTest {
     @Test
     fun `бронь и членство требуют предусловия наравне с упаковкой`() {
         val world = world()
-        reservationService.create(world.userId, world.drugId, qty(20.0))
+        dbHelper.reserve(world.userId, world.drugId, qty(20.0))
 
         mockMvc.perform(
             patch(ApiRoutes.reservation(world.drugId))
@@ -275,7 +275,7 @@ class PreconditionMatrixTest {
 
     private fun world(): World {
         val owner = dbHelper.freshUser("alice")
-        val kit = medKitService.create(owner.id)
+        val kit = dbHelper.freshMedKit(owner.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         return World(owner.id, kit.id, drug.id)
     }

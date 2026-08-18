@@ -96,7 +96,7 @@ class InputSizeLimitsTest {
      */
     private fun createDrug(quantity: String): ResultActions {
         val owner = dbHelper.freshUser("limits")
-        val kit = medKitService.create(owner.id)
+        val kit = dbHelper.freshMedKit(owner.id)
         // Справочник здесь мок — он замокан ради поиска; единицу для записи он должен отдать
         // настоящую, иначе «на границе принимается» упрётся не в границу.
         whenever(catalogueService.requireQuantityUnit(any())).thenReturn(dbHelper.unit())
