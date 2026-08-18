@@ -8,9 +8,6 @@ import org.kert0n.medappserver.api.MedKitDTO
 import org.kert0n.medappserver.api.MedKitSummaryDTO
 import org.kert0n.medappserver.api.toSummaryDto
 import org.kert0n.medappserver.api.toDto
-import org.kert0n.medappserver.db.store.DrugStore
-import org.kert0n.medappserver.db.store.MedKitStore
-import org.kert0n.medappserver.db.store.ReservationStore
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.Reservation
 import org.kert0n.medappserver.services.models.DrugService
@@ -31,10 +28,7 @@ import org.springframework.transaction.annotation.Transactional
 class MedKitDrugOrchestrator(
     private val drugService: DrugService,
     private val reservationService: ReservationService,
-    private val medKitService: MedKitService,
-    private val drugs: DrugStore,
-    private val reservations: ReservationStore,
-    private val medKits: MedKitStore
+    private val medKitService: MedKitService
 ) {
 
     private val logger = LoggerFactory.getLogger(MedKitDrugOrchestrator::class.java)
@@ -48,7 +42,7 @@ class MedKitDrugOrchestrator(
     @Transactional
     fun createDrugInMedKit(medKitId: UUID, request: DrugCreateRequest, userId: UUID): Drug {
         logger.debug("Creating drug {} in medkit {}", request.name, medKitId)
-        medKits.requireUnchanged(medKitService.requireAccessible(medKitId, userId))
+        medKitService.requireUnchanged(medKitService.requireAccessible(medKitId, userId))
         return drugService.create(request, medKitId, userId)
     }
 
@@ -64,7 +58,7 @@ class MedKitDrugOrchestrator(
         logger.debug("Creating reservation of user {} on drug {}", userId, drugId)
         val drug = drugService.require(drugId, userId)
         drugService.requireUnchanged(drug)
-        medKits.requireUnchanged(medKitService.requireAccessible(drug.medKitId, userId))
+        medKitService.requireUnchanged(medKitService.requireAccessible(drug.medKitId, userId))
         return reservationService.create(userId, drugId, amount)
     }
 
@@ -82,9 +76,9 @@ class MedKitDrugOrchestrator(
     fun moveDrug(drugId: UUID, targetMedKitId: UUID, userId: UUID, expectedVersion: Long): Drug {
         logger.debug("Moving drug {} to medkit {}", drugId, targetMedKitId)
         val target = medKitService.requireAccessible(targetMedKitId, userId)
-        medKits.requireUnchanged(target)
+        medKitService.requireUnchanged(target)
         val moved = drugService.moveTo(drugId, target.id, userId, expectedVersion)
-        reservations.deleteOfDrugExcept(drugId, target.members)
+        reservationService.dropOnDrugExcept(drugId, target.members)
         return moved
     }
 
@@ -100,7 +94,7 @@ class MedKitDrugOrchestrator(
         val left = medKitService.leave(medKitId, userId, expectedVersion)
         // Аптечки не стало — брони ушли вместе с упаковками по каскаду.
         if (left != null) {
-            reservations.deleteOfUserInMedKit(userId, medKitId)
+            reservationService.dropOfUserInMedKit(userId, medKitId)
         }
     }
 
@@ -125,11 +119,11 @@ class MedKitDrugOrchestrator(
         if (transferToMedKitId != null) {
             val target = medKitService.requireAccessible(transferToMedKitId, userId)
             // Тот же состав, что и при переносе одной пачки, — и то же требование к нему.
-            medKits.requireUnchanged(target)
+            medKitService.requireUnchanged(target)
             // Порядок важен: брони выбираются по исходной аптечке, пока упаковки ещё в ней.
-            reservations.deleteInMedKitExcept(medKitId, target.members)
-            drugs.moveAllToMedKit(medKitId, target.id)
-            medKits.requireUnchanged(target)
+            reservationService.dropInMedKitExcept(medKitId, target.members)
+            drugService.moveAllToMedKit(medKitId, target.id)
+            medKitService.requireUnchanged(target)
         }
 
         medKitService.delete(medKitId, userId, expectedVersion)

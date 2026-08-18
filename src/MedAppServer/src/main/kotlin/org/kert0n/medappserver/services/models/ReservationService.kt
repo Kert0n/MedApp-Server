@@ -82,6 +82,32 @@ class ReservationService(
         return reservations.save(current.changeTo(Quantity(amount, current.amount.unit)))
     }
 
+    /**
+     * Снятие броней, потерявших доступ.
+     *
+     * Массово, а не обходом: у аптечки со ста пачками поднимать каждую ради одной строки
+     * незачем. Кто именно потерял доступ, решает вызывающий — состав знает он.
+     */
+    @Transactional
+    fun dropOfUserInMedKit(userId: UUID, medKitId: UUID) {
+        logger.debug("Dropping reservations of user {} in medkit {}", userId, medKitId)
+        reservations.deleteOfUserInMedKit(userId, medKitId)
+    }
+
+    /** Брони всех, кто целевую аптечку не видит, — при удалении с переносом. */
+    @Transactional
+    fun dropInMedKitExcept(medKitId: UUID, accessibleUserIds: Set<UUID>) {
+        logger.debug("Dropping reservations in medkit {} outside {} users", medKitId, accessibleUserIds.size)
+        reservations.deleteInMedKitExcept(medKitId, accessibleUserIds)
+    }
+
+    /** То же для одной переехавшей упаковки. */
+    @Transactional
+    fun dropOnDrugExcept(drugId: UUID, accessibleUserIds: Set<UUID>) {
+        logger.debug("Dropping reservations on drug {} outside {} users", drugId, accessibleUserIds.size)
+        reservations.deleteOfDrugExcept(drugId, accessibleUserIds)
+    }
+
     /** Отмена — это удаление: брони с нулём не бывает. */
     @Transactional
     fun cancel(userId: UUID, drugId: UUID, expectedVersion: Long) {

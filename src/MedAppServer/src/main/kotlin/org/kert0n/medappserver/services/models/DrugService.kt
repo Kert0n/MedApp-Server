@@ -150,6 +150,18 @@ class DrugService(
         return left
     }
 
+    /**
+     * Все упаковки аптечки — в другую, одним запросом.
+     *
+     * Поштучный переезд честнее по слоям, но стоит команды на пачку: сотня пачек — сотня
+     * загрузок. Судьбу броней решает вызывающий: они в чужом агрегате.
+     */
+    @Transactional
+    fun moveAllToMedKit(sourceMedKitId: UUID, targetMedKitId: UUID) {
+        logger.debug("Moving all drugs of medkit {} to {}", sourceMedKitId, targetMedKitId)
+        drugs.moveAllToMedKit(sourceMedKitId, targetMedKitId)
+    }
+
     /** Брони, потерявшие доступ, убирает межагрегатный сценарий: они в чужом агрегате. */
     @Transactional
     fun moveTo(drugId: UUID, targetMedKitId: UUID, userId: UUID, expectedVersion: Long): Drug {

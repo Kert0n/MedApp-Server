@@ -112,6 +112,15 @@ class MedKitService(
         return left
     }
 
+    /**
+     * Требует, чтобы состав дожил до коммита таким, каким его прочитали.
+     *
+     * Для тех, кто решает **по составу, а меняет другое**: переезд упаковки смотрит, кто её
+     * увидит после переезда, и убирает брони остальных.
+     */
+    @Transactional
+    fun requireUnchanged(medKit: MedKit) = medKits.requireUnchanged(medKit)
+
     /** Доступ проверяется здесь: команда по одному идентификатору однажды придёт без проверки. */
     @Transactional
     fun delete(medKitId: UUID, userId: UUID, expectedVersion: Long) {
