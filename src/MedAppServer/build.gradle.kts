@@ -65,4 +65,9 @@ tasks.withType<Test> {
     // Lets OpenApiSnapshotTest rewrite open-api.yaml instead of asserting against it:
     //     ./gradlew test -DupdateOpenApi=true
     systemProperty("updateOpenApi", System.getProperty("updateOpenApi") ?: "false")
+    // Tests read these two files, so a change to either must invalidate the results.
+    // Without this a broken db/schema.sql leaves the previous green run in place: the task
+    // is up to date because neither file is on the classpath.
+    inputs.file("db/schema.sql").withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file("open-api.yaml").withPathSensitivity(PathSensitivity.RELATIVE)
 }
