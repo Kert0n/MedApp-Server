@@ -61,6 +61,22 @@ class SchemaContractTest {
         }
     }
 
+    /**
+     * Положительность продублирована в схеме намеренно.
+     *
+     * Правило держит домен, но колонку может тронуть и не он: массовый `UPDATE`, миграция, рука
+     * в psql. `CHECK` — та же мысль там, где её нельзя обойти.
+     */
+    @Test
+    fun `положительные количества закреплены и в схеме`() {
+        val schema = Files.readString(SCHEMA)
+
+        listOf(
+            "CONSTRAINT user_drugs_quantity_positive CHECK (quantity > 0)",
+            "CONSTRAINT reservations_amount_positive CHECK (amount > 0)"
+        ).forEach { assertTrue(it in schema, "в схеме нет ограничения: $it") }
+    }
+
     @Test
     fun `рабочие профили проверяют схему, а не правят её`() {
         listOf(

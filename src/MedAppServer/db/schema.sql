@@ -93,6 +93,10 @@ CREATE TABLE user_drugs
     med_kit_id       uuid           NOT NULL,
 
     CONSTRAINT user_drugs_pkey PRIMARY KEY (id),
+    -- Пустой упаковки не бывает: опустевшая уничтожается, а не остаётся нулём. Правило держит
+    -- домен, здесь оно продублировано затем, что колонку может тронуть и не он: массовый
+    -- UPDATE, миграция, рука в psql.
+    CONSTRAINT user_drugs_quantity_positive CHECK (quantity > 0),
     CONSTRAINT user_drugs_med_kit_fkey FOREIGN KEY (med_kit_id) REFERENCES med_kits (id) ON DELETE CASCADE,
     -- Без каскада: словарь переживает препараты, а препарат без единицы измерения
     -- бессмыслен, поэтому удалить используемую единицу база не даст.
@@ -119,6 +123,8 @@ CREATE TABLE reservations
     amount  numeric(19, 6) NOT NULL,
 
     CONSTRAINT reservations_pkey PRIMARY KEY (drug_id, user_id),
+    -- Брони с нулём не бывает: отмена выражается удалением строки.
+    CONSTRAINT reservations_amount_positive CHECK (amount > 0),
     CONSTRAINT reservations_user_fkey FOREIGN KEY (user_id) REFERENCES users (id),
     CONSTRAINT reservations_drug_fkey FOREIGN KEY (drug_id) REFERENCES user_drugs (id) ON DELETE CASCADE
 );
