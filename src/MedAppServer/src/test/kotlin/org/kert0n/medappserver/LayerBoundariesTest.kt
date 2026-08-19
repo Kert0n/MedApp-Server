@@ -61,21 +61,28 @@ class LayerBoundariesTest {
 
         controllers.forEach { file ->
             val text = Files.readString(file)
+            // Собеседник опознаётся по пакету, а не по суффиксу имени: `MedKitDrugOrchestrator`
+            // на «Service» не заканчивался и мимо проверки по имени проходил бы насквозь.
+            // Безопасность — инфраструктура запроса, а не сценарий, и в счёт не идёт.
+            val collaborators = Regex("^import org\\.kert0n\\.medappserver\\.services\\.(?!security\\.)[\\w.]*?(\\w+)$", RegexOption.MULTILINE)
+                .findAll(text)
+                .map { it.groupValues[1] }
+                .filter { it.first().isUpperCase() }
+                .toSet()
+
             Regex("^class (\\w+Controller)\\((.*?)\\) \\{", setOf(RegexOption.MULTILINE, RegexOption.DOT_MATCHES_ALL))
                 .findAll(text)
                 .forEach { declaration ->
                     // Тип берётся вместе с пакетом и обрезается: иначе полное имя вида
                     // `org.kert0n...DrugService` проскочило бы мимо проверки.
-                    val services = Regex("val \\w+: ([\\w.]+)").findAll(declaration.groupValues[2])
+                    val held = Regex("val \\w+: ([\\w.]+)").findAll(declaration.groupValues[2])
                         .map { it.groupValues[1].substringAfterLast('.') }
-                        .filter { it.endsWith("Service") }
-                        // Безопасность и разбор предусловий — инфраструктура, а не домен.
-                        .filterNot { it == "SecurityService" }
+                        .filter { it in collaborators }
                         .toList()
 
                     assertTrue(
-                        services.size <= 1,
-                        "${declaration.groupValues[1]} держит ${services.size} сервисов ($services): " +
+                        held.size <= 1,
+                        "${declaration.groupValues[1]} держит ${held.size} сервисов ($held): " +
                             "на ресурс полагается один, иначе выбор между ними знает HTTP-слой"
                     )
                 }
