@@ -45,20 +45,20 @@ class SchemaContractTest {
         val schema = Files.readString(SCHEMA)
 
         listOf(
-            "FOREIGN KEY (drug_id) REFERENCES user_drugs (id) ON DELETE CASCADE",
+            "REFERENCES user_drugs (id, med_kit_id) ON UPDATE CASCADE ON DELETE CASCADE",
+            "REFERENCES user_med_kits (med_kit_id, user_id) ON DELETE CASCADE",
             "FOREIGN KEY (med_kit_id) REFERENCES med_kits (id) ON DELETE CASCADE"
         ).forEach { assertTrue(it in schema, "в схеме нет каскада: $it") }
 
-        listOf(
-            "CONSTRAINT reservations_user_fkey FOREIGN KEY (user_id) REFERENCES users (id),",
-            "CONSTRAINT user_med_kits_user_fkey FOREIGN KEY (user_id) REFERENCES users (id)\n"
-        ).forEach {
-            assertTrue(
-                it in schema,
-                "FK на users обязан остаться без каскада: удаление пользователя не должно " +
-                    "молча выносить чужие данные из общей аптечки"
-            )
-        }
+        assertTrue(
+            "CONSTRAINT user_med_kits_user_fkey FOREIGN KEY (user_id) REFERENCES users (id)\n" in schema,
+            "FK на users обязан остаться без каскада: удаление пользователя не должно молча " +
+                "выносить чужие данные из общей аптечки"
+        )
+        assertTrue(
+            "reservations_user_fkey" !in schema,
+            "отдельный FK брони на users избыточен: членство и так ссылается на пользователя"
+        )
     }
 
     @Test

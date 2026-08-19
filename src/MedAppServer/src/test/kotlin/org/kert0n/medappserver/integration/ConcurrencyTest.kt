@@ -464,4 +464,73 @@ class ConcurrencyTest {
         assertNotNull(failure, "бронь по устаревшей упаковке обязана быть отклонена")
         assertNull(dbHelper.userReservation(bob.id, drug.id), "брони не осталось")
     }
+
+    // ── Ключи страхуют правила ───────────────────────────────────────────────────
+
+    /**
+     * Выход уносит брони даже тогда, когда правило в коде до них не дошло.
+     *
+     * Правило живёт в выходе из аптечки и снимает брони само. Здесь оно намеренно обойдено —
+     * членство удаляется напрямую, — и остаться не должно ни одной брони: это работа ключа.
+     * Проверяется страховка, а не правило; правило проверяется своим тестом.
+     */
+    @Test
+    fun `ключ уносит брони вслед за членством`() {
+        val alice = dbHelper.freshUser("alice")
+        val bob = dbHelper.freshUser("bob")
+        val kit = dbHelper.freshMedKit(alice.id)
+        dbHelper.join(kit.id, bob.id)
+        val drug = dbHelper.freshDrug(kit.id, 100.0)
+        dbHelper.reserve(bob.id, drug.id, qty(20.0))
+
+        dbHelper.removeMembershipRow(kit.id, bob.id)
+
+        assertNull(dbHelper.userReservation(bob.id, drug.id), "бронь не пережила членства")
+    }
+
+    /**
+     * Назначение переезжает вместе с пачкой: копия аптечки едет за настоящей.
+     *
+     * Здесь обе аптечки доступны Бобу, поэтому его назначение обязано уцелеть — коробку
+     * переставили на другую полку, к которой он допущен. За копией следит ключ.
+     */
+    @Test
+    fun `бронь переезжает вместе с пачкой`() {
+        val alice = dbHelper.freshUser("alice")
+        val bob = dbHelper.freshUser("bob")
+        val source = dbHelper.freshMedKit(alice.id)
+        dbHelper.join(source.id, bob.id)
+        val target = dbHelper.freshMedKit(alice.id)
+        dbHelper.join(target.id, bob.id)
+        val drug = dbHelper.freshDrug(source.id, 100.0)
+        dbHelper.reserve(bob.id, drug.id, qty(20.0))
+
+        drugs.moveToMedKit(drug.id, target.id, alice.id, dbHelper.drugVersion(drug.id))
+
+        assertQty(20.0, dbHelper.userReservation(bob.id, drug.id), "назначение пережило переезд")
+        assertEquals(target.id, dbHelper.reservationMedKit(bob.id, drug.id), "копия аптечки уехала следом")
+    }
+
+    /**
+     * Вставка удерживает строку членства: гонка закрывается ключом, а не версией.
+     *
+     * Медленная сторона заводит бронь, пока быстрая выходит из аптечки. Чем бы ни кончилось —
+     * отказом вставки или её отменой каскадом, — брони без доступа остаться не должно.
+     */
+    @Test
+    fun `бронь и выход одновременно не оставляют брони без доступа`() {
+        val alice = dbHelper.freshUser("alice")
+        val bob = dbHelper.freshUser("bob")
+        val kit = dbHelper.freshMedKit(alice.id)
+        dbHelper.join(kit.id, bob.id)
+        val drug = dbHelper.freshDrug(kit.id, 100.0)
+
+        interleaved.lostUpdate(
+            read = { drugService.require(drug.id, bob.id) },
+            meanwhile = { medKits.leave(kit.id, bob.id, dbHelper.medKitVersion(kit.id)) },
+            write = { visible -> reservationStore.insert(Reservation(bob.id, drug.id, visible.quantity)) }
+        )
+
+        assertNull(dbHelper.userReservation(bob.id, drug.id), "брони без доступа не осталось")
+    }
 }

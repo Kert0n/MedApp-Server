@@ -101,6 +101,9 @@ CREATE TABLE user_drugs
     version          bigint         NOT NULL DEFAULT 0,
 
     CONSTRAINT user_drugs_pkey PRIMARY KEY (id),
+    -- Родительская сторона составного ключа брони: бронь ссылается на пару «пачка и её
+    -- аптечка», чтобы аптечку в её строке нельзя было рассогласовать с настоящей.
+    CONSTRAINT user_drugs_id_med_kit_key UNIQUE (id, med_kit_id),
     -- Пустой упаковки не бывает: опустевшая уничтожается, а не остаётся нулём. Правило
     -- держит домен, здесь оно продублировано затем, что колонку может тронуть и не он:
     -- массовый UPDATE, миграция, рука в psql.
@@ -126,20 +129,35 @@ CREATE INDEX ix_user_drugs_med_kit_id ON user_drugs (med_kit_id);
 -- не держит.
 CREATE TABLE reservations
 (
-    user_id uuid           NOT NULL,
-    drug_id uuid           NOT NULL,
-    amount  numeric(19, 6) NOT NULL,
-    version bigint         NOT NULL DEFAULT 0,
+    user_id    uuid           NOT NULL,
+    drug_id    uuid           NOT NULL,
+    -- Аптечка пачки, скопированная в строку брони. Не свойство брони: назначение живёт парой
+    -- «человек и пачка», а хранилище у пачки своё. Копия нужна ключам целостности — без неё
+    -- членство и бронь связать нечем.
+    med_kit_id uuid           NOT NULL,
+    amount     numeric(19, 6) NOT NULL,
+    version    bigint         NOT NULL DEFAULT 0,
 
     CONSTRAINT reservations_pkey PRIMARY KEY (drug_id, user_id),
     -- Брони с нулём не бывает: отмена выражается удалением строки.
     CONSTRAINT reservations_amount_positive CHECK (amount > 0),
-    CONSTRAINT reservations_user_fkey FOREIGN KEY (user_id) REFERENCES users (id),
-    CONSTRAINT reservations_drug_fkey FOREIGN KEY (drug_id) REFERENCES user_drugs (id) ON DELETE CASCADE
+    -- Пачка вместе со своей аптечкой. Ключ составной, и это даёт два следствия: копию аптечки
+    -- не рассогласовать с настоящей — такой пары нет в родителе; переезд пачки тянет копию за
+    -- собой. Правило, стоящее за переездом, написано в домене и в сценарии, здесь — страховка.
+    CONSTRAINT reservations_drug_med_kit_fkey FOREIGN KEY (drug_id, med_kit_id)
+        REFERENCES user_drugs (id, med_kit_id) ON UPDATE CASCADE ON DELETE CASCADE,
+    -- «Нет членства — нет брони». Правило живёт в выходе из аптечки, который снимает брони сам;
+    -- ключ страхует от забывчивости и закрывает гонку: вставка удерживает строку членства до
+    -- конца транзакции, и одновременный выход её дождётся.
+    --
+    -- Отдельного ключа на users больше нет: членство и так на них ссылается.
+    CONSTRAINT reservations_membership_fkey FOREIGN KEY (med_kit_id, user_id)
+        REFERENCES user_med_kits (med_kit_id, user_id) ON DELETE CASCADE
 );
 
 CREATE INDEX ix_reservations_user_id ON reservations (user_id);
-CREATE INDEX ix_reservations_drug_id ON reservations (drug_id);
+-- Отдельного индекса по drug_id нет: первичный ключ начинается с него.
+CREATE INDEX ix_reservations_med_kit_user_id ON reservations (med_kit_id, user_id);
 
 
 -- ============================================================

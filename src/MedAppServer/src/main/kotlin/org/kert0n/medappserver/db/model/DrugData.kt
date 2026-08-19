@@ -19,6 +19,8 @@ import org.kert0n.medappserver.domain.QUANTITY_SCALE
 @Entity
 @Table(
     name = "user_drugs",
+    // Родительская сторона составного ключа брони: она ссылается на пару «пачка и её аптечка».
+    uniqueConstraints = [UniqueConstraint(name = "user_drugs_id_med_kit_key", columnNames = ["id", "med_kit_id"])],
     indexes = [
         Index(name = "ix_user_drugs_name", columnList = "name"),
         Index(name = "ix_user_drugs_med_kit_id", columnList = "med_kit_id")

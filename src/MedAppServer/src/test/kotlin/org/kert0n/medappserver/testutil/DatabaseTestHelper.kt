@@ -143,5 +143,35 @@ class DatabaseTestHelper(
 
     fun medKit(medKitId: UUID): MedKit? = medKits.findById(medKitId)
 
+    /** Аптечка брони: та самая копия, за которой следит составной ключ. */
+    fun reservationMedKit(userId: UUID, drugId: UUID): UUID? = entityManager
+        .createQuery(
+            "SELECT r.medKitId FROM ReservationData r " +
+                "WHERE r.reservationKey.userId = :userId AND r.reservationKey.drugId = :drugId",
+            UUID::class.java
+        )
+        .setParameter("userId", userId)
+        .setParameter("drugId", drugId)
+        .resultList
+        .firstOrNull()
+
+    /**
+     * Удаляет строку членства в обход правила выхода.
+     *
+     * Нужно ровно одному тесту — тому, что проверяет страховку: правило намеренно обходится,
+     * чтобы стало видно, что делает ключ сам по себе.
+     */
+    @Transactional
+    fun removeMembershipRow(medKitId: UUID, userId: UUID) {
+        entityManager
+            .createQuery(
+                "DELETE FROM MedKitMembershipData m " +
+                    "WHERE m.membershipKey.medKitId = :medKitId AND m.membershipKey.userId = :userId"
+            )
+            .setParameter("medKitId", medKitId)
+            .setParameter("userId", userId)
+            .executeUpdate()
+    }
+
     fun medKitVersion(medKitId: UUID): Long = medKits.findById(medKitId)?.version ?: error("Аптечки $medKitId нет")
 }

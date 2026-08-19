@@ -2,6 +2,7 @@ package org.kert0n.medappserver.db.store
 
 import jakarta.persistence.EntityManager
 import java.util.UUID
+import org.kert0n.medappserver.db.model.DrugData
 import org.kert0n.medappserver.db.model.ReservationData
 import org.kert0n.medappserver.db.model.ReservationKey
 import org.kert0n.medappserver.db.repository.DrugRepository
@@ -51,16 +52,17 @@ class ReservationStore(
     fun insert(reservation: Reservation): Reservation {
         val drug = drugs.findByIdOrNull(reservation.drugId)
             ?: error("Упаковка ${reservation.drugId} исчезла во время записи брони")
-        val user = users.findByIdOrNull(reservation.userId)
-            ?: error("Пользователь ${reservation.userId} исчез во время записи брони")
 
         // persist, а не save: у брони присвоенный составной ключ, и save пошёл бы через merge —
         // искать несуществующую строку и сохранять копию, теряя связь с управляемой упаковкой.
         val row = ReservationData(
             reservationKey = ReservationKey(reservation.userId, reservation.drugId),
-            userData = user,
-            drugData = drug,
-            amount = reservation.amount.amount
+            // Аптечка берётся у самой пачки: рассогласовать копию с настоящей нельзя даже так.
+            medKitId = drug.medKit.id,
+            amount = reservation.amount.amount,
+            // Связь только на чтение: на вставку не влияет, но избавляет от лишнего чтения,
+            // когда строку тут же переводят в доменный вид — единица величины лежит у пачки.
+            drugData = drug
         )
         entityManager.persist(row)
         // Флаш здесь и ради версии, и ради отказа: пока запись не дошла до базы, о том, что
@@ -102,9 +104,13 @@ class ReservationStore(
     private fun ReservationData.toDomain(): Reservation = Reservation(
         userId = reservationKey.userId,
         drugId = reservationKey.drugId,
-        amount = Quantity(amount, drugData.quantityUnit.toDomain()),
+        amount = Quantity(amount, requireDrug().quantityUnit.toDomain()),
         version = version
     )
+
+    /** Пачка у брони есть всегда: без неё строки не бывает, это держит внешний ключ. */
+    private fun ReservationData.requireDrug(): DrugData =
+        drugData ?: error("У брони ${reservationKey.userId}/${reservationKey.drugId} нет упаковки")
 
     private fun managed(userId: UUID, drugId: UUID): ReservationData =
         reservations.findByIdOrNull(ReservationKey(userId, drugId))
