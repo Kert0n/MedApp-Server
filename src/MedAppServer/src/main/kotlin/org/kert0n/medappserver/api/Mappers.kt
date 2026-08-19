@@ -54,6 +54,37 @@ fun DrugTemplate.toDto(): DrugTemplateDTO = DrugTemplateDTO(
     description = description
 )
 
+/** Аптечка с содержимым: состав она знает сама, упаковки приносит вызывающий. */
+fun MedKit.toDto(drugs: Set<DrugDTO>): MedKitDTO = MedKitDTO(
+    id = id,
+    drugs = drugs
+)
+
+/**
+ * Набор упаковок вместе с бронями на них.
+ *
+ * Группировка живёт здесь, а не у вызывающего: сборка ответа — работа этого файла, и
+ * повторять её в каждом сценарии значило бы держать её в трёх местах сразу.
+ *
+ * Брони приходят одним списком на весь набор — тем самым, что читается одним запросом.
+ */
+fun List<Drug>.toDto(reservations: List<Reservation>): List<DrugDTO> {
+    val byDrug = reservations.groupBy { it.drugId }
+    return map { it.toDto(byDrug[it.id].orEmpty()) }
+}
+
+/** Аптечки со счётчиками: число пачек считается по тому набору, который вызывающий уже читал. */
+fun List<MedKit>.toSummaryDto(accessiblePackages: List<Drug>): Set<MedKitSummaryDTO> {
+    val perMedKit = accessiblePackages.groupingBy { it.medKitId }.eachCount()
+    return map { it.toSummaryDto(perMedKit[it.id] ?: 0) }.toSet()
+}
+
+/** Аптечки вместе с содержимым: пачки разбираются по аптечкам, к которым принадлежат. */
+fun List<MedKit>.toDto(accessibleDrugs: List<DrugDTO>): Set<MedKitDTO> {
+    val perMedKit = accessibleDrugs.groupBy { it.medKitId }
+    return map { it.toDto(perMedKit[it.id].orEmpty().toSet()) }.toSet()
+}
+
 fun QuantityUnit.toDto(): VocabularyEntryDTO = VocabularyEntryDTO(id = id, name = name)
 
 fun FormType.toDto(): VocabularyEntryDTO = VocabularyEntryDTO(id = id, name = name)

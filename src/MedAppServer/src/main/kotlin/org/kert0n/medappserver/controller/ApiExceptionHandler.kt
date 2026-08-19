@@ -1,9 +1,11 @@
 package org.kert0n.medappserver.controller
 
 import org.kert0n.medappserver.domain.DomainRuleViolated
+import org.kert0n.medappserver.domain.InvalidRegistrationSecret
 import org.kert0n.medappserver.domain.NoSuchReservation
 import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.ReservationAlreadyExists
+import org.kert0n.medappserver.domain.TooManyRegistrations
 import org.springframework.http.HttpStatus
 import org.springframework.http.ProblemDetail
 import org.springframework.web.bind.MethodArgumentNotValidException
@@ -40,6 +42,9 @@ class ApiExceptionHandler {
             // выдавал бы существование чужой.
             is NotAMember -> HttpStatus.NOT_FOUND
             is ReservationAlreadyExists -> HttpStatus.CONFLICT
+            // Секрет регистрации не совпал: отвечаем как на запрет, а не как на ошибку формы.
+            is InvalidRegistrationSecret -> HttpStatus.FORBIDDEN
+            is TooManyRegistrations -> HttpStatus.TOO_MANY_REQUESTS
             else -> HttpStatus.BAD_REQUEST
         }
     )

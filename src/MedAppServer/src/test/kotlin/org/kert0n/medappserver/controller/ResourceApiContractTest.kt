@@ -6,6 +6,11 @@ import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.api.IntakeRequest
 import org.kert0n.medappserver.api.MembershipCreateRequest
+import org.kert0n.medappserver.api.MedKitCreatedDTO
+import org.kert0n.medappserver.api.MedKitDTO
+import org.kert0n.medappserver.api.MedKitSummaryDTO
+import org.kert0n.medappserver.api.InvitationDTO
+import org.kert0n.medappserver.api.UserSnapshotDTO
 import org.kert0n.medappserver.api.ReservationCreateRequest
 import org.kert0n.medappserver.api.ReservationPatchRequest
 import org.kert0n.medappserver.api.toDto
@@ -14,11 +19,11 @@ import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.QuantityUnit
 import org.kert0n.medappserver.domain.Reservation
-import org.kert0n.medappserver.services.models.CatalogueService
-import org.kert0n.medappserver.services.models.DrugService
-import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.models.ReservationService
-import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
+import org.kert0n.medappserver.services.aggregate.CatalogueService
+import org.kert0n.medappserver.services.aggregate.DrugService
+import org.kert0n.medappserver.services.aggregate.MedKitService
+import org.kert0n.medappserver.services.aggregate.ReservationService
+import org.kert0n.medappserver.services.application.MedKitApplicationService
 import org.kert0n.medappserver.testutil.ApiRoutes
 import org.kert0n.medappserver.testutil.qty
 import org.mockito.kotlin.any
@@ -39,6 +44,9 @@ import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
 import tools.jackson.databind.ObjectMapper
+import org.kert0n.medappserver.services.application.DrugApplicationService
+import org.kert0n.medappserver.services.application.ReservationApplicationService
+import org.kert0n.medappserver.services.application.UserApplicationService
 
 /**
  * Опубликованная поверхность API.
@@ -54,10 +62,12 @@ class ResourceApiContractTest {
     @Autowired private lateinit var context: WebApplicationContext
     @Autowired private lateinit var objectMapper: ObjectMapper
 
-    @MockitoBean private lateinit var drugService: DrugService
-    @MockitoBean private lateinit var reservationService: ReservationService
-    @MockitoBean private lateinit var medKitService: MedKitService
-    @MockitoBean private lateinit var medKitDrugOrchestrator: MedKitDrugOrchestrator
+    // Подменяются ровно те, кого зовёт контроллер: по одному прикладному сервису на ресурс.
+    // Раньше здесь стояли и сервисы агрегатов — контроллер ходил и туда тоже.
+    @MockitoBean private lateinit var drugs: DrugApplicationService
+    @MockitoBean private lateinit var reservations: ReservationApplicationService
+    @MockitoBean private lateinit var medKits: MedKitApplicationService
+    @MockitoBean private lateinit var users: UserApplicationService
     @MockitoBean private lateinit var catalogueService: CatalogueService
 
     private lateinit var mockMvc: MockMvc
@@ -87,7 +97,7 @@ class ResourceApiContractTest {
 
     @Test
     fun `препарат читается по своему пути`() {
-        whenever(medKitDrugOrchestrator.drug(drugId, userId)).thenReturn(drugDto)
+        whenever(drugs.read(drugId, userId)).thenReturn(drugDto)
 
         mockMvc.perform(get(ApiRoutes.drug(drugId)).with(asUser()))
             .andExpect(status().isOk)
@@ -100,8 +110,7 @@ class ResourceApiContractTest {
 
     @Test
     fun `препарат создаётся в аптечке из пути`() {
-        whenever(medKitDrugOrchestrator.createDrugInMedKit(eq(medKitId), any(), eq(userId))).thenReturn(drug)
-        whenever(medKitDrugOrchestrator.drug(drugId, userId)).thenReturn(drugDto)
+        whenever(drugs.createInMedKit(eq(medKitId), any(), eq(userId))).thenReturn(drugDto)
         val body = DrugCreateRequest(name = "Aspirin", quantity = qty(100.0), quantityUnitId = unit.id)
 
         mockMvc.perform(
@@ -127,8 +136,7 @@ class ResourceApiContractTest {
 
     @Test
     fun `приём создаётся подчинённым ресурсом упаковки`() {
-        whenever(drugService.consume(eq(drugId), any(), eq(userId))).thenReturn(drug)
-        whenever(medKitDrugOrchestrator.drug(drugId, userId)).thenReturn(drugDto)
+        whenever(drugs.recordIntake(eq(drugId), any(), eq(userId))).thenReturn(drugDto)
 
         mockMvc.perform(
             post(ApiRoutes.intakes(drugId)).with(asUser())
@@ -142,8 +150,7 @@ class ResourceApiContractTest {
     @Test
     fun `перенос выражен размещением препарата в целевой аптечке`() {
         val target = UUID.randomUUID()
-        whenever(medKitDrugOrchestrator.moveDrug(drugId, target, userId)).thenReturn(drug)
-        whenever(medKitDrugOrchestrator.drug(drugId, userId)).thenReturn(drugDto)
+        whenever(drugs.moveToMedKit(drugId, target, userId)).thenReturn(drugDto)
 
         mockMvc.perform(put(ApiRoutes.drugIn(target, drugId)).with(asUser()))
             .andExpect(status().isOk)
@@ -152,7 +159,7 @@ class ResourceApiContractTest {
 
     @Test
     fun `препарат удаляется`() {
-        doNothing().whenever(drugService).delete(drugId, userId)
+        doNothing().whenever(drugs).delete(drugId, userId)
 
         mockMvc.perform(delete(ApiRoutes.drug(drugId)).with(asUser()))
             .andExpect(status().isNoContent)
@@ -170,9 +177,7 @@ class ResourceApiContractTest {
 
     @Test
     fun `предел выдачи каталога ограничен сверху`() {
-        mockMvc.perform(
-            get(ApiRoutes.DRUG_TEMPLATES).param("query", "аспир").param("limit", "500").with(asUser())
-        )
+        mockMvc.perform(get(ApiRoutes.DRUG_TEMPLATES).param("query", "аспир").param("limit", "500").with(asUser()))
             .andExpect(status().isBadRequest)
     }
 
@@ -180,10 +185,10 @@ class ResourceApiContractTest {
 
     @Test
     fun `план лечения создаётся и меняется`() {
-        val plan = Reservation(userId = userId, drugId = drugId, amount = Quantity(qty(20.0), unit))
-        whenever(reservationService.create(eq(userId), eq(drugId), any())).thenReturn(plan)
-        whenever(reservationService.changeTo(eq(userId), eq(drugId), any())).thenReturn(plan)
-        whenever(reservationService.require(userId, drugId)).thenReturn(plan)
+        val reservation = Reservation(userId = userId, drugId = drugId, amount = Quantity(qty(20.0), unit)).toDto()
+        whenever(reservations.create(eq(userId), eq(drugId), any())).thenReturn(reservation)
+        whenever(reservations.changeTo(eq(userId), eq(drugId), any())).thenReturn(reservation)
+        whenever(reservations.read(userId, drugId)).thenReturn(reservation)
 
         mockMvc.perform(
             post(ApiRoutes.RESERVATIONS).with(asUser())
@@ -206,7 +211,7 @@ class ResourceApiContractTest {
 
     @Test
     fun `план лечения удаляется`() {
-        doNothing().whenever(reservationService).cancel(userId, drugId)
+        doNothing().whenever(reservations).cancel(userId, drugId)
 
         mockMvc.perform(delete(ApiRoutes.reservation(drugId)).with(asUser()))
             .andExpect(status().isNoContent)
@@ -216,9 +221,9 @@ class ResourceApiContractTest {
 
     @Test
     fun `аптечка создаётся и перечисляется`() {
-        whenever(medKitService.create(userId)).thenReturn(medKit)
-        whenever(medKitDrugOrchestrator.medKitSummaries(userId))
-            .thenReturn(setOf(org.kert0n.medappserver.api.MedKitSummaryDTO(medKitId, 2, 17)))
+        whenever(medKits.create(userId)).thenReturn(MedKitCreatedDTO(medKitId))
+        whenever(medKits.summaries(userId))
+            .thenReturn(setOf(MedKitSummaryDTO(medKitId, 2, 17)))
 
         mockMvc.perform(post(ApiRoutes.MED_KITS).with(asUser()))
             .andExpect(status().isCreated)
@@ -232,7 +237,7 @@ class ResourceApiContractTest {
 
     @Test
     fun `приглашение возвращается объектом, а не строкой`() {
-        whenever(medKitService.invite(medKitId, userId)).thenReturn("invite-key")
+        whenever(medKits.invite(medKitId, userId)).thenReturn(InvitationDTO("invite-key"))
 
         mockMvc.perform(post(ApiRoutes.invitations(medKitId)).with(asUser()))
             .andExpect(status().isCreated)
@@ -242,10 +247,9 @@ class ResourceApiContractTest {
 
     @Test
     fun `членство создаётся и удаляется`() {
-        whenever(medKitService.joinByInvitation("invite-key", userId)).thenReturn(medKit)
-        whenever(medKitDrugOrchestrator.medKitWithDrugs(medKitId, userId))
-            .thenReturn(org.kert0n.medappserver.api.MedKitDTO(medKitId, emptySet()))
-        doNothing().whenever(medKitDrugOrchestrator).leaveMedKit(medKitId, userId)
+        whenever(medKits.joinByInvitation("invite-key", userId))
+            .thenReturn(MedKitDTO(medKitId, emptySet()))
+        doNothing().whenever(medKits).leave(medKitId, userId)
 
         mockMvc.perform(
             post(ApiRoutes.MEMBERSHIPS).with(asUser())
@@ -261,10 +265,12 @@ class ResourceApiContractTest {
     @Test
     fun `удаление аптечки принимает целевую параметром запроса`() {
         val target = UUID.randomUUID()
-        doNothing().whenever(medKitDrugOrchestrator).delete(medKitId, userId, target)
+        doNothing().whenever(medKits).delete(medKitId, userId, target)
 
         mockMvc.perform(
-            delete(ApiRoutes.medKit(medKitId)).param("targetMedKitId", target.toString()).with(asUser())
+            delete(ApiRoutes.medKit(medKitId))
+                .param("targetMedKitId", target.toString())
+                .with(asUser())
         )
             .andExpect(status().isNoContent)
     }
@@ -273,8 +279,8 @@ class ResourceApiContractTest {
 
     @Test
     fun `снимок пользователя лежит по пути me`() {
-        whenever(medKitService.allOfUser(userId)).thenReturn(listOf(medKit))
-        whenever(drugService.accessibleTo(userId)).thenReturn(listOf(drug))
+        whenever(users.snapshot(userId))
+            .thenReturn(UserSnapshotDTO(userId, setOf(MedKitDTO(medKitId, setOf(drugDto)))))
 
         mockMvc.perform(get(ApiRoutes.ME).with(asUser()))
             .andExpect(status().isOk)

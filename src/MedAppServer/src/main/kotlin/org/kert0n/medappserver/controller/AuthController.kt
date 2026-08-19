@@ -11,25 +11,14 @@ import jakarta.servlet.http.HttpServletRequest
 import java.util.*
 import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.OpenApiConfiguration
-import org.kert0n.medappserver.services.models.UserService
-import org.kert0n.medappserver.services.security.RegistrationSecret
-import org.kert0n.medappserver.services.security.SecurityService
-import org.springframework.http.HttpStatus
+import org.kert0n.medappserver.services.application.AuthApplicationService
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
-import org.springframework.web.server.ResponseStatusException
 
 @RestController
 @RequestMapping("/v1/auth")
 @Tag(name = "Authentication", description = "Public endpoints for registration and token issuance")
-class AuthController(
-    // Проверки секрета — в самом RegistrationSecret: заглушка в проде должна ронять старт
-    // независимо от того, кто её читает.
-    private val registrationSecret: RegistrationSecret,
-    private val userService: UserService,
-    private val securityService: SecurityService
-) {
-
+class AuthController(private val auth: AuthApplicationService) {
 
     @Schema(description = "Registration response with generated credentials")
     data class RegisterResponse(
@@ -49,20 +38,8 @@ class AuthController(
         @Parameter(description = "Shared registration secret", required = true, example = "dev-secret")
         @RequestHeader("X-Registration-Token") token: String
     ): RegisterResponse {
-        // Secret first, so rate-limit status is not exposed to unauthorized callers. Constant
-        // time: `!=` stops at the first differing character and timing would leak the prefix.
-        if (!securityService.secretsMatch(token, registrationSecret.value)) {
-            throw ResponseStatusException(HttpStatus.FORBIDDEN, "Invalid secret")
-        }
-        // Rate limit by IP to reduce abuse without storing PII. 429, а не 504: превышен лимит
-        // вызывающего, а не истёк срок вышестоящего сервиса.
-        if (!securityService.validateRequest(request.remoteAddr)) {
-            throw ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "Too many registration request")
-        }
-        val login = UUID.randomUUID()
-        val pwd: String = securityService.generateKey(32)
-        userService.registerNewUser(login, pwd, request.remoteAddr)
-        return RegisterResponse(login, pwd)
+        val credentials = auth.register(token, request.remoteAddr)
+        return RegisterResponse(credentials.login, credentials.key)
     }
 
     /**
@@ -87,5 +64,5 @@ class AuthController(
     @ApiResponse(responseCode = "401", description = "Invalid credentials", content = [Content()])
     @ApiResponse(responseCode = "429", description = "Too many token requests", content = [Content()])
     fun token(authentication: Authentication): TokenResponse =
-        TokenResponse(securityService.generateToken(authentication.principal as User))
+        TokenResponse(auth.issueToken(authentication.principal as User))
 }

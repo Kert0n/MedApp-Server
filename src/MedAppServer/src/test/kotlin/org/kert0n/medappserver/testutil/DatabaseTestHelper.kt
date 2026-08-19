@@ -6,12 +6,17 @@ import java.util.*
 import org.kert0n.medappserver.db.model.parsed.QuantityUnitData
 import org.kert0n.medappserver.db.repository.QuantityUnitRepository
 import org.kert0n.medappserver.db.store.DrugStore
+import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.db.store.ReservationStore
 import org.kert0n.medappserver.db.store.UserStore
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.QuantityUnit
 import org.kert0n.medappserver.domain.User
+import org.kert0n.medappserver.domain.MedKit
+import org.kert0n.medappserver.domain.Reservation
+import org.kert0n.medappserver.services.aggregate.MedKitService
+import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
 
@@ -27,7 +32,10 @@ class DatabaseTestHelper(
     private val users: UserStore,
     private val drugs: DrugStore,
     private val reservations: ReservationStore,
+    private val medKits: MedKitStore,
     private val quantityUnits: QuantityUnitRepository,
+    private val medKitService: MedKitService,
+    private val reservationService: ReservationService,
     private val entityManager: EntityManager
 ) {
     @Transactional
@@ -60,6 +68,21 @@ class DatabaseTestHelper(
         return drug
     }
 
+    /**
+     * Аптечка с одним участником — под подготовку сценария.
+     *
+     * Подготовка идёт отсюда, а не прямым вызовом сервиса агрегата: агрегат транзакцию не
+     * открывает, а этот помощник — открывает. Действие, которое тест **проверяет**, зовётся
+     * через фасад: тем же входом, что и приложение.
+     */
+    @Transactional
+    fun freshMedKit(ownerId: UUID): MedKit = medKitService.create(ownerId)
+
+    /** Бронь под подготовку сценария. */
+    @Transactional
+    fun reserve(userId: UUID, drugId: UUID, amount: BigDecimal): Reservation =
+        reservationService.create(userId, drugId, amount)
+
     /** Кладёт заранее собранный препарат: тестам нужны свои имена и количества. */
     @Transactional
     fun insert(drug: Drug): Drug {
@@ -86,6 +109,8 @@ class DatabaseTestHelper(
      * убедиться, что строки не стало, безотносительно того, кто спрашивает.
      */
     fun drug(id: UUID): Drug? = drugs.findById(id)
+
+    fun medKit(medKitId: UUID): MedKit? = medKits.findById(medKitId)
 
     fun requireDrug(id: UUID): Drug = drug(id) ?: error("Препарат $id не найден")
 

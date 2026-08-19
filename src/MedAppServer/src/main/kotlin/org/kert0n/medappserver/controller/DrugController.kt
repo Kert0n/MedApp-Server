@@ -16,10 +16,9 @@ import org.kert0n.medappserver.api.DrugPatchRequest
 import org.kert0n.medappserver.api.DrugTemplateDTO
 import org.kert0n.medappserver.api.VocabularyEntryDTO
 import org.kert0n.medappserver.api.toDto
-import org.kert0n.medappserver.services.models.DrugService
-import org.kert0n.medappserver.services.models.CatalogueService
-import org.kert0n.medappserver.services.models.userId
-import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
+import org.kert0n.medappserver.services.aggregate.userId
+import org.kert0n.medappserver.services.application.CatalogueApplicationService
+import org.kert0n.medappserver.services.application.DrugApplicationService
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
@@ -31,10 +30,7 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBod
 @RestController
 @RequestMapping("/v1")
 @Tag(name = "Drugs", description = "Drugs stored in medicine kits")
-class DrugController(
-    private val drugService: DrugService,
-    private val medKitDrugOrchestrator: MedKitDrugOrchestrator
-) {
+class DrugController(private val drugs: DrugApplicationService) {
 
     private val logger = LoggerFactory.getLogger(DrugController::class.java)
 
@@ -46,7 +42,7 @@ class DrugController(
         @Parameter(description = "Drug identifier") @PathVariable drugId: UUID
     ): DrugDTO {
         logger.debug("GET /v1/drugs/{} by user {}", drugId, authentication.userId)
-        return medKitDrugOrchestrator.drug(drugId, authentication.userId)
+        return drugs.read(drugId, authentication.userId)
     }
 
     /** Аптечка задаётся путём: упаковка не существует сама по себе, она всегда в аптечке. */
@@ -62,8 +58,7 @@ class DrugController(
         @Valid @RequestBody request: DrugCreateRequest
     ): DrugDTO {
         logger.debug("POST /v1/med-kits/{}/drugs by user {}", medKitId, authentication.userId)
-        val created = medKitDrugOrchestrator.createDrugInMedKit(medKitId, request, authentication.userId)
-        return medKitDrugOrchestrator.drug(created.id, authentication.userId)
+        return drugs.createInMedKit(medKitId, request, authentication.userId)
     }
 
     /** PATCH, а не PUT: тело описывает изменение части полей, а не препарат целиком. */
@@ -78,8 +73,7 @@ class DrugController(
         @Valid @RequestBody request: DrugPatchRequest
     ): DrugDTO {
         logger.debug("PATCH /v1/drugs/{} by user {}", drugId, authentication.userId)
-        drugService.update(drugId, request, authentication.userId)
-        return medKitDrugOrchestrator.drug(drugId, authentication.userId)
+        return drugs.update(drugId, request, authentication.userId)
     }
 
     @DeleteMapping("/drugs/{drugId}")
@@ -91,7 +85,7 @@ class DrugController(
         @Parameter(description = "Drug identifier") @PathVariable drugId: UUID
     ) {
         logger.debug("DELETE /v1/drugs/{} by user {}", drugId, authentication.userId)
-        drugService.delete(drugId, authentication.userId)
+        drugs.delete(drugId, authentication.userId)
     }
 
     /**
@@ -113,8 +107,7 @@ class DrugController(
     ): DrugDTO? {
         logger.debug("POST /v1/drugs/{}/intakes by user {}", drugId, authentication.userId)
         // null означает, что пачка кончилась и уничтожена этим списанием.
-        drugService.consume(drugId, request.quantity, authentication.userId) ?: return null
-        return medKitDrugOrchestrator.drug(drugId, authentication.userId)
+        return drugs.recordIntake(drugId, request.quantity, authentication.userId)
     }
 
     /**
@@ -130,8 +123,7 @@ class DrugController(
         @Parameter(description = "Drug identifier") @PathVariable drugId: UUID
     ): DrugDTO {
         logger.debug("PUT /v1/med-kits/{}/drugs/{} by user {}", targetMedKitId, drugId, authentication.userId)
-        medKitDrugOrchestrator.moveDrug(drugId, targetMedKitId, authentication.userId)
-        return medKitDrugOrchestrator.drug(drugId, authentication.userId)
+        return drugs.moveToMedKit(drugId, targetMedKitId, authentication.userId)
     }
 }
 
@@ -139,7 +131,7 @@ class DrugController(
 @RequestMapping("/v1/drug-templates")
 @Tag(name = "Drug catalogue", description = "Reference catalogue used when adding a drug")
 class DrugTemplateController(
-    private val catalogueService: CatalogueService
+    private val catalogue: CatalogueApplicationService
 ) {
 
     private val logger = LoggerFactory.getLogger(DrugTemplateController::class.java)
@@ -160,7 +152,7 @@ class DrugTemplateController(
         @RequestParam(defaultValue = "10") @Min(1) @Max(50) limit: Int
     ): List<DrugTemplateDTO> {
         logger.debug("GET /v1/drug-templates by user {}", authentication.userId)
-        return catalogueService.fuzzySearch(query, limit).map { it.toDto() }
+        return catalogue.search(query, limit)
     }
 
     @GetMapping("/{templateId}")
@@ -171,7 +163,7 @@ class DrugTemplateController(
         @Parameter(description = "Template identifier") @PathVariable templateId: UUID
     ): DrugTemplateDTO {
         logger.debug("GET /v1/drug-templates/{} by user {}", templateId, authentication.userId)
-        return catalogueService.find(templateId)?.toDto()
+        return catalogue.template(templateId)
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Drug template not found")
     }
 }
@@ -186,7 +178,7 @@ class DrugTemplateController(
 @RequestMapping("/v1")
 @Tag(name = "Vocabularies", description = "Shared quantity units and dosage forms")
 class VocabularyController(
-    private val catalogueService: CatalogueService
+    private val catalogue: CatalogueApplicationService
 ) {
 
     private val logger = LoggerFactory.getLogger(VocabularyController::class.java)
@@ -195,13 +187,13 @@ class VocabularyController(
     @ApiResponse(responseCode = "200", description = "Units returned")
     fun listQuantityUnits(authentication: Authentication): List<VocabularyEntryDTO> {
         logger.debug("GET /v1/quantity-units by user {}", authentication.userId)
-        return catalogueService.quantityUnits().map { it.toDto() }
+        return catalogue.quantityUnits()
     }
 
     @GetMapping("/form-types")
     @ApiResponse(responseCode = "200", description = "Dosage forms returned")
     fun listFormTypes(authentication: Authentication): List<VocabularyEntryDTO> {
         logger.debug("GET /v1/form-types by user {}", authentication.userId)
-        return catalogueService.formTypes().map { it.toDto() }
+        return catalogue.formTypes()
     }
 }

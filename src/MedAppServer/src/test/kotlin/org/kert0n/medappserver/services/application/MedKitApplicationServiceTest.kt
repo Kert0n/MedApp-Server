@@ -1,4 +1,4 @@
-package org.kert0n.medappserver.services.orchestrators
+package org.kert0n.medappserver.services.application
 
 import java.util.*
 import kotlin.test.assertEquals
@@ -11,9 +11,10 @@ import org.junit.jupiter.api.assertThrows
 import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.domain.DomainRuleViolated
-import org.kert0n.medappserver.services.models.DrugService
-import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.models.ReservationService
+import org.kert0n.medappserver.services.aggregate.DrugService
+import org.kert0n.medappserver.services.aggregate.NewDrug
+import org.kert0n.medappserver.services.aggregate.MedKitService
+import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
@@ -24,7 +25,7 @@ import org.springframework.transaction.annotation.Transactional
 @SpringBootTest
 @ActiveProfiles("test")
 @Transactional
-class MedKitDrugOrchestratorTest {
+class MedKitApplicationServiceTest {
 
     @Autowired
 
@@ -32,7 +33,9 @@ class MedKitDrugOrchestratorTest {
 
 
     @Autowired
-    private lateinit var medKitDrugOrchestrator: MedKitDrugOrchestrator
+    private lateinit var medKits: MedKitApplicationService
+    @Autowired
+    private lateinit var drugs: DrugApplicationService
     @Autowired
     private lateinit var drugService: DrugService
     @Autowired
@@ -50,7 +53,7 @@ class MedKitDrugOrchestratorTest {
         val kit = medKitService.create(alice.id)
         dbHelper.flushAndClear()
 
-        val drug = medKitDrugOrchestrator.createDrugInMedKit(
+        val drug = drugs.createInMedKit(
             kit.id,
             DrugCreateRequest(name = "Aspirin", quantity = qty(100.0), quantityUnitId = dbHelper.unit().id),
             alice.id
@@ -68,7 +71,7 @@ class MedKitDrugOrchestratorTest {
         dbHelper.flushAndClear()
 
         assertFailsWith<DomainRuleViolated> {
-            medKitDrugOrchestrator.createDrugInMedKit(
+            drugs.createInMedKit(
                 kit.id,
                 DrugCreateRequest(name = "Drug", quantity = qty(10.0), quantityUnitId = dbHelper.unit().id),
                 eve.id
@@ -86,7 +89,7 @@ class MedKitDrugOrchestratorTest {
         val drug = dbHelper.freshDrug(kit1.id, 50.0)
         dbHelper.flushAndClear()
 
-        val moved = medKitDrugOrchestrator.moveDrug(drug.id, kit2.id, alice.id)
+        val moved = drugs.moveToMedKit(drug.id, kit2.id, alice.id)
         assertEquals(kit2.id, moved.medKitId)
     }
 
@@ -105,7 +108,7 @@ class MedKitDrugOrchestratorTest {
         reservationService.create(bob.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
-        medKitDrugOrchestrator.moveDrug(drug.id, targetKit.id, alice.id)
+        drugs.moveToMedKit(drug.id, targetKit.id, alice.id)
         dbHelper.flushAndClear()
 
         assertNull(dbHelper.userReservation(bob.id, drug.id))
@@ -120,13 +123,13 @@ class MedKitDrugOrchestratorTest {
         medKitService.joinByInvitation(medKitService.invite(kitA.id, alice.id), bob.id)
 
         val drug = drugService.create(
-            DrugCreateRequest("Shared Meds", qty(10.0), dbHelper.unit().id), kitA.id, alice.id
+            NewDrug("Shared Meds", qty(10.0), dbHelper.unit().id), kitA.id, alice.id
         )
         val kitB = medKitService.create(bob.id)
         dbHelper.flushAndClear()
 
         assertDoesNotThrow {
-            medKitDrugOrchestrator.moveDrug(drug.id, kitB.id, bob.id)
+            drugs.moveToMedKit(drug.id, kitB.id, bob.id)
         }
 
         assertEquals(kitB.id, dbHelper.requireDrug(drug.id).medKitId)
@@ -140,7 +143,7 @@ class MedKitDrugOrchestratorTest {
         dbHelper.flushAndClear()
 
         assertThrows<DomainRuleViolated> {
-            medKitDrugOrchestrator.moveDrug(drug.id, UUID.randomUUID(), alice.id)
+            drugs.moveToMedKit(drug.id, UUID.randomUUID(), alice.id)
         }
     }
 
@@ -158,7 +161,7 @@ class MedKitDrugOrchestratorTest {
         reservationService.create(bob.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
-        medKitDrugOrchestrator.leaveMedKit(kit.id, bob.id)
+        medKits.leave(kit.id, bob.id)
         dbHelper.flushAndClear()
 
         assertNotNull(medKitService.requireAccessible(kit.id, alice.id))
@@ -176,7 +179,7 @@ class MedKitDrugOrchestratorTest {
         dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
-        medKitDrugOrchestrator.delete(kit.id, alice.id, null)
+        medKits.delete(kit.id, alice.id, null)
         dbHelper.flushAndClear()
 
         assertThrows<DomainRuleViolated> {
@@ -189,12 +192,12 @@ class MedKitDrugOrchestratorTest {
         val alice = dbHelper.freshUser("alice")
         val kitA = medKitService.create(alice.id)
         val kitB = medKitService.create(alice.id)
-        val drug = medKitDrugOrchestrator.createDrugInMedKit(
+        val drug = drugs.createInMedKit(
             kitA.id, DrugCreateRequest("Migrating Drug", qty(10.0), dbHelper.unit().id), alice.id
         )
         dbHelper.flushAndClear()
 
-        medKitDrugOrchestrator.delete(kitA.id, alice.id, kitB.id)
+        medKits.delete(kitA.id, alice.id, kitB.id)
         dbHelper.flushAndClear()
 
         assertNull(medKitStore.findById(kitA.id))
@@ -219,7 +222,7 @@ class MedKitDrugOrchestratorTest {
         reservationService.create(charlie.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
-        medKitDrugOrchestrator.delete(oldKit.id, alice.id, newKit.id)
+        medKits.delete(oldKit.id, alice.id, newKit.id)
         dbHelper.flushAndClear()
 
         assertNotNull(dbHelper.userReservation(alice.id, drug.id))
@@ -232,7 +235,7 @@ class MedKitDrugOrchestratorTest {
         dbHelper.flushAndClear()
 
         assertThrows<DomainRuleViolated> {
-            medKitDrugOrchestrator.delete(UUID.randomUUID(), alice.id, null)
+            medKits.delete(UUID.randomUUID(), alice.id, null)
         }
     }
 
@@ -243,16 +246,16 @@ class MedKitDrugOrchestratorTest {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.create(alice.id)
         drugService.create(
-            DrugCreateRequest(name = "Drug A", quantity = qty(50.0), quantityUnitId = dbHelper.unit().id),
+            NewDrug(name = "Drug A", quantity = qty(50.0), quantityUnitId = dbHelper.unit().id),
             kit.id, alice.id
         )
         drugService.create(
-            DrugCreateRequest(name = "Drug B", quantity = qty(30.0), quantityUnitId = dbHelper.unit().id),
+            NewDrug(name = "Drug B", quantity = qty(30.0), quantityUnitId = dbHelper.unit().id),
             kit.id, alice.id
         )
         dbHelper.flushAndClear()
 
-        val dto = medKitDrugOrchestrator.medKitWithDrugs(kit.id, alice.id)
+        val dto = medKits.read(kit.id, alice.id)
         assertEquals(kit.id, dto.id)
         assertEquals(2, dto.drugs.size)
     }
