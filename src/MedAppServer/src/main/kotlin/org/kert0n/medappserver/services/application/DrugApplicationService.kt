@@ -12,7 +12,9 @@ import org.kert0n.medappserver.domain.Intake
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.StaleAggregateVersion
 import org.kert0n.medappserver.domain.StaleSyncVersion
+import org.kert0n.medappserver.services.aggregate.DrugEdit
 import org.kert0n.medappserver.services.aggregate.DrugService
+import org.kert0n.medappserver.services.aggregate.NewDrug
 import org.kert0n.medappserver.services.aggregate.IntakeService
 import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.services.aggregate.ReservationService
@@ -70,12 +72,12 @@ class DrugApplicationService(
     fun createInMedKit(medKitId: UUID, request: DrugCreateRequest, userId: UUID): DrugDTO {
         logger.debug("Creating drug {} in medkit {}", request.name, medKitId)
         medKitService.requireUnchanged(medKitService.requireAccessible(medKitId, userId))
-        return drugService.create(request, medKitId, userId).toDto(emptyList())
+        return drugService.create(request.toCommand(), medKitId, userId).toDto(emptyList())
     }
 
     @Transactional
     fun update(drugId: UUID, request: DrugPatchRequest, userId: UUID, expectedVersion: Long): DrugDTO {
-        drugService.update(drugId, request, userId, expectedVersion)
+        drugService.update(drugId, request.toCommand(), userId, expectedVersion)
         return read(drugId, userId)
     }
 
@@ -172,4 +174,30 @@ class DrugApplicationService(
         )
     }
 
+    /**
+     * Форма запроса переводится в команду здесь: фасад — единственный, кто знает обе стороны.
+     *
+     * Ниже про контракт не знают вовсе, поэтому его правка не доходит до правил.
+     */
+    private fun DrugCreateRequest.toCommand() = NewDrug(
+        name = name,
+        quantity = quantity,
+        quantityUnitId = quantityUnitId,
+        formTypeId = formTypeId,
+        category = category,
+        manufacturer = manufacturer,
+        country = country,
+        description = description
+    )
+
+    private fun DrugPatchRequest.toCommand() = DrugEdit(
+        name = name,
+        quantity = quantity,
+        quantityUnitId = quantityUnitId,
+        formTypeId = formTypeId,
+        category = category,
+        manufacturer = manufacturer,
+        country = country,
+        description = description
+    )
 }

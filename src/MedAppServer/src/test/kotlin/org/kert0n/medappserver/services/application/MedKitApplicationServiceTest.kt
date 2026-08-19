@@ -12,6 +12,7 @@ import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.domain.DomainRuleViolated
 import org.kert0n.medappserver.services.aggregate.DrugService
+import org.kert0n.medappserver.services.aggregate.NewDrug
 import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
@@ -122,7 +123,7 @@ class MedKitDrugOrchestratorTest {
         medKitService.joinByInvitation(medKitService.invite(kitA.id, alice.id), bob.id)
 
         val drug = drugService.create(
-            DrugCreateRequest("Shared Meds", qty(10.0), dbHelper.unit().id), kitA.id, alice.id
+            NewDrug("Shared Meds", qty(10.0), dbHelper.unit().id), kitA.id, alice.id
         )
         val kitB = medKitService.create(bob.id)
         dbHelper.flushAndClear()
@@ -246,11 +247,11 @@ class MedKitDrugOrchestratorTest {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.create(alice.id)
         drugService.create(
-            DrugCreateRequest(name = "Drug A", quantity = qty(50.0), quantityUnitId = dbHelper.unit().id),
+            NewDrug(name = "Drug A", quantity = qty(50.0), quantityUnitId = dbHelper.unit().id),
             kit.id, alice.id
         )
         drugService.create(
-            DrugCreateRequest(name = "Drug B", quantity = qty(30.0), quantityUnitId = dbHelper.unit().id),
+            NewDrug(name = "Drug B", quantity = qty(30.0), quantityUnitId = dbHelper.unit().id),
             kit.id, alice.id
         )
         dbHelper.flushAndClear()

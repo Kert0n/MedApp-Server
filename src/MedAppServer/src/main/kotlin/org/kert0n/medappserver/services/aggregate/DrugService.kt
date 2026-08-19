@@ -2,8 +2,6 @@ package org.kert0n.medappserver.services.aggregate
 
 import java.math.BigDecimal
 import java.util.UUID
-import org.kert0n.medappserver.api.DrugCreateRequest
-import org.kert0n.medappserver.api.DrugPatchRequest
 import org.kert0n.medappserver.db.store.DrugStore
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.DrugDetails
@@ -82,7 +80,7 @@ class DrugService(
     // ── Команды препарата ────────────────────────────────────────────────────────
 
     @Transactional(propagation = MANDATORY)
-    fun create(request: DrugCreateRequest, medKitId: UUID, userId: UUID): Drug {
+    fun create(request: NewDrug, medKitId: UUID, userId: UUID): Drug {
         logger.debug("Creating drug: {} for user: {}", request.name, userId)
 
         val drug = Drug(
@@ -101,7 +99,7 @@ class DrugService(
     }
 
     @Transactional(propagation = MANDATORY)
-    fun update(drugId: UUID, request: DrugPatchRequest, userId: UUID, expectedVersion: Long): Drug {
+    fun update(drugId: UUID, request: DrugEdit, userId: UUID, expectedVersion: Long): Drug {
         logger.debug("Updating drug: {}", drugId)
 
         var drug = requireAt(drugId, userId, expectedVersion)

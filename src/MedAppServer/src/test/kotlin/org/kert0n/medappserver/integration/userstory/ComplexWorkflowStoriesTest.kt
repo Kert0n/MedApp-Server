@@ -15,6 +15,7 @@ import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.aggregate.DrugService
+import org.kert0n.medappserver.services.aggregate.NewDrug
 import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.services.application.MedKitApplicationService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
@@ -292,7 +293,8 @@ class ComplexWorkflowStoriesTest {
         medKitService.joinByInvitation(shareKey, bob.id)
 
         // Alice creates a drug
-        val drug = drugService.create(DrugCreateRequest("Shared Meds", qty(10.0), dbHelper.unit().id), kitA.id, alice.id)
+        val drug = drugService.create(
+            NewDrug("Shared Meds", qty(10.0), dbHelper.unit().id), kitA.id, alice.id)
 
         // Bob creates a private kit
         val kitB = medKitService.create(bob.id)
@@ -315,7 +317,8 @@ class ComplexWorkflowStoriesTest {
         val kitA = medKitService.create(alice.id)
         medKitService.joinByInvitation(medKitService.invite(kitA.id, alice.id), bob.id)
 
-        val drug = drugService.create(DrugCreateRequest("Audit Meds", qty(10.0), dbHelper.unit().id), kitA.id, alice.id)
+        val drug = drugService.create(
+            NewDrug("Audit Meds", qty(10.0), dbHelper.unit().id), kitA.id, alice.id)
 
         // Both reserve a share
         reservationService.create(alice.id, drug.id, qty(5.0))

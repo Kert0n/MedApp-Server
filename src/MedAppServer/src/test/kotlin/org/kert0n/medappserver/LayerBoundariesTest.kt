@@ -154,4 +154,24 @@ class LayerBoundariesTest {
                 )
             }
     }
+
+    /**
+     * Ниже фасада про контракт не знают.
+     *
+     * `DrugService` принимал `DrugCreateRequest` — форму HTTP-запроса в слое агрегата. Правка
+     * контракта дотягивалась бы до правил, а правило начинало бы зависеть от того, каким
+     * способом о нём попросили. Перевод формы в команду делает фасад: он один знает обе стороны.
+     */
+    @Test
+    fun `под фасадом не знают про контракт`() {
+        sources
+            .filter { it.parent.name == "aggregate" || it.parent.name == "orchestrator" }
+            .forEach { file ->
+                assertTrue(
+                    !Regex("^import org\\.kert0n\\.medappserver\\.(api|controller)\\.", RegexOption.MULTILINE)
+                        .containsMatchIn(Files.readString(file)),
+                    "${file.name} импортирует api или controller: форму запроса переводит фасад"
+                )
+            }
+    }
 }

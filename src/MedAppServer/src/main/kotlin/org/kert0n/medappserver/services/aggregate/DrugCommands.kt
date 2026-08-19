@@ -1,0 +1,38 @@
+package org.kert0n.medappserver.services.aggregate
+
+import java.math.BigDecimal
+import java.util.UUID
+
+/**
+ * Чего просят у агрегата упаковки.
+ *
+ * Отдельно от `api`, хотя поля те же: агрегатный сервис не должен знать про контракт. Иначе
+ * правка формы запроса тянется вниз до правил, а правило начинает зависеть от того, каким
+ * способом о нём попросили. Здесь нет ни аннотаций проверки, ни описаний схемы — только то,
+ * что нужно самой команде.
+ *
+ * Единица и форма приходят идентификаторами: разворачивает их сервис, потому что справочник —
+ * его собеседник, а не вызывающего.
+ */
+data class NewDrug(
+    val name: String,
+    val quantity: BigDecimal,
+    val quantityUnitId: UUID,
+    val formTypeId: UUID? = null,
+    val category: String? = null,
+    val manufacturer: String? = null,
+    val country: String? = null,
+    val description: String? = null
+)
+
+/** Частичное изменение: `null` значит «не трогать это поле». */
+data class DrugEdit(
+    val name: String? = null,
+    val quantity: BigDecimal? = null,
+    val quantityUnitId: UUID? = null,
+    val formTypeId: UUID? = null,
+    val category: String? = null,
+    val manufacturer: String? = null,
+    val country: String? = null,
+    val description: String? = null
+)
