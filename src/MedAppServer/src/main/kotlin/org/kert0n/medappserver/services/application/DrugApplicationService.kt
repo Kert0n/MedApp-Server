@@ -65,13 +65,13 @@ class DrugApplicationService(
     /**
      * Доступ решает аптечка, заведение упаковки — упаковка.
      *
-     * Состав удерживается до коммита: между проверкой доступа и записью вызывающий успевает из
-     * аптечки выйти, и пачка легла бы в чужую.
+     * Право проверяет чтение состава; версией это не проверяется — чужое вступление в ту же
+     * аптечку заведению пачки не мешает.
      */
     @Transactional
     fun createInMedKit(medKitId: UUID, request: DrugCreateRequest, userId: UUID): DrugDTO {
         logger.debug("Creating drug {} in medkit {}", request.name, medKitId)
-        medKitService.requireUnchanged(medKitService.requireAccessible(medKitId, userId))
+        medKitService.requireAccessible(medKitId, userId)
         return drugService.create(request.toCommand(), medKitId, userId).toDto(emptyList())
     }
 

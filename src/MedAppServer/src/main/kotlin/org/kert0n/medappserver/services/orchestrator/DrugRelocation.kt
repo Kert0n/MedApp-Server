@@ -37,12 +37,11 @@ class DrugRelocation(
      * Обе половины видны здесь: непереживших снимает `dropOnDrugExcept`, а уцелевшие едут за
      * пачкой — их `med_kit_id` обязан оказаться новым.
      *
-     * Состав аптечки — основание решения, а не то, что меняется: `requireUnchanged` требует,
-     * чтобы он дожил до коммита.
+     * Состав аптечки версией не удерживается: она отвечает за состояние своей сущности, а не
+     * за права. Если состав изменится под нами, оставшуюся без членства бронь уберёт ключ.
      */
     @Transactional(propagation = MANDATORY)
     fun moveOne(drugId: UUID, target: MedKit, userId: UUID, expectedVersion: Long): Drug {
-        medKitService.requireUnchanged(target)
         val moved = drugService.moveTo(drugId, target.id, userId, expectedVersion)
         reservationService.dropOnDrugExcept(drugId, target.members)
         return moved
@@ -54,18 +53,12 @@ class DrugRelocation(
      * То же правило, что у одной пачки, и та же пара половин — но двумя запросами: аптечка со
      * ста пачками не должна стоить ста загрузок.
      *
-     * Состав требуется дважды, и это не перестраховка. **Замерено:** массовый `UPDATE` с
-     * `clearAutomatically` очищает persistence context и уносит вместе с ним зарегистрированную
-     * проверку версии — снял из сценария один этот запрос, и та же гонка стала отвергаться.
-     * Поэтому состав перепроверяется после него, уже по свежему чтению; держится это на том,
-     * что `requireUnchanged` сравнивает версию со снимком явно.
+     * Состав здесь тоже не удерживается версией — по той же причине, что и у одной пачки.
      */
     @Transactional(propagation = MANDATORY)
     fun moveAll(sourceMedKitId: UUID, target: MedKit) {
-        medKitService.requireUnchanged(target)
         // Порядок важен: брони выбираются по исходной аптечке, пока упаковки ещё в ней.
         reservationService.dropInMedKitExcept(sourceMedKitId, target.members)
         drugService.moveAllToMedKit(sourceMedKitId, target.id)
-        medKitService.requireUnchanged(target)
     }
 }

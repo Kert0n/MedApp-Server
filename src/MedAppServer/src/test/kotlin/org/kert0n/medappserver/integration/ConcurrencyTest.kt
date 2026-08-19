@@ -11,6 +11,7 @@ import org.kert0n.medappserver.db.store.DrugStore
 import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.db.store.ReservationStore
 import java.util.UUID
+import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.api.SyncRequest
 import org.kert0n.medappserver.api.SyncReservation
 import org.kert0n.medappserver.services.aggregate.IntakeService
@@ -533,4 +534,54 @@ class ConcurrencyTest {
 
         assertNull(dbHelper.userReservation(bob.id, drug.id), "брони без доступа не осталось")
     }
+
+    // ── Версия не отвечает за право ──────────────────────────────────────────────
+
+    /**
+     * Постороннее вступление не отвергает чужие команды.
+     *
+     * Версия аптечки двигается на **любое** изменение состава, поэтому удержание её как способа
+     * проверить право отвергало команду из-за того, что рядом кто-то вошёл. К правам
+     * вызывающего это отношения не имеет: право проверяется чтением состава, и оно у него есть.
+     *
+     * Три команды, которые раньше так и падали.
+     */
+    @Test
+    fun `постороннее вступление не отвергает команды участника`() {
+        val alice = dbHelper.freshUser("alice")
+        val bob = dbHelper.freshUser("bob")
+        val stranger = dbHelper.freshUser("stranger")
+        val kit = dbHelper.freshMedKit(alice.id)
+        dbHelper.join(kit.id, bob.id)
+        val drug = dbHelper.freshDrug(kit.id, 100.0)
+
+        assertNull(
+            interleaved.lostUpdate(
+                read = { medKits.read(kit.id, bob.id) },
+                meanwhile = { dbHelper.join(kit.id, stranger.id) },
+                write = { reservationsApp.create(bob.id, drug.id, qty(20.0)) }
+            ),
+            "чужое вступление не мешает завести бронь"
+        )
+        assertNull(
+            interleaved.lostUpdate(
+                read = { medKits.read(kit.id, bob.id) },
+                meanwhile = { dbHelper.join(kit.id, dbHelper.freshUser("second").id) },
+                write = { drugs.createInMedKit(kit.id, newDrug(), bob.id) },
+            ),
+            "чужое вступление не мешает завести упаковку"
+        )
+        assertNull(
+            interleaved.lostUpdate(
+                read = { medKits.read(kit.id, bob.id) },
+                meanwhile = { dbHelper.join(kit.id, dbHelper.freshUser("third").id) },
+                write = { medKits.invite(kit.id, bob.id) }
+            ),
+            "чужое вступление не мешает выдать приглашение"
+        )
+    }
+
+    private fun newDrug() = DrugCreateRequest(
+        name = "Aspirin", quantity = qty(10.0), quantityUnitId = dbHelper.unit().id
+    )
 }
