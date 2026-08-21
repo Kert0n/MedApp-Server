@@ -1,214 +1,68 @@
--- Схема БД приложения MedAppServer.
+-- Схема базы MedAppServer.
+--
+-- ФАЙЛ ПОРОЖДАЁТСЯ. Руками не правится: схему описывают объекты Table в
+-- src/main/kotlin/.../db/tables. После правки — ./gradlew test -DupdateSchema=true,
+-- и перегенерированный файл кладётся в тот же коммит; за этим следит
+-- SchemaSnapshotTest.
 --
 -- Применяется при инициализации Postgres в compose, поэтому на чистой машине схема
--- появляется сама. Источник истины — JPA-сущности в src/main/kotlin/.../db/model:
--- при их изменении править и этот файл, иначе prod с ddl-auto=validate не поднимется.
---
--- Проверка после правки: применить на пустую БД и убедиться, что приложение стартует
--- с ddl-auto=validate.
+-- появляется сама.
 
--- Нужен для поиска по справочнику: VidalDrugRepository вызывает similarity().
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
+CREATE TABLE IF NOT EXISTS users (id uuid, hashed_key VARCHAR(255) NOT NULL, CONSTRAINT users_pkey PRIMARY KEY (id));
 
--- ============================================================
--- Аптечки пользователей
--- ============================================================
+ALTER TABLE users ADD CONSTRAINT ix_users_hashed_key UNIQUE (hashed_key);
 
--- Персональных данных нет по замыслу: только идентификатор и хеш ключа.
-CREATE TABLE users
-(
-    id         uuid         NOT NULL,
-    hashed_key varchar(255) NOT NULL,
+CREATE TABLE IF NOT EXISTS med_kits (id uuid, CONSTRAINT med_kits_pkey PRIMARY KEY (id));
 
-    CONSTRAINT users_pkey PRIMARY KEY (id),
-    CONSTRAINT ix_users_hashed_key UNIQUE (hashed_key)
-);
+CREATE TABLE IF NOT EXISTS user_med_kits (med_kit_id uuid, user_id uuid, CONSTRAINT user_med_kits_pkey PRIMARY KEY (med_kit_id, user_id), CONSTRAINT user_med_kits_med_kit_fkey FOREIGN KEY (med_kit_id) REFERENCES med_kits(id) ON DELETE CASCADE, CONSTRAINT user_med_kits_user_fkey FOREIGN KEY (user_id) REFERENCES users(id));
 
--- У аптечки нет ни владельца, ни названия: участники равноправны.
-CREATE TABLE med_kits
-(
-    id uuid NOT NULL,
+CREATE TABLE IF NOT EXISTS form_types (id uuid, "name" VARCHAR(100) NOT NULL, CONSTRAINT form_types_pkey PRIMARY KEY (id));
 
-    CONSTRAINT med_kits_pkey PRIMARY KEY (id)
-);
+ALTER TABLE form_types ADD CONSTRAINT form_types_name_key UNIQUE ("name");
 
--- Членство. Каскад только со стороны аптечки: удалили аптечку — членства нет.
---
--- Со стороны пользователя каскада намеренно нет, и это относится ко всем FK на users ниже.
--- Удаление пользователя не является операцией API: аптечки общие, и каскад молча вынес бы из
--- чужой аптечки чужие планы. Если такая операция понадобится, она должна быть явной, а не
--- побочным эффектом DELETE.
-CREATE TABLE user_med_kits
-(
-    med_kit_id uuid NOT NULL,
-    user_id    uuid NOT NULL,
+CREATE TABLE IF NOT EXISTS quantity_units (id uuid, "name" VARCHAR(30) NOT NULL, CONSTRAINT quantity_units_pkey PRIMARY KEY (id));
 
-    CONSTRAINT user_med_kits_pkey PRIMARY KEY (med_kit_id, user_id),
-    CONSTRAINT user_med_kits_med_kit_fkey FOREIGN KEY (med_kit_id) REFERENCES med_kits (id) ON DELETE CASCADE,
-    CONSTRAINT user_med_kits_user_fkey FOREIGN KEY (user_id) REFERENCES users (id)
-);
+ALTER TABLE quantity_units ADD CONSTRAINT quantity_units_name_key UNIQUE ("name");
 
--- IF NOT EXISTS у этих двух таблиц не для красоты: их создаёт и наполняет дамп
--- справочника (01-load-catalogue.sh), который применяется раньше. Без IF NOT EXISTS
--- второй по порядку скрипт падал бы с "relation already exists" — проверено в обоих
--- направлениях. Определения ниже совпадают с дамповыми, поэтому файл остаётся
--- самодостаточным и когда дампа нет.
-CREATE TABLE IF NOT EXISTS form_types
-(
-    id   uuid         NOT NULL,
-    name varchar(100) NOT NULL,
+CREATE TABLE IF NOT EXISTS user_drugs (id uuid, "name" VARCHAR(300) NOT NULL, quantity DECIMAL(19, 6) NOT NULL, quantity_unit_id uuid NOT NULL, form_type_id uuid NULL, category VARCHAR(200) NULL, manufacturer VARCHAR(300) NULL, country VARCHAR(100) NULL, description TEXT NULL, med_kit_id uuid NOT NULL, CONSTRAINT user_drugs_pkey PRIMARY KEY (id), CONSTRAINT user_drugs_quantity_unit_fkey FOREIGN KEY (quantity_unit_id) REFERENCES quantity_units(id), CONSTRAINT user_drugs_form_type_fkey FOREIGN KEY (form_type_id) REFERENCES form_types(id), CONSTRAINT user_drugs_med_kit_fkey FOREIGN KEY (med_kit_id) REFERENCES med_kits(id) ON DELETE CASCADE, CONSTRAINT user_drugs_quantity_positive CHECK (quantity > 0));
 
-    CONSTRAINT form_types_pkey PRIMARY KEY (id),
-    CONSTRAINT form_types_name_key UNIQUE (name)
-);
+CREATE INDEX ix_user_drugs_name ON user_drugs ("name");
 
-CREATE TABLE IF NOT EXISTS quantity_units
-(
-    id   uuid        NOT NULL,
-    name varchar(30) NOT NULL,
-
-    CONSTRAINT quantity_units_pkey PRIMARY KEY (id),
-    CONSTRAINT quantity_units_name_key UNIQUE (name)
-);
-
--- Препарат в аптечке. Название и производитель — свободный текст, а не ссылка на
--- справочник: препарат можно добавить руками, не найдя его в каталоге.
-CREATE TABLE user_drugs
-(
-    id            uuid           NOT NULL,
-    name          varchar(300)   NOT NULL,
-    -- numeric, а не double precision: количество препарата — это точная величина, и половина
-    -- таблетки не должна превращаться в 0.49999999999999994 при первом же делении.
-    quantity         numeric(19, 6) NOT NULL,
-    -- Единица измерения и форма — ссылки в тот же справочник, которым пользуется каталог:
-    -- «шт» у заведённого руками препарата и «шт» у карточки каталога должны быть одной
-    -- единицей, а не двумя одинаково написанными строками.
-    quantity_unit_id uuid           NOT NULL,
-    form_type_id     uuid,
-    category         varchar(200),
-    manufacturer     varchar(300),
-    country          varchar(100),
-    description      text,
-    med_kit_id       uuid           NOT NULL,
-
-    CONSTRAINT user_drugs_pkey PRIMARY KEY (id),
-    -- Избыточно при первичном ключе по id, но составной внешний ключ брони может ссылаться
-    -- только на объявленную уникальность. Существует ради reservations_drug_fkey ниже.
-    CONSTRAINT user_drugs_id_med_kit_key UNIQUE (id, med_kit_id),
-    -- Пустой упаковки не бывает: опустевшая уничтожается, а не остаётся нулём. Правило держит
-    -- домен, здесь оно продублировано затем, что колонку может тронуть и не он: массовый
-    -- UPDATE, миграция, рука в psql.
-    CONSTRAINT user_drugs_quantity_positive CHECK (quantity > 0),
-    CONSTRAINT user_drugs_med_kit_fkey FOREIGN KEY (med_kit_id) REFERENCES med_kits (id) ON DELETE CASCADE,
-    -- Без каскада: словарь переживает препараты, а препарат без единицы измерения
-    -- бессмыслен, поэтому удалить используемую единицу база не даст.
-    CONSTRAINT user_drugs_quantity_unit_fkey FOREIGN KEY (quantity_unit_id) REFERENCES quantity_units (id),
-    CONSTRAINT user_drugs_form_type_fkey FOREIGN KEY (form_type_id) REFERENCES form_types (id)
-);
-
-CREATE INDEX ix_user_drugs_name ON user_drugs (name);
 CREATE INDEX ix_user_drugs_med_kit_id ON user_drugs (med_kit_id);
 
--- Бронь: сколько из этой упаковки человек считает своим. Расписание приёма живёт на клиенте,
--- здесь только количество.
---
--- Бронь может превышать остаток упаковки, и никакого ограничения на этот счёт в схеме нет:
--- сколько из своей брони оставить, решает её владелец, а не сервер.
---
--- med_kit_id продублирован из упаковки не ради удобства чтения, а чтобы бронь могла сослаться
--- на членство. Поддерживает его ссылочная целостность (ON UPDATE CASCADE ниже), а не логика:
--- ни триггеров, ни вычисляемых колонок здесь нет.
-CREATE TABLE reservations
-(
-    user_id    uuid           NOT NULL,
-    drug_id    uuid           NOT NULL,
-    med_kit_id uuid           NOT NULL,
-    amount     numeric(19, 6) NOT NULL,
+ALTER TABLE user_drugs ADD CONSTRAINT user_drugs_id_med_kit_key UNIQUE (id, med_kit_id);
 
-    CONSTRAINT reservations_pkey PRIMARY KEY (drug_id, user_id),
-    -- Брони с нулём не бывает: отмена выражается удалением строки.
-    CONSTRAINT reservations_amount_positive CHECK (amount > 0),
+CREATE TABLE IF NOT EXISTS reservations (user_id uuid, drug_id uuid, med_kit_id uuid NOT NULL, amount DECIMAL(19, 6) NOT NULL, CONSTRAINT reservations_pkey PRIMARY KEY (drug_id, user_id), CONSTRAINT reservations_drug_med_kit_fkey FOREIGN KEY (drug_id, med_kit_id) REFERENCES user_drugs(id, med_kit_id) ON DELETE CASCADE ON UPDATE CASCADE, CONSTRAINT reservations_membership_fkey FOREIGN KEY (med_kit_id, user_id) REFERENCES user_med_kits(med_kit_id, user_id) ON DELETE CASCADE, CONSTRAINT reservations_amount_positive CHECK (amount > 0));
 
-    -- Пачку уничтожили — бронь ушла. Пачка переехала — ON UPDATE CASCADE двигает med_kit_id
-    -- брони вслед за ней, и тогда проверяется ключ ниже.
-    CONSTRAINT reservations_drug_med_kit_fkey FOREIGN KEY (drug_id, med_kit_id)
-        REFERENCES user_drugs (id, med_kit_id) ON UPDATE CASCADE ON DELETE CASCADE,
-
-    -- Главный ключ этой схемы: бронь висит на членстве, а не на пользователе.
-    --
-    -- Членство отозвали — бронь ушла каскадом. И наоборот: брони без доступа не существует,
-    -- поэтому чтение своих броней вправе не проверять членство отдельно — сама строка это
-    -- доказательство. user_id ключом не был бы: членство отзывается, а строка осталась бы.
-    --
-    -- Переезд пачки к участнику, которого нет в целевой аптечке, упрётся сюда и упадёт. Это
-    -- намеренно: правило «назначение переживает переезд, только если человек допущен к цели»
-    -- живёт в DrugRelocation, а ключ ловит забытую уборку как ошибку, а не как утечку.
-    CONSTRAINT reservations_membership_fkey FOREIGN KEY (med_kit_id, user_id)
-        REFERENCES user_med_kits (med_kit_id, user_id) ON DELETE CASCADE
-);
-
--- Обслуживает каскад по членству и чтение «мои брони в этой аптечке».
 CREATE INDEX ix_reservations_med_kit_user_id ON reservations (med_kit_id, user_id);
+
 CREATE INDEX ix_reservations_user_id ON reservations (user_id);
--- Индекса по drug_id нет: первичный ключ (drug_id, user_id) уже начинается с него.
 
+CREATE TABLE IF NOT EXISTS parsed_drugs (id uuid, "name" VARCHAR(300) NOT NULL, name_lat VARCHAR(300) NULL, form_type_id uuid NULL, quantity INT NULL, quantity_unit_id uuid NULL, active_substance VARCHAR(300) NULL, category VARCHAR(300) NULL, manufacturer VARCHAR(300) NOT NULL, country VARCHAR(100) NULL, description TEXT NULL, otc BOOLEAN NOT NULL, CONSTRAINT parsed_drugs_pkey PRIMARY KEY (id), CONSTRAINT parsed_drugs_form_type_fkey FOREIGN KEY (form_type_id) REFERENCES form_types(id), CONSTRAINT parsed_drugs_quantity_unit_fkey FOREIGN KEY (quantity_unit_id) REFERENCES quantity_units(id));
 
--- ============================================================
--- Справочник препаратов (данные из скраппера Vidal)
--- ============================================================
+CREATE INDEX ix_parsed_drugs_name ON parsed_drugs ("name");
 
-CREATE TABLE parsed_drugs
-(
-    id               uuid         NOT NULL,
-    name             varchar(300) NOT NULL,
-    -- Международное название латиницей; в справочнике заполнено не всюду. Искать по нему
-    -- нужно: пользователь набирает и «Ибупрофен», и «Ibuprofen».
-    name_lat         varchar(300),
-    form_type_id     uuid,
-    quantity         integer,
-    quantity_unit_id uuid,
-    active_substance varchar(300),
-    category         varchar(300),
-    manufacturer     varchar(300) NOT NULL,
-    country          varchar(100),
-    description      text,
-    otc              boolean      NOT NULL,
+CREATE INDEX ix_parsed_drugs_form_type_id ON parsed_drugs (form_type_id);
 
-    -- Документ полнотекстового поиска, который считает сама база. Конфигурация simple, а не
-    -- russian: стемминг ломает торговые названия и фамилии производителей, а искать нужно
-    -- именно их написание.
-    search_tsv       tsvector GENERATED ALWAYS AS (
+CREATE INDEX ix_parsed_drugs_quantity_unit_id ON parsed_drugs (quantity_unit_id);
+
+ALTER TABLE parsed_drugs ADD COLUMN IF NOT EXISTS search_tsv tsvector
+    GENERATED ALWAYS AS (
         to_tsvector('simple',
                     coalesce(name, '') || ' ' || coalesce(name_lat, '') || ' ' ||
                     coalesce(active_substance, '') || ' ' || coalesce(manufacturer, ''))
-        ) STORED,
+    ) STORED;
 
-    -- Те же четыре поля одной строкой — для поиска по словам. Отдельно от search_tsv, потому
-    -- что триграммам нужен именно текст: tsvector уже разобран на лексемы, и опечатку в нём
-    -- не найти. Описание, категорию и страну сюда не берём: без весов совпадение в длинном
-    -- описании считалось бы наравне с совпадением в названии.
-    search_text      text GENERATED ALWAYS AS (
+ALTER TABLE parsed_drugs ADD COLUMN IF NOT EXISTS search_text text
+    GENERATED ALWAYS AS (
         coalesce(name, '') || ' ' || coalesce(name_lat, '') || ' ' ||
         coalesce(active_substance, '') || ' ' || coalesce(manufacturer, '')
-        ) STORED,
+    ) STORED;
 
-    CONSTRAINT parsed_drugs_pkey PRIMARY KEY (id),
-    CONSTRAINT parsed_drugs_form_type_fkey FOREIGN KEY (form_type_id) REFERENCES form_types (id),
-    CONSTRAINT parsed_drugs_quantity_unit_fkey FOREIGN KEY (quantity_unit_id) REFERENCES quantity_units (id)
-);
+CREATE INDEX IF NOT EXISTS ix_parsed_drugs_search_tsv
+    ON parsed_drugs USING gin (search_tsv);
 
--- Имена по своей таблице: ix_drugs_* сталкивались с индексами таблицы drugs из дампа
--- справочника, а имена индексов в Postgres уникальны на схему.
-CREATE INDEX ix_parsed_drugs_name ON parsed_drugs (name);
-CREATE INDEX ix_parsed_drugs_form_type_id ON parsed_drugs (form_type_id);
-CREATE INDEX ix_parsed_drugs_quantity_unit_id ON parsed_drugs (quantity_unit_id);
-
--- GIN по search_tsv обслуживает точный многословный запрос сразу по четырём полям.
-CREATE INDEX ix_parsed_drugs_search_tsv ON parsed_drugs USING gin (search_tsv);
-
--- GIN по склейке обслуживает поиск по словам с опечатками: оператор <% отбирает записи, в
--- которых у слова запроса есть похожий участок. Один индекс на все четыре поля вместо
--- четырёх по отдельности — искать всё равно нужно «где-нибудь в записи», а не в конкретном
--- поле. Opclass индекса объектами Table не выражается, поэтому он живёт только здесь.
-CREATE INDEX ix_parsed_drugs_search_text_trgm ON parsed_drugs USING gin (search_text gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS ix_parsed_drugs_search_text_trgm
+    ON parsed_drugs USING gin (search_text gin_trgm_ops);

@@ -56,9 +56,11 @@ kotlin {
 tasks.withType<Test> {
     useJUnitPlatform()
     jvmArgs("-XX:+EnableDynamicAgentLoading")
-    // Lets OpenApiSnapshotTest rewrite open-api.yaml instead of asserting against it:
+    // Снимки перезаписываются вместо сверки:
     //     ./gradlew test -DupdateOpenApi=true
+    //     ./gradlew test -DupdateSchema=true
     systemProperty("updateOpenApi", System.getProperty("updateOpenApi") ?: "false")
+    systemProperty("updateSchema", System.getProperty("updateSchema") ?: "false")
     // Tests read these two files, so a change to either must invalidate the results.
     // Without this a broken db/schema.sql leaves the previous green run in place: the task
     // is up to date because neither file is on the classpath.
