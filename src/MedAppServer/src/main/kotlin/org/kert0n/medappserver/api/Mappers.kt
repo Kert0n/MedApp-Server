@@ -7,6 +7,7 @@ import org.kert0n.medappserver.domain.FormType
 import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.QuantityUnit
 import org.kert0n.medappserver.domain.Reservation
+import org.kert0n.medappserver.domain.ReservationSnapshot
 
 /**
  * Перевод доменных значений в публичный контракт.
@@ -56,13 +57,10 @@ fun DrugTemplate.toDto(): DrugTemplateDTO = DrugTemplateDTO(
  * Своя доля отделена от общей суммы: одну показывают владельцу, по другой судят, разобрана ли
  * пачка. Упаковка про брони не знает — их приносит вызывающий.
  */
-fun Drug.toSnapshot(reservations: List<Reservation>, userId: Uuid): DrugSnapshotDTO =
+fun Drug.toSnapshot(reservations: ReservationSnapshot): DrugSnapshotDTO =
     DrugSnapshotDTO(
         drug = toDto(),
-        reservations = ReservationsDTO(
-            total = reservations.sumOf { it.amount.amount },
-            mine = reservations.firstOrNull { it.userId == userId }?.amount?.amount
-        )
+        reservations = ReservationsDTO(total = reservations.total, mine = reservations.mine)
     )
 
 /** Аптечка с содержимым: число участников она знает сама, упаковки приносит вызывающий. */
@@ -80,10 +78,8 @@ fun MedKit.toDto(drugs: Set<DrugSnapshotDTO>): MedKitDTO = MedKitDTO(
  *
  * Брони приходят одним списком на весь набор — тем самым, что читается одним запросом.
  */
-fun List<Drug>.toSnapshots(reservations: List<Reservation>, userId: Uuid): List<DrugSnapshotDTO> {
-    val byDrug = reservations.groupBy { it.drugId }
-    return map { it.toSnapshot(byDrug[it.id].orEmpty(), userId) }
-}
+fun List<Drug>.toSnapshots(reservations: Map<Uuid, ReservationSnapshot>): List<DrugSnapshotDTO> =
+    map { it.toSnapshot(reservations.getValue(it.id)) }
 
 /** Справка: по каким аптечкам и каким пачкам клиент может свериться, что ничего не исчезло. */
 fun List<MedKit>.toSummaryDto(accessiblePackages: List<Drug>): Set<MedKitSummaryDTO> {

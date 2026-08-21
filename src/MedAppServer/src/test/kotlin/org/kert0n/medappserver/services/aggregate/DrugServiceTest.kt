@@ -264,8 +264,8 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         // Заявленное приходит извне упаковки: сама она про брони не знает.
-        val snapshot = drugService.get(drug.id, alice.id)
-            .toSnapshot(reservationService.onDrugs(listOf(drug.id), alice.id), alice.id)
+        val read = drugService.get(drug.id, alice.id)
+        val snapshot = read.toSnapshot(reservationService.onDrugs(listOf(read), alice.id).getValue(read.id))
         assertQty(100.0, snapshot.drug.quantity)
         assertQty(25.0, snapshot.reservations.total)
         assertQty(25.0, snapshot.reservations.mine!!, "своя доля видна отдельно от общей")

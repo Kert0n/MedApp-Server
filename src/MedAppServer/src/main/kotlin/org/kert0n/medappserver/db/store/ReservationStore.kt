@@ -14,6 +14,7 @@ import org.jetbrains.exposed.v1.jdbc.Query
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.select
+import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
 import org.kert0n.medappserver.db.tables.Drugs
@@ -25,6 +26,7 @@ import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.QuantityUnit
 import org.kert0n.medappserver.domain.Reservation
+import org.kert0n.medappserver.domain.ReservationSnapshot
 import org.springframework.stereotype.Component
 
 /**
@@ -60,6 +62,30 @@ class ReservationStore {
     fun findAllOfDrugs(drugIds: Collection<Uuid>, userId: Uuid): List<Reservation> =
         if (drugIds.isEmpty()) emptyList()
         else rows { (Reservations.drugId inList drugIds) and visibleTo(userId) }.map { it.toDomain() }
+
+    /**
+     * Заявленное на упаковки — снимками, а не голыми бронями.
+     *
+     * Упаковки приходят объектами: вызывающий их уже прочитал, и это и есть доказательство
+     * доступа — отдельный предикат тут был бы второй копией того же правила.
+     *
+     * Версия снимка живёт в колонке рядом с упаковкой и принадлежит снимку, поэтому читает её
+     * это хранилище, а не хранилище упаковок. Упаковка без броней тоже получает снимок: сумма
+     * ноль, а версия у неё всё равно своя.
+     */
+    fun snapshotsOf(drugs: List<Drug>, userId: Uuid): Map<Uuid, ReservationSnapshot> {
+        if (drugs.isEmpty()) return emptyMap()
+
+        val ids = drugs.map { it.id }
+        val versions = Drugs.select(Drugs.id, Drugs.reservationsVersion)
+            .where { Drugs.id inList ids }
+            .associate { it[Drugs.id] to it[Drugs.reservationsVersion] }
+        val byDrug = findAllOfDrugs(ids, userId).groupBy { it.drugId }
+
+        return ids.associateWith { id ->
+            ReservationSnapshot.of(id, byDrug[id].orEmpty(), userId, versions.getValue(id))
+        }
+    }
 
     // ── Команды ──────────────────────────────────────────────────────────────────
 

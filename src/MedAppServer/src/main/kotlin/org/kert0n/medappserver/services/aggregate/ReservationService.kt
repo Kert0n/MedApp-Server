@@ -8,6 +8,7 @@ import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.NoSuchReservation
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.Reservation
+import org.kert0n.medappserver.domain.ReservationSnapshot
 import org.kert0n.medappserver.domain.ReservationAlreadyExists
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -48,10 +49,10 @@ class ReservationService(
     fun get(userId: Uuid, drugId: Uuid): Reservation =
         reservations.find(userId, drugId) ?: throw NoSuchReservation()
 
-    /** Брони на перечисленные упаковки — чтобы ответить, сколько на пачку заявлено. */
+    /** Заявленное на упаковки — снимками: сумма, своя доля и версия картины. */
     @Transactional(propagation = MANDATORY, readOnly = true)
-    fun onDrugs(drugIds: Collection<Uuid>, userId: Uuid): List<Reservation> =
-        reservations.findAllOfDrugs(drugIds, userId)
+    fun onDrugs(drugs: List<Drug>, userId: Uuid): Map<Uuid, ReservationSnapshot> =
+        reservations.snapshotsOf(drugs, userId)
 
     // ── Команды ──────────────────────────────────────────────────────────────────
 

@@ -19,6 +19,7 @@ import org.kert0n.medappserver.api.toSnapshot
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.Quantity
+import org.kert0n.medappserver.domain.ReservationSnapshot
 import org.kert0n.medappserver.domain.QuantityUnit
 import org.kert0n.medappserver.domain.Reservation
 import org.kert0n.medappserver.services.aggregate.CatalogueService
@@ -86,7 +87,7 @@ class ResourceApiContractTest {
         quantity = Quantity(qty(100.0), unit)
     )
     private val drugDto = drug.toDto()
-    private val snapshot = drug.toSnapshot(emptyList(), userId)
+    private val snapshot = drug.toSnapshot(ReservationSnapshot.empty(drugId, version = 0))
 
     @BeforeEach
     fun setup() {

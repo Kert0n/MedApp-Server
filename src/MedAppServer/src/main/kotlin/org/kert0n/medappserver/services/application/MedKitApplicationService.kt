@@ -40,8 +40,8 @@ class MedKitApplicationService(
     fun read(medKitId: Uuid, userId: Uuid): MedKitDTO {
         val medKit = medKitService.get(medKitId, userId)
         val packages = drugService.ofMedKit(medKitId, userId)
-        val reservations = reservationService.onDrugs(packages.map { it.id }, userId)
-        return medKit.toDto(packages.toSnapshots(reservations, userId).toSet())
+        val reservations = reservationService.onDrugs(packages, userId)
+        return medKit.toDto(packages.toSnapshots(reservations).toSet())
     }
 
     /** Список аптечек со счётчиками — два чтения на весь ответ, сколько бы их ни было. */
