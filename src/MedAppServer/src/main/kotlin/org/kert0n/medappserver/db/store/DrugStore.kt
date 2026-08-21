@@ -39,15 +39,15 @@ class DrugStore {
     // ── Чтение ───────────────────────────────────────────────────────────────────
 
     fun find(drugId: Uuid, userId: Uuid): Drug? =
-        rows { (Drugs.id eq drugId) and accessibleTo(userId) }.singleOrNull()?.toDomain()
+        drugsWhere { (Drugs.id eq drugId) and accessibleTo(userId) }.singleOrNull()?.toDomain()
 
     fun findAllInMedKit(medKitId: Uuid, userId: Uuid): List<Drug> =
-        rows { (Drugs.medKitId eq medKitId) and accessibleTo(userId) }
+        drugsWhere { (Drugs.medKitId eq medKitId) and accessibleTo(userId) }
             .orderBy(Drugs.name)
             .map { it.toDomain() }
 
     fun findAllOfUser(userId: Uuid): List<Drug> =
-        rows { accessibleTo(userId) }.orderBy(Drugs.name).map { it.toDomain() }
+        drugsWhere { accessibleTo(userId) }.orderBy(Drugs.name).map { it.toDomain() }
 
     // ── Команды ──────────────────────────────────────────────────────────────────
 
@@ -85,8 +85,9 @@ class DrugStore {
             .select(MedKitMemberships.medKitId)
             .where { MedKitMemberships.userId eq userId }
 
-    private fun rows(where: () -> Op<Boolean>): Query =
-        withVocabulary.selectAll().where(where())
+    /** Упаковки со словарями, отобранные условием. */
+    private fun drugsWhere(condition: () -> Op<Boolean>): Query =
+        withVocabulary.selectAll().where(condition())
 
     private val withVocabulary: Join
         get() = Drugs

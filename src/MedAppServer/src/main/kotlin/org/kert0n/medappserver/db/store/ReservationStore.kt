@@ -47,10 +47,10 @@ class ReservationStore {
      * и её существование само по себе доказывает доступ.
      */
     fun findAllOfUser(userId: Uuid): List<Reservation> =
-        rows { Reservations.userId eq userId }.orderBy(Drugs.name).map { it.toDomain() }
+        reservationsWhere { Reservations.userId eq userId }.orderBy(Drugs.name).map { it.toDomain() }
 
     fun find(userId: Uuid, drugId: Uuid): Reservation? =
-        rows { (Reservations.userId eq userId) and (Reservations.drugId eq drugId) }
+        reservationsWhere { (Reservations.userId eq userId) and (Reservations.drugId eq drugId) }
             .singleOrNull()?.toDomain()
 
     /**
@@ -61,7 +61,7 @@ class ReservationStore {
      */
     fun findAllOfDrugs(drugIds: Collection<Uuid>, userId: Uuid): List<Reservation> =
         if (drugIds.isEmpty()) emptyList()
-        else rows { (Reservations.drugId inList drugIds) and visibleTo(userId) }.map { it.toDomain() }
+        else reservationsWhere { (Reservations.drugId inList drugIds) and visibleTo(userId) }.map { it.toDomain() }
 
     /**
      * Заявленное на упаковки — снимками, а не голыми бронями.
@@ -105,11 +105,11 @@ class ReservationStore {
     }
 
     fun save(reservation: Reservation) {
-        Reservations.update({ key(reservation) }) { it[amount] = reservation.amount.amount }
+        Reservations.update({ identityOf(reservation) }) { it[amount] = reservation.amount.amount }
     }
 
     fun delete(reservation: Reservation) {
-        Reservations.deleteWhere { key(reservation) }
+        Reservations.deleteWhere { identityOf(reservation) }
     }
 
     /** Все брони на упаковку — когда упаковки не станет. */
@@ -131,7 +131,8 @@ class ReservationStore {
         }
     }
 
-    private fun key(reservation: Reservation): Op<Boolean> =
+    /** Тождество брони — пара «человек и упаковка». */
+    private fun identityOf(reservation: Reservation): Op<Boolean> =
         (Reservations.userId eq reservation.userId) and (Reservations.drugId eq reservation.drugId)
 
     private fun visibleTo(userId: Uuid): Op<Boolean> =
@@ -139,7 +140,9 @@ class ReservationStore {
             .select(MedKitMemberships.medKitId)
             .where { MedKitMemberships.userId eq userId }
 
-    private fun rows(where: () -> Op<Boolean>): Query = withDrug.selectAll().where(where())
+    /** Брони вместе с упаковкой и её единицей, отобранные условием. */
+    private fun reservationsWhere(condition: () -> Op<Boolean>): Query =
+        withDrug.selectAll().where(condition())
 
     private val withDrug: Join
         get() = Reservations
