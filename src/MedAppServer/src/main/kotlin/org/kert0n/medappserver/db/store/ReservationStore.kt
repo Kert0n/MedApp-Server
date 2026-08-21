@@ -6,10 +6,7 @@ import org.kert0n.medappserver.db.model.ReservationData
 import org.kert0n.medappserver.db.model.ReservationKey
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.ReservationRepository
-import org.hibernate.exception.ConstraintViolationException
-import org.kert0n.medappserver.domain.DomainRuleViolated
 import org.kert0n.medappserver.domain.Quantity
-import org.kert0n.medappserver.domain.ReservationAlreadyExists
 import org.kert0n.medappserver.domain.Reservation
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Component
@@ -61,9 +58,6 @@ class ReservationStore(
                 drugData = drug
             )
         )
-        // Флаш здесь, а не на коммите: пока запись не дошла до базы, о том, что такая бронь уже
-        // есть, знает только база, — а на коммите переводить нарушение ключа в правило уже некому.
-        flushTranslating(RESERVATION_KEY) { ReservationAlreadyExists() }
     }
 
     /** Лишнего запроса нет: в той же транзакции строка уже в persistence context. */
@@ -97,23 +91,4 @@ class ReservationStore(
     private fun managed(userId: UUID, drugId: UUID): ReservationData =
         reservations.findByIdOrNull(ReservationKey(userId, drugId))
             ?: error("Бронь $userId/$drugId исчезла во время записи")
-
-    /**
-     * Переводит нарушение именованного ограничения в доменный отказ.
-     *
-     * Имя ключа — единственное, чем гонка отличается от поломки: без него пришлось бы либо
-     * читать перед записью и всё равно проиграть гонку, либо отдавать наружу 500.
-     */
-    private fun flushTranslating(constraint: String, refusal: () -> DomainRuleViolated) {
-        try {
-            entityManager.flush()
-        } catch (violation: ConstraintViolationException) {
-            if (violation.constraintName?.lowercase() == constraint) throw refusal()
-            throw violation
-        }
-    }
-
-    private companion object {
-        const val RESERVATION_KEY = "reservations_pkey"
-    }
 }

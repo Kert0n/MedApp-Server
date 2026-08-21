@@ -73,9 +73,10 @@ class ReservationService(
         logger.debug("Creating reservation of user {} on drug {}", userId, drugId)
 
         val drug = drugs.require(drugId, userId)
-        // Одна бронь на пару «человек и пачка» — это первичный ключ. Читать перед записью
-        // значило бы заплатить лишним запросом и всё равно проиграть гонку: отказ приходит
-        // нарушением ключа и переводится в правило хранилищем.
+        // Правило читается здесь, как и у вступления в аптечку: одна бронь на пару «человек и
+        // пачка». Первичный ключ его страхует, но выражено оно в коде.
+        if (reservations.find(userId, drugId) != null) throw ReservationAlreadyExists()
+
         val reservation = Reservation(userId, drugId, Quantity(amount, drug.quantity.unit))
         reservations.insert(reservation)
         return reservation

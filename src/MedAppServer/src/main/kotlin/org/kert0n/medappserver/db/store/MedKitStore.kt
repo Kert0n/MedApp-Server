@@ -2,14 +2,12 @@ package org.kert0n.medappserver.db.store
 
 import jakarta.persistence.EntityManager
 import java.util.UUID
-import org.hibernate.exception.ConstraintViolationException
 import org.kert0n.medappserver.db.model.MedKitData
 import org.kert0n.medappserver.db.model.MedKitMembershipData
 import org.kert0n.medappserver.db.model.MedKitMembershipKey
 import org.kert0n.medappserver.db.repository.MedKitMembershipRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.UserRepository
-import org.kert0n.medappserver.domain.AlreadyMember
 import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.NotAMember
 import org.springframework.data.repository.findByIdOrNull
@@ -58,31 +56,21 @@ class MedKitStore(
         memberships.saveAll(medKit.members.map { membershipRow(row, it) })
     }
 
-    /**
-     * Вставляет строку членства, не читая аптечку.
-     *
-     * Обслуживает вступление по приглашению: вызывающего в аптечке ещё нет, и скоупленное
-     * чтение его туда не пустит. Несуществующая аптечка и повторное вступление приезжают
-     * нарушениями именованных ключей — читать перед записью значило бы всё равно проиграть
-     * гонку и заплатить лишним запросом.
-     */
+    /** Своя строка членства: не чужая аптечка, читать её вызывающему можно. */
     fun isMember(medKitId: UUID, userId: UUID): Boolean =
         memberships.existsById(MedKitMembershipKey(medKitId = medKitId, userId = userId))
 
+    /**
+     * Вставляет строку членства, не читая состав аптечки.
+     *
+     * Обслуживает вступление по приглашению: вызывающего в аптечке ещё нет, и скоупленное
+     * чтение его туда не пустит. Правило «дважды не вступают» проверяет `MedKitService`.
+     */
     fun addMember(medKitId: UUID, userId: UUID) {
         val medKit = medKits.findByIdOrNull(medKitId) ?: throw NotAMember()
-        // persist, а не save: ключ присвоенный, и save пошёл бы через merge — повторное
-        // вступление стало бы обновлением существующей строки вместо нарушения ключа.
+        // persist, а не save: ключ присвоенный, и save пошёл бы через merge — лишний SELECT
+        // перед вставкой и обновление там, где нужна вставка.
         entityManager.persist(membershipRow(medKit, userId))
-        try {
-            entityManager.flush()
-        } catch (violation: ConstraintViolationException) {
-            when (violation.constraintName?.lowercase()) {
-                MEMBERSHIP_KEY -> throw AlreadyMember()
-                MEMBERSHIP_MED_KIT_KEY -> throw NotAMember()
-                else -> throw violation
-            }
-        }
     }
 
     /** Сводит строки членства к тому, что в состоянии. Сама аптечка полей больше не имеет. */
@@ -119,11 +107,6 @@ class MedKitStore(
      * не дошедшую до базы, при первом массовом запросе превращается в «ссылку на несохранённый
      * объект». Запросов это не стоит: обе сущности уже в контексте.
      */
-    private companion object {
-        const val MEMBERSHIP_KEY = "user_med_kits_pkey"
-        const val MEMBERSHIP_MED_KIT_KEY = "user_med_kits_med_kit_fkey"
-    }
-
     private fun membershipRow(medKit: MedKitData, userId: UUID) = MedKitMembershipData(
         membershipKey = MedKitMembershipKey(medKitId = medKit.id, userId = userId),
         medKit = medKit,
