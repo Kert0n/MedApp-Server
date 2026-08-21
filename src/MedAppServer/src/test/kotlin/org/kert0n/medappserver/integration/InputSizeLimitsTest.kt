@@ -91,7 +91,7 @@ class InputSizeLimitsTest {
     @Test
     fun `oversized description is rejected`() {
         val body = """
-            {"name":"Aspirin","quantity":10.0,"quantityUnit":"tab",
+            {"name":"Aspirin","quantity":"10.0","quantityUnit":"tab",
              "description":"${"x".repeat(4001)}"}
         """.trimIndent()
 
@@ -119,7 +119,7 @@ class InputSizeLimitsTest {
             post(ApiRoutes.drugsOf(kit.id))
                 .with(jwt().jwt { it.subject(owner.id.toString()) })
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"name":"Aspirin","quantity":$quantity,"quantityUnitId":"${dbHelper.unit().id}"}""")
+                .content("""{"name":"Aspirin","quantity":"$quantity","quantityUnitId":"${dbHelper.unit().id}"}""")
         )
     }
 

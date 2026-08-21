@@ -1,10 +1,15 @@
+@file:UseSerializers(UuidAsString::class)
+
 package org.kert0n.medappserver.api
 
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.NotBlank
 import java.util.UUID
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 
 @Schema(description = "Medicine kit with its drugs")
+@Serializable
 data class MedKitDTO(
     @Schema(description = "Medicine kit identifier")
     val id: UUID,
@@ -15,6 +20,7 @@ data class MedKitDTO(
 )
 
 @Schema(description = "Medicine kit counters without loading its contents")
+@Serializable
 data class MedKitSummaryDTO(
     @Schema(description = "Medicine kit identifier")
     val id: UUID,
@@ -29,6 +35,7 @@ data class MedKitSummaryDTO(
 )
 
 @Schema(description = "Created medicine kit")
+@Serializable
 data class MedKitCreatedDTO(
     @Schema(description = "Medicine kit identifier")
     val id: UUID
@@ -36,12 +43,14 @@ data class MedKitCreatedDTO(
 
 /** Объектом, а не голой строкой: срок жизни или ссылку рядом с ней добавить было бы некуда. */
 @Schema(description = "Invitation to join a medicine kit")
+@Serializable
 data class InvitationDTO(
     @Schema(description = "Key to join the kit; valid for a limited time and reusable within it")
     val key: String
 )
 
 @Schema(description = "Request to join a medicine kit by invitation")
+@Serializable
 data class MembershipCreateRequest(
     @field:NotBlank
     @Schema(description = "Invitation key", example = "sSQUCT8iOjYsobZ7StyspQ", required = true)

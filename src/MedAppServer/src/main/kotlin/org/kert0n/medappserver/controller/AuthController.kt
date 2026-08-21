@@ -1,3 +1,5 @@
+@file:UseSerializers(UuidAsString::class)
+
 package org.kert0n.medappserver.controller
 
 import io.swagger.v3.oas.annotations.Operation
@@ -9,6 +11,9 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.servlet.http.HttpServletRequest
 import java.util.*
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
+import org.kert0n.medappserver.api.UuidAsString
 import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.OpenApiConfiguration
 import org.kert0n.medappserver.services.application.AuthApplicationService
@@ -21,6 +26,7 @@ import org.springframework.web.bind.annotation.*
 class AuthController(private val auth: AuthApplicationService) {
 
     @Schema(description = "Registration response with generated credentials")
+    @Serializable
     data class RegisterResponse(
         @Schema(description = "Generated login identifier")
         val login: UUID,
@@ -53,6 +59,7 @@ class AuthController(private val auth: AuthApplicationService) {
      * Схема (`Bearer`) одна и зафиксирована в OpenAPI, от ответа к ответу не меняется.
      */
     @Schema(description = "Issued access token")
+    @Serializable
     data class TokenResponse(
         @Schema(description = "JWT access token")
         val accessToken: String

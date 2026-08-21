@@ -1,6 +1,7 @@
 package org.kert0n.medappserver.controller
 
 import java.util.*
+import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.api.DrugCreateRequest
@@ -44,7 +45,6 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.*
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
-import tools.jackson.databind.ObjectMapper
 import org.kert0n.medappserver.services.application.DrugApplicationService
 import org.kert0n.medappserver.services.application.ReservationApplicationService
 import org.kert0n.medappserver.services.application.UserApplicationService
@@ -61,7 +61,9 @@ import org.kert0n.medappserver.services.application.UserApplicationService
 class ResourceApiContractTest {
 
     @Autowired private lateinit var context: WebApplicationContext
-    @Autowired private lateinit var objectMapper: ObjectMapper
+    // Тем же Json, что читает сервер: тело запроса в тесте должно быть тем же
+    // текстом, что придёт с клиента, иначе проверяется не тот провод.
+    @Autowired private lateinit var json: Json
 
     // Подменяются ровно те, кого зовёт контроллер: по одному прикладному сервису на ресурс.
     // Раньше здесь стояли и сервисы агрегатов — контроллер ходил и туда тоже.
@@ -120,7 +122,7 @@ class ResourceApiContractTest {
         mockMvc.perform(
             post(ApiRoutes.drugsOf(medKitId)).with(asUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(body))
+                .content(json.encodeToString(body))
         )
             .andExpect(status().isCreated)
             .andExpect(jsonPath("$.drug.id").value(drugId.toString()))
@@ -133,7 +135,7 @@ class ResourceApiContractTest {
         mockMvc.perform(
             post(ApiRoutes.drugsOf(medKitId)).with(asUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(body))
+                .content(json.encodeToString(body))
         )
             .andExpect(status().isBadRequest)
     }
@@ -145,7 +147,7 @@ class ResourceApiContractTest {
         mockMvc.perform(
             post(ApiRoutes.intakes(drugId)).with(asUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"quantity":2.0}""")
+                .content("""{"quantity":"2.0"}""")
         )
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.drug.id").value(drugId.toString()))
@@ -197,7 +199,7 @@ class ResourceApiContractTest {
         mockMvc.perform(
             post(ApiRoutes.RESERVATIONS).with(asUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(ReservationCreateRequest(drugId, qty(20.0))))
+                .content(json.encodeToString(ReservationCreateRequest(drugId, qty(20.0))))
         )
             .andExpect(status().isCreated)
             .andExpect(jsonPath("$.drugId").value(drugId.toString()))
@@ -208,7 +210,7 @@ class ResourceApiContractTest {
         mockMvc.perform(
             patch(ApiRoutes.reservation(drugId)).with(asUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(ReservationPatchRequest(qty(15.0))))
+                .content(json.encodeToString(ReservationPatchRequest(qty(15.0))))
         )
             .andExpect(status().isOk)
     }
@@ -258,7 +260,7 @@ class ResourceApiContractTest {
         mockMvc.perform(
             post(ApiRoutes.MEMBERSHIPS).with(asUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(MembershipCreateRequest("invite-key")))
+                .content(json.encodeToString(MembershipCreateRequest("invite-key")))
         )
             .andExpect(status().isCreated)
 
