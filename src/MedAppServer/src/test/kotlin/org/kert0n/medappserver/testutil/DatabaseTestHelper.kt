@@ -85,9 +85,15 @@ class DatabaseTestHelper(
     @Transactional
     fun freshMedKit(ownerId: UUID): MedKit = medKitService.create(ownerId)
 
-    /** Вступление без приглашения: сценарию нужен состав, а не проверка ключа. */
+    /**
+     * Вступление под подготовку сценария — тем же путём, что и приложение.
+     *
+     * Вступить иначе нельзя: приглашение и есть право прочитать аптечку, в которой тебя ещё
+     * нет. Ключ выписывается от имени участника, который в ней уже состоит.
+     */
     @Transactional
-    fun join(medKitId: UUID, userId: UUID): MedKit = medKitService.join(medKitId, userId)
+    fun join(medKitId: UUID, invitedBy: UUID, userId: UUID): MedKit =
+        medKitService.joinByInvitation(medKitService.invite(medKitId, invitedBy), userId)
 
     /** Бронь под подготовку сценария. */
     @Transactional

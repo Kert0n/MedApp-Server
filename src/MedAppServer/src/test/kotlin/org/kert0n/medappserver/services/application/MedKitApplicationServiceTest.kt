@@ -154,7 +154,7 @@ class MedKitApplicationServiceTest {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
         val kit = medKitService.create(alice.id)
-        medKitService.join(kit.id, bob.id)
+        dbHelper.join(kit.id, alice.id, bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 

@@ -3,7 +3,7 @@ package org.kert0n.medappserver.services.aggregate
 import com.sksamuel.aedile.core.Cache
 import java.util.UUID
 import org.kert0n.medappserver.db.store.MedKitStore
-import org.kert0n.medappserver.domain.AlreadyMember
+import org.kert0n.medappserver.domain.Invitation
 import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.services.security.SecurityService
@@ -23,7 +23,7 @@ import org.springframework.transaction.annotation.Transactional
 class MedKitService(
     private val medKits: MedKitStore,
     private val securityService: SecurityService,
-    private val medKitTokenCache: Cache<String, UUID>
+    private val medKitTokenCache: Cache<String, Invitation>
 ) {
 
     private val logger = LoggerFactory.getLogger(MedKitService::class.java)
@@ -61,35 +61,30 @@ class MedKitService(
         // аптечку к правам приглашающего отношения не имеет.
         require(medKitId, userId)
         val key = securityService.generateKey(16)
-        // Кешируется только хеш: сырой ключ приглашения на сервере не хранится.
-        medKitTokenCache[securityService.hashToken(key)] = medKitId
+        // Кешируется только хеш: сырой ключ приглашения на сервере не хранится. Вместе с
+        // аптечкой запоминается пригласивший — его правами будет читать вступающий.
+        medKitTokenCache[securityService.hashToken(key)] = Invitation(medKitId, userId)
         return key
     }
 
     /**
-     * Вступление — единственное место, где вызывающего в аптечке ещё нет.
+     * Вступление по приглашению — единственный способ попасть в аптечку.
      *
-     * Поэтому оно не читает её: чтение чужой аптечки было бы дырой в правиле «доступ проверяет
-     * запрос». Сначала пишется членство, и только потом аптечка читается уже как своя.
-     * Правила в домене нет и быть не может: `MedKit` — это состав, а прочитать состав аптечки,
-     * к которой доступа ещё нет, нельзя. Поэтому «дважды не вступают» проверяется по
-     * собственной строке членства, а несуществующая аптечка приезжает нарушением ключа.
+     * Вступающего в ней ещё нет, поэтому аптечка читается правами **пригласившего**: он в ней
+     * состоит, и обычное скоупленное чтение работает. Нескоупленных чтений в приложении не
+     * появляется — см. [Invitation] о том, что из этого следует.
+     *
+     * Правило «дважды не вступают» решает сам агрегат: состав у него на руках.
      */
     @Transactional(propagation = MANDATORY)
-    fun join(medKitId: UUID, userId: UUID): MedKit {
-        logger.debug("Adding user {} to medkit {}", userId, medKitId)
-        // Правило читается здесь; собственную строку членства для этого читать можно — это не
-        // чужая аптечка. Ключ ниже страхует гонку двух одновременных вступлений.
-        if (medKits.isMember(medKitId, userId)) throw AlreadyMember()
-        medKits.addMember(medKitId, userId)
-        return require(medKitId, userId)
-    }
-
-    @Transactional(propagation = MANDATORY)
     fun joinByInvitation(key: String, userId: UUID): MedKit {
-        val medKitId = medKitTokenCache.getOrNull(securityService.hashToken(key))
+        logger.debug("Adding user {} to medkit by invitation", userId)
+        val invitation = medKitTokenCache.getOrNull(securityService.hashToken(key))
             ?: throw NotAMember()
-        return join(medKitId, userId)
+
+        val joined = require(invitation.medKitId, invitation.invitedBy).join(userId)
+        medKits.save(joined)
+        return joined
     }
 
     /**

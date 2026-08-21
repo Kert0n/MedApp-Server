@@ -11,8 +11,6 @@ import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.QuantityUnitRepository
 import org.kert0n.medappserver.db.repository.ReservationRepository
 import org.kert0n.medappserver.domain.Drug
-import org.kert0n.medappserver.domain.UnknownFormType
-import org.kert0n.medappserver.domain.UnknownQuantityUnit
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Component
 
@@ -70,6 +68,9 @@ class DrugStore(
      * Брони уносит каскад внешнего ключа, но Hibernate о нём не знает: загруженные строки
      * остались бы ссылаться на удалённую пачку и уронили бы ближайший flush. Это persistence, а
      * не решение агрегата — сама упаковка про брони не знает.
+     *
+     * Проверено снятием: без этой строки `TransientPropertyValueException` — загруженная бронь
+     * ссылается на уже удалённую пачку. Правило здесь ни при чём, правило несёт каскад.
      */
     fun delete(drugId: UUID) {
         val entity = drugs.findByIdOrNull(drugId) ?: return
@@ -88,9 +89,11 @@ class DrugStore(
     private fun resolveMedKit(medKitId: UUID): MedKitData =
         medKits.findByIdOrNull(medKitId) ?: error("Аптечка $medKitId исчезла во время записи упаковки")
 
+    // Отказ пользователю здесь невозможен: словарь проверил CatalogueService, когда собирал
+    // упаковку. Пустота на этом шаге — рассогласованность внутри, а не ошибка вызывающего.
     private fun resolveUnit(unitId: UUID): QuantityUnitData =
-        units.findByIdOrNull(unitId) ?: throw UnknownQuantityUnit()
+        units.findByIdOrNull(unitId) ?: error("Единица измерения $unitId исчезла во время записи упаковки")
 
     private fun resolveForm(formId: UUID): FormTypeData =
-        forms.findByIdOrNull(formId) ?: throw UnknownFormType()
+        forms.findByIdOrNull(formId) ?: error("Форма выпуска $formId исчезла во время записи упаковки")
 }

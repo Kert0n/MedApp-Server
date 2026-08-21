@@ -64,9 +64,13 @@ class QueryScopeTest {
     }
 
     private companion object {
-        // Единственное исключение: справочник ничей — он одинаков для всех, владельца у
+        // Исключения только справочные: каталог и словари одинаковы для всех, владельца у
         // записи нет и скоупить нечем. `UserStore.findById` в списке не нужен: вызывающий там
         // и есть тот, кого ищут, и параметр называется так же.
-        val ALLOWED = setOf("CatalogueStore.kt.findTemplate")
+        val ALLOWED = setOf(
+            "CatalogueStore.kt.findTemplate",
+            "CatalogueStore.kt.findQuantityUnit",
+            "CatalogueStore.kt.findFormType"
+        )
     }
 }

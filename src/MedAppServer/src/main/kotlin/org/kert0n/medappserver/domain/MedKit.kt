@@ -19,6 +19,12 @@ data class MedKit(
 
     fun isMember(userId: UUID): Boolean = userId in members
 
+    /** Вступление по приглашению. Повторное — отказ: вступать второй раз некуда. */
+    fun join(userId: UUID): MedKit {
+        if (isMember(userId)) throw AlreadyMember()
+        return copy(members = members + userId)
+    }
+
     /** `null` — вышел последний: аптечки без участников не бывает, и она уходит вместе с ним. */
     fun leave(userId: UUID): MedKit? {
         if (!isMember(userId)) throw NotAMember()

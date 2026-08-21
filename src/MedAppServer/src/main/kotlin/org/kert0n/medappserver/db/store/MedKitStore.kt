@@ -1,6 +1,5 @@
 package org.kert0n.medappserver.db.store
 
-import jakarta.persistence.EntityManager
 import java.util.UUID
 import org.kert0n.medappserver.db.model.MedKitData
 import org.kert0n.medappserver.db.model.MedKitMembershipData
@@ -9,7 +8,6 @@ import org.kert0n.medappserver.db.repository.MedKitMembershipRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.domain.MedKit
-import org.kert0n.medappserver.domain.NotAMember
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Component
 
@@ -23,8 +21,7 @@ import org.springframework.stereotype.Component
 class MedKitStore(
     private val medKits: MedKitRepository,
     private val memberships: MedKitMembershipRepository,
-    private val users: UserRepository,
-    private val entityManager: EntityManager
+    private val users: UserRepository
 ) {
 
     /**
@@ -54,23 +51,6 @@ class MedKitStore(
     fun insert(medKit: MedKit) {
         val row = medKits.save(MedKitData(id = medKit.id))
         memberships.saveAll(medKit.members.map { membershipRow(row, it) })
-    }
-
-    /** Своя строка членства: не чужая аптечка, читать её вызывающему можно. */
-    fun isMember(medKitId: UUID, userId: UUID): Boolean =
-        memberships.existsById(MedKitMembershipKey(medKitId = medKitId, userId = userId))
-
-    /**
-     * Вставляет строку членства, не читая состав аптечки.
-     *
-     * Обслуживает вступление по приглашению: вызывающего в аптечке ещё нет, и скоупленное
-     * чтение его туда не пустит. Правило «дважды не вступают» проверяет `MedKitService`.
-     */
-    fun addMember(medKitId: UUID, userId: UUID) {
-        val medKit = medKits.findByIdOrNull(medKitId) ?: throw NotAMember()
-        // persist, а не save: ключ присвоенный, и save пошёл бы через merge — лишний SELECT
-        // перед вставкой и обновление там, где нужна вставка.
-        entityManager.persist(membershipRow(medKit, userId))
     }
 
     /** Сводит строки членства к тому, что в состоянии. Сама аптечка полей больше не имеет. */

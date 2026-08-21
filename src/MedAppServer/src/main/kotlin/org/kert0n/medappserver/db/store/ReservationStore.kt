@@ -1,6 +1,5 @@
 package org.kert0n.medappserver.db.store
 
-import jakarta.persistence.EntityManager
 import java.util.UUID
 import org.kert0n.medappserver.db.model.ReservationData
 import org.kert0n.medappserver.db.model.ReservationKey
@@ -20,8 +19,7 @@ import org.springframework.stereotype.Component
 @Component
 class ReservationStore(
     private val reservations: ReservationRepository,
-    private val drugs: DrugRepository,
-    private val entityManager: EntityManager
+    private val drugs: DrugRepository
 ) {
 
     // ── Чтение ───────────────────────────────────────────────────────────────────
@@ -45,9 +43,10 @@ class ReservationStore(
         val drug = drugs.findByIdOrNull(reservation.drugId)
             ?: error("Упаковка ${reservation.drugId} исчезла во время записи брони")
 
-        // persist, а не save: у брони присвоенный составной ключ, и save пошёл бы через merge —
-        // искать несуществующую строку и сохранять копию, теряя связь с управляемой упаковкой.
-        entityManager.persist(
+        // save, а не persist: у брони присвоенный составной ключ, поэтому Spring Data идёт
+        // через merge и делает лишний SELECT. Это дешевле, чем строить запись на том, чем
+        // именно persist отличается от merge, — на такой тонкости уже спотыкались.
+        reservations.save(
             ReservationData(
                 reservationKey = ReservationKey(reservation.userId, reservation.drugId),
                 // Аптечка берётся у самой пачки: рассогласовать копию с настоящей нельзя даже так.

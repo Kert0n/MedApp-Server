@@ -128,7 +128,7 @@ class MedKitServiceTest {
         val kit = medKitService.create(alice.id)
         dbHelper.flushAndClear()
 
-        medKitService.join(kit.id, bob.id)
+        dbHelper.join(kit.id, alice.id, bob.id)
         dbHelper.flushAndClear()
 
         assertEquals(1, medKitService.allOfUser(bob.id).size)
@@ -141,7 +141,7 @@ class MedKitServiceTest {
         dbHelper.flushAndClear()
 
         assertFailsWith<DomainRuleViolated> {
-            medKitService.join(kit.id, alice.id)
+            dbHelper.join(kit.id, alice.id, alice.id)
         }
     }
 
@@ -152,7 +152,7 @@ class MedKitServiceTest {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
         val kit = medKitService.create(alice.id)
-        medKitService.join(kit.id, bob.id)
+        dbHelper.join(kit.id, alice.id, bob.id)
         dbHelper.flushAndClear()
 
         medKitService.leave(kit.id, bob.id)

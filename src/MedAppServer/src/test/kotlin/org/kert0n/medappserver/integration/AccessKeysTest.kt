@@ -47,7 +47,7 @@ class AccessKeysTest {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
         val shared = dbHelper.freshMedKit(alice.id)
-        dbHelper.join(shared.id, bob.id)
+        dbHelper.join(shared.id, alice.id, bob.id)
         val aliceOnly = dbHelper.freshMedKit(alice.id)
 
         val drug = dbHelper.freshDrug(shared.id, 10.0)

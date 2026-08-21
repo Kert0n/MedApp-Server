@@ -1,6 +1,7 @@
 package org.kert0n.medappserver.services
 
 import com.github.benmanes.caffeine.cache.Caffeine
+import org.kert0n.medappserver.domain.Invitation
 import com.sksamuel.aedile.core.Cache
 import com.sksamuel.aedile.core.asCache
 import com.sksamuel.aedile.core.expireAfterWrite
@@ -22,7 +23,7 @@ class CacheService(
     // window is an upper bound. Acceptable — ask for a new key — but never document it as
     // absolute.
     @Bean
-    fun medKitTokenCache(): Cache<String, UUID> = Caffeine.newBuilder()
+    fun medKitTokenCache(): Cache<String, Invitation> = Caffeine.newBuilder()
         .expireAfterWrite(medKitShareTerm.minutes)
         .maximumSize(10_000)
         .asCache()
