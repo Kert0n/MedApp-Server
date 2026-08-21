@@ -93,6 +93,9 @@ CREATE TABLE user_drugs
     med_kit_id       uuid           NOT NULL,
 
     CONSTRAINT user_drugs_pkey PRIMARY KEY (id),
+    -- Избыточно при первичном ключе по id, но составной внешний ключ брони может ссылаться
+    -- только на объявленную уникальность. Существует ради reservations_drug_fkey ниже.
+    CONSTRAINT user_drugs_id_med_kit_key UNIQUE (id, med_kit_id),
     -- Пустой упаковки не бывает: опустевшая уничтожается, а не остаётся нулём. Правило держит
     -- домен, здесь оно продублировано затем, что колонку может тронуть и не он: массовый
     -- UPDATE, миграция, рука в psql.
@@ -113,24 +116,42 @@ CREATE INDEX ix_user_drugs_med_kit_id ON user_drugs (med_kit_id);
 -- Бронь может превышать остаток упаковки, и никакого ограничения на этот счёт в схеме нет:
 -- сколько из своей брони оставить, решает её владелец, а не сервер.
 --
--- Каскад по drug_id остаётся: бронь на выброшенную пачку бессмысленна. Но это правило
--- целостности данных, а не владения — упаковка бронями не распоряжается и в своём агрегате их
--- не держит.
+-- med_kit_id продублирован из упаковки не ради удобства чтения, а чтобы бронь могла сослаться
+-- на членство. Поддерживает его ссылочная целостность (ON UPDATE CASCADE ниже), а не логика:
+-- ни триггеров, ни вычисляемых колонок здесь нет.
 CREATE TABLE reservations
 (
-    user_id uuid           NOT NULL,
-    drug_id uuid           NOT NULL,
-    amount  numeric(19, 6) NOT NULL,
+    user_id    uuid           NOT NULL,
+    drug_id    uuid           NOT NULL,
+    med_kit_id uuid           NOT NULL,
+    amount     numeric(19, 6) NOT NULL,
 
     CONSTRAINT reservations_pkey PRIMARY KEY (drug_id, user_id),
     -- Брони с нулём не бывает: отмена выражается удалением строки.
     CONSTRAINT reservations_amount_positive CHECK (amount > 0),
-    CONSTRAINT reservations_user_fkey FOREIGN KEY (user_id) REFERENCES users (id),
-    CONSTRAINT reservations_drug_fkey FOREIGN KEY (drug_id) REFERENCES user_drugs (id) ON DELETE CASCADE
+
+    -- Пачку уничтожили — бронь ушла. Пачка переехала — ON UPDATE CASCADE двигает med_kit_id
+    -- брони вслед за ней, и тогда проверяется ключ ниже.
+    CONSTRAINT reservations_drug_med_kit_fkey FOREIGN KEY (drug_id, med_kit_id)
+        REFERENCES user_drugs (id, med_kit_id) ON UPDATE CASCADE ON DELETE CASCADE,
+
+    -- Главный ключ этой схемы: бронь висит на членстве, а не на пользователе.
+    --
+    -- Членство отозвали — бронь ушла каскадом. И наоборот: брони без доступа не существует,
+    -- поэтому чтение своих броней вправе не проверять членство отдельно — сама строка это
+    -- доказательство. user_id ключом не был бы: членство отзывается, а строка осталась бы.
+    --
+    -- Переезд пачки к участнику, которого нет в целевой аптечке, упрётся сюда и упадёт. Это
+    -- намеренно: правило «назначение переживает переезд, только если человек допущен к цели»
+    -- живёт в DrugRelocation, а ключ ловит забытую уборку как ошибку, а не как утечку.
+    CONSTRAINT reservations_membership_fkey FOREIGN KEY (med_kit_id, user_id)
+        REFERENCES user_med_kits (med_kit_id, user_id) ON DELETE CASCADE
 );
 
+-- Обслуживает каскад по членству и чтение «мои брони в этой аптечке».
+CREATE INDEX ix_reservations_med_kit_user_id ON reservations (med_kit_id, user_id);
 CREATE INDEX ix_reservations_user_id ON reservations (user_id);
-CREATE INDEX ix_reservations_drug_id ON reservations (drug_id);
+-- Индекса по drug_id нет: первичный ключ (drug_id, user_id) уже начинается с него.
 
 
 -- ============================================================

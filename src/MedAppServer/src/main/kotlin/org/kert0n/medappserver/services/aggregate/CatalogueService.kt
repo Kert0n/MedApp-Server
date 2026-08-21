@@ -4,6 +4,8 @@ import java.util.UUID
 import org.kert0n.medappserver.db.store.CatalogueStore
 import org.kert0n.medappserver.domain.DrugTemplate
 import org.kert0n.medappserver.domain.FormType
+import org.kert0n.medappserver.domain.UnknownFormType
+import org.kert0n.medappserver.domain.UnknownQuantityUnit
 import org.kert0n.medappserver.domain.QuantityUnit
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Propagation.MANDATORY
@@ -44,10 +46,12 @@ class CatalogueService(private val catalogue: CatalogueStore) {
     fun formTypes(): List<FormType> = catalogue.formTypes()
 
     @Transactional(propagation = MANDATORY, readOnly = true)
-    fun requireQuantityUnit(id: UUID): QuantityUnit = catalogue.requireQuantityUnit(id)
+    fun requireQuantityUnit(id: UUID): QuantityUnit =
+        catalogue.findQuantityUnit(id) ?: throw UnknownQuantityUnit()
 
     @Transactional(propagation = MANDATORY, readOnly = true)
-    fun requireFormType(id: UUID): FormType = catalogue.requireFormType(id)
+    fun requireFormType(id: UUID): FormType =
+        catalogue.findFormType(id) ?: throw UnknownFormType()
 
     /**
      * Границы проверяет и контроллер, но сервис вызывается не только из HTTP: `LIMIT -1` —

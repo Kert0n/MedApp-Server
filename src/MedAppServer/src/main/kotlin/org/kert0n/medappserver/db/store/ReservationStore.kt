@@ -1,12 +1,11 @@
 package org.kert0n.medappserver.db.store
 
-import jakarta.persistence.EntityManager
 import java.util.UUID
 import org.kert0n.medappserver.db.model.ReservationData
 import org.kert0n.medappserver.db.model.ReservationKey
-import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.ReservationRepository
-import org.kert0n.medappserver.db.repository.UserRepository
+import org.kert0n.medappserver.domain.Drug
+import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.Reservation
 import org.springframework.data.repository.findByIdOrNull
@@ -20,10 +19,7 @@ import org.springframework.stereotype.Component
  */
 @Component
 class ReservationStore(
-    private val reservations: ReservationRepository,
-    private val drugs: DrugRepository,
-    private val users: UserRepository,
-    private val entityManager: EntityManager
+    private val reservations: ReservationRepository
 ) {
 
     // ── Чтение ───────────────────────────────────────────────────────────────────
@@ -32,25 +28,32 @@ class ReservationStore(
 
     fun find(userId: UUID, drugId: UUID): Reservation? = reservations.findOne(userId, drugId)?.toDomain()
 
-    /** Брони на перечисленные упаковки — чтобы ответить, сколько на пачку заявлено. */
-    fun findAllOfDrugs(drugIds: Collection<UUID>): List<Reservation> =
-        if (drugIds.isEmpty()) emptyList() else reservations.findAllOfDrugs(drugIds).map { it.toDomain() }
+    /**
+     * Брони на перечисленные упаковки — чтобы ответить, сколько на пачку заявлено.
+     *
+     * Отдаёт чужие брони, поэтому предикат про вызывающего: видеть заявленное можно там, куда
+     * есть доступ. Своё членство доказывать не нужно — его доказывает существование строки.
+     */
+    fun findAllOfDrugs(drugIds: Collection<UUID>, userId: UUID): List<Reservation> =
+        if (drugIds.isEmpty()) emptyList() else reservations.findAllOfDrugs(drugIds, userId).map { it.toDomain() }
 
     // ── Команды ──────────────────────────────────────────────────────────────────
 
-    fun insert(reservation: Reservation) {
-        val drug = drugs.findByIdOrNull(reservation.drugId)
-            ?: error("Упаковка ${reservation.drugId} исчезла во время записи брони")
-        val user = users.findByIdOrNull(reservation.userId)
-            ?: error("Пользователь ${reservation.userId} исчез во время записи брони")
-
-        // persist, а не save: у брони присвоенный составной ключ, и save пошёл бы через merge —
-        // искать несуществующую строку и сохранять копию, теряя связь с управляемой упаковкой.
-        entityManager.persist(
+    /**
+     * Пачка приходит доменным объектом, а не поднимается из чужого репозитория.
+     *
+     * Нужна от неё одна вещь — аптечка для составного ключа, — и она уже есть у вызывающего:
+     * он эту пачку и прочитал.
+     */
+    fun insert(reservation: Reservation, drug: Drug) {
+        // save, а не persist: у брони присвоенный составной ключ, поэтому Spring Data идёт
+        // через merge и делает лишний SELECT. Это дешевле, чем строить запись на том, чем
+        // именно persist отличается от merge, — на такой тонкости уже спотыкались.
+        reservations.save(
             ReservationData(
                 reservationKey = ReservationKey(reservation.userId, reservation.drugId),
-                userData = user,
-                drugData = drug,
+                // Аптечка берётся у самой пачки: рассогласовать копию с настоящей нельзя даже так.
+                medKitId = drug.medKitId,
                 amount = reservation.amount.amount
             )
         )
@@ -63,30 +66,31 @@ class ReservationStore(
         reservations.save(row)
     }
 
-    fun delete(userId: UUID, drugId: UUID) {
-        reservations.findByIdOrNull(ReservationKey(userId, drugId))?.let { reservations.delete(it) }
+    fun delete(reservation: Reservation) {
+        reservations.findByIdOrNull(ReservationKey(reservation.userId, reservation.drugId))
+            ?.let { reservations.delete(it) }
     }
 
-    /** Брони участника во всех упаковках аптечки — при выходе из неё. */
-    fun deleteOfUserInMedKit(userId: UUID, medKitId: UUID) {
-        reservations.deleteOfUserInMedKit(userId, medKitId)
+    /** Все брони на упаковку — когда упаковки не станет. */
+    fun deleteOfDrug(drug: Drug) {
+        reservations.deleteOfDrug(drug.id)
     }
 
     /** Брони тех, кто аптечку не видит, — при удалении аптечки с переносом. */
-    fun deleteInMedKitExcept(medKitId: UUID, accessibleUserIds: Set<UUID>) {
-        reservations.deleteInMedKitExcept(medKitId, accessibleUserIds)
+    fun deleteInMedKitExcept(medKit: MedKit, accessibleUserIds: Set<UUID>) {
+        reservations.deleteInMedKitExcept(medKit.id, accessibleUserIds)
     }
 
     /** То же для одной переехавшей упаковки. */
-    fun deleteOfDrugExcept(drugId: UUID, accessibleUserIds: Set<UUID>) {
-        reservations.deleteOfDrugExcept(drugId, accessibleUserIds)
+    fun deleteOfDrugExcept(drug: Drug, accessibleUserIds: Set<UUID>) {
+        reservations.deleteOfDrugExcept(drug.id, accessibleUserIds)
     }
 
     /** Единица величины лежит у упаковки: бронь в «штуках вообще» смысла не имеет. */
     private fun ReservationData.toDomain(): Reservation = Reservation(
         userId = reservationKey.userId,
         drugId = reservationKey.drugId,
-        amount = Quantity(amount, drugData.quantityUnit.toDomain())
+        amount = Quantity(amount, drugData?.quantityUnit?.toDomain() ?: error("Бронь прочитана без пачки"))
     )
 
     private fun managed(userId: UUID, drugId: UUID): ReservationData =

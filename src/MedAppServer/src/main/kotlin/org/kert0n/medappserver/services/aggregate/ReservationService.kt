@@ -4,6 +4,8 @@ import java.math.BigDecimal
 import java.util.UUID
 import org.kert0n.medappserver.db.store.ReservationStore
 import org.kert0n.medappserver.domain.NoSuchReservation
+import org.kert0n.medappserver.domain.Drug
+import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.Reservation
 import org.kert0n.medappserver.domain.ReservationAlreadyExists
@@ -26,9 +28,7 @@ import org.springframework.transaction.annotation.Transactional
  */
 @Service
 class ReservationService(
-    private val reservations: ReservationStore,
-    private val drugs: DrugService,
-    private val medKits: MedKitService
+    private val reservations: ReservationStore
 ) {
 
     private val logger = LoggerFactory.getLogger(ReservationService::class.java)
@@ -43,16 +43,15 @@ class ReservationService(
     }
 
     /** Бронь или `null`, если её нет. */
+    /** Бронь вызывающего. Единственный способ её получить. */
     @Transactional(propagation = MANDATORY, readOnly = true)
-    fun find(userId: UUID, drugId: UUID): Reservation? = reservations.find(userId, drugId)
-
-    /** Бронь или 404. */
-    @Transactional(propagation = MANDATORY, readOnly = true)
-    fun require(userId: UUID, drugId: UUID): Reservation = find(userId, drugId) ?: throw NoSuchReservation()
+    fun get(userId: UUID, drugId: UUID): Reservation =
+        reservations.find(userId, drugId) ?: throw NoSuchReservation()
 
     /** Брони на перечисленные упаковки — чтобы ответить, сколько на пачку заявлено. */
     @Transactional(propagation = MANDATORY, readOnly = true)
-    fun onDrugs(drugIds: Collection<UUID>): List<Reservation> = reservations.findAllOfDrugs(drugIds)
+    fun onDrugs(drugIds: Collection<UUID>, userId: UUID): List<Reservation> =
+        reservations.findAllOfDrugs(drugIds, userId)
 
     // ── Команды ──────────────────────────────────────────────────────────────────
 
@@ -68,59 +67,60 @@ class ReservationService(
      * ключ на членство: он же не даёт вставке разойтись с одновременным выходом.
      */
     @Transactional(propagation = MANDATORY)
-    fun create(userId: UUID, drugId: UUID, amount: BigDecimal): Reservation {
-        logger.debug("Creating reservation of user {} on drug {}", userId, drugId)
+    fun create(drug: Drug, userId: UUID, amount: BigDecimal): Reservation {
+        logger.debug("Creating reservation of user {} on drug {}", userId, drug.id)
 
-        val drug = drugs.require(drugId, userId)
-        if (reservations.find(userId, drugId) != null) throw ReservationAlreadyExists()
+        // Правило читается здесь, как и у вступления в аптечку: одна бронь на пару «человек и
+        // пачка». Первичный ключ его страхует, но выражено оно в коде.
+        if (reservations.find(userId, drug.id) != null) throw ReservationAlreadyExists()
 
-        val reservation = Reservation(userId, drugId, Quantity(amount, drug.quantity.unit))
-        reservations.insert(reservation)
+        val reservation = Reservation(userId, drug.id, Quantity(amount, drug.quantity.unit))
+        reservations.insert(reservation, drug)
         return reservation
     }
 
+    /** По идентификаторам — то же самое плюс своё чтение. */
     @Transactional(propagation = MANDATORY)
-    fun changeTo(userId: UUID, drugId: UUID, amount: BigDecimal): Reservation {
-        logger.debug("Changing reservation of user {} on drug {}", userId, drugId)
+    fun changeTo(userId: UUID, drugId: UUID, amount: BigDecimal): Reservation =
+        changeTo(get(userId, drugId), amount)
 
-        val current = require(userId, drugId)
-        val changed = current.changeTo(Quantity(amount, current.amount.unit))
+    @Transactional(propagation = MANDATORY)
+    fun changeTo(reservation: Reservation, amount: BigDecimal): Reservation {
+        logger.debug("Changing reservation of user {} on drug {}", reservation.userId, reservation.drugId)
+
+        val changed = reservation.changeTo(Quantity(amount, reservation.amount.unit))
         reservations.save(changed)
         return changed
     }
 
-    /**
-     * Снятие броней, потерявших доступ.
-     *
-     * Массово, а не обходом: у аптечки со ста пачками поднимать каждую ради одной строки
-     * незачем. Кто именно потерял доступ, решает вызывающий — состав знает он.
-     */
-    @Transactional(propagation = MANDATORY)
-    fun dropOfUserInMedKit(userId: UUID, medKitId: UUID) {
-        logger.debug("Dropping reservations of user {} in medkit {}", userId, medKitId)
-        reservations.deleteOfUserInMedKit(userId, medKitId)
-    }
-
     /** Брони всех, кто целевую аптечку не видит, — при удалении с переносом. */
     @Transactional(propagation = MANDATORY)
-    fun dropInMedKitExcept(medKitId: UUID, accessibleUserIds: Set<UUID>) {
-        logger.debug("Dropping reservations in medkit {} outside {} users", medKitId, accessibleUserIds.size)
-        reservations.deleteInMedKitExcept(medKitId, accessibleUserIds)
+    fun dropInMedKitExcept(medKit: MedKit, accessibleUserIds: Set<UUID>) {
+        logger.debug("Dropping reservations in medkit {} outside {} users", medKit.id, accessibleUserIds.size)
+        reservations.deleteInMedKitExcept(medKit, accessibleUserIds)
     }
 
     /** То же для одной переехавшей упаковки. */
+    /** Все брони на упаковку: зовётся, когда упаковка уничтожается. */
     @Transactional(propagation = MANDATORY)
-    fun dropOnDrugExcept(drugId: UUID, accessibleUserIds: Set<UUID>) {
-        logger.debug("Dropping reservations on drug {} outside {} users", drugId, accessibleUserIds.size)
-        reservations.deleteOfDrugExcept(drugId, accessibleUserIds)
+    fun dropOnDrug(drug: Drug) {
+        logger.debug("Dropping all reservations on drug {}", drug.id)
+        reservations.deleteOfDrug(drug)
+    }
+
+    @Transactional(propagation = MANDATORY)
+    fun dropOnDrugExcept(drug: Drug, accessibleUserIds: Set<UUID>) {
+        logger.debug("Dropping reservations on drug {} outside {} users", drug.id, accessibleUserIds.size)
+        reservations.deleteOfDrugExcept(drug, accessibleUserIds)
     }
 
     /** Отмена — это удаление: брони с нулём не бывает. */
     @Transactional(propagation = MANDATORY)
-    fun cancel(userId: UUID, drugId: UUID) {
-        logger.debug("Cancelling reservation of user {} on drug {}", userId, drugId)
+    fun cancel(userId: UUID, drugId: UUID) = cancel(get(userId, drugId))
 
-        require(userId, drugId)
-        reservations.delete(userId, drugId)
+    @Transactional(propagation = MANDATORY)
+    fun cancel(reservation: Reservation) {
+        logger.debug("Cancelling reservation of user {} on drug {}", reservation.userId, reservation.drugId)
+        reservations.delete(reservation)
     }
 }

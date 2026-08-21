@@ -1,6 +1,7 @@
 package org.kert0n.medappserver.integration
 
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
@@ -8,6 +9,8 @@ import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.services.aggregate.ReservationService
+import org.kert0n.medappserver.domain.NotAMember
+import org.kert0n.medappserver.domain.NoSuchReservation
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -33,14 +36,14 @@ class ReadProjectionTest {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.create(alice.id)
         val bob = dbHelper.freshUser("bob")
-        medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
+        medKitService.joinByInvitation(medKitService.invite(medKitService.get(kit.id, alice.id), alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
 
-        reservationService.create(alice.id, drug.id, qty(30.0))
-        reservationService.create(bob.id, drug.id, qty(20.0))
+        dbHelper.reserve(alice.id, drug.id, qty(30.0))
+        dbHelper.reserve(bob.id, drug.id, qty(20.0))
         dbHelper.flushAndClear()
 
-        val view = drugService.require(drug.id, alice.id)
+        val view = drugService.get(drug.id, alice.id)
 
         assertQty(100.0, view.quantity)
         // Заявленное считается снаружи: упаковка про брони не знает и знать не должна.
@@ -54,7 +57,7 @@ class ReadProjectionTest {
         val drug = dbHelper.freshDrug(kit.id, 7.0)
         dbHelper.flushAndClear()
 
-        val view = drugService.require(drug.id, alice.id)
+        val view = drugService.get(drug.id, alice.id)
 
         assertQty(7.0, view.quantity)
         assertQty(0.0, dbHelper.reservedOnDrug(drug.id))
@@ -68,7 +71,7 @@ class ReadProjectionTest {
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
-        assertNull(drugService.find(drug.id, eve.id), "чужая аптечка не должна читаться")
+        assertFailsWith<NotAMember>("чужая аптечка не должна читаться") { drugService.get(drug.id, eve.id) }
     }
 
     @Test
@@ -85,7 +88,7 @@ class ReadProjectionTest {
         dbHelper.freshDrug(foreign.id, 4.0)
         dbHelper.flushAndClear()
 
-        val views = drugService.accessibleTo(alice.id)
+        val views = drugService.allOf(alice.id)
 
         assertEquals(3, views.size, "видны препараты обеих своих аптечек и только их")
         assertEquals(2, views.count { it.medKitId == first.id })
@@ -98,13 +101,13 @@ class ReadProjectionTest {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.create(alice.id)
         val bob = dbHelper.freshUser("bob")
-        medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
+        medKitService.joinByInvitation(medKitService.invite(medKitService.get(kit.id, alice.id), alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
-        reservationService.create(alice.id, drug.id, qty(30.0))
+        dbHelper.reserve(alice.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
-        assertQty(30.0, reservationService.require(alice.id, drug.id).amount)
+        assertQty(30.0, reservationService.get(alice.id, drug.id).amount)
         // Пачка общая, бронь личная: Боб видит упаковку, но не чужую бронь.
-        assertNull(reservationService.find(bob.id, drug.id), "чужой план не читается")
+        assertFailsWith<NoSuchReservation>("чужой план не читается") { reservationService.get(bob.id, drug.id) }
     }
 }

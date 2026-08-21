@@ -6,7 +6,6 @@ import org.kert0n.medappserver.db.model.MedKitMembershipData
 import org.kert0n.medappserver.db.model.MedKitMembershipKey
 import org.kert0n.medappserver.db.repository.MedKitMembershipRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
-import org.kert0n.medappserver.db.repository.UserRepository
 import org.kert0n.medappserver.domain.MedKit
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Component
@@ -20,13 +19,20 @@ import org.springframework.stereotype.Component
 @Component
 class MedKitStore(
     private val medKits: MedKitRepository,
-    private val memberships: MedKitMembershipRepository,
-    private val users: UserRepository
+    private val memberships: MedKitMembershipRepository
 ) {
 
-    fun findById(medKitId: UUID): MedKit? {
-        val row = medKits.findByIdOrNull(medKitId) ?: return null
-        return MedKit(row.id, memberships.findMemberIds(row.id))
+    /**
+     * Аптечка, доступная вызывающему, — одним запросом.
+     *
+     * Доступ проверяет сам запрос: не нашли — значит либо нет аптечки, либо вызывающего нет в
+     * ней, и различать эти случаи мы не собираемся. Состав приходит целиком: агрегат аптечки и
+     * есть её состав, а решения по нему принимает не только тот, кто её читал.
+     */
+    fun find(medKitId: UUID, userId: UUID): MedKit? {
+        val rows = memberships.findMembershipsOf(medKitId, userId)
+        if (rows.isEmpty()) return null
+        return MedKit(medKitId, rows.map { it.membershipKey.userId }.toSet())
     }
 
     /**
@@ -36,13 +42,13 @@ class MedKitStore(
      */
     fun findAllOfUser(userId: UUID): List<MedKit> =
         medKits.findMembershipsOfUserKits(userId)
-            .groupBy { it.medKit.id }
+            .groupBy { it.membershipKey.medKitId }
             .map { (id, memberships) -> MedKit(id, memberships.map { it.membershipKey.userId }.toSet()) }
             .sortedBy { it.id }
 
     fun insert(medKit: MedKit) {
-        val row = medKits.save(MedKitData(id = medKit.id))
-        memberships.saveAll(medKit.members.map { membershipRow(row, it) })
+        medKits.save(MedKitData(id = medKit.id))
+        memberships.saveAll(medKit.members.map { membershipRow(medKit.id, it) })
     }
 
     /** Сводит строки членства к тому, что в состоянии. Сама аптечка полей больше не имеет. */
@@ -53,10 +59,7 @@ class MedKitStore(
         if (gone.isNotEmpty()) memberships.deleteMembers(medKit.id, gone)
 
         val added = medKit.members - stored
-        if (added.isNotEmpty()) {
-            val row = medKits.findByIdOrNull(medKit.id) ?: error("Аптечка ${medKit.id} исчезла во время записи")
-            memberships.saveAll(added.map { membershipRow(row, it) })
-        }
+        if (added.isNotEmpty()) memberships.saveAll(added.map { membershipRow(medKit.id, it) })
     }
 
     /**
@@ -66,22 +69,20 @@ class MedKitStore(
      * загружены и ссылаются на удаляемую аптечку — Hibernate упал бы на ближайшем flush.
      * Поэтому явно: участников столько, сколько людей ею пользуется, обход дешёвый.
      */
-    fun delete(medKitId: UUID) {
-        val row = medKits.findByIdOrNull(medKitId) ?: return
-        memberships.deleteAll(memberships.findAllOfMedKit(medKitId))
+    fun delete(medKit: MedKit) {
+        val row = medKits.findByIdOrNull(medKit.id) ?: return
+        memberships.deleteAll(memberships.findAllOfMedKit(medKit.id))
         medKits.delete(row)
     }
 
     /**
-     * Строка членства.
+     * Строка членства — из одного ключа.
      *
-     * Ссылки — управляемые сущности, а не заглушки `getReferenceById`: заглушка на запись, ещё
-     * не дошедшую до базы, при первом массовом запросе превращается в «ссылку на несохранённый
-     * объект». Запросов это не стоит: обе сущности уже в контексте.
+     * Ни аптечка, ни пользователь сюда не поднимаются: обе колонки в ключе, а связи в сущности
+     * объявлены только на чтение. Поднимать чужие строки ради ссылки значило бы держать в
+     * хранилище членства чужие репозитории и платить за них запросами.
      */
-    private fun membershipRow(medKit: MedKitData, userId: UUID) = MedKitMembershipData(
-        membershipKey = MedKitMembershipKey(medKitId = medKit.id, userId = userId),
-        medKit = medKit,
-        user = users.findByIdOrNull(userId) ?: error("Пользователь $userId исчез во время записи членства")
+    private fun membershipRow(medKitId: UUID, userId: UUID) = MedKitMembershipData(
+        membershipKey = MedKitMembershipKey(medKitId = medKitId, userId = userId)
     )
 }

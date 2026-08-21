@@ -11,6 +11,7 @@ import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.aggregate.DrugService
+import org.kert0n.medappserver.services.orchestrator.DrugDisposal
 import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.services.application.DrugApplicationService
 import org.kert0n.medappserver.services.application.MedKitApplicationService
@@ -37,6 +38,9 @@ class DrugMovementStoriesTest {
 
     @Autowired
     private lateinit var drugService: DrugService
+
+    @Autowired
+    private lateinit var disposal: DrugDisposal
 
     @Autowired
     private lateinit var medKitService: MedKitService
@@ -67,7 +71,7 @@ class DrugMovementStoriesTest {
         entityManager.flush()
 
         // Reserve a share
-        reservationService.create(userData.id, painkiller.id, qty(20.0))
+        dbHelper.reserve(userData.id, painkiller.id, qty(20.0))
         entityManager.flush()
 
         // Move drug to travel kit
@@ -81,11 +85,11 @@ class DrugMovementStoriesTest {
         assertEquals(travelKit.id, movedDrug.medKitId)
 
         // Home kit is empty
-        val homeKitDrugs = drugService.ofMedKit(homeKit.id)
+        val homeKitDrugs = drugService.ofMedKit(homeKit.id, userData.id)
         assertTrue(homeKitDrugs.isEmpty())
 
         // Travel kit has the drug
-        val travelKitDrugs = drugService.ofMedKit(travelKit.id)
+        val travelKitDrugs = drugService.ofMedKit(travelKit.id, userData.id)
         assertEquals(1, travelKitDrugs.size)
 
         // The reservation survives
@@ -105,7 +109,7 @@ class DrugMovementStoriesTest {
         dbHelper.insert(bob)
 
         val medkit = medKitService.create(anna.id)
-        val shareKey = medKitService.invite(medkit.id, anna.id)
+        val shareKey = medKitService.invite(medKitService.get(medkit.id, anna.id), anna.id)
         medKitService.joinByInvitation(shareKey, bob.id)
 
         val drugData = Drug(
@@ -118,18 +122,18 @@ class DrugMovementStoriesTest {
         entityManager.flush()
 
         // Anna reserves 40, Bob 30 — 70 of 100
-        reservationService.create(anna.id, drugData.id, qty(40.0))
-        reservationService.create(bob.id, drugData.id, qty(30.0))
+        dbHelper.reserve(anna.id, drugData.id, qty(40.0))
+        dbHelper.reserve(bob.id, drugData.id, qty(30.0))
         entityManager.flush()
 
-        val updated = reservationService.changeTo(anna.id, drugData.id, qty(70.0))
+        val updated = reservationService.changeTo(reservationService.get(anna.id, drugData.id), qty(70.0))
         assertQty(70.0, updated.amount)
         entityManager.flush()
         entityManager.clear()
         assertQty(100.0, dbHelper.reservedOnDrug(drugData.id))
 
         // Выше содержимого пачки тоже можно: 200 + 30 на сотню таблеток — законное состояние.
-        reservationService.changeTo(anna.id, drugData.id, qty(200.0))
+        reservationService.changeTo(reservationService.get(anna.id, drugData.id), qty(200.0))
         entityManager.flush()
         entityManager.clear()
         assertQty(230.0, dbHelper.reservedOnDrug(drugData.id))
@@ -154,7 +158,7 @@ class DrugMovementStoriesTest {
         entityManager.flush()
 
         // Reserve a share
-        reservationService.create(userData.id, drugData.id, qty(25.0))
+        dbHelper.reserve(userData.id, drugData.id, qty(25.0))
         entityManager.flush()
         entityManager.clear()
 
@@ -163,7 +167,7 @@ class DrugMovementStoriesTest {
         assertNotNull(plan)
 
         // Delete the drug
-        drugService.delete(drugData.id, userData.id)
+        disposal.destroy(drugService.get(drugData.id, userData.id))
         entityManager.flush()
         entityManager.clear()
 
@@ -187,12 +191,12 @@ class DrugMovementStoriesTest {
         val charlie = dbHelper.insert(User(id = UUID.randomUUID(), hashedKey = "charlie_${UUID.randomUUID()}"))
 
         val oldKit = medKitService.create(anna.id)
-        medKitService.joinByInvitation(medKitService.invite(oldKit.id, anna.id), bob.id)
-        medKitService.joinByInvitation(medKitService.invite(oldKit.id, anna.id), charlie.id)
+        medKitService.joinByInvitation(medKitService.invite(medKitService.get(oldKit.id, anna.id), anna.id), bob.id)
+        medKitService.joinByInvitation(medKitService.invite(medKitService.get(oldKit.id, anna.id), anna.id), charlie.id)
 
         // Setup: Anna and Bob share a New MedKit (Charlie is excluded)
         val newKit = medKitService.create(anna.id)
-        medKitService.joinByInvitation(medKitService.invite(newKit.id, anna.id), bob.id)
+        medKitService.joinByInvitation(medKitService.invite(medKitService.get(newKit.id, anna.id), anna.id), bob.id)
 
         // Add drug to old kit
         val drugData = dbHelper.insert(
@@ -206,9 +210,9 @@ class DrugMovementStoriesTest {
         )
 
         // Everyone reserves 30 pills
-        reservationService.create(anna.id, drugData.id, qty(30.0))
-        reservationService.create(bob.id, drugData.id, qty(30.0))
-        reservationService.create(charlie.id, drugData.id, qty(30.0))
+        dbHelper.reserve(anna.id, drugData.id, qty(30.0))
+        dbHelper.reserve(bob.id, drugData.id, qty(30.0))
+        dbHelper.reserve(charlie.id, drugData.id, qty(30.0))
 
         entityManager.flush()
         entityManager.clear()

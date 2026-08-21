@@ -13,6 +13,7 @@ import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.aggregate.DrugService
+import org.kert0n.medappserver.services.orchestrator.DrugDisposal
 import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.services.application.DrugApplicationService
 import org.kert0n.medappserver.services.application.MedKitApplicationService
@@ -41,6 +42,9 @@ class BasicWorkflowStoriesTest {
 
     @Autowired
     private lateinit var drugService: DrugService
+
+    @Autowired
+    private lateinit var disposal: DrugDisposal
 
     @Autowired
     private lateinit var medKitService: MedKitService
@@ -97,7 +101,7 @@ class BasicWorkflowStoriesTest {
         entityManager.flush()
 
         // Anna takes 2 tablets of Aspirin
-        drugService.consume(aspirin.id, qty(2.0), anna.id)
+        drugService.consume(drugService.get(aspirin.id, anna.id), qty(2.0))
         entityManager.flush()
         entityManager.clear()
 
@@ -106,7 +110,7 @@ class BasicWorkflowStoriesTest {
         assertNotNull(updatedAspirin)
         assertQty(98.0, updatedAspirin.quantity, "Should have 98 tablets left")
 
-        val drugs = drugService.ofMedKit(homeMedkit.id)
+        val drugs = drugService.ofMedKit(homeMedkit.id, anna.id)
         assertEquals(2, drugs.size, "Should have 2 drugs in medkit")
 
         println("✅ Story 1 passed: Anna successfully created medkit and managed drugs")
@@ -143,7 +147,7 @@ class BasicWorkflowStoriesTest {
         entityManager.flush()
 
         // Anna shares with Bob via share key
-        val shareKey = medKitService.invite(medkit.id, anna.id)
+        val shareKey = medKitService.invite(medKitService.get(medkit.id, anna.id), anna.id)
         medKitService.joinByInvitation(shareKey, bob.id)
         entityManager.flush()
         entityManager.clear()
@@ -157,7 +161,7 @@ class BasicWorkflowStoriesTest {
         assertEquals(annaMedkits[0], bobMedkits[0], "Should be the same medkit")
 
         // Verify the medkit has 2 users
-        val sharedMedkit = medKitStore.findById(medkit.id)
+        val sharedMedkit = dbHelper.medKit(medkit.id)
         assertNotNull(sharedMedkit)
         assertEquals(2, sharedMedkit.members.size, "Medkit should have 2 users")
 
@@ -178,7 +182,7 @@ class BasicWorkflowStoriesTest {
         dbHelper.insert(bob)
 
         val medkit = medKitService.create(anna.id)
-        val shareKey = medKitService.invite(medkit.id, anna.id)
+        val shareKey = medKitService.invite(medKitService.get(medkit.id, anna.id), anna.id)
         medKitService.joinByInvitation(shareKey, bob.id)
 
         val drugData = Drug(
@@ -196,7 +200,7 @@ class BasicWorkflowStoriesTest {
         entityManager.clear()
 
         // Verify both users have access
-        val loadedMedkit = medKitStore.findById(medkit.id)!!
+        val loadedMedkit = dbHelper.medKit(medkit.id)!!
         assertEquals(2, loadedMedkit.members.size)
 
         // Bob leaves (drugs stay)
@@ -205,7 +209,7 @@ class BasicWorkflowStoriesTest {
         entityManager.clear()
 
         // Medkit still exists with Anna only
-        val updatedMedkit = medKitStore.findById(medkit.id)
+        val updatedMedkit = dbHelper.medKit(medkit.id)
         assertNotNull(updatedMedkit)
         assertEquals(1, updatedMedkit.members.size, "Only Anna should be in medkit")
         assertTrue(updatedMedkit.members.contains(anna.id))
@@ -267,14 +271,14 @@ class BasicWorkflowStoriesTest {
         entityManager.clear()
 
         // Verify migration
-        val drugsInNew = drugService.ofMedKit(newMedkit.id)
+        val drugsInNew = drugService.ofMedKit(newMedkit.id, userData.id)
         assertEquals(2, drugsInNew.size, "All drugs should be in new medkit")
         val drugNames = drugsInNew.map { drug -> drug.name }
         assertTrue(drugNames.contains("Drug A"))
         assertTrue(drugNames.contains("Drug B"))
 
         // Old medkit should be gone
-        val oldMedkitCheck = medKitStore.findById(oldMedkit.id)
+        val oldMedkitCheck = dbHelper.medKit(oldMedkit.id)
         assertNull(oldMedkitCheck, "Old medkit should be deleted")
 
         // User should have only 1 medkit now
@@ -304,9 +308,9 @@ class BasicWorkflowStoriesTest {
         entityManager.flush()
 
         // Consume all in steps
-        drugService.consume(drugData.id, qty(10.0), userData.id)
-        drugService.consume(drugData.id, qty(10.0), userData.id)
-        drugService.consume(drugData.id, qty(10.0), userData.id)
+        disposal.consume(drugService.get(drugData.id, userData.id), qty(10.0))
+        disposal.consume(drugService.get(drugData.id, userData.id), qty(10.0))
+        disposal.consume(drugService.get(drugData.id, userData.id), qty(10.0))
         entityManager.flush()
         entityManager.clear()
 

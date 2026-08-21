@@ -25,10 +25,10 @@ class CascadeSchemaTest {
             FROM information_schema.referential_constraints
             WHERE constraint_schema = current_schema()
               AND constraint_name IN (
-                'reservations_drug_fkey',
+                'reservations_drug_med_kit_fkey',
+                'reservations_membership_fkey',
                 'user_drugs_med_kit_fkey',
                 'user_med_kits_med_kit_fkey',
-                'reservations_user_fkey',
                 'user_med_kits_user_fkey'
               )
             """.trimIndent()
@@ -37,11 +37,11 @@ class CascadeSchemaTest {
 
         assertEquals(
             mapOf(
-                "reservations_drug_fkey" to "CASCADE",
+                "reservations_drug_med_kit_fkey" to "CASCADE",
+                "reservations_membership_fkey" to "CASCADE",
                 "user_drugs_med_kit_fkey" to "CASCADE",
                 "user_med_kits_med_kit_fkey" to "CASCADE",
                 // Пользователь не удаляется каскадом намеренно: аптечки общие.
-                "reservations_user_fkey" to "NO ACTION",
                 "user_med_kits_user_fkey" to "NO ACTION"
             ),
             rules

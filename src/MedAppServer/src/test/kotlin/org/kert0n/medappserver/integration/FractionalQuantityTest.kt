@@ -9,6 +9,7 @@ import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.ReservationRepository
 import org.kert0n.medappserver.services.aggregate.DrugService
+import org.kert0n.medappserver.services.orchestrator.DrugDisposal
 import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
@@ -30,6 +31,7 @@ class FractionalQuantityTest {
     @Autowired private lateinit var drugRepository: DrugRepository
     @Autowired private lateinit var treatmentPlanRepository: ReservationRepository
     @Autowired private lateinit var drugService: DrugService
+    @Autowired private lateinit var disposal: DrugDisposal
     @Autowired private lateinit var medKitService: MedKitService
     @Autowired private lateinit var reservationService: ReservationService
     @Autowired private lateinit var dbHelper: DatabaseTestHelper
@@ -42,12 +44,12 @@ class FractionalQuantityTest {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.create(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 1.0)
-        reservationService.create(alice.id, drug.id, qty(1.0))
+        dbHelper.reserve(alice.id, drug.id, qty(1.0))
         dbHelper.flushAndClear()
 
         val third = third("1")   // 0.333333
-        drugService.consume(drug.id, third, alice.id)
-        drugService.consume(drug.id, third, alice.id)
+        drugService.consume(drugService.get(drug.id, alice.id), third)
+        drugService.consume(drugService.get(drug.id, alice.id), third)
         dbHelper.flushAndClear()
 
         // 1 - 2 * 0.333333 = 0.333334: остаток чуть больше трети, и он не потерян.
@@ -55,7 +57,7 @@ class FractionalQuantityTest {
 
         // Третий приём забирает ровно остаток — препарат кончился.
         val last = dbHelper.drugQuantity(drug.id)!!
-        val afterLast = drugService.consume(drug.id, last, alice.id)
+        val afterLast = disposal.consume(drugService.get(drug.id, alice.id), last)
         dbHelper.flushAndClear()
 
         assertNull(afterLast, "план исчезает вместе с кончившимся препаратом")

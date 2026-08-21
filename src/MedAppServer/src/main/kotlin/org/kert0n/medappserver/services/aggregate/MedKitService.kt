@@ -3,6 +3,7 @@ package org.kert0n.medappserver.services.aggregate
 import com.sksamuel.aedile.core.Cache
 import java.util.UUID
 import org.kert0n.medappserver.db.store.MedKitStore
+import org.kert0n.medappserver.domain.Invitation
 import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.services.security.SecurityService
@@ -22,7 +23,7 @@ import org.springframework.transaction.annotation.Transactional
 class MedKitService(
     private val medKits: MedKitStore,
     private val securityService: SecurityService,
-    private val medKitTokenCache: Cache<String, UUID>
+    private val medKitTokenCache: Cache<String, Invitation>
 ) {
 
     private val logger = LoggerFactory.getLogger(MedKitService::class.java)
@@ -35,21 +36,15 @@ class MedKitService(
         return medKit
     }
 
-    /** Аптечка или `null`, если её нет. */
+    /**
+     * Аптечка вызывающего. Недоступная и несуществующая неотличимы намеренно.
+     *
+     * Единственный способ получить `MedKit`: чтение и есть проверка доступа.
+     */
     @Transactional(propagation = MANDATORY, readOnly = true)
-    fun findById(medKitId: UUID): MedKit? = medKits.findById(medKitId)
-
-    /** Аптечка или 404. */
-    @Transactional(propagation = MANDATORY, readOnly = true)
-    fun requireById(medKitId: UUID): MedKit = findById(medKitId) ?: throw NotAMember()
-
-    /** Аптечка, доступная вызывающему, или 404 — недоступная и несуществующая неотличимы. */
-    @Transactional(propagation = MANDATORY, readOnly = true)
-    fun requireAccessible(medKitId: UUID, userId: UUID): MedKit {
+    fun get(medKitId: UUID, userId: UUID): MedKit {
         logger.debug("Finding medkit {} for user {}", medKitId, userId)
-        val medKit = requireById(medKitId)
-        medKit.requireMember(userId)
-        return medKit
+        return medKits.find(medKitId, userId) ?: throw NotAMember()
     }
 
     /** Все аптечки участника — целиком и одним запросом. */
@@ -59,31 +54,39 @@ class MedKitService(
         return medKits.findAllOfUser(userId)
     }
 
+    /** По идентификатору — то же самое плюс своё чтение, в котором и проверяется доступ. */
     @Transactional(propagation = MANDATORY)
-    fun invite(medKitId: UUID, userId: UUID): String {
-        logger.debug("Sharing medkit {} by user: {}", medKitId, userId)
-        // Право проверяет чтение состава. Версией это не проверяется: чужое вступление в ту же
-        // аптечку к правам приглашающего отношения не имеет.
-        requireAccessible(medKitId, userId)
+    fun invite(medKitId: UUID, userId: UUID): String = invite(get(medKitId, userId), userId)
+
+    @Transactional(propagation = MANDATORY)
+    fun invite(medKit: MedKit, invitedBy: UUID): String {
+        logger.debug("Sharing medkit {} by user: {}", medKit.id, invitedBy)
+        // Аптечка приходит прочитанной — читал её тот, кто приглашает, и это и есть его право.
+        val invitation = Invitation(medKit, invitedBy)
         val key = securityService.generateKey(16)
         // Кешируется только хеш: сырой ключ приглашения на сервере не хранится.
-        medKitTokenCache[securityService.hashToken(key)] = medKitId
+        medKitTokenCache[securityService.hashToken(key)] = invitation
         return key
     }
 
-    @Transactional(propagation = MANDATORY)
-    fun join(medKitId: UUID, userId: UUID): MedKit {
-        logger.debug("Adding user {} to medkit {}", userId, medKitId)
-        val joined = requireById(medKitId).join(userId)
-        medKits.save(joined)
-        return joined
-    }
-
+    /**
+     * Вступление по приглашению — единственный способ попасть в аптечку.
+     *
+     * Вступающего в ней ещё нет, поэтому аптечка читается правами **пригласившего**: он в ней
+     * состоит, и обычное скоупленное чтение работает. Нескоупленных чтений в приложении не
+     * появляется — см. [Invitation] о том, что из этого следует.
+     *
+     * Правило «дважды не вступают» решает сам агрегат: состав у него на руках.
+     */
     @Transactional(propagation = MANDATORY)
     fun joinByInvitation(key: String, userId: UUID): MedKit {
-        val medKitId = medKitTokenCache.getOrNull(securityService.hashToken(key))
+        logger.debug("Adding user {} to medkit by invitation", userId)
+        val invitation = medKitTokenCache.getOrNull(securityService.hashToken(key))
             ?: throw NotAMember()
-        return join(medKitId, userId)
+
+        val joined = get(invitation.medKitId, invitation.invitedBy).join(userId)
+        medKits.save(joined)
+        return joined
     }
 
     /**
@@ -92,22 +95,30 @@ class MedKitService(
      * Брони выходящего лежат в чужом агрегате: их убирает оркестратор.
      */
     @Transactional(propagation = MANDATORY)
-    fun leave(medKitId: UUID, userId: UUID): MedKit? {
-        logger.debug("Removing user {} from medkit {}", userId, medKitId)
-        val left = requireAccessible(medKitId, userId).leave(userId)
+    fun leave(medKitId: UUID, userId: UUID): MedKit? = leave(get(medKitId, userId), userId)
+
+    @Transactional(propagation = MANDATORY)
+    fun leave(medKit: MedKit, userId: UUID): MedKit? {
+        logger.debug("Removing user {} from medkit {}", userId, medKit.id)
+        val left = medKit.leave(userId)
 
         if (left == null) {
-            medKits.delete(medKitId)
+            medKits.delete(medKit)
             return null
         }
         medKits.save(left)
         return left
     }
 
-    /** Доступ проверяется здесь: команда по одному идентификатору однажды придёт без проверки. */
+    /**
+     * Удаляется уже прочитанная аптечка.
+     *
+     * Идентификатора здесь нет намеренно: получить `MedKit` можно только скоупленным чтением,
+     * поэтому команде нечего перепроверять — а перепроверка стоила бы второго запроса.
+     */
     @Transactional(propagation = MANDATORY)
-    fun delete(medKitId: UUID, userId: UUID) {
-        requireAccessible(medKitId, userId)
-        medKits.delete(medKitId)
-    }
+    fun delete(medKitId: UUID, userId: UUID) = delete(get(medKitId, userId))
+
+    @Transactional(propagation = MANDATORY)
+    fun delete(medKit: MedKit) = medKits.delete(medKit)
 }

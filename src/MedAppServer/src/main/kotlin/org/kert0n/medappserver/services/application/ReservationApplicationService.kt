@@ -5,6 +5,7 @@ import java.util.UUID
 import org.kert0n.medappserver.api.ReservationDTO
 import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.services.aggregate.ReservationService
+import org.kert0n.medappserver.services.orchestrator.ReservationPlacement
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -16,17 +17,20 @@ import org.springframework.transaction.annotation.Transactional
  * они о ней, а не о том, кто её заказал.
  */
 @Service
-class ReservationApplicationService(private val reservationService: ReservationService) {
+class ReservationApplicationService(
+    private val reservationService: ReservationService,
+    private val placement: ReservationPlacement
+) {
 
     @Transactional(readOnly = true)
     fun ofUser(userId: UUID): List<ReservationDTO> = reservationService.ofUser(userId).map { it.toDto() }
 
     @Transactional(readOnly = true)
-    fun read(userId: UUID, drugId: UUID): ReservationDTO = reservationService.require(userId, drugId).toDto()
+    fun read(userId: UUID, drugId: UUID): ReservationDTO = reservationService.get(userId, drugId).toDto()
 
     @Transactional
     fun create(userId: UUID, drugId: UUID, amount: BigDecimal): ReservationDTO =
-        reservationService.create(userId, drugId, amount).toDto()
+        placement.place(drugId, userId, amount).toDto()
 
     @Transactional
     fun changeTo(userId: UUID, drugId: UUID, amount: BigDecimal): ReservationDTO =

@@ -98,14 +98,14 @@ class MedKitApplicationServiceTest {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
         val sourceKit = medKitService.create(alice.id)
-        medKitService.joinByInvitation(medKitService.invite(sourceKit.id, alice.id), bob.id)
+        medKitService.joinByInvitation(medKitService.invite(medKitService.get(sourceKit.id, alice.id), alice.id), bob.id)
 
         val targetKit = medKitService.create(alice.id) // Only Alice
         val drug = dbHelper.freshDrug(sourceKit.id, 50.0)
         dbHelper.flushAndClear()
 
-        reservationService.create(alice.id, drug.id, qty(10.0))
-        reservationService.create(bob.id, drug.id, qty(10.0))
+        dbHelper.reserve(alice.id, drug.id, qty(10.0))
+        dbHelper.reserve(bob.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
         drugs.moveToMedKit(drug.id, targetKit.id, alice.id)
@@ -120,10 +120,10 @@ class MedKitApplicationServiceTest {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
         val kitA = medKitService.create(alice.id)
-        medKitService.joinByInvitation(medKitService.invite(kitA.id, alice.id), bob.id)
+        medKitService.joinByInvitation(medKitService.invite(medKitService.get(kitA.id, alice.id), alice.id), bob.id)
 
         val drug = drugService.create(
-            NewDrug("Shared Meds", qty(10.0), dbHelper.unit().id), kitA.id, alice.id
+            NewDrug("Shared Meds", qty(10.0), dbHelper.unit().id), medKitService.get(kitA.id, alice.id)
         )
         val kitB = medKitService.create(bob.id)
         dbHelper.flushAndClear()
@@ -154,19 +154,19 @@ class MedKitApplicationServiceTest {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
         val kit = medKitService.create(alice.id)
-        medKitService.join(kit.id, bob.id)
+        dbHelper.join(kit.id, alice.id, bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        reservationService.create(bob.id, drug.id, qty(10.0))
+        dbHelper.reserve(bob.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
         medKits.leave(kit.id, bob.id)
         dbHelper.flushAndClear()
 
-        assertNotNull(medKitService.requireAccessible(kit.id, alice.id))
+        assertNotNull(medKitService.get(kit.id, alice.id))
         assertFailsWith<DomainRuleViolated> {
-            medKitService.requireAccessible(kit.id, bob.id)
+            medKitService.get(kit.id, bob.id)
         }
     }
 
@@ -183,7 +183,7 @@ class MedKitApplicationServiceTest {
         dbHelper.flushAndClear()
 
         assertThrows<DomainRuleViolated> {
-            medKitService.requireAccessible(kit.id, alice.id)
+            medKitService.get(kit.id, alice.id)
         }
     }
 
@@ -200,7 +200,7 @@ class MedKitApplicationServiceTest {
         medKits.delete(kitA.id, alice.id, kitB.id)
         dbHelper.flushAndClear()
 
-        assertNull(medKitStore.findById(kitA.id))
+        assertNull(dbHelper.medKit(kitA.id))
         val survivingDrug = dbHelper.drug(drug.id)
         assertNotNull(survivingDrug)
         assertEquals(kitB.id, survivingDrug.medKitId)
@@ -211,15 +211,15 @@ class MedKitApplicationServiceTest {
         val alice = dbHelper.freshUser("alice")
         val charlie = dbHelper.freshUser("charlie")
         val oldKit = medKitService.create(alice.id)
-        medKitService.joinByInvitation(medKitService.invite(oldKit.id, alice.id), charlie.id)
+        medKitService.joinByInvitation(medKitService.invite(medKitService.get(oldKit.id, alice.id), alice.id), charlie.id)
 
         val newKit = medKitService.create(alice.id) // Only Alice
 
         val drug = dbHelper.freshDrug(oldKit.id, 90.0)
         dbHelper.flushAndClear()
 
-        reservationService.create(alice.id, drug.id, qty(30.0))
-        reservationService.create(charlie.id, drug.id, qty(30.0))
+        dbHelper.reserve(alice.id, drug.id, qty(30.0))
+        dbHelper.reserve(charlie.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
         medKits.delete(oldKit.id, alice.id, newKit.id)
@@ -247,11 +247,11 @@ class MedKitApplicationServiceTest {
         val kit = medKitService.create(alice.id)
         drugService.create(
             NewDrug(name = "Drug A", quantity = qty(50.0), quantityUnitId = dbHelper.unit().id),
-            kit.id, alice.id
+            medKitService.get(kit.id, alice.id)
         )
         drugService.create(
             NewDrug(name = "Drug B", quantity = qty(30.0), quantityUnitId = dbHelper.unit().id),
-            kit.id, alice.id
+            medKitService.get(kit.id, alice.id)
         )
         dbHelper.flushAndClear()
 

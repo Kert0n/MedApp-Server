@@ -19,6 +19,9 @@ import org.kert0n.medappserver.domain.QUANTITY_SCALE
 @Entity
 @Table(
     name = "user_drugs",
+    // Избыточно при первичном ключе по id, но составной ключ брони может ссылаться только на
+    // объявленную уникальность. Существует ради reservations_drug_med_kit_fkey.
+    uniqueConstraints = [UniqueConstraint(name = "user_drugs_id_med_kit_key", columnNames = ["id", "med_kit_id"])],
     indexes = [
         Index(name = "ix_user_drugs_name", columnList = "name"),
         Index(name = "ix_user_drugs_med_kit_id", columnList = "med_kit_id")
@@ -38,19 +41,40 @@ class DrugData(
     @Column(name = "quantity", nullable = false, precision = QUANTITY_PRECISION, scale = QUANTITY_SCALE)
     var quantity: BigDecimal,
 
-    /** `EAGER`: без единицы количество не имеет смысла, поэтому она нужна всегда. */
+    /**
+     * Ссылки пишутся идентификаторами, а связи объявлены **только на чтение**.
+     *
+     * Иначе хранилищу упаковки пришлось бы поднимать чужие строки, чтобы присвоить
+     * `@ManyToOne`, — то есть держать чужие репозитории и ходить в соседний агрегат мимо его
+     * сервиса. Решения там нет никакого: идентификаторы у домена уже на руках.
+     *
+     * Связи остаются затем, что по ним читается имя единицы и строятся внешние ключи схемы.
+     */
     @NotNull
+    @Column(name = "quantity_unit_id", nullable = false)
+    var quantityUnitId: UUID,
+
+    @Column(name = "form_type_id")
+    var formTypeId: UUID?,
+
+    /** `EAGER`: без единицы количество не имеет смысла, поэтому она нужна всегда. */
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(
         name = "quantity_unit_id",
-        nullable = false,
+        insertable = false,
+        updatable = false,
         foreignKey = ForeignKey(name = "user_drugs_quantity_unit_fkey")
     )
-    var quantityUnit: QuantityUnitData,
+    var quantityUnit: QuantityUnitData? = null,
 
     @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "form_type_id", foreignKey = ForeignKey(name = "user_drugs_form_type_fkey"))
-    var formType: FormTypeData?,
+    @JoinColumn(
+        name = "form_type_id",
+        insertable = false,
+        updatable = false,
+        foreignKey = ForeignKey(name = "user_drugs_form_type_fkey")
+    )
+    var formType: FormTypeData? = null,
 
     @Size(max = 200)
     @Column(name = "category", length = 200)
@@ -68,10 +92,14 @@ class DrugData(
     var description: String?,
 
     @NotNull
+    @Column(name = "med_kit_id", nullable = false)
+    var medKitId: UUID,
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(
         name = "med_kit_id",
-        nullable = false,
+        insertable = false,
+        updatable = false,
         // Определение задано явно, чтобы схема Hibernate в тестах совпадала с db/schema.sql:
         // иначе каскад проверялся бы только в одной из двух схем.
         foreignKey = ForeignKey(
@@ -80,7 +108,7 @@ class DrugData(
                 "FOREIGN KEY (med_kit_id) REFERENCES med_kits (id) ON DELETE CASCADE"
         )
     )
-    var medKit: MedKitData
+    var medKit: MedKitData? = null
 
     // Коллекции броней здесь нет: упаковка ими не владеет. Их исчезновение вслед за пачкой
     // держит внешний ключ в `ReservationData`.

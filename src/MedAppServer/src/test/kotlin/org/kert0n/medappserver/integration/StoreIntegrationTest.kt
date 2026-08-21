@@ -45,10 +45,10 @@ class StoreIntegrationTest {
         val kit = medKitService.create(alice.id)
         val first = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.freshDrug(kit.id, 20.0)
-        reservationService.create(alice.id, first.id, qty(4.0))
+        dbHelper.reserve(alice.id, first.id, qty(4.0))
         dbHelper.flushAndClear()
 
-        val loaded = drugs.findAllInMedKit(kit.id)
+        val loaded = drugs.findAllInMedKit(kit.id, alice.id)
 
         assertEquals(2, loaded.size)
         assertQty(10.0, loaded.single { it.id == first.id }.quantity)
@@ -62,7 +62,7 @@ class StoreIntegrationTest {
         val kit = medKitService.create(alice.id)
         dbHelper.flushAndClear()
 
-        assertTrue(drugs.findAllInMedKit(kit.id).isEmpty())
+        assertTrue(drugs.findAllInMedKit(kit.id, alice.id).isEmpty())
     }
 
     @Test
@@ -73,8 +73,8 @@ class StoreIntegrationTest {
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
-        assertEquals(drug.id, drugs.findAccessible(drug.id, alice.id)?.id)
-        assertNull(drugs.findAccessible(drug.id, eve.id), "чужая аптечка не читается")
+        assertEquals(drug.id, drugs.find(drug.id, alice.id)?.id)
+        assertNull(drugs.find(drug.id, eve.id), "чужая аптечка не читается")
     }
 
     @Test
@@ -89,24 +89,10 @@ class StoreIntegrationTest {
         dbHelper.freshDrug(foreign.id, 3.0)
         dbHelper.flushAndClear()
 
-        val accessible = drugs.findAllAccessibleTo(alice.id)
+        val accessible = drugs.findAllOfUser(alice.id)
 
         assertEquals(2, accessible.size)
         assertTrue(accessible.none { it.medKitId == foreign.id })
-    }
-
-    @Test
-    fun `блокирующая загрузка отдаёт то же состояние, что и обычная`() {
-        val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
-        val drug = dbHelper.freshDrug(kit.id, 30.0)
-        reservationService.create(alice.id, drug.id, qty(10.0))
-        dbHelper.flushAndClear()
-
-        val locked = drugs.lockAccessible(drug.id, alice.id)!!
-
-        assertQty(30.0, locked.quantity)
-        assertQty(10.0, dbHelper.reservedOnDrug(locked.id))
     }
 
     // ── Брони ────────────────────────────────────────────────────────────────────
@@ -117,8 +103,8 @@ class StoreIntegrationTest {
         val kit = medKitService.create(alice.id)
         val first = dbHelper.freshDrug(kit.id, 50.0)
         val second = dbHelper.freshDrug(kit.id, 50.0)
-        reservationService.create(alice.id, first.id, qty(5.0))
-        reservationService.create(alice.id, second.id, qty(7.0))
+        dbHelper.reserve(alice.id, first.id, qty(5.0))
+        dbHelper.reserve(alice.id, second.id, qty(7.0))
         dbHelper.flushAndClear()
 
         val mine = reservations.findAllOfUser(alice.id)
@@ -132,9 +118,9 @@ class StoreIntegrationTest {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
         val kit = medKitService.create(alice.id)
-        medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
+        medKitService.joinByInvitation(medKitService.invite(medKitService.get(kit.id, alice.id), alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 50.0)
-        reservationService.create(alice.id, drug.id, qty(5.0))
+        dbHelper.reserve(alice.id, drug.id, qty(5.0))
         dbHelper.flushAndClear()
 
         assertQty(5.0, reservations.find(alice.id, drug.id)?.amount)
@@ -159,7 +145,7 @@ class StoreIntegrationTest {
         val kit = medKitService.create(alice.id)
         dbHelper.flushAndClear()
 
-        val loaded = medKits.findById(kit.id)!!
+        val loaded = dbHelper.medKit(kit.id)!!
 
         assertEquals(setOf(alice.id), loaded.members)
     }
@@ -180,7 +166,7 @@ class StoreIntegrationTest {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
         val kit = medKitService.create(alice.id)
-        medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
+        medKitService.joinByInvitation(medKitService.invite(medKitService.get(kit.id, alice.id), alice.id), bob.id)
         dbHelper.freshDrug(kit.id, 1.0)
         dbHelper.freshDrug(kit.id, 2.0)
         dbHelper.freshDrug(kit.id, 3.0)
@@ -191,7 +177,7 @@ class StoreIntegrationTest {
         val mine = medKits.findAllOfUser(alice.id).single()
 
         assertEquals(2, mine.members.size)
-        assertEquals(3, drugs.findAllInMedKit(kit.id).size)
+        assertEquals(3, drugs.findAllInMedKit(kit.id, alice.id).size)
     }
 
     @Test
@@ -201,11 +187,11 @@ class StoreIntegrationTest {
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
-        medKits.delete(kit.id)
+        medKits.delete(dbHelper.medKit(kit.id)!!)
         dbHelper.flushAndClear()
 
-        assertNull(medKits.findById(kit.id))
-        assertNull(drugs.findById(drug.id), "препараты не переживают свою аптечку")
+        assertNull(dbHelper.medKit(kit.id))
+        assertNull(dbHelper.drug(drug.id), "препараты не переживают свою аптечку")
         assertTrue(medKits.findAllOfUser(alice.id).map { it.id }.isEmpty())
     }
 
@@ -231,16 +217,16 @@ class StoreIntegrationTest {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
         val source = medKitService.create(alice.id)
-        medKitService.joinByInvitation(medKitService.invite(source.id, alice.id), bob.id)
+        medKitService.joinByInvitation(medKitService.invite(medKitService.get(source.id, alice.id), alice.id), bob.id)
         val target = medKitService.create(alice.id)
 
         val first = dbHelper.freshDrug(source.id, 50.0)
         val second = dbHelper.freshDrug(source.id, 30.0)
-        reservationService.create(alice.id, first.id, qty(10.0))
-        reservationService.create(bob.id, first.id, qty(20.0))
+        dbHelper.reserve(alice.id, first.id, qty(10.0))
+        dbHelper.reserve(bob.id, first.id, qty(20.0))
         dbHelper.flushAndClear()
 
-        reservations.deleteInMedKitExcept(source.id, setOf(alice.id))
+        reservations.deleteInMedKitExcept(dbHelper.medKit(source.id)!!, setOf(alice.id))
         drugs.moveAllToMedKit(source.id, target.id)
         dbHelper.flushAndClear()
 

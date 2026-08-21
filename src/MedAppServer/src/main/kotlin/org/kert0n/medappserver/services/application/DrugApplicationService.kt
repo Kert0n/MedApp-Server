@@ -11,6 +11,8 @@ import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.NewDrug
 import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.services.aggregate.ReservationService
+import org.kert0n.medappserver.services.orchestrator.DrugDisposal
+import org.kert0n.medappserver.services.orchestrator.DrugPlacement
 import org.kert0n.medappserver.services.orchestrator.DrugRelocation
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -31,7 +33,9 @@ class DrugApplicationService(
     private val drugService: DrugService,
     private val reservationService: ReservationService,
     private val medKitService: MedKitService,
-    private val relocation: DrugRelocation
+    private val relocation: DrugRelocation,
+    private val disposal: DrugDisposal,
+    private val placement: DrugPlacement
 ) {
 
     private val logger = LoggerFactory.getLogger(DrugApplicationService::class.java)
@@ -46,8 +50,8 @@ class DrugApplicationService(
      */
     @Transactional(readOnly = true)
     fun read(drugId: UUID, userId: UUID): DrugDTO {
-        val drug = drugService.require(drugId, userId)
-        return drug.toDto(reservationService.onDrugs(listOf(drug.id)))
+        val drug = drugService.get(drugId, userId)
+        return drug.toDto(reservationService.onDrugs(listOf(drug.id), userId))
     }
 
     // ── Команды ──────────────────────────────────────────────────────────────────
@@ -56,33 +60,30 @@ class DrugApplicationService(
     @Transactional
     fun createInMedKit(medKitId: UUID, request: DrugCreateRequest, userId: UUID): DrugDTO {
         logger.debug("Creating drug {} in medkit {}", request.name, medKitId)
-        medKitService.requireAccessible(medKitId, userId)
-        return drugService.create(request.toCommand(), medKitId, userId).toDto(emptyList())
+        return placement.place(request.toCommand(), medKitId, userId).toDto(emptyList())
     }
 
     @Transactional
     fun update(drugId: UUID, request: DrugPatchRequest, userId: UUID): DrugDTO {
-        drugService.update(drugId, request.toCommand(), userId)
-        return read(drugId, userId)
+        val updated = drugService.update(drugId, request.toCommand(), userId)
+        return updated.toDto(reservationService.onDrugs(listOf(updated.id), userId))
     }
 
     @Transactional
-    fun delete(drugId: UUID, userId: UUID) =
-        drugService.delete(drugId, userId)
+    fun delete(drugId: UUID, userId: UUID) = disposal.destroy(drugId, userId)
 
     /** `null` — приём опустошил пачку, и она уничтожена: отдавать нечего. */
     @Transactional
     fun recordIntake(drugId: UUID, quantity: BigDecimal, userId: UUID): DrugDTO? {
-        drugService.consume(drugId, quantity, userId) ?: return null
-        return read(drugId, userId)
+        val left = disposal.consume(drugId, quantity, userId) ?: return null
+        return left.toDto(reservationService.onDrugs(listOf(left.id), userId))
     }
 
     @Transactional
     fun moveToMedKit(drugId: UUID, targetMedKitId: UUID, userId: UUID): DrugDTO {
         logger.debug("Moving drug {} to medkit {}", drugId, targetMedKitId)
-        val target = medKitService.requireAccessible(targetMedKitId, userId)
-        relocation.moveOne(drugId, target, userId)
-        return read(drugId, userId)
+        val moved = relocation.moveOne(drugId, targetMedKitId, userId)
+        return moved.toDto(reservationService.onDrugs(listOf(moved.id), userId))
     }
 
     /**

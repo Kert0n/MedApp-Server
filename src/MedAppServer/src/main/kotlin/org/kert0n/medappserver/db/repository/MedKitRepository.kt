@@ -31,6 +31,26 @@ interface MedKitRepository : JpaRepository<MedKitData, UUID> {
 
 interface MedKitMembershipRepository : JpaRepository<MedKitMembershipData, org.kert0n.medappserver.db.model.MedKitMembershipKey> {
 
+    /**
+     * Аптечка, доступная вызывающему, вместе со **всем** её составом.
+     *
+     * Предикат про вызывающего, выборка про всех: агрегат аптечки и есть её состав, а переезд
+     * пачки решает по участникам цели. Недоступная и несуществующая дают пустую выборку —
+     * различать их нечем, и это намеренно.
+     */
+    @Query(
+        """
+        SELECT m FROM MedKitMembershipData m
+        WHERE m.membershipKey.medKitId = :medKitId
+          AND EXISTS (SELECT 1 FROM MedKitMembershipData mine
+                      WHERE mine.membershipKey.medKitId = :medKitId AND mine.membershipKey.userId = :userId)
+    """
+    )
+    fun findMembershipsOf(
+        @Param("medKitId") medKitId: UUID,
+        @Param("userId") userId: UUID
+    ): List<MedKitMembershipData>
+
     @Query("SELECT m.membershipKey.userId FROM MedKitMembershipData m WHERE m.membershipKey.medKitId = :medKitId")
     fun findMemberIds(@Param("medKitId") medKitId: UUID): Set<UUID>
 

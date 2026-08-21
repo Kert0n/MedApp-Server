@@ -19,17 +19,7 @@ data class MedKit(
 
     fun isMember(userId: UUID): Boolean = userId in members
 
-    /**
-     * Доступ есть только у участника.
-     *
-     * Вызывающий обязан отобразить «не участник» и «нет аптечки» одинаково: иначе по коду
-     * ответа узнаётся, что чужая аптечка существует.
-     */
-    fun requireMember(userId: UUID) {
-        if (!isMember(userId)) throw NotAMember()
-    }
-
-    /** Вступление по приглашению. Повторное — ошибка: клиент уже внутри. */
+    /** Вступление по приглашению. Повторное — отказ: вступать второй раз некуда. */
     fun join(userId: UUID): MedKit {
         if (isMember(userId)) throw AlreadyMember()
         return copy(members = members + userId)

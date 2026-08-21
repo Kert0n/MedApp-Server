@@ -29,9 +29,6 @@ class UserService(
         return user
     }
 
-    @Transactional(propagation = MANDATORY, readOnly = true)
-    fun requireById(id: UUID): User =
-        findById(id) ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "User not found")
 
     @Transactional(propagation = MANDATORY, readOnly = true)
     fun findById(id: UUID): User? {

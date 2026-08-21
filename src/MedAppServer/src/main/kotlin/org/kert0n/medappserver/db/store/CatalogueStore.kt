@@ -8,8 +8,6 @@ import org.kert0n.medappserver.db.repository.VidalDrugRepository
 import org.kert0n.medappserver.domain.DrugTemplate
 import org.kert0n.medappserver.domain.FormType
 import org.kert0n.medappserver.domain.QuantityUnit
-import org.kert0n.medappserver.domain.UnknownFormType
-import org.kert0n.medappserver.domain.UnknownQuantityUnit
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Component
 
@@ -34,11 +32,9 @@ class CatalogueStore(
 
     fun formTypes(): List<FormType> = forms.findAll().map { it.toDomain() }.sortedBy { it.name }
 
-    fun requireQuantityUnit(id: UUID): QuantityUnit =
-        units.findByIdOrNull(id)?.toDomain() ?: throw UnknownQuantityUnit()
+    fun findQuantityUnit(id: UUID): QuantityUnit? = units.findByIdOrNull(id)?.toDomain()
 
-    fun requireFormType(id: UUID): FormType =
-        forms.findByIdOrNull(id)?.toDomain() ?: throw UnknownFormType()
+    fun findFormType(id: UUID): FormType? = forms.findByIdOrNull(id)?.toDomain()
 
     private fun DrugTemplateData.toDomain() = DrugTemplate(
         id = id,

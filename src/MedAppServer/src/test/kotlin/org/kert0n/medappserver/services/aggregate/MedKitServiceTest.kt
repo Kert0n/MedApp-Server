@@ -8,12 +8,10 @@ import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.domain.DomainRuleViolated
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.test.context.ActiveProfiles
+import org.kert0n.medappserver.PostgresIntegrationTest
 import org.springframework.transaction.annotation.Transactional
 
-@SpringBootTest
-@ActiveProfiles("test")
+@PostgresIntegrationTest
 @Transactional
 class MedKitServiceTest {
 
@@ -41,26 +39,26 @@ class MedKitServiceTest {
         assertTrue(medKit.members.contains(alice.id))
     }
 
-    // ── findById ──
+    // ── require ──
 
     @Test
-    fun `requireById throws NOT_FOUND for non-existent medkit`() {
+    fun `require throws NOT_FOUND for non-existent medkit`() {
         assertThrows<DomainRuleViolated> {
-            medKitService.requireById(UUID.randomUUID())
+            medKitService.get(UUID.randomUUID(), UUID.randomUUID())
         }
     }
 
     // ── findByIdForUser ──
 
     @Test
-    fun `requireAccessible throws when user has no access`() {
+    fun `require throws when user has no access`() {
         val alice = dbHelper.freshUser("alice")
         val eve = dbHelper.freshUser("eve")
         val kit = medKitService.create(alice.id)
         dbHelper.flushAndClear()
 
         assertFailsWith<DomainRuleViolated> {
-            medKitService.requireAccessible(kit.id, eve.id)
+            medKitService.get(kit.id, eve.id)
         }
     }
 
@@ -98,7 +96,7 @@ class MedKitServiceTest {
         val kit = medKitService.create(owner.id)
         dbHelper.flushAndClear()
 
-        val key = medKitService.invite(kit.id, owner.id)
+        val key = medKitService.invite(medKitService.get(kit.id, owner.id), owner.id)
         medKitService.joinByInvitation(key, joiner.id)
         dbHelper.flushAndClear()
 
@@ -130,7 +128,7 @@ class MedKitServiceTest {
         val kit = medKitService.create(alice.id)
         dbHelper.flushAndClear()
 
-        medKitService.join(kit.id, bob.id)
+        dbHelper.join(kit.id, alice.id, bob.id)
         dbHelper.flushAndClear()
 
         assertEquals(1, medKitService.allOfUser(bob.id).size)
@@ -143,7 +141,7 @@ class MedKitServiceTest {
         dbHelper.flushAndClear()
 
         assertFailsWith<DomainRuleViolated> {
-            medKitService.join(kit.id, alice.id)
+            dbHelper.join(kit.id, alice.id, alice.id)
         }
     }
 
@@ -154,15 +152,15 @@ class MedKitServiceTest {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
         val kit = medKitService.create(alice.id)
-        medKitService.join(kit.id, bob.id)
+        dbHelper.join(kit.id, alice.id, bob.id)
         dbHelper.flushAndClear()
 
-        medKitService.leave(kit.id, bob.id)
+        medKitService.leave(medKitService.get(kit.id, bob.id), bob.id)
         dbHelper.flushAndClear()
 
-        assertNotNull(medKitService.requireAccessible(kit.id, alice.id))
+        assertNotNull(medKitService.get(kit.id, alice.id))
         assertFailsWith<DomainRuleViolated> {
-            medKitService.requireAccessible(kit.id, bob.id)
+            medKitService.get(kit.id, bob.id)
         }
     }
 
@@ -172,9 +170,9 @@ class MedKitServiceTest {
         val kit = medKitService.create(alice.id)
         dbHelper.flushAndClear()
 
-        medKitService.leave(kit.id, alice.id)
+        medKitService.leave(medKitService.get(kit.id, alice.id), alice.id)
         dbHelper.flushAndClear()
 
-        assertNull(medKitStore.findById(kit.id))
+        assertNull(dbHelper.medKit(kit.id))
     }
 }

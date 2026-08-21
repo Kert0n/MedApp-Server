@@ -15,6 +15,7 @@ import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.aggregate.DrugService
+import org.kert0n.medappserver.services.orchestrator.DrugDisposal
 import org.kert0n.medappserver.services.aggregate.NewDrug
 import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.services.application.DrugApplicationService
@@ -48,6 +49,9 @@ class ComplexWorkflowStoriesTest {
     private lateinit var drugService: DrugService
 
     @Autowired
+    private lateinit var disposal: DrugDisposal
+
+    @Autowired
     private lateinit var medKitService: MedKitService
 
     @Autowired
@@ -76,8 +80,8 @@ class ComplexWorkflowStoriesTest {
         val charlie = dbHelper.insert(User(id = UUID.randomUUID(), hashedKey = "charlie_${UUID.randomUUID()}"))
 
         val homeKit = medKitService.create(alice.id)
-        medKitService.joinByInvitation(medKitService.invite(homeKit.id, alice.id), bob.id)
-        medKitService.joinByInvitation(medKitService.invite(homeKit.id, alice.id), charlie.id)
+        medKitService.joinByInvitation(medKitService.invite(medKitService.get(homeKit.id, alice.id), alice.id), bob.id)
+        medKitService.joinByInvitation(medKitService.invite(medKitService.get(homeKit.id, alice.id), alice.id), charlie.id)
 
         val allergyMeds = dbHelper.insert(
             Drug(
@@ -106,13 +110,13 @@ class ComplexWorkflowStoriesTest {
         // PHASE 2: Everyone reserves a share
         // ==========================================
         // Allergy Meds: 60 total. Alice (20), Bob (20), Charlie (20) = 60 reserved.
-        reservationService.create(alice.id, allergyMeds.id, qty(20.0))
-        reservationService.create(bob.id, allergyMeds.id, qty(20.0))
-        reservationService.create(charlie.id, allergyMeds.id, qty(20.0))
+        dbHelper.reserve(alice.id, allergyMeds.id, qty(20.0))
+        dbHelper.reserve(bob.id, allergyMeds.id, qty(20.0))
+        dbHelper.reserve(charlie.id, allergyMeds.id, qty(20.0))
 
         // Painkillers: 100 total. Bob reserves 30, Charlie reserves 30.
-        reservationService.create(bob.id, painkillers.id, qty(30.0))
-        reservationService.create(charlie.id, painkillers.id, qty(30.0))
+        dbHelper.reserve(bob.id, painkillers.id, qty(30.0))
+        dbHelper.reserve(charlie.id, painkillers.id, qty(30.0))
 
         entityManager.flush()
         entityManager.clear()
@@ -121,7 +125,7 @@ class ComplexWorkflowStoriesTest {
         // PHASE 3: Heavy Consumption
         // ==========================================
         // Bob consumes 30 Allergy Meds: 60 in the pack becomes 30, while 60 stays reserved.
-        drugService.consume(allergyMeds.id, qty(30.0), bob.id)
+        drugService.consume(drugService.get(allergyMeds.id, bob.id), qty(30.0))
 
         entityManager.flush()
         entityManager.clear()
@@ -159,7 +163,7 @@ class ComplexWorkflowStoriesTest {
         // ==========================================
         // Alice deletes Home Kit. She moves remaining Allergy Meds to a new "Duo Kit" with just Bob.
         val duoKit = medKitService.create(alice.id)
-        medKitService.joinByInvitation(medKitService.invite(duoKit.id, alice.id), bob.id)
+        medKitService.joinByInvitation(medKitService.invite(medKitService.get(duoKit.id, alice.id), alice.id), bob.id)
 
         entityManager.flush()
         entityManager.clear()
@@ -171,7 +175,7 @@ class ComplexWorkflowStoriesTest {
         entityManager.clear()
 
         // Verify Home Kit is dead
-        assertNull(medKitStore.findById(homeKit.id), "Home kit must be completely deleted")
+        assertNull(dbHelper.medKit(homeKit.id), "Home kit must be completely deleted")
 
         // Verify Allergy Meds survived the migration
         val migratedAllergyMeds = dbHelper.drug(allergyMeds.id)
@@ -197,17 +201,17 @@ class ComplexWorkflowStoriesTest {
         entityManager.flush()
         entityManager.clear()
 
-        val duoKitCheck1 = medKitStore.findById(duoKit.id)!!
+        val duoKitCheck1 = dbHelper.medKit(duoKit.id)!!
         assertEquals(1, duoKitCheck1.members.size, "Only Alice remains")
 
         // Alice is the last one out, so the kit auto-deletes. medKitService directly: the
         // orchestrator would clean up reservations that are already gone with the kit.
-        medKitService.leave(duoKitCheck1.id, alice.id)
+        medKitService.leave(medKitService.get(duoKitCheck1.id, alice.id), alice.id)
 
         entityManager.flush()
         entityManager.clear()
 
-        assertNull(medKitStore.findById(duoKit.id), "Duo kit must auto-delete when last user leaves")
+        assertNull(dbHelper.medKit(duoKit.id), "Duo kit must auto-delete when last user leaves")
         assertNull(
             dbHelper.drug(allergyMeds.id),
             "Cascade should kill the drugs inside the abandoned kit"
@@ -224,7 +228,7 @@ class ComplexWorkflowStoriesTest {
 
         val sourceKit = medKitService.create(alice.id)
         val targetKit = medKitService.create(alice.id) // Only Alice has access to this one
-        medKitService.joinByInvitation(medKitService.invite(sourceKit.id, alice.id), bob.id)
+        medKitService.joinByInvitation(medKitService.invite(medKitService.get(sourceKit.id, alice.id), alice.id), bob.id)
 
         // Alice adds 100 tablets to sourceKit
         val createDrugDto = DrugCreateRequest(
@@ -234,13 +238,13 @@ class ComplexWorkflowStoriesTest {
         dbHelper.flushAndClear()
 
         // Alice and Bob reserve 40 each, 80 of 100 in total
-        reservationService.create(alice.id, drug.id, qty(40.0))
-        reservationService.create(bob.id, drug.id, qty(40.0))
+        dbHelper.reserve(alice.id, drug.id, qty(40.0))
+        dbHelper.reserve(bob.id, drug.id, qty(40.0))
         dbHelper.flushAndClear()
 
         // ── Phase 1: Alter a reservation ──
         // Bob raises his from 40 to 60. Nothing checks it against the pack: that is his call.
-        reservationService.changeTo(bob.id, drug.id, qty(60.0))
+        reservationService.changeTo(reservationService.get(bob.id, drug.id), qty(60.0))
         dbHelper.flushAndClear()
 
         assertQty(60.0, dbHelper.userReservation(bob.id, drug.id)!!, "Bob's reservation is 60")
@@ -249,7 +253,7 @@ class ComplexWorkflowStoriesTest {
         // ── Phase 2: Alter Drug (The Spill) ──
         // Алиса разлила половину. Брони не двигаются: вместе они теперь превышают содержимое
         // пачки, и это законное состояние — отвечают за него их владельцы.
-        drugService.consume(drug.id, qty(50.0), alice.id)
+        disposal.consume(drugService.get(drug.id, alice.id), qty(50.0))
         dbHelper.flushAndClear()
 
         assertQty(50.0, dbHelper.drugQuantity(drug.id)!!, "в пачке осталось 50")
@@ -271,7 +275,7 @@ class ComplexWorkflowStoriesTest {
 
         // ── Phase 4: Privacy-by-Default Deletion ──
         // Alice deletes the drug completely.
-        drugService.delete(drug.id, alice.id)
+        disposal.destroy(drugService.get(drug.id, alice.id))
         dbHelper.flushAndClear()
 
         assertNull(dbHelper.drugQuantity(drug.id), "Drug record completely purged")
@@ -290,11 +294,12 @@ class ComplexWorkflowStoriesTest {
         val bob = createTestUser("bob")
 
         val kitA = medKitService.create(alice.id)
-        val shareKey = medKitService.invite(kitA.id, alice.id)
+        val shareKey = medKitService.invite(medKitService.get(kitA.id, alice.id), alice.id)
         medKitService.joinByInvitation(shareKey, bob.id)
 
         // Alice creates a drug
-        val drug = drugService.create(NewDrug("Shared Meds", qty(10.0), dbHelper.unit().id), kitA.id, alice.id)
+        val drug = drugService.create(NewDrug("Shared Meds", qty(10.0), dbHelper.unit().id), medKitService.get(kitA.id, alice.id))
+        dbHelper.flushAndClear()
 
         // Bob creates a private kit
         val kitB = medKitService.create(bob.id)
@@ -315,13 +320,14 @@ class ComplexWorkflowStoriesTest {
         val alice = createTestUser("alice")
         val bob = createTestUser("bob")
         val kitA = medKitService.create(alice.id)
-        medKitService.joinByInvitation(medKitService.invite(kitA.id, alice.id), bob.id)
+        medKitService.joinByInvitation(medKitService.invite(medKitService.get(kitA.id, alice.id), alice.id), bob.id)
 
-        val drug = drugService.create(NewDrug("Audit Meds", qty(10.0), dbHelper.unit().id), kitA.id, alice.id)
+        val drug = drugService.create(NewDrug("Audit Meds", qty(10.0), dbHelper.unit().id), medKitService.get(kitA.id, alice.id))
+        dbHelper.flushAndClear()
 
         // Both reserve a share
-        reservationService.create(alice.id, drug.id, qty(5.0))
-        reservationService.create(bob.id, drug.id, qty(2.0))
+        dbHelper.reserve(alice.id, drug.id, qty(5.0))
+        dbHelper.reserve(bob.id, drug.id, qty(2.0))
 
         // Alice has a private kit (Bob is NOT in this one)
         val kitB = medKitService.create(alice.id)

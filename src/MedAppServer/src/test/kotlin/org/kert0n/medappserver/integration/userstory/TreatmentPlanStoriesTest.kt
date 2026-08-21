@@ -77,7 +77,7 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
 
         // Reserve 30 tablets
-        val plan = reservationService.create(userId = userData.id, drugData.id, qty(30.0))
+        val plan = dbHelper.reserve(userData.id, drugData.id, qty(30.0))
         assertNotNull(plan)
         entityManager.flush()
 
@@ -87,8 +87,8 @@ class TreatmentPlanStoriesTest {
         assertQty(30.0, createdPlan, "Planned amount should be 30")
 
         // Record some intakes
-        drugService.consume(drugData.id, qty(5.0), userData.id)
-        drugService.consume(drugData.id, qty(5.0), userData.id)
+        drugService.consume(drugService.get(drugData.id, userData.id), qty(5.0))
+        drugService.consume(drugService.get(drugData.id, userData.id), qty(5.0))
         entityManager.flush()
         entityManager.clear()
 
@@ -110,7 +110,7 @@ class TreatmentPlanStoriesTest {
         dbHelper.insert(bob)
 
         val medkit = medKitService.create(anna.id)
-        val shareKey = medKitService.invite(medkit.id, anna.id)
+        val shareKey = medKitService.invite(medKitService.get(medkit.id, anna.id), anna.id)
         medKitService.joinByInvitation(shareKey, bob.id)
 
         val vitaminC = Drug(
@@ -127,11 +127,11 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
 
         // Anna reserves 40 tablets
-        reservationService.create(anna.id, vitaminC.id, qty(40.0))
+        dbHelper.reserve(anna.id, vitaminC.id, qty(40.0))
         entityManager.flush()
 
         // Bob reserves 50 more
-        reservationService.create(bob.id, vitaminC.id, qty(50.0))
+        dbHelper.reserve(bob.id, vitaminC.id, qty(50.0))
         entityManager.flush()
         entityManager.clear()
         // 90 reserved on the pack in total
@@ -167,9 +167,9 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
 
         val familyKit = medKitService.create(mom.id)
-        val dadKey = medKitService.invite(familyKit.id, mom.id)
+        val dadKey = medKitService.invite(medKitService.get(familyKit.id, mom.id), mom.id)
         medKitService.joinByInvitation(dadKey, dad.id)
-        val childKey = medKitService.invite(familyKit.id, mom.id)
+        val childKey = medKitService.invite(medKitService.get(familyKit.id, mom.id), mom.id)
         medKitService.joinByInvitation(childKey, child.id)
         entityManager.flush()
 
@@ -191,20 +191,20 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
 
         // Everyone reserves 30 vitamins
-        reservationService.create(mom.id, vitamins.id, qty(30.0))
-        reservationService.create(dad.id, vitamins.id, qty(30.0))
-        reservationService.create(child.id, vitamins.id, qty(30.0))
+        dbHelper.reserve(mom.id, vitamins.id, qty(30.0))
+        dbHelper.reserve(dad.id, vitamins.id, qty(30.0))
+        dbHelper.reserve(child.id, vitamins.id, qty(30.0))
         entityManager.flush()
         entityManager.clear()
         // 90 reserved — the whole pack
         assertQty(90.0, dbHelper.reservedOnDrug(vitamins.id))
 
         // Everyone takes their daily vitamin
-        drugService.consume(vitamins.id, qty(1.0), mom.id)
+        drugService.consume(drugService.get(vitamins.id, mom.id), qty(1.0))
         entityManager.flush()
-        drugService.consume(vitamins.id, qty(1.0), dad.id)
+        drugService.consume(drugService.get(vitamins.id, dad.id), qty(1.0))
         entityManager.flush()
-        drugService.consume(vitamins.id, qty(1.0), child.id)
+        drugService.consume(drugService.get(vitamins.id, child.id), qty(1.0))
         entityManager.flush()
         entityManager.clear()
 
@@ -214,7 +214,7 @@ class TreatmentPlanStoriesTest {
         assertQty(87.0, updatedVitamins.quantity, "Should be 90 - 3 = 87")
 
         // 3 users in the medkit
-        val medkit = medKitStore.findById(familyKit.id)
+        val medkit = dbHelper.medKit(familyKit.id)
         assertNotNull(medkit)
         assertEquals(3, medkit.members.size)
 
@@ -224,7 +224,7 @@ class TreatmentPlanStoriesTest {
         entityManager.clear()
 
         // Medkit still has mom and dad
-        val updatedKit = medKitStore.findById(familyKit.id)
+        val updatedKit = dbHelper.medKit(familyKit.id)
         assertNotNull(updatedKit)
         assertEquals(2, updatedKit.members.size)
 

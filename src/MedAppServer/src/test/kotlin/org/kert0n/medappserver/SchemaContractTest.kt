@@ -45,12 +45,16 @@ class SchemaContractTest {
         val schema = Files.readString(SCHEMA)
 
         listOf(
-            "FOREIGN KEY (drug_id) REFERENCES user_drugs (id) ON DELETE CASCADE",
+            "FOREIGN KEY (drug_id, med_kit_id)\n        REFERENCES user_drugs (id, med_kit_id) " +
+                "ON UPDATE CASCADE ON DELETE CASCADE",
+            "FOREIGN KEY (med_kit_id, user_id)\n        REFERENCES user_med_kits (med_kit_id, user_id) " +
+                "ON DELETE CASCADE",
             "FOREIGN KEY (med_kit_id) REFERENCES med_kits (id) ON DELETE CASCADE"
         ).forEach { assertTrue(it in schema, "в схеме нет каскада: $it") }
 
+        // Прямого FK брони на users больше нет: он следует из членства, которое на users и
+        // ссылается. Отсутствие каскада проверяется там, где ключ остался.
         listOf(
-            "CONSTRAINT reservations_user_fkey FOREIGN KEY (user_id) REFERENCES users (id),",
             "CONSTRAINT user_med_kits_user_fkey FOREIGN KEY (user_id) REFERENCES users (id)\n"
         ).forEach {
             assertTrue(

@@ -45,7 +45,7 @@ class DrugServiceTest {
     fun `несуществующий препарат неотличим от недоступного`() {
         val alice = dbHelper.freshUser("alice")
 
-        assertThrows<NotAMember> { drugService.require(UUID.randomUUID(), alice.id) }
+        assertThrows<NotAMember> { drugService.get(UUID.randomUUID(), alice.id) }
     }
 
     // ── findByIdForUser / findByIdForUserForUpdate ──
@@ -59,7 +59,7 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         assertThrows<DomainRuleViolated> {
-            drugService.require(drug.id, eve.id)
+            drugService.get(drug.id, eve.id)
         }
     }
 
@@ -72,7 +72,7 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         assertThrows<DomainRuleViolated> {
-            drugService.require(drug.id, eve.id)
+            drugService.get(drug.id, eve.id)
         }
     }
 
@@ -86,7 +86,7 @@ class DrugServiceTest {
         dbHelper.freshDrug(kit.id, 20.0)
         dbHelper.flushAndClear()
 
-        assertEquals(2, drugService.ofMedKit(kit.id).size)
+        assertEquals(2, drugService.ofMedKit(kit.id, alice.id).size)
     }
 
     @Test
@@ -98,7 +98,7 @@ class DrugServiceTest {
 
         assertEquals(0, reservationService.ofUser(alice.id).size)
 
-        reservationService.create(alice.id, drug.id, qty(10.0))
+        dbHelper.reserve(alice.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
         assertEquals(1, reservationService.ofUser(alice.id).size)
@@ -114,7 +114,7 @@ class DrugServiceTest {
 
         val drug = drugService.create(
             NewDrug(name = "Aspirin", quantity = qty(100.0), quantityUnitId = dbHelper.unit().id),
-            kit.id, alice.id
+            medKitService.get(kit.id, alice.id)
         )
 
         assertNotNull(drug.id)
@@ -133,7 +133,7 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         val emptyUpdate = DrugEdit(null, null, null, null, null, null, null, null)
-        drugService.update(drug.id, emptyUpdate, alice.id)
+        drugService.update(drugService.get(drug.id, alice.id), emptyUpdate)
         dbHelper.flushAndClear()
 
         assertQty(10.0, dbHelper.requireDrug(drug.id).quantity)
@@ -150,7 +150,7 @@ class DrugServiceTest {
             name = "New Name", quantity = qty(100.0), category = "cat", manufacturer = "man",
             country = "co", description = "desc"
         )
-        drugService.update(drug.id, fullUpdate, alice.id)
+        drugService.update(drugService.get(drug.id, alice.id), fullUpdate)
         dbHelper.flushAndClear()
 
         val updated = dbHelper.requireDrug(drug.id)
@@ -169,7 +169,7 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
-        drugService.update(drug.id, DrugEdit(quantity = qty(20.0)), alice.id)
+        drugService.update(drugService.get(drug.id, alice.id), DrugEdit(quantity = qty(20.0)))
         dbHelper.flushAndClear()
 
         assertQty(20.0, dbHelper.drugQuantity(drug.id))
@@ -184,13 +184,13 @@ class DrugServiceTest {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
         val kit = medKitService.create(alice.id)
-        medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
+        medKitService.joinByInvitation(medKitService.invite(medKitService.get(kit.id, alice.id), alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
-        reservationService.create(alice.id, drug.id, qty(60.0))
-        reservationService.create(bob.id, drug.id, qty(40.0))
+        dbHelper.reserve(alice.id, drug.id, qty(60.0))
+        dbHelper.reserve(bob.id, drug.id, qty(40.0))
         dbHelper.flushAndClear()
 
-        drugService.update(drug.id, DrugEdit(quantity = qty(50.0)), alice.id)
+        drugService.update(drugService.get(drug.id, alice.id), DrugEdit(quantity = qty(50.0)))
         dbHelper.flushAndClear()
 
         assertQty(50.0, dbHelper.drugQuantity(drug.id)!!)
@@ -208,7 +208,7 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         assertThrows<InvalidQuantity> {
-            drugService.update(drug.id, DrugEdit(quantity = qty(0.0)), alice.id)
+            drugService.update(drugService.get(drug.id, alice.id), DrugEdit(quantity = qty(0.0)))
         }
     }
 
@@ -221,7 +221,7 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 50.0)
         dbHelper.flushAndClear()
 
-        drugService.delete(drug.id, alice.id)
+        drugService.delete(drugService.get(drug.id, alice.id))
         dbHelper.flushAndClear()
 
         assertNull(dbHelper.drug(drug.id))
@@ -236,7 +236,7 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        val consumed = drugService.consume(drug.id, qty(30.0), alice.id)
+        val consumed = drugService.consume(drugService.get(drug.id, alice.id), qty(30.0))
         assertQty(70.0, consumed?.quantity)
     }
 
@@ -248,7 +248,7 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         assertThrows<InsufficientStock> {
-            drugService.consume(drug.id, qty(20.0), alice.id)
+            drugService.consume(drugService.get(drug.id, alice.id), qty(20.0))
         }
     }
 
@@ -260,13 +260,14 @@ class DrugServiceTest {
         val kit = medKitService.create(alice.id)
         val drug = drugService.create(
             NewDrug(name = "Drug", quantity = qty(100.0), quantityUnitId = dbHelper.unit().id),
-            kit.id, alice.id
+            medKitService.get(kit.id, alice.id)
         )
-        reservationService.create(alice.id, drug.id, qty(25.0))
+        dbHelper.flushAndClear()
+        dbHelper.reserve(alice.id, drug.id, qty(25.0))
         dbHelper.flushAndClear()
 
         // Заявленное приходит извне упаковки: сама она про брони не знает.
-        val dto = drugService.require(drug.id, alice.id).toDto(reservationService.onDrugs(listOf(drug.id)))
+        val dto = drugService.get(drug.id, alice.id).toDto(reservationService.onDrugs(listOf(drug.id), alice.id))
         assertQty(100.0, dto.quantity)
         assertQty(25.0, dto.reservedQuantity)
     }
