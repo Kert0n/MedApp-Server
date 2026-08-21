@@ -35,5 +35,20 @@ class TestSchema {
                 ) STORED
             """.trimIndent()
         )
+        TransactionManager.current().exec(
+            """
+            ALTER TABLE parsed_drugs ADD COLUMN IF NOT EXISTS search_text text
+                GENERATED ALWAYS AS (
+                    coalesce(name, '') || ' ' || coalesce(name_lat, '') || ' ' ||
+                    coalesce(active_substance, '') || ' ' || coalesce(manufacturer, '')
+                ) STORED
+            """.trimIndent()
+        )
+        TransactionManager.current().exec(
+            """
+            CREATE INDEX IF NOT EXISTS ix_parsed_drugs_search_text_trgm
+                ON parsed_drugs USING gin (search_text gin_trgm_ops)
+            """.trimIndent()
+        )
     }
 }

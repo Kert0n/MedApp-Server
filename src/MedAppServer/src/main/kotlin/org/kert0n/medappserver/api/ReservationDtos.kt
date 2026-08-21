@@ -1,4 +1,4 @@
-@file:UseSerializers(BigDecimalAsString::class, UuidAsString::class)
+@file:UseSerializers(BigDecimalAsString::class)
 
 package org.kert0n.medappserver.api
 

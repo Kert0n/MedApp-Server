@@ -1,15 +1,16 @@
 package org.kert0n.medappserver.db.store
 
 import kotlin.uuid.Uuid
+import org.jetbrains.exposed.v1.core.JoinType
+import org.jetbrains.exposed.v1.core.alias
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.core.exists
 import org.jetbrains.exposed.v1.core.inList
-import org.jetbrains.exposed.v1.core.inSubQuery
 import org.jetbrains.exposed.v1.jdbc.batchInsert
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.jdbc.select
+import org.jetbrains.exposed.v1.jdbc.Query
+import org.jetbrains.exposed.v1.jdbc.andWhere
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.kert0n.medappserver.db.tables.MedKitMemberships
 import org.kert0n.medappserver.db.tables.MedKits
@@ -33,11 +34,8 @@ class MedKitStore {
      * есть её состав, а решения по нему принимает не только тот, кто её читал.
      */
     fun find(medKitId: Uuid, userId: Uuid): MedKit? {
-        val mine = MedKitMemberships.selectAll()
-            .where { (MedKitMemberships.medKitId eq medKitId) and (MedKitMemberships.userId eq userId) }
-
-        val members = MedKitMemberships.selectAll()
-            .where { (MedKitMemberships.medKitId eq medKitId) and exists(mine) }
+        val members = withCaller(userId)
+            .andWhere { MedKitMemberships.medKitId eq medKitId }
             .map { it[MedKitMemberships.userId] }
             .toSet()
 
@@ -50,20 +48,29 @@ class MedKitStore {
      * Берутся строки членства тех аптечек, где состоит вызывающий, и группируются в памяти:
      * состав нужен целиком, а не только его строка.
      */
-    fun findAllOfUser(userId: Uuid): List<MedKit> {
-        val mineKits = MedKitMemberships.select(MedKitMemberships.medKitId)
-            .where { MedKitMemberships.userId eq userId }
-
-        return MedKitMemberships.selectAll()
-            .where { MedKitMemberships.medKitId inSubQuery mineKits }
+    fun findAllOfUser(userId: Uuid): List<MedKit> =
+        withCaller(userId)
             .groupBy({ it[MedKitMemberships.medKitId] }, { it[MedKitMemberships.userId] })
             .map { (id, members) -> MedKit(id, members.toSet()) }
             .sortedBy { it.id }
+
+    /**
+     * Строки членства тех аптечек, где состоит вызывающий.
+     *
+     * Соединением таблицы с собой, а не подзапросом: вопрос «аптечки, где есть моя строка»
+     * соединением и записывается, а как его выполнять — дело планировщика.
+     */
+    private fun withCaller(userId: Uuid): Query {
+        val mine = MedKitMemberships.alias("mine")
+        return MedKitMemberships
+            .join(mine, JoinType.INNER, MedKitMemberships.medKitId, mine[MedKitMemberships.medKitId])
+            .selectAll()
+            .where { mine[MedKitMemberships.userId] eq userId }
     }
 
     fun insert(medKit: MedKit) {
         MedKits.insert { it[id] = medKit.id }
-        addMembers(medKit.id, medKit.members)
+        insertMemberships(medKit.id, medKit.members)
     }
 
     /** Сводит строки членства к тому, что в состоянии. Сама аптечка полей больше не имеет. */
@@ -79,22 +86,8 @@ class MedKitStore {
                 (MedKitMemberships.medKitId eq medKit.id) and (MedKitMemberships.userId inList gone)
             }
         }
-        addMembers(medKit.id, medKit.members - stored)
+        insertMemberships(medKit.id, medKit.members - stored)
     }
-
-    /**
-     * Вставляет строку членства, не читая состав аптечки.
-     *
-     * Обслуживает вступление по приглашению: вызывающего в аптечке ещё нет, и скоупленное
-     * чтение его туда не пустит. Правило «дважды не вступают» проверяет `MedKitService`.
-     */
-    fun addMember(medKitId: Uuid, userId: Uuid) = addMembers(medKitId, setOf(userId))
-
-    fun isMember(medKitId: Uuid, userId: Uuid): Boolean =
-        MedKitMemberships.selectAll()
-            .where { (MedKitMemberships.medKitId eq medKitId) and (MedKitMemberships.userId eq userId) }
-            .empty()
-            .not()
 
     /**
      * Удаление аптечки.
@@ -106,7 +99,7 @@ class MedKitStore {
         MedKits.deleteWhere { MedKits.id eq medKit.id }
     }
 
-    private fun addMembers(medKitId: Uuid, userIds: Set<Uuid>) {
+    private fun insertMemberships(medKitId: Uuid, userIds: Set<Uuid>) {
         if (userIds.isEmpty()) return
         MedKitMemberships.batchInsert(userIds) { member ->
             this[MedKitMemberships.medKitId] = medKitId

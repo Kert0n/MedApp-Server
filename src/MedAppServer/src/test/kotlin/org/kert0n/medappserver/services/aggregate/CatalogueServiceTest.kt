@@ -32,23 +32,32 @@ class CatalogueServiceTest {
     @Test
     fun `fuzzySearch trims input before querying`() {
         catalogueService.fuzzySearch("  аспир  ", 10)
-        verify(catalogueStore).searchTemplates("аспир", "аспир", 10)
+        verify(catalogueStore).searchTemplates("аспир", listOf("аспир"), 10)
     }
 
     /**
-     * Экранируется только вариант для LIKE: в полнотекстовом и trigram-поиске обратный слэш
-     * стал бы частью искомого текста.
+     * Запрос уезжает вниз словами и целиком: слова — чтобы искать, целое — чтобы отличить
+     * набранное точно от похожего. Экранирование `LIKE` сюда больше не относится: оно
+     * свойство оператора и живёт в хранилище.
      */
     @Test
-    fun `fuzzySearch escapes LIKE metacharacters only in the LIKE term`() {
-        catalogueService.fuzzySearch("test%drug", 10)
-        verify(catalogueStore).searchTemplates("test%drug", "test\\%drug", 10)
+    fun `fuzzySearch splits the query into words`() {
+        catalogueService.fuzzySearch("аспирин байер", 10)
+        verify(catalogueStore).searchTemplates("аспирин байер", listOf("аспирин", "байер"), 10)
+    }
 
-        catalogueService.fuzzySearch("test_drug", 10)
-        verify(catalogueStore).searchTemplates("test_drug", "test\\_drug", 10)
+    /** Слова короче трёх букв в кандидаты тянут пол-справочника и потому отбрасываются. */
+    @Test
+    fun `fuzzySearch drops words too short for trigrams`() {
+        catalogueService.fuzzySearch("аспирин от 10", 10)
+        verify(catalogueStore).searchTemplates("аспирин от 10", listOf("аспирин"), 10)
+    }
 
-        catalogueService.fuzzySearch("test\\drug", 10)
-        verify(catalogueStore).searchTemplates("test\\drug", "test\\\\drug", 10)
+    /** Если после отбрасывания не осталось ничего, ищем всем запросом целиком. */
+    @Test
+    fun `fuzzySearch falls back to the whole query when no word survives`() {
+        catalogueService.fuzzySearch("от 10", 10)
+        verify(catalogueStore).searchTemplates("от 10", listOf("от 10"), 10)
     }
 
     @Test
@@ -56,7 +65,7 @@ class CatalogueServiceTest {
         val template = DrugTemplate(
             Uuid.random(), "Аспирин", null, null, null, null, null, "Байер", null, null
         )
-        whenever(catalogueStore.searchTemplates("аспир", "аспир", 10)).thenReturn(listOf(template))
+        whenever(catalogueStore.searchTemplates("аспир", listOf("аспир"), 10)).thenReturn(listOf(template))
 
         val result = catalogueService.fuzzySearch("аспир", 10)
         assertEquals(1, result.size)
@@ -66,7 +75,7 @@ class CatalogueServiceTest {
     @Test
     fun `fuzzySearch passes limit to repository`() {
         catalogueService.fuzzySearch("test", 5)
-        verify(catalogueStore).searchTemplates("test", "test", 5)
+        verify(catalogueStore).searchTemplates("test", listOf("test"), 5)
     }
 
     /**
@@ -76,13 +85,13 @@ class CatalogueServiceTest {
     @Test
     fun `fuzzySearch clamps limit to supported range`() {
         catalogueService.fuzzySearch("test", 0)
-        verify(catalogueStore).searchTemplates("test", "test", 1)
+        verify(catalogueStore).searchTemplates("test", listOf("test"), 1)
 
         catalogueService.fuzzySearch("test", -1)
-        verify(catalogueStore, times(2)).searchTemplates("test", "test", 1)
+        verify(catalogueStore, times(2)).searchTemplates("test", listOf("test"), 1)
 
         catalogueService.fuzzySearch("test", 10_000)
-        verify(catalogueStore).searchTemplates("test", "test", 50)
+        verify(catalogueStore).searchTemplates("test", listOf("test"), 50)
     }
 
     @Test

@@ -1,12 +1,9 @@
-@file:UseSerializers(UuidAsString::class)
-
 package org.kert0n.medappserver.api
 
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.NotBlank
 import kotlin.uuid.Uuid
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.UseSerializers
 
 @Schema(description = "Medicine kit with its drugs")
 @Serializable

@@ -184,6 +184,15 @@ CREATE TABLE parsed_drugs
                     coalesce(active_substance, '') || ' ' || coalesce(manufacturer, ''))
         ) STORED,
 
+    -- Те же четыре поля одной строкой — для поиска по словам. Отдельно от search_tsv, потому
+    -- что триграммам нужен именно текст: tsvector уже разобран на лексемы, и опечатку в нём
+    -- не найти. Описание, категорию и страну сюда не берём: без весов совпадение в длинном
+    -- описании считалось бы наравне с совпадением в названии.
+    search_text      text GENERATED ALWAYS AS (
+        coalesce(name, '') || ' ' || coalesce(name_lat, '') || ' ' ||
+        coalesce(active_substance, '') || ' ' || coalesce(manufacturer, '')
+        ) STORED,
+
     CONSTRAINT parsed_drugs_pkey PRIMARY KEY (id),
     CONSTRAINT parsed_drugs_form_type_fkey FOREIGN KEY (form_type_id) REFERENCES form_types (id),
     CONSTRAINT parsed_drugs_quantity_unit_fkey FOREIGN KEY (quantity_unit_id) REFERENCES quantity_units (id)
@@ -195,12 +204,11 @@ CREATE INDEX ix_parsed_drugs_name ON parsed_drugs (name);
 CREATE INDEX ix_parsed_drugs_form_type_id ON parsed_drugs (form_type_id);
 CREATE INDEX ix_parsed_drugs_quantity_unit_id ON parsed_drugs (quantity_unit_id);
 
--- GIN по search_tsv обслуживает многословный запрос сразу по четырём полям. Отдельные
--- trigram-индексы обслуживают ILIKE и поиск по опечатке для каждого поля по отдельности:
--- в общей склейке сходство размывалось бы длиной документа. Opclass этих индексов
--- аннотациями JPA не выражается, поэтому они живут только здесь.
+-- GIN по search_tsv обслуживает точный многословный запрос сразу по четырём полям.
 CREATE INDEX ix_parsed_drugs_search_tsv ON parsed_drugs USING gin (search_tsv);
-CREATE INDEX ix_parsed_drugs_name_trgm ON parsed_drugs USING gin (name gin_trgm_ops);
-CREATE INDEX ix_parsed_drugs_name_lat_trgm ON parsed_drugs USING gin (name_lat gin_trgm_ops);
-CREATE INDEX ix_parsed_drugs_substance_trgm ON parsed_drugs USING gin (active_substance gin_trgm_ops);
-CREATE INDEX ix_parsed_drugs_manufacturer_trgm ON parsed_drugs USING gin (manufacturer gin_trgm_ops);
+
+-- GIN по склейке обслуживает поиск по словам с опечатками: оператор <% отбирает записи, в
+-- которых у слова запроса есть похожий участок. Один индекс на все четыре поля вместо
+-- четырёх по отдельности — искать всё равно нужно «где-нибудь в записи», а не в конкретном
+-- поле. Opclass индекса объектами Table не выражается, поэтому он живёт только здесь.
+CREATE INDEX ix_parsed_drugs_search_text_trgm ON parsed_drugs USING gin (search_text gin_trgm_ops);
