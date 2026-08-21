@@ -1,5 +1,3 @@
-@file:UseSerializers(UuidAsString::class)
-
 package org.kert0n.medappserver.controller
 
 import io.swagger.v3.oas.annotations.Operation
@@ -12,8 +10,6 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.servlet.http.HttpServletRequest
 import kotlin.uuid.Uuid
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.UseSerializers
-import org.kert0n.medappserver.api.UuidAsString
 import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.OpenApiConfiguration
 import org.kert0n.medappserver.services.application.AuthApplicationService
