@@ -8,7 +8,10 @@ import org.kert0n.medappserver.domain.QUANTITY_PRECISION
 import org.kert0n.medappserver.domain.QUANTITY_SCALE
 
 /**
- * Таблицы приложения — один в один с `db/schema.sql`.
+ * Таблицы приложения — единственное описание схемы.
+ *
+ * `db/schema.sql` порождается отсюда и руками не правится: его монтируют в Postgres compose-файлы,
+ * но истина живёт здесь. То, чего Exposed в DDL не выражает, лежит в [SchemaSupplement].
  *
  * Здесь нет ни правил, ни решений: только колонки, ключи и индексы. Связей между таблицами как
  * объектов тоже нет — внешние ключи объявлены значениями, а соединения пишутся в запросе там,
@@ -18,6 +21,7 @@ import org.kert0n.medappserver.domain.QUANTITY_SCALE
 // Exposed по умолчанию пишет ON UPDATE RESTRICT там, где прежняя схема оставляла NO ACTION.
 // Для наших случаев поведение то же — ключи родителей не меняются, — но схема должна совпадать
 // с тем, что было, поэтому правило задано явно всюду.
+/** Персональных данных нет по замыслу: только идентификатор и хеш ключа. */
 object Users : Table("users") {
     val id = uuid("id")
     val hashedKey = varchar("hashed_key", 255).uniqueIndex("ix_users_hashed_key")
@@ -35,8 +39,10 @@ object MedKits : Table("med_kits") {
 /**
  * Членство. Каскад только со стороны аптечки: удалили аптечку — членства нет.
  *
- * Со стороны пользователя каскада намеренно нет: удаление человека не является операцией API,
- * и каскад молча вынес бы из чужой аптечки чужие данные.
+ * Со стороны пользователя каскада намеренно нет, и это относится ко всем ключам на `users`:
+ * удаление человека не является операцией API. Аптечки общие, и каскад молча вынес бы из чужой
+ * аптечки чужие данные. Понадобится такая операция — будет явной, а не побочным эффектом
+ * `DELETE`.
  */
 object MedKitMemberships : Table("user_med_kits") {
     val medKitId = uuid("med_kit_id").references(MedKits.id, onDelete = CASCADE, onUpdate = NO_ACTION, fkName = "user_med_kits_med_kit_fkey")
@@ -45,6 +51,14 @@ object MedKitMemberships : Table("user_med_kits") {
     override val primaryKey = PrimaryKey(medKitId, userId, name = "user_med_kits_pkey")
 }
 
+/**
+ * Словари формы выпуска и единицы измерения общие для справочника и заведённых руками упаковок.
+ *
+ * Обе таблицы создаются с `IF NOT EXISTS` — это не украшение: их же создаёт и наполняет дамп
+ * справочника, который применяется раньше. Без этого второй по счёту скрипт падал бы на
+ * «relation already exists», проверено в обе стороны. Определения совпадают с дамповыми, поэтому
+ * схема остаётся самодостаточной и когда дампа нет.
+ */
 object FormTypes : Table("form_types") {
     val id = uuid("id")
     val name = varchar("name", 100).uniqueIndex("form_types_name_key")
@@ -69,6 +83,10 @@ object Drugs : Table("user_drugs") {
     val id = uuid("id")
     val name = varchar("name", 300).index("ix_user_drugs_name")
     val quantity = decimal("quantity", QUANTITY_PRECISION, QUANTITY_SCALE)
+    // Ссылки в тот же словарь, которым пользуется справочник: «шт» у заведённой руками упаковки
+    // и «шт» у карточки каталога должны быть одной единицей, а не двумя одинаковыми строками.
+    // Каскада нет намеренно — словарь переживает упаковки, а упаковка без единицы измерения
+    // бессмысленна, поэтому удалить используемую единицу база не даст.
     val quantityUnitId = uuid("quantity_unit_id").references(QuantityUnits.id, onDelete = NO_ACTION, onUpdate = NO_ACTION, fkName = "user_drugs_quantity_unit_fkey")
     val formTypeId = uuid("form_type_id").references(FormTypes.id, onDelete = NO_ACTION, onUpdate = NO_ACTION, fkName = "user_drugs_form_type_fkey").nullable()
     val category = varchar("category", 200).nullable()
@@ -82,9 +100,13 @@ object Drugs : Table("user_drugs") {
     override val primaryKey = PrimaryKey(id, name = "user_drugs_pkey")
 
     init {
-        // Существует ради составного ключа брони: сослаться можно только на объявленную
-        // уникальность. Пустой упаковки не бывает — опустевшая уничтожается, а не остаётся нулём.
+        // Избыточна при первичном ключе по id, но составной ключ брони может сослаться только
+        // на объявленную уникальность. Существует ради него.
         uniqueIndex("user_drugs_id_med_kit_key", id, medKitId)
+
+        // Пустой упаковки не бывает: опустевшая уничтожается, а не остаётся нулём. Правило
+        // держит домен, здесь оно продублировано затем, что колонку может тронуть и не он:
+        // массовый UPDATE, миграция, рука в psql.
         check("user_drugs_quantity_positive") { quantity greater java.math.BigDecimal.ZERO }
     }
 }
@@ -125,10 +147,15 @@ object DrugTemplates : Table("parsed_drugs") {
     val id = uuid("id")
     val name = varchar("name", 300).index("ix_parsed_drugs_name")
     val nameLat = varchar("name_lat", 300).nullable()
-    val formTypeId = uuid("form_type_id").references(FormTypes.id, onDelete = NO_ACTION, onUpdate = NO_ACTION, fkName = "parsed_drugs_form_type_fkey").nullable()
+    val formTypeId = uuid("form_type_id")
+        .references(FormTypes.id, onDelete = NO_ACTION, onUpdate = NO_ACTION, fkName = "parsed_drugs_form_type_fkey")
+        .nullable()
+        .index("ix_parsed_drugs_form_type_id")
     val quantity = integer("quantity").nullable()
     val quantityUnitId = uuid("quantity_unit_id")
-        .references(QuantityUnits.id, onDelete = NO_ACTION, onUpdate = NO_ACTION, fkName = "parsed_drugs_quantity_unit_fkey").nullable()
+        .references(QuantityUnits.id, onDelete = NO_ACTION, onUpdate = NO_ACTION, fkName = "parsed_drugs_quantity_unit_fkey")
+        .nullable()
+        .index("ix_parsed_drugs_quantity_unit_id")
     val activeSubstance = varchar("active_substance", 300).nullable()
     val category = varchar("category", 300).nullable()
     val manufacturer = varchar("manufacturer", 300)
@@ -138,3 +165,15 @@ object DrugTemplates : Table("parsed_drugs") {
 
     override val primaryKey = PrimaryKey(id, name = "parsed_drugs_pkey")
 }
+
+/**
+ * Все таблицы приложения в порядке зависимостей.
+ *
+ * Порядок значим: составной ключ брони ссылается на уникальность `user_drugs`, и та обязана
+ * существовать раньше. Перечисление здесь одно на всех — и для порождения схемы, и для тестовой
+ * оснастки, — чтобы новая таблица не оказалась заведена в одном месте и забыта в другом.
+ */
+val APPLICATION_TABLES: Array<Table> = arrayOf(
+    Users, MedKits, MedKitMemberships, FormTypes, QuantityUnits,
+    Drugs, Reservations, DrugTemplates
+)
