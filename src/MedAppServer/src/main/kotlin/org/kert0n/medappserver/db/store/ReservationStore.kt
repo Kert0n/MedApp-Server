@@ -70,6 +70,11 @@ class ReservationStore(
         reservations.findByIdOrNull(ReservationKey(userId, drugId))?.let { reservations.delete(it) }
     }
 
+    /** Все брони на упаковку — когда упаковки не станет. */
+    fun deleteOfDrug(drugId: UUID) {
+        reservations.deleteOfDrug(drugId)
+    }
+
     /** Брони тех, кто аптечку не видит, — при удалении аптечки с переносом. */
     fun deleteInMedKitExcept(medKitId: UUID, accessibleUserIds: Set<UUID>) {
         reservations.deleteInMedKitExcept(medKitId, accessibleUserIds)

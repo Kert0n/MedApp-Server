@@ -11,6 +11,7 @@ import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.NewDrug
 import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.services.aggregate.ReservationService
+import org.kert0n.medappserver.services.orchestrator.DrugDisposal
 import org.kert0n.medappserver.services.orchestrator.DrugRelocation
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -31,7 +32,8 @@ class DrugApplicationService(
     private val drugService: DrugService,
     private val reservationService: ReservationService,
     private val medKitService: MedKitService,
-    private val relocation: DrugRelocation
+    private val relocation: DrugRelocation,
+    private val disposal: DrugDisposal
 ) {
 
     private val logger = LoggerFactory.getLogger(DrugApplicationService::class.java)
@@ -67,13 +69,12 @@ class DrugApplicationService(
     }
 
     @Transactional
-    fun delete(drugId: UUID, userId: UUID) =
-        drugService.delete(drugId, userId)
+    fun delete(drugId: UUID, userId: UUID) = disposal.destroy(drugId, userId)
 
     /** `null` — приём опустошил пачку, и она уничтожена: отдавать нечего. */
     @Transactional
     fun recordIntake(drugId: UUID, quantity: BigDecimal, userId: UUID): DrugDTO? {
-        drugService.consume(drugId, quantity, userId) ?: return null
+        disposal.consume(drugId, quantity, userId) ?: return null
         return read(drugId, userId)
     }
 

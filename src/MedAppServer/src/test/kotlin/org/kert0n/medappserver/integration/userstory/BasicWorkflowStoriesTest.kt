@@ -13,6 +13,7 @@ import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.aggregate.DrugService
+import org.kert0n.medappserver.services.orchestrator.DrugDisposal
 import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.services.application.DrugApplicationService
 import org.kert0n.medappserver.services.application.MedKitApplicationService
@@ -41,6 +42,9 @@ class BasicWorkflowStoriesTest {
 
     @Autowired
     private lateinit var drugService: DrugService
+
+    @Autowired
+    private lateinit var disposal: DrugDisposal
 
     @Autowired
     private lateinit var medKitService: MedKitService
@@ -304,9 +308,9 @@ class BasicWorkflowStoriesTest {
         entityManager.flush()
 
         // Consume all in steps
-        drugService.consume(drugData.id, qty(10.0), userData.id)
-        drugService.consume(drugData.id, qty(10.0), userData.id)
-        drugService.consume(drugData.id, qty(10.0), userData.id)
+        disposal.consume(drugData.id, qty(10.0), userData.id)
+        disposal.consume(drugData.id, qty(10.0), userData.id)
+        disposal.consume(drugData.id, qty(10.0), userData.id)
         entityManager.flush()
         entityManager.clear()
 

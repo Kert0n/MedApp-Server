@@ -15,6 +15,7 @@ import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.aggregate.DrugService
+import org.kert0n.medappserver.services.orchestrator.DrugDisposal
 import org.kert0n.medappserver.services.aggregate.NewDrug
 import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.services.application.DrugApplicationService
@@ -46,6 +47,9 @@ class ComplexWorkflowStoriesTest {
 
     @Autowired
     private lateinit var drugService: DrugService
+
+    @Autowired
+    private lateinit var disposal: DrugDisposal
 
     @Autowired
     private lateinit var medKitService: MedKitService
@@ -249,7 +253,7 @@ class ComplexWorkflowStoriesTest {
         // ── Phase 2: Alter Drug (The Spill) ──
         // Алиса разлила половину. Брони не двигаются: вместе они теперь превышают содержимое
         // пачки, и это законное состояние — отвечают за него их владельцы.
-        drugService.consume(drug.id, qty(50.0), alice.id)
+        disposal.consume(drug.id, qty(50.0), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(50.0, dbHelper.drugQuantity(drug.id)!!, "в пачке осталось 50")
@@ -271,7 +275,7 @@ class ComplexWorkflowStoriesTest {
 
         // ── Phase 4: Privacy-by-Default Deletion ──
         // Alice deletes the drug completely.
-        drugService.delete(drug.id, alice.id)
+        disposal.destroy(drug.id, alice.id)
         dbHelper.flushAndClear()
 
         assertNull(dbHelper.drugQuantity(drug.id), "Drug record completely purged")

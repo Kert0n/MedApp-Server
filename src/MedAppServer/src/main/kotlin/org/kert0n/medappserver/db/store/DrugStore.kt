@@ -9,7 +9,6 @@ import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.FormTypeRepository
 import org.kert0n.medappserver.db.repository.MedKitRepository
 import org.kert0n.medappserver.db.repository.QuantityUnitRepository
-import org.kert0n.medappserver.db.repository.ReservationRepository
 import org.kert0n.medappserver.domain.Drug
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Component
@@ -25,8 +24,7 @@ class DrugStore(
     private val drugs: DrugRepository,
     private val medKits: MedKitRepository,
     private val units: QuantityUnitRepository,
-    private val forms: FormTypeRepository,
-    private val reservations: ReservationRepository
+    private val forms: FormTypeRepository
 ) {
 
     // ── Чтение ───────────────────────────────────────────────────────────────────
@@ -63,18 +61,13 @@ class DrugStore(
     }
 
     /**
-     * Уничтожение пачки.
+     * Уничтожение пачки — только пачки.
      *
-     * Брони уносит каскад внешнего ключа, но Hibernate о нём не знает: загруженные строки
-     * остались бы ссылаться на удалённую пачку и уронили бы ближайший flush. Это persistence, а
-     * не решение агрегата — сама упаковка про брони не знает.
-     *
-     * Проверено снятием: без этой строки `TransientPropertyValueException` — загруженная бронь
-     * ссылается на уже удалённую пачку. Правило здесь ни при чём, правило несёт каскад.
+     * Брони снимает `DrugDisposal`: их исчезновение вслед за упаковкой — правило, а не
+     * подробность записи, и в запросе ему не место.
      */
     fun delete(drugId: UUID) {
         val entity = drugs.findByIdOrNull(drugId) ?: return
-        reservations.deleteOfDrug(drugId)
         drugs.delete(entity)
     }
 

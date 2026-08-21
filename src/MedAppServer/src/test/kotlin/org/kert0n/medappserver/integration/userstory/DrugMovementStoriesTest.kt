@@ -11,6 +11,7 @@ import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.aggregate.DrugService
+import org.kert0n.medappserver.services.orchestrator.DrugDisposal
 import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.services.application.DrugApplicationService
 import org.kert0n.medappserver.services.application.MedKitApplicationService
@@ -37,6 +38,9 @@ class DrugMovementStoriesTest {
 
     @Autowired
     private lateinit var drugService: DrugService
+
+    @Autowired
+    private lateinit var disposal: DrugDisposal
 
     @Autowired
     private lateinit var medKitService: MedKitService
@@ -163,7 +167,7 @@ class DrugMovementStoriesTest {
         assertNotNull(plan)
 
         // Delete the drug
-        drugService.delete(drugData.id, userData.id)
+        disposal.destroy(drugData.id, userData.id)
         entityManager.flush()
         entityManager.clear()
 

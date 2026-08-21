@@ -119,11 +119,9 @@ class DrugService(
         logger.debug("Consuming {} of drug {}", quantity, drugId)
 
         val drug = require(drugId, userId)
-        val left = drug.consume(Quantity(quantity, drug.quantity.unit))
-        if (left == null) {
-            drugs.delete(drugId)
-            return null
-        }
+        // `null` — приём опустошил пачку. Уничтожать её отсюда нельзя: вместе с пачкой
+        // исчезают брони, а это чужой агрегат. Решение принимает `DrugDisposal`.
+        val left = drug.consume(Quantity(quantity, drug.quantity.unit)) ?: return null
         drugs.save(left)
         return left
     }

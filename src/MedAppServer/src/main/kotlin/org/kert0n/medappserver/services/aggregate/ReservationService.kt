@@ -100,6 +100,13 @@ class ReservationService(
     }
 
     /** То же для одной переехавшей упаковки. */
+    /** Все брони на упаковку: зовётся, когда упаковка уничтожается. */
+    @Transactional(propagation = MANDATORY)
+    fun dropOnDrug(drugId: UUID) {
+        logger.debug("Dropping all reservations on drug {}", drugId)
+        reservations.deleteOfDrug(drugId)
+    }
+
     @Transactional(propagation = MANDATORY)
     fun dropOnDrugExcept(drugId: UUID, accessibleUserIds: Set<UUID>) {
         logger.debug("Dropping reservations on drug {} outside {} users", drugId, accessibleUserIds.size)
