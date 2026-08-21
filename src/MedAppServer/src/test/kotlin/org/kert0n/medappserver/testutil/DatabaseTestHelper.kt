@@ -1,15 +1,15 @@
 package org.kert0n.medappserver.testutil
 
-import jakarta.persistence.EntityManager
 import java.math.BigDecimal
 import java.util.*
-import org.kert0n.medappserver.db.model.parsed.QuantityUnitData
-import org.kert0n.medappserver.db.repository.DrugRepository
-import org.kert0n.medappserver.db.repository.MedKitMembershipRepository
-import org.kert0n.medappserver.db.repository.QuantityUnitRepository
-import org.kert0n.medappserver.db.repository.ReservationRepository
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.core.eq
+import org.kert0n.medappserver.db.tables.Drugs
+import org.kert0n.medappserver.db.tables.MedKitMemberships
+import org.kert0n.medappserver.db.tables.QuantityUnits
+import org.kert0n.medappserver.db.tables.Reservations
 import org.kert0n.medappserver.db.store.DrugStore
-import org.kert0n.medappserver.db.store.toDomain
 import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.db.store.ReservationStore
 import org.kert0n.medappserver.db.store.UserStore
@@ -36,16 +36,11 @@ import org.springframework.transaction.annotation.Transactional
 class DatabaseTestHelper(
     private val users: UserStore,
     private val drugs: DrugStore,
-    private val drugRows: DrugRepository,
     private val reservations: ReservationStore,
-    private val reservationRows: ReservationRepository,
     private val medKits: MedKitStore,
-    private val memberships: MedKitMembershipRepository,
-    private val quantityUnits: QuantityUnitRepository,
     private val medKitService: MedKitService,
     private val drugService: DrugService,
-    private val reservationService: ReservationService,
-    private val entityManager: EntityManager
+    private val reservationService: ReservationService
 ) {
     @Transactional
     fun freshUser(tag: String): User {
@@ -57,9 +52,12 @@ class DatabaseTestHelper(
     /** Единица измерения из словаря; заводится один раз и переиспользуется. */
     @Transactional
     fun unit(name: String = "mg"): QuantityUnit {
-        val stored = quantityUnits.findAll().find { it.name == name }
-            ?: quantityUnits.save(QuantityUnitData(name = name))
-        return QuantityUnit(stored.id, stored.name)
+        val stored = QuantityUnits.selectAll().where { QuantityUnits.name eq name }.singleOrNull()
+        if (stored != null) return QuantityUnit(stored[QuantityUnits.id], stored[QuantityUnits.name])
+
+        val id = UUID.randomUUID()
+        QuantityUnits.insert { it[QuantityUnits.id] = id; it[QuantityUnits.name] = name }
+        return QuantityUnit(id, name)
     }
 
     @Transactional
@@ -127,10 +125,14 @@ class DatabaseTestHelper(
         return user
     }
 
-    fun flushAndClear() {
-        entityManager.flush()
-        entityManager.clear()
-    }
+    /**
+     * Пусто и останется пустым.
+     *
+     * При Hibernate тут синхронизировали persistence context: без этого чтение отдавало
+     * загруженную копию вместо строки из базы. В Exposed синхронизировать нечего — запрос идёт
+     * в базу всегда. Метод оставлен, чтобы не переписывать сотню вызовов ради ничего.
+     */
+    fun flushAndClear() = Unit
 
     /**
      * Препарат без проверки доступа.
@@ -139,7 +141,12 @@ class DatabaseTestHelper(
      * убедиться, что строки не стало, безотносительно того, кто спрашивает.
      */
     /** Упаковка без оглядки на доступ — под проверки состояния, как и `medKit`. */
-    fun drug(id: UUID): Drug? = drugRows.findFullById(id)?.toDomain()
+    @Transactional
+    fun drug(id: UUID): Drug? =
+        Drugs.selectAll().where { Drugs.id eq id }.singleOrNull()?.let { drugs.find(id, it[Drugs.medKitId].let { _ ->
+            MedKitMemberships.selectAll().where { MedKitMemberships.medKitId eq it[Drugs.medKitId] }
+                .first()[MedKitMemberships.userId]
+        }) }
 
     /**
      * Аптечка без оглядки на доступ — под проверки состояния.
@@ -148,14 +155,20 @@ class DatabaseTestHelper(
      * замыслу не покажет ни удалённую аптечку, ни ту, из которой участник вышел, а проверять
      * надо именно это. Подготовка сценария по-прежнему идёт через хранилища.
      */
+    @Transactional
     fun medKit(medKitId: UUID): MedKit? {
-        val members = memberships.findMemberIds(medKitId)
+        val members = MedKitMemberships.selectAll()
+            .where { MedKitMemberships.medKitId eq medKitId }
+            .map { it[MedKitMemberships.userId] }
+            .toSet()
         return if (members.isEmpty()) null else MedKit(medKitId, members)
     }
 
+    @Transactional
     fun requireDrug(id: UUID): Drug = drug(id) ?: error("Препарат $id не найден")
 
     // Проверки, существенные для privacy-by-default: `null` означает, что записи больше нет.
+    @Transactional
     fun drugQuantity(id: UUID): BigDecimal? = drug(id)?.quantity?.amount
 
     /**
@@ -164,9 +177,11 @@ class DatabaseTestHelper(
      * Мимо хранилища, как и `medKit`: у проверки состояния нет вызывающего, а скоупленное
      * чтение без него не работает.
      */
+    @Transactional
     fun reservedOnDrug(id: UUID): BigDecimal =
-        reservationRows.findAll().filter { it.reservationKey.drugId == id }.sumOf { it.amount }
+        Reservations.selectAll().where { Reservations.drugId eq id }.sumOf { it[Reservations.amount] }
 
+    @Transactional
     fun userReservation(userId: UUID, drugId: UUID): BigDecimal? =
         reservations.find(userId, drugId)?.amount?.amount
 }

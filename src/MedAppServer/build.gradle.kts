@@ -22,10 +22,11 @@ repositories {
 
 dependencies {
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.1")
-    // ЭКСПЕРИМЕНТ: Exposed вместо JPA. JPA пока оставлена — снимаем неизвестности до переезда.
-    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
-    implementation("org.jetbrains.exposed:exposed-spring-boot-starter:0.61.0")
-    implementation("org.jetbrains.exposed:exposed-jdbc:0.61.0")
+    // Стартер под Spring Boot 4 — отдельный артефакт, как вофициальном samples/exposed-spring.
+    // Обычный exposed-spring-boot-starter собран под Boot 3 и ищет автоконфигурацию по
+    // старым адресам.
+    implementation("org.jetbrains.exposed:exposed-spring-boot4-starter:1.4.0")
+    implementation("org.jetbrains.exposed:exposed-jdbc:1.4.0")
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-webmvc")
@@ -46,7 +47,6 @@ dependencies {
     testImplementation("org.testcontainers:testcontainers-postgresql")
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.2.1")
     testImplementation("org.mockito:mockito-inline:5.2.0")
-    testImplementation("com.h2database:h2")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 

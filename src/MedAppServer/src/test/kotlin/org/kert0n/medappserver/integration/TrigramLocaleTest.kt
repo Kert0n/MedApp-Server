@@ -1,10 +1,10 @@
 package org.kert0n.medappserver.integration
 
-import jakarta.persistence.EntityManager
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.transaction.annotation.Transactional
 
 /**
@@ -22,10 +22,11 @@ import org.springframework.transaction.annotation.Transactional
 @Transactional
 class TrigramLocaleTest {
 
-    @Autowired private lateinit var entityManager: EntityManager
 
-    private fun scalar(sql: String): String =
-        entityManager.createNativeQuery(sql).singleResult.toString()
+    @Autowired
+    private lateinit var jdbc: JdbcTemplate
+
+    private fun scalar(sql: String): String = jdbc.queryForObject(sql, String::class.java)!!
 
     /**
      * Локаль текущей базы — атрибут базы, а не сервера.

@@ -1,15 +1,17 @@
 package org.kert0n.medappserver.integration
 
-import jakarta.persistence.EntityManager
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import java.util.UUID
+import org.jetbrains.exposed.v1.jdbc.deleteAll
+import org.jetbrains.exposed.v1.jdbc.insert
 import org.kert0n.medappserver.PostgresIntegrationTest
-import org.kert0n.medappserver.db.model.parsed.DrugTemplateData
-import org.kert0n.medappserver.db.model.parsed.FormTypeData
-import org.kert0n.medappserver.db.repository.VidalDrugRepository
+import org.kert0n.medappserver.db.store.CatalogueStore
+import org.kert0n.medappserver.db.tables.DrugTemplates
+import org.kert0n.medappserver.db.tables.FormTypes
 import org.kert0n.medappserver.services.application.CatalogueApplicationService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.transaction.PlatformTransactionManager
@@ -25,14 +27,13 @@ import org.springframework.transaction.support.TransactionTemplate
 @PostgresIntegrationTest
 class CatalogueSearchTest {
 
-    @Autowired
-    private lateinit var vidalDrugRepository: VidalDrugRepository
 
     @Autowired
     private lateinit var catalogue: CatalogueApplicationService
 
     @Autowired
-    private lateinit var entityManager: EntityManager
+    private lateinit var store: CatalogueStore
+
 
     @Autowired
     private lateinit var transactionManager: PlatformTransactionManager
@@ -43,28 +44,18 @@ class CatalogueSearchTest {
     fun setup() {
         txTemplate = TransactionTemplate(transactionManager)
         txTemplate.execute {
-            vidalDrugRepository.deleteAll()
-            entityManager.createNativeQuery("DELETE FROM form_types").executeUpdate()
+            DrugTemplates.deleteAll()
+            FormTypes.deleteAll()
 
-            val tabletType = FormTypeData(name = "таблетки")
-            entityManager.persist(tabletType)
-            entityManager.flush()
+            val tablet = UUID.randomUUID()
+            FormTypes.insert { it[id] = tablet; it[name] = "таблетки" }
 
-            val drugs = listOf(
-                DrugTemplateData(name = "Аспирин", manufacturer = "Байер", otc = true, formType = tabletType),
-                DrugTemplateData(name = "Аспирин Кардио", manufacturer = "Байер", otc = true, formType = tabletType),
-                DrugTemplateData(
-                    name = "Ибупрофен", nameLat = "Ibuprofenum", manufacturer = "Фармстандарт",
-                    activeSubstance = "ибупрофен", otc = true
-                ),
-                DrugTemplateData(
-                    name = "Парацетамол", nameLat = "Paracetamolum", manufacturer = "Медисорб",
-                    activeSubstance = "парацетамол", otc = true
-                ),
-                DrugTemplateData(name = "Aspirin", manufacturer = "Bayer", otc = true, formType = tabletType),
-                DrugTemplateData(name = "Ibuprofen", manufacturer = "Generic", otc = true)
-            )
-            vidalDrugRepository.saveAll(drugs)
+            template("Аспирин", manufacturer = "Байер", formTypeId = tablet)
+            template("Аспирин Кардио", manufacturer = "Байер", formTypeId = tablet)
+            template("Ибупрофен", nameLat = "Ibuprofenum", manufacturer = "Фармстандарт", substance = "ибупрофен")
+            template("Парацетамол", nameLat = "Paracetamolum", manufacturer = "Медисорб", substance = "парацетамол")
+            template("Aspirin", manufacturer = "Bayer", formTypeId = tablet)
+            template("Ibuprofen", manufacturer = "Generic")
         }
     }
 
@@ -73,7 +64,25 @@ class CatalogueSearchTest {
      * исходным. Экранирование проверяется отдельно, на уровне сервиса.
      */
     private fun search(term: String, limit: Int = 10) =
-        vidalDrugRepository.fuzzySearch(term, term, limit)
+        txTemplate.execute { store.searchTemplates(term, term, limit) }!!
+
+    private fun template(
+        name: String,
+        nameLat: String? = null,
+        substance: String? = null,
+        manufacturer: String,
+        formTypeId: UUID? = null
+    ) {
+        DrugTemplates.insert {
+            it[DrugTemplates.id] = UUID.randomUUID()
+            it[DrugTemplates.name] = name
+            it[DrugTemplates.nameLat] = nameLat
+            it[DrugTemplates.activeSubstance] = substance
+            it[DrugTemplates.manufacturer] = manufacturer
+            it[DrugTemplates.formTypeId] = formTypeId
+            it[DrugTemplates.otc] = true
+        }
+    }
 
     @Test
     fun `fuzzySearch finds Cyrillic drugs by prefix`() {
@@ -135,14 +144,10 @@ class CatalogueSearchTest {
     @Test
     fun `fuzzySearch prioritizes exact and prefix matches`() {
         txTemplate.execute {
-            vidalDrugRepository.deleteAll()
-            vidalDrugRepository.saveAll(
-                listOf(
-                    DrugTemplateData(name = "Aspirin", manufacturer = "Bayer", otc = true),
-                    DrugTemplateData(name = "Aspirin Cardio", manufacturer = "Bayer", otc = true),
-                    DrugTemplateData(name = "Baby Aspirin", manufacturer = "Generic", otc = true)
-                )
-            )
+            DrugTemplates.deleteAll()
+            template("Aspirin", manufacturer = "Bayer")
+            template("Aspirin Cardio", manufacturer = "Bayer")
+            template("Baby Aspirin", manufacturer = "Generic")
         }
 
         val results = search("Aspirin", 10)

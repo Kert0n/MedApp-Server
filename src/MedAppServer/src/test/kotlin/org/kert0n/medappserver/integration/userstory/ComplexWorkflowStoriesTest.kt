@@ -1,7 +1,6 @@
 package org.kert0n.medappserver.integration.userstory
 
 import org.kert0n.medappserver.services.aggregate.ReservationService
-import jakarta.persistence.EntityManager
 import java.util.*
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -42,8 +41,6 @@ class ComplexWorkflowStoriesTest {
     private lateinit var reservationService: ReservationService
 
 
-    @Autowired
-    private lateinit var entityManager: EntityManager
 
     @Autowired
     private lateinit var drugService: DrugService
@@ -103,8 +100,6 @@ class ComplexWorkflowStoriesTest {
         )
 
         // Emulate end of HTTP request
-        entityManager.flush()
-        entityManager.clear()
 
         // ==========================================
         // PHASE 2: Everyone reserves a share
@@ -118,8 +113,6 @@ class ComplexWorkflowStoriesTest {
         dbHelper.reserve(bob.id, painkillers.id, qty(30.0))
         dbHelper.reserve(charlie.id, painkillers.id, qty(30.0))
 
-        entityManager.flush()
-        entityManager.clear()
 
         // ==========================================
         // PHASE 3: Heavy Consumption
@@ -127,8 +120,6 @@ class ComplexWorkflowStoriesTest {
         // Bob consumes 30 Allergy Meds: 60 in the pack becomes 30, while 60 stays reserved.
         drugService.consume(drugService.get(allergyMeds.id, bob.id), qty(30.0))
 
-        entityManager.flush()
-        entityManager.clear()
 
         val updatedAllergyMeds = dbHelper.requireDrug(allergyMeds.id)
         assertQty(30.0, updatedAllergyMeds.quantity, "Stock should be 30")
@@ -143,13 +134,9 @@ class ComplexWorkflowStoriesTest {
         // Alice makes a private travel kit and takes the Painkillers.
         val travelKit = medKitService.create(alice.id)
 
-        entityManager.flush()
-        entityManager.clear()
 
         drugs.moveToMedKit(painkillers.id, travelKit.id, alice.id)
 
-        entityManager.flush()
-        entityManager.clear()
 
         // Bob and Charlie cannot see the Travel Kit, so their reservations go with the pack
         assertNull(dbHelper.userReservation(bob.id, painkillers.id), "Bob's reservation must be deleted")
@@ -165,14 +152,10 @@ class ComplexWorkflowStoriesTest {
         val duoKit = medKitService.create(alice.id)
         medKitService.joinByInvitation(medKitService.invite(medKitService.get(duoKit.id, alice.id), alice.id), bob.id)
 
-        entityManager.flush()
-        entityManager.clear()
 
         // Perform the complex deletion migration
         medKits.delete(homeKit.id, alice.id, duoKit.id)
 
-        entityManager.flush()
-        entityManager.clear()
 
         // Verify Home Kit is dead
         assertNull(dbHelper.medKit(homeKit.id), "Home kit must be completely deleted")
@@ -198,8 +181,6 @@ class ComplexWorkflowStoriesTest {
         // Bob leaves Duo Kit
         medKits.leave(duoKit.id, bob.id)
 
-        entityManager.flush()
-        entityManager.clear()
 
         val duoKitCheck1 = dbHelper.medKit(duoKit.id)!!
         assertEquals(1, duoKitCheck1.members.size, "Only Alice remains")
@@ -208,8 +189,6 @@ class ComplexWorkflowStoriesTest {
         // orchestrator would clean up reservations that are already gone with the kit.
         medKitService.leave(medKitService.get(duoKitCheck1.id, alice.id), alice.id)
 
-        entityManager.flush()
-        entityManager.clear()
 
         assertNull(dbHelper.medKit(duoKit.id), "Duo kit must auto-delete when last user leaves")
         assertNull(
@@ -331,12 +310,8 @@ class ComplexWorkflowStoriesTest {
 
         // Alice has a private kit (Bob is NOT in this one)
         val kitB = medKitService.create(alice.id)
-        entityManager.flush()
-        entityManager.clear()
         // ACT: Move drug to private kit
         drugs.moveToMedKit(drug.id, kitB.id, alice.id)
-        entityManager.flush()
-        entityManager.clear()
         // VERIFY: Bob's reservation is purged, Alice's remains
         val aliceReservation = dbHelper.userReservation(alice.id, drug.id)
         val bobReservation = dbHelper.userReservation(bob.id, drug.id)
@@ -350,17 +325,11 @@ class ComplexWorkflowStoriesTest {
         val alice = createTestUser("alice")
         val kitA = medKitService.create(alice.id)
         val kitB = medKitService.create(alice.id)
-        entityManager.flush()
-        entityManager.clear()
         val drug =
             drugs.createInMedKit(kitA.id, DrugCreateRequest("Migrating Meds", qty(10.0), dbHelper.unit().id), alice.id)
 
         // ACT: Delete Kit A and migrate drugs to Kit B
-        entityManager.flush()
-        entityManager.clear()
         medKits.delete(kitA.id, alice.id, kitB.id)
-        entityManager.flush()
-        entityManager.clear()
         // VERIFY: Kit A is gone, but the drug survives in Kit B
         val survivingDrug = dbHelper.drug(drug.drug.id)
 

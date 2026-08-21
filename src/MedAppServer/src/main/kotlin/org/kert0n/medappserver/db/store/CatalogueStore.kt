@@ -1,51 +1,127 @@
 package org.kert0n.medappserver.db.store
 
 import java.util.UUID
-import org.kert0n.medappserver.db.model.parsed.DrugTemplateData
-import org.kert0n.medappserver.db.repository.FormTypeRepository
-import org.kert0n.medappserver.db.repository.QuantityUnitRepository
-import org.kert0n.medappserver.db.repository.VidalDrugRepository
+import org.jetbrains.exposed.v1.core.JoinType
+import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
+import org.kert0n.medappserver.db.tables.DrugTemplates
+import org.kert0n.medappserver.db.tables.FormTypes
+import org.kert0n.medappserver.db.tables.QuantityUnits
 import org.kert0n.medappserver.domain.DrugTemplate
 import org.kert0n.medappserver.domain.FormType
 import org.kert0n.medappserver.domain.QuantityUnit
-import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Component
 
 /**
- * Хранилище справочника: карточки препаратов и словари единиц и форм.
+ * Хранилище справочника.
  *
- * Словари общие буквально — «шт» в каталоге и «шт» у заведённой руками пачки одна и та же строка.
+ * Справочник ничей: он одинаков для всех, владельца у записи нет, и скоупить его нечем.
  */
 @Component
-class CatalogueStore(
-    private val templates: VidalDrugRepository,
-    private val units: QuantityUnitRepository,
-    private val forms: FormTypeRepository
-) {
+class CatalogueStore {
 
-    fun findTemplate(id: UUID): DrugTemplate? = templates.findByIdOrNull(id)?.toDomain()
+    fun findTemplate(id: UUID): DrugTemplate? =
+        templateRows.selectAll().where { DrugTemplates.id eq id }.singleOrNull()?.toDomain()
 
-    fun searchTemplates(term: String, likeTerm: String, limit: Int): List<DrugTemplate> =
-        templates.fuzzySearch(term, likeTerm, limit).map { it.toDomain() }
+    /**
+     * Нечёткий поиск остаётся сырым SQL — и это честнее, чем прятать его за DSL.
+     *
+     * Здесь и полнотекст по документу, который считает сама база, и триграммное сходство, и
+     * порядок выдачи «точное совпадение выше префикса, префикс выше подстроки». Ни одно из
+     * этого в переносимых выражениях не выражается, а прятать `similarity()` за обёрткой
+     * значило бы делать вид, что запрос переносим.
+     */
+    fun searchTemplates(term: String, likeTerm: String, limit: Int): List<DrugTemplate> {
+        val found = mutableListOf<UUID>()
+        TransactionManager.current().exec(
+            """
+            SELECT id FROM parsed_drugs
+            WHERE search_tsv @@ plainto_tsquery('simple', ?)
+               OR name ILIKE ('%' || ? || '%')
+               OR name_lat ILIKE ('%' || ? || '%')
+               OR active_substance ILIKE ('%' || ? || '%')
+               OR manufacturer ILIKE ('%' || ? || '%')
+               OR name % ?
+               OR name_lat % ?
+               OR active_substance % ?
+               OR manufacturer % ?
+            ORDER BY
+                (search_tsv @@ plainto_tsquery('simple', ?)) DESC,
+                CASE
+                    WHEN lower(name) = lower(?) THEN 0
+                    WHEN name ILIKE (? || '%') THEN 1
+                    WHEN name ILIKE ('%' || ? || '%') THEN 2
+                    WHEN name_lat ILIKE ('%' || ? || '%') THEN 3
+                    WHEN active_substance ILIKE ('%' || ? || '%') THEN 4
+                    WHEN manufacturer ILIKE ('%' || ? || '%') THEN 5
+                    ELSE 6
+                END,
+                GREATEST(
+                    similarity(name, ?),
+                    similarity(coalesce(name_lat, ''), ?),
+                    similarity(coalesce(active_substance, ''), ?),
+                    similarity(coalesce(manufacturer, ''), ?)
+                ) DESC,
+                name
+            LIMIT ?
+            """.trimIndent(),
+            searchArguments(term, likeTerm, limit)
+        ) { rs -> while (rs.next()) found += rs.getObject(1, UUID::class.java) }
 
-    fun quantityUnits(): List<QuantityUnit> = units.findAll().map { it.toDomain() }.sortedBy { it.name }
+        if (found.isEmpty()) return emptyList()
+        // Порядок задаёт запрос выше, поэтому выборка по идентификаторам пересортировывается им.
+        val byId = templateRows.selectAll().where { DrugTemplates.id inList found }
+            .associate { it[DrugTemplates.id] to it.toDomain() }
+        return found.mapNotNull { byId[it] }
+    }
 
-    fun formTypes(): List<FormType> = forms.findAll().map { it.toDomain() }.sortedBy { it.name }
+    fun quantityUnits(): List<QuantityUnit> =
+        QuantityUnits.selectAll().map { QuantityUnit(it[QuantityUnits.id], it[QuantityUnits.name]) }
+            .sortedBy { it.name }
 
-    fun findQuantityUnit(id: UUID): QuantityUnit? = units.findByIdOrNull(id)?.toDomain()
+    fun formTypes(): List<FormType> =
+        FormTypes.selectAll().map { FormType(it[FormTypes.id], it[FormTypes.name]) }.sortedBy { it.name }
 
-    fun findFormType(id: UUID): FormType? = forms.findByIdOrNull(id)?.toDomain()
+    fun findQuantityUnit(id: UUID): QuantityUnit? =
+        QuantityUnits.selectAll().where { QuantityUnits.id eq id }
+            .singleOrNull()?.let { QuantityUnit(it[QuantityUnits.id], it[QuantityUnits.name]) }
 
-    private fun DrugTemplateData.toDomain() = DrugTemplate(
-        id = id,
-        name = name,
-        nameLat = nameLat,
-        activeSubstance = activeSubstance,
-        formType = formType?.toDomain(),
-        category = category,
-        quantityUnit = quantityUnit?.toDomain(),
-        manufacturer = manufacturer,
-        country = country,
-        description = description
+    fun findFormType(id: UUID): FormType? =
+        FormTypes.selectAll().where { FormTypes.id eq id }
+            .singleOrNull()?.let { FormType(it[FormTypes.id], it[FormTypes.name]) }
+
+    private val templateRows
+        get() = DrugTemplates
+            .join(FormTypes, JoinType.LEFT, DrugTemplates.formTypeId, FormTypes.id)
+            .join(QuantityUnits, JoinType.LEFT, DrugTemplates.quantityUnitId, QuantityUnits.id)
+
+    private fun searchArguments(term: String, likeTerm: String, limit: Int) =
+        listOf<Pair<org.jetbrains.exposed.v1.core.IColumnType<*>, Any?>>(
+            *Array(1) { org.jetbrains.exposed.v1.core.TextColumnType() to term },
+            *Array(4) { org.jetbrains.exposed.v1.core.TextColumnType() to likeTerm },
+            *Array(4) { org.jetbrains.exposed.v1.core.TextColumnType() to term },
+            org.jetbrains.exposed.v1.core.TextColumnType() to term,
+            org.jetbrains.exposed.v1.core.TextColumnType() to term,
+            *Array(5) { org.jetbrains.exposed.v1.core.TextColumnType() to likeTerm },
+            *Array(4) { org.jetbrains.exposed.v1.core.TextColumnType() to term },
+            org.jetbrains.exposed.v1.core.IntegerColumnType() to limit
+        )
+
+    private fun ResultRow.toDomain(): DrugTemplate = DrugTemplate(
+        id = this[DrugTemplates.id],
+        name = this[DrugTemplates.name],
+        nameLat = this[DrugTemplates.nameLat],
+        activeSubstance = this[DrugTemplates.activeSubstance],
+        formType = this[DrugTemplates.formTypeId]?.let { FormType(it, this[FormTypes.name]) },
+        category = this[DrugTemplates.category],
+        quantityUnit = this[DrugTemplates.quantityUnitId]?.let {
+            QuantityUnit(it, this[QuantityUnits.name])
+        },
+        manufacturer = this[DrugTemplates.manufacturer],
+        country = this[DrugTemplates.country],
+        description = this[DrugTemplates.description]
     )
 }

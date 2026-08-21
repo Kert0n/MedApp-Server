@@ -1,6 +1,5 @@
 package org.kert0n.medappserver.integration.userstory
 
-import jakarta.persistence.EntityManager
 import java.util.*
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -37,8 +36,6 @@ class BasicWorkflowStoriesTest {
     private lateinit var dbHelper: DatabaseTestHelper
 
 
-    @Autowired
-    private lateinit var entityManager: EntityManager
 
     @Autowired
     private lateinit var drugService: DrugService
@@ -68,7 +65,6 @@ class BasicWorkflowStoriesTest {
             hashedKey = "anna_hashed_key_${UUID.randomUUID()}"
         )
         dbHelper.insert(anna)
-        entityManager.flush()
 
         // Creates medkit
         val homeMedkit = medKitService.create(anna.id)
@@ -98,12 +94,9 @@ class BasicWorkflowStoriesTest {
             medKitId = homeMedkit.id
         )
         dbHelper.insert(ibuprofen)
-        entityManager.flush()
 
         // Anna takes 2 tablets of Aspirin
         drugService.consume(drugService.get(aspirin.id, anna.id), qty(2.0))
-        entityManager.flush()
-        entityManager.clear()
 
         // Check inventory
         val updatedAspirin = dbHelper.drug(aspirin.id)
@@ -139,18 +132,14 @@ class BasicWorkflowStoriesTest {
             medKitId = medkit.id
         )
         dbHelper.insert(vitamins)
-        entityManager.flush()
 
         // Bob signs up
         val bob = User(id = UUID.randomUUID(), hashedKey = "bob_${UUID.randomUUID()}")
         dbHelper.insert(bob)
-        entityManager.flush()
 
         // Anna shares with Bob via share key
         val shareKey = medKitService.invite(medKitService.get(medkit.id, anna.id), anna.id)
         medKitService.joinByInvitation(shareKey, bob.id)
-        entityManager.flush()
-        entityManager.clear()
 
         // Both can see it
         val annaMedkits = medKitService.allOfUser(anna.id)
@@ -196,8 +185,6 @@ class BasicWorkflowStoriesTest {
             medKitId = medkit.id
         )
         dbHelper.insert(drugData)
-        entityManager.flush()
-        entityManager.clear()
 
         // Verify both users have access
         val loadedMedkit = dbHelper.medKit(medkit.id)!!
@@ -205,8 +192,6 @@ class BasicWorkflowStoriesTest {
 
         // Bob leaves (drugs stay)
         medKits.leave(medkit.id, bob.id)
-        entityManager.flush()
-        entityManager.clear()
 
         // Medkit still exists with Anna only
         val updatedMedkit = dbHelper.medKit(medkit.id)
@@ -259,16 +244,12 @@ class BasicWorkflowStoriesTest {
 
         // Create new medkit for migration
         val newMedkit = medKitService.create(userData.id)
-        entityManager.flush()
-        entityManager.clear()
 
         // Verify user has 2 medkits
         assertEquals(2, medKitService.allOfUser(userData.id).size)
 
         // Delete old medkit and move drugs
         medKits.delete(oldMedkit.id, userData.id, newMedkit.id)
-        entityManager.flush()
-        entityManager.clear()
 
         // Verify migration
         val drugsInNew = drugService.ofMedKit(newMedkit.id, userData.id)
@@ -305,14 +286,11 @@ class BasicWorkflowStoriesTest {
             medKitId = medkit.id
         )
         dbHelper.insert(drugData)
-        entityManager.flush()
 
         // Consume all in steps
         disposal.consume(drugService.get(drugData.id, userData.id), qty(10.0))
         disposal.consume(drugService.get(drugData.id, userData.id), qty(10.0))
         disposal.consume(drugService.get(drugData.id, userData.id), qty(10.0))
-        entityManager.flush()
-        entityManager.clear()
 
         val updatedDrug = dbHelper.drug(drugData.id)
         // Must be deleted

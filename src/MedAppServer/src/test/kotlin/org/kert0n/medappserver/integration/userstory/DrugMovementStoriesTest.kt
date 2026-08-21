@@ -1,7 +1,6 @@
 package org.kert0n.medappserver.integration.userstory
 
 import org.kert0n.medappserver.services.aggregate.ReservationService
-import jakarta.persistence.EntityManager
 import java.util.*
 import kotlin.test.*
 import org.junit.jupiter.api.Test
@@ -30,8 +29,6 @@ class DrugMovementStoriesTest {
     private lateinit var dbHelper: DatabaseTestHelper
 
 
-    @Autowired
-    private lateinit var entityManager: EntityManager
 
     @Autowired
     private lateinit var reservationService: ReservationService
@@ -68,16 +65,12 @@ class DrugMovementStoriesTest {
             description = null, medKitId = homeKit.id
         )
         dbHelper.insert(painkiller)
-        entityManager.flush()
 
         // Reserve a share
         dbHelper.reserve(userData.id, painkiller.id, qty(20.0))
-        entityManager.flush()
 
         // Move drug to travel kit
         drugs.moveToMedKit(painkiller.id, travelKit.id, userData.id)
-        entityManager.flush()
-        entityManager.clear()
 
         // Drug is in travel kit
         val movedDrug = dbHelper.drug(painkiller.id)
@@ -119,23 +112,17 @@ class DrugMovementStoriesTest {
             description = null, medKitId = medkit.id
         )
         dbHelper.insert(drugData)
-        entityManager.flush()
 
         // Anna reserves 40, Bob 30 — 70 of 100
         dbHelper.reserve(anna.id, drugData.id, qty(40.0))
         dbHelper.reserve(bob.id, drugData.id, qty(30.0))
-        entityManager.flush()
 
         val updated = reservationService.changeTo(reservationService.get(anna.id, drugData.id), qty(70.0))
         assertQty(70.0, updated.amount)
-        entityManager.flush()
-        entityManager.clear()
         assertQty(100.0, dbHelper.reservedOnDrug(drugData.id))
 
         // Выше содержимого пачки тоже можно: 200 + 30 на сотню таблеток — законное состояние.
         reservationService.changeTo(reservationService.get(anna.id, drugData.id), qty(200.0))
-        entityManager.flush()
-        entityManager.clear()
         assertQty(230.0, dbHelper.reservedOnDrug(drugData.id))
 
         println("✅ Story 12 passed: reservations are free to exceed the package")
@@ -155,12 +142,9 @@ class DrugMovementStoriesTest {
             description = null, medKitId = medkit.id
         )
         dbHelper.insert(drugData)
-        entityManager.flush()
 
         // Reserve a share
         dbHelper.reserve(userData.id, drugData.id, qty(25.0))
-        entityManager.flush()
-        entityManager.clear()
 
         // Verify the reservation exists
         val plan = dbHelper.userReservation(userData.id, drugData.id)
@@ -168,8 +152,6 @@ class DrugMovementStoriesTest {
 
         // Delete the drug
         disposal.destroy(drugService.get(drugData.id, userData.id))
-        entityManager.flush()
-        entityManager.clear()
 
         // Drug should be gone
         val deletedDrug = dbHelper.drug(drugData.id)
@@ -214,14 +196,10 @@ class DrugMovementStoriesTest {
         dbHelper.reserve(bob.id, drugData.id, qty(30.0))
         dbHelper.reserve(charlie.id, drugData.id, qty(30.0))
 
-        entityManager.flush()
-        entityManager.clear()
 
         // Anna deletes the old kit and migrates to the new kit
         medKits.delete(oldKit.id, anna.id, newKit.id)
 
-        entityManager.flush()
-        entityManager.clear()
 
         // Verify: Anna and Bob keep their reservations, Charlie's is deleted.
         assertNotNull(dbHelper.userReservation(anna.id, drugData.id), "Anna should keep her plan")
@@ -263,14 +241,10 @@ class DrugMovementStoriesTest {
             )
         )
 
-        entityManager.flush()
-        entityManager.clear()
 
         // Move ONLY one drug
         drugs.moveToMedKit(drugDataToMove.id, targetKit.id, userData.id)
 
-        entityManager.flush()
-        entityManager.clear()
 
         // Verify the move did not destroy it
         val movedDrug = dbHelper.drug(drugDataToMove.id)

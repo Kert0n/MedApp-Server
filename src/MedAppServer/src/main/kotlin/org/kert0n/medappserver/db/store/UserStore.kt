@@ -1,8 +1,9 @@
 package org.kert0n.medappserver.db.store
 
 import java.util.UUID
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.kert0n.medappserver.db.tables.Users
 import org.kert0n.medappserver.domain.User
 import org.springframework.stereotype.Component

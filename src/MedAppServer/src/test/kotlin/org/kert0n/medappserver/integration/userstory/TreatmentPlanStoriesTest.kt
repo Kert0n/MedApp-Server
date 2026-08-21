@@ -1,7 +1,6 @@
 package org.kert0n.medappserver.integration.userstory
 
 import org.kert0n.medappserver.services.aggregate.ReservationService
-import jakarta.persistence.EntityManager
 import java.util.*
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -37,8 +36,6 @@ class TreatmentPlanStoriesTest {
     private lateinit var dbHelper: DatabaseTestHelper
 
 
-    @Autowired
-    private lateinit var entityManager: EntityManager
 
     @Autowired
     private lateinit var reservationService: ReservationService
@@ -74,12 +71,10 @@ class TreatmentPlanStoriesTest {
             medKitId = medkit.id
         )
         dbHelper.insert(drugData)
-        entityManager.flush()
 
         // Reserve 30 tablets
         val plan = dbHelper.reserve(userData.id, drugData.id, qty(30.0))
         assertNotNull(plan)
-        entityManager.flush()
 
         // Verify the reservation was created
         val createdPlan = dbHelper.userReservation(userData.id, drugData.id)
@@ -89,8 +84,6 @@ class TreatmentPlanStoriesTest {
         // Record some intakes
         drugService.consume(drugService.get(drugData.id, userData.id), qty(5.0))
         drugService.consume(drugService.get(drugData.id, userData.id), qty(5.0))
-        entityManager.flush()
-        entityManager.clear()
 
         // Verify drug quantity decreased
         val updatedDrug = dbHelper.drug(drugData.id)
@@ -124,16 +117,12 @@ class TreatmentPlanStoriesTest {
             medKitId = medkit.id
         )
         dbHelper.insert(vitaminC)
-        entityManager.flush()
 
         // Anna reserves 40 tablets
         dbHelper.reserve(anna.id, vitaminC.id, qty(40.0))
-        entityManager.flush()
 
         // Bob reserves 50 more
         dbHelper.reserve(bob.id, vitaminC.id, qty(50.0))
-        entityManager.flush()
-        entityManager.clear()
         // 90 reserved on the pack in total
         assertQty(90.0, dbHelper.reservedOnDrug(vitaminC.id), "Total planned should be 90")
 
@@ -164,14 +153,12 @@ class TreatmentPlanStoriesTest {
         dbHelper.insert(mom)
         dbHelper.insert(dad)
         dbHelper.insert(child)
-        entityManager.flush()
 
         val familyKit = medKitService.create(mom.id)
         val dadKey = medKitService.invite(medKitService.get(familyKit.id, mom.id), mom.id)
         medKitService.joinByInvitation(dadKey, dad.id)
         val childKey = medKitService.invite(medKitService.get(familyKit.id, mom.id), mom.id)
         medKitService.joinByInvitation(childKey, child.id)
-        entityManager.flush()
 
         // Add family medications
         val aspirin = Drug(
@@ -188,25 +175,18 @@ class TreatmentPlanStoriesTest {
         )
         dbHelper.insert(aspirin)
         dbHelper.insert(vitamins)
-        entityManager.flush()
 
         // Everyone reserves 30 vitamins
         dbHelper.reserve(mom.id, vitamins.id, qty(30.0))
         dbHelper.reserve(dad.id, vitamins.id, qty(30.0))
         dbHelper.reserve(child.id, vitamins.id, qty(30.0))
-        entityManager.flush()
-        entityManager.clear()
         // 90 reserved — the whole pack
         assertQty(90.0, dbHelper.reservedOnDrug(vitamins.id))
 
         // Everyone takes their daily vitamin
         drugService.consume(drugService.get(vitamins.id, mom.id), qty(1.0))
-        entityManager.flush()
         drugService.consume(drugService.get(vitamins.id, dad.id), qty(1.0))
-        entityManager.flush()
         drugService.consume(drugService.get(vitamins.id, child.id), qty(1.0))
-        entityManager.flush()
-        entityManager.clear()
 
         // Check vitamins after 1 day
         val updatedVitamins = dbHelper.drug(vitamins.id)
@@ -220,8 +200,6 @@ class TreatmentPlanStoriesTest {
 
         // Child leaves the medkit
         medKits.leave(familyKit.id, child.id)
-        entityManager.flush()
-        entityManager.clear()
 
         // Medkit still has mom and dad
         val updatedKit = dbHelper.medKit(familyKit.id)
