@@ -102,7 +102,8 @@ class DrugStore {
         category = this[Drugs.category],
         manufacturer = this[Drugs.manufacturer],
         country = this[Drugs.country],
-        description = this[Drugs.description]
+        description = this[Drugs.description],
+        version = this[Drugs.version]
     )
 }
 
@@ -118,4 +119,5 @@ private fun org.jetbrains.exposed.v1.core.statements.UpdateBuilder<*>.write(drug
     this[Drugs.country] = drug.country
     this[Drugs.description] = drug.description
     this[Drugs.medKitId] = drug.medKitId
+    this[Drugs.version] = drug.version
 }

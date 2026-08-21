@@ -21,7 +21,9 @@ data class Drug(
     val category: String? = null,
     val manufacturer: String? = null,
     val country: String? = null,
-    val description: String? = null
+    val description: String? = null,
+    /** Токен предусловия: чем была упаковка, когда её прочитали. Домен на него не смотрит. */
+    val version: Long = 0
 ) {
 
     init {
@@ -83,5 +85,7 @@ data class DrugDetails(
     val category: String? = null,
     val manufacturer: String? = null,
     val country: String? = null,
-    val description: String? = null
+    val description: String? = null,
+    /** Токен предусловия: чем была упаковка, когда её прочитали. Домен на него не смотрит. */
+    val version: Long = 0
 )

@@ -34,12 +34,16 @@ class MedKitStore {
      * есть её состав, а решения по нему принимает не только тот, кто её читал.
      */
     fun find(medKitId: Uuid, userId: Uuid): MedKit? {
-        val members = withCaller(userId)
+        val rows = withCaller(userId)
             .andWhere { MedKitMemberships.medKitId eq medKitId }
-            .map { it[MedKitMemberships.userId] }
-            .toSet()
+            .toList()
 
-        return if (members.isEmpty()) null else MedKit(medKitId, members)
+        if (rows.isEmpty()) return null
+        return MedKit(
+            id = medKitId,
+            members = rows.map { it[MedKitMemberships.userId] }.toSet(),
+            version = rows.first()[MedKits.version]
+        )
     }
 
     /**
@@ -50,8 +54,8 @@ class MedKitStore {
      */
     fun findAllOfUser(userId: Uuid): List<MedKit> =
         withCaller(userId)
-            .groupBy({ it[MedKitMemberships.medKitId] }, { it[MedKitMemberships.userId] })
-            .map { (id, members) -> MedKit(id, members.toSet()) }
+            .groupBy({ it[MedKitMemberships.medKitId] to it[MedKits.version] }, { it[MedKitMemberships.userId] })
+            .map { (key, members) -> MedKit(key.first, members.toSet(), key.second) }
             .sortedBy { it.id }
 
     /**
@@ -64,12 +68,16 @@ class MedKitStore {
         val mine = MedKitMemberships.alias("mine")
         return MedKitMemberships
             .join(mine, JoinType.INNER, MedKitMemberships.medKitId, mine[MedKitMemberships.medKitId])
+            .join(MedKits, JoinType.INNER, MedKitMemberships.medKitId, MedKits.id)
             .selectAll()
             .where { mine[MedKitMemberships.userId] eq userId }
     }
 
     fun insert(medKit: MedKit) {
-        MedKits.insert { it[id] = medKit.id }
+        MedKits.insert {
+            it[id] = medKit.id
+            it[version] = medKit.version
+        }
         insertMemberships(medKit.id, medKit.members)
     }
 

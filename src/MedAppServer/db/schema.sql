@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS users (id uuid, hashed_key VARCHAR(255) NOT NULL, CON
 
 ALTER TABLE users ADD CONSTRAINT ix_users_hashed_key UNIQUE (hashed_key);
 
-CREATE TABLE IF NOT EXISTS med_kits (id uuid, CONSTRAINT med_kits_pkey PRIMARY KEY (id));
+CREATE TABLE IF NOT EXISTS med_kits (id uuid, "version" BIGINT DEFAULT 0 NOT NULL, CONSTRAINT med_kits_pkey PRIMARY KEY (id));
 
 CREATE TABLE IF NOT EXISTS user_med_kits (med_kit_id uuid, user_id uuid, CONSTRAINT user_med_kits_pkey PRIMARY KEY (med_kit_id, user_id), CONSTRAINT user_med_kits_med_kit_fkey FOREIGN KEY (med_kit_id) REFERENCES med_kits(id) ON DELETE CASCADE, CONSTRAINT user_med_kits_user_fkey FOREIGN KEY (user_id) REFERENCES users(id));
 
@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS quantity_units (id uuid, "name" VARCHAR(30) NOT NULL,
 
 ALTER TABLE quantity_units ADD CONSTRAINT quantity_units_name_key UNIQUE ("name");
 
-CREATE TABLE IF NOT EXISTS user_drugs (id uuid, "name" VARCHAR(300) NOT NULL, quantity DECIMAL(19, 6) NOT NULL, quantity_unit_id uuid NOT NULL, form_type_id uuid NULL, category VARCHAR(200) NULL, manufacturer VARCHAR(300) NULL, country VARCHAR(100) NULL, description TEXT NULL, med_kit_id uuid NOT NULL, CONSTRAINT user_drugs_pkey PRIMARY KEY (id), CONSTRAINT user_drugs_quantity_unit_fkey FOREIGN KEY (quantity_unit_id) REFERENCES quantity_units(id), CONSTRAINT user_drugs_form_type_fkey FOREIGN KEY (form_type_id) REFERENCES form_types(id), CONSTRAINT user_drugs_med_kit_fkey FOREIGN KEY (med_kit_id) REFERENCES med_kits(id) ON DELETE CASCADE, CONSTRAINT user_drugs_quantity_positive CHECK (quantity > 0));
+CREATE TABLE IF NOT EXISTS user_drugs (id uuid, "name" VARCHAR(300) NOT NULL, quantity DECIMAL(19, 6) NOT NULL, quantity_unit_id uuid NOT NULL, form_type_id uuid NULL, category VARCHAR(200) NULL, manufacturer VARCHAR(300) NULL, country VARCHAR(100) NULL, description TEXT NULL, med_kit_id uuid NOT NULL, "version" BIGINT DEFAULT 0 NOT NULL, reservations_version BIGINT DEFAULT 0 NOT NULL, reservations_total DECIMAL(19, 6) DEFAULT 0 NOT NULL, CONSTRAINT user_drugs_pkey PRIMARY KEY (id), CONSTRAINT user_drugs_quantity_unit_fkey FOREIGN KEY (quantity_unit_id) REFERENCES quantity_units(id), CONSTRAINT user_drugs_form_type_fkey FOREIGN KEY (form_type_id) REFERENCES form_types(id), CONSTRAINT user_drugs_med_kit_fkey FOREIGN KEY (med_kit_id) REFERENCES med_kits(id) ON DELETE CASCADE, CONSTRAINT user_drugs_quantity_positive CHECK (quantity > 0), CONSTRAINT user_drugs_reservations_total_not_negative CHECK (reservations_total >= 0));
 
 CREATE INDEX ix_user_drugs_name ON user_drugs ("name");
 

@@ -4,6 +4,7 @@ import org.jetbrains.exposed.v1.core.ReferenceOption.CASCADE
 import org.jetbrains.exposed.v1.core.ReferenceOption.NO_ACTION
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.core.greater
+import org.jetbrains.exposed.v1.core.greaterEq
 import org.kert0n.medappserver.domain.QUANTITY_PRECISION
 import org.kert0n.medappserver.domain.QUANTITY_SCALE
 
@@ -32,6 +33,9 @@ object Users : Table("users") {
 /** У аптечки нет ни владельца, ни названия: участники равноправны. */
 object MedKits : Table("med_kits") {
     val id = uuid("id")
+
+    /** Токен предусловия аптечки. Двигают его вступление и выход: состав лежит в другой таблице. */
+    val version = long("version").default(0)
 
     override val primaryKey = PrimaryKey(id, name = "med_kits_pkey")
 }
@@ -97,6 +101,21 @@ object Drugs : Table("user_drugs") {
         .references(MedKits.id, onDelete = CASCADE, onUpdate = NO_ACTION, fkName = "user_drugs_med_kit_fkey")
         .index("ix_user_drugs_med_kit_id")
 
+    /** Токен предусловия упаковки: количество, описание, принадлежность аптечке. */
+    val version = long("version").default(0)
+
+    /**
+     * Состояние снимка броней, а не упаковки.
+     *
+     * Колонки соседствуют с упаковкой физически, но принадлежат `ReservationSnapshot`: агрегат
+     * `Drug` их не читает, и запрет «броней, их суммы и доступного остатка в агрегате нет и не
+     * будет» остаётся в силе. Двигают их сервисы, а не база: ни триггеров, ни вычисляемых
+     * колонок здесь нет.
+     */
+    val reservationsVersion = long("reservations_version").default(0)
+    val reservationsTotal = decimal("reservations_total", QUANTITY_PRECISION, QUANTITY_SCALE)
+        .default(java.math.BigDecimal.ZERO)
+
     override val primaryKey = PrimaryKey(id, name = "user_drugs_pkey")
 
     init {
@@ -108,6 +127,11 @@ object Drugs : Table("user_drugs") {
         // держит домен, здесь оно продублировано затем, что колонку может тронуть и не он:
         // массовый UPDATE, миграция, рука в psql.
         check("user_drugs_quantity_positive") { quantity greater java.math.BigDecimal.ZERO }
+
+        // Заявленное не бывает отрицательным. Ноль бывает: броней может не быть вовсе.
+        check("user_drugs_reservations_total_not_negative") {
+            reservationsTotal greaterEq java.math.BigDecimal.ZERO
+        }
     }
 }
 
