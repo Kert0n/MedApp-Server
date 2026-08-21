@@ -1,14 +1,17 @@
 package org.kert0n.medappserver.controller
 
+import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.responses.ApiResponse
+import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
 import java.util.*
 import org.kert0n.medappserver.api.ReservationCreateRequest
 import org.kert0n.medappserver.api.ReservationDTO
 import org.kert0n.medappserver.api.ReservationPatchRequest
+import org.kert0n.medappserver.services.OpenApiConfiguration
 import org.kert0n.medappserver.services.aggregate.userId
 import org.kert0n.medappserver.services.application.ReservationApplicationService
 import org.slf4j.LoggerFactory
@@ -29,6 +32,11 @@ class ReservationController(private val reservations: ReservationApplicationServ
     private val logger = LoggerFactory.getLogger(ReservationController::class.java)
 
     @GetMapping
+    @Operation(
+        security = [SecurityRequirement(name = OpenApiConfiguration.BEARER_SCHEME)],
+        summary = "List reservations",
+        description = "Returns every reservation of the caller."
+    )
     @ApiResponse(responseCode = "200", description = "Reservations returned")
     fun listReservations(authentication: Authentication): List<ReservationDTO> {
         logger.debug("GET /v1/reservations by user {}", authentication.userId)
@@ -36,6 +44,11 @@ class ReservationController(private val reservations: ReservationApplicationServ
     }
 
     @GetMapping("/{drugId}")
+    @Operation(
+        security = [SecurityRequirement(name = OpenApiConfiguration.BEARER_SCHEME)],
+        summary = "Get a reservation",
+        description = "Returns the caller's reservation on the package."
+    )
     @ApiResponse(responseCode = "200", description = "Reservation found")
     @ApiResponse(responseCode = "404", description = "No reservation on this package", content = [Content()])
     fun getReservation(
@@ -48,6 +61,12 @@ class ReservationController(private val reservations: ReservationApplicationServ
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @Operation(
+        security = [SecurityRequirement(name = OpenApiConfiguration.BEARER_SCHEME)],
+        summary = "Reserve part of a package",
+        description = "Claims an amount of the package for the caller. The amount may exceed what is left in the " +
+            "package: how much of their own reservation to keep is the owner's decision, not the server's."
+    )
     @ApiResponse(responseCode = "201", description = "Reservation created")
     @ApiResponse(responseCode = "400", description = "Invalid amount", content = [Content()])
     @ApiResponse(responseCode = "404", description = "Package is not accessible", content = [Content()])
@@ -62,6 +81,11 @@ class ReservationController(private val reservations: ReservationApplicationServ
     }
 
     @PatchMapping("/{drugId}")
+    @Operation(
+        security = [SecurityRequirement(name = OpenApiConfiguration.BEARER_SCHEME)],
+        summary = "Change the reserved amount",
+        description = "Sets a new reserved amount. It may exceed what is left in the package."
+    )
     @ApiResponse(responseCode = "200", description = "Reservation updated")
     @ApiResponse(responseCode = "400", description = "Invalid amount", content = [Content()])
     @ApiResponse(responseCode = "404", description = "No reservation on this package", content = [Content()])
@@ -77,6 +101,11 @@ class ReservationController(private val reservations: ReservationApplicationServ
 
     @DeleteMapping("/{drugId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(
+        security = [SecurityRequirement(name = OpenApiConfiguration.BEARER_SCHEME)],
+        summary = "Cancel a reservation",
+        description = "Releases the claim. A reservation of zero does not exist, so cancelling is a deletion."
+    )
     @ApiResponse(responseCode = "204", description = "Reservation cancelled")
     @ApiResponse(responseCode = "404", description = "No reservation on this package", content = [Content()])
     fun deleteReservation(

@@ -29,7 +29,11 @@ class AuthController(private val auth: AuthApplicationService) {
     )
 
     @PostMapping("/register")
-    @Operation(security = [])
+    @Operation(
+        security = [],
+        summary = "Register a new user",
+        description = "Creates a new user and returns generated credentials."
+    )
     @ApiResponse(responseCode = "200", description = "User registered", content = [Content(schema = Schema(implementation = RegisterResponse::class))])
     @ApiResponse(responseCode = "403", description = "Invalid registration secret", content = [Content()])
     @ApiResponse(responseCode = "429", description = "Too many registration attempts", content = [Content()])
@@ -59,7 +63,12 @@ class AuthController(private val auth: AuthApplicationService) {
      * и кешировать — вместе с уходящим в нём Basic-заголовком.
      */
     @PostMapping("/token")
-    @Operation(security = [SecurityRequirement(name = OpenApiConfiguration.BASIC_SCHEME)])
+    @Operation(
+        security = [SecurityRequirement(name = OpenApiConfiguration.BASIC_SCHEME)],
+        summary = "Issue JWT token",
+        description = "Uses HTTP Basic authentication and returns a JWT access token. The token carries its own " +
+            "expiry in the `exp` claim; use it as `Authorization: Bearer <token>`."
+    )
     @ApiResponse(responseCode = "200", description = "JWT token issued", content = [Content(schema = Schema(implementation = TokenResponse::class))])
     @ApiResponse(responseCode = "401", description = "Invalid credentials", content = [Content()])
     @ApiResponse(responseCode = "429", description = "Too many token requests", content = [Content()])

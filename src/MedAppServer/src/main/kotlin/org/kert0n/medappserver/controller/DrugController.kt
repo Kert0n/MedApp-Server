@@ -1,9 +1,11 @@
 package org.kert0n.medappserver.controller
 
+import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
+import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
 import jakarta.validation.constraints.Max
@@ -16,6 +18,7 @@ import org.kert0n.medappserver.api.DrugPatchRequest
 import org.kert0n.medappserver.api.DrugTemplateDTO
 import org.kert0n.medappserver.api.VocabularyEntryDTO
 import org.kert0n.medappserver.api.toDto
+import org.kert0n.medappserver.services.OpenApiConfiguration
 import org.kert0n.medappserver.services.aggregate.userId
 import org.kert0n.medappserver.services.application.CatalogueApplicationService
 import org.kert0n.medappserver.services.application.DrugApplicationService
@@ -35,6 +38,11 @@ class DrugController(private val drugs: DrugApplicationService) {
     private val logger = LoggerFactory.getLogger(DrugController::class.java)
 
     @GetMapping("/drugs/{drugId}")
+    @Operation(
+        security = [SecurityRequirement(name = OpenApiConfiguration.BEARER_SCHEME)],
+        summary = "Get a drug",
+        description = "Returns a drug the caller has access to."
+    )
     @ApiResponse(responseCode = "200", description = "Drug found")
     @ApiResponse(responseCode = "404", description = "Drug does not exist or is not accessible", content = [Content()])
     fun getDrug(
@@ -48,6 +56,11 @@ class DrugController(private val drugs: DrugApplicationService) {
     /** Аптечка задаётся путём: упаковка не существует сама по себе, она всегда в аптечке. */
     @PostMapping("/med-kits/{medKitId}/drugs")
     @ResponseStatus(HttpStatus.CREATED)
+    @Operation(
+        security = [SecurityRequirement(name = OpenApiConfiguration.BEARER_SCHEME)],
+        summary = "Add a drug to a medicine kit",
+        description = "Creates a drug in the given kit."
+    )
     @ApiResponse(responseCode = "201", description = "Drug created")
     @ApiResponse(responseCode = "400", description = "Invalid request", content = [Content()])
     @ApiResponse(responseCode = "404", description = "Medicine kit is not accessible", content = [Content()])
@@ -63,6 +76,13 @@ class DrugController(private val drugs: DrugApplicationService) {
 
     /** PATCH, а не PUT: тело описывает изменение части полей, а не препарат целиком. */
     @PatchMapping("/drugs/{drugId}")
+    @Operation(
+        security = [SecurityRequirement(name = OpenApiConfiguration.BEARER_SCHEME)],
+        summary = "Update a package",
+        description = "Changes the given fields; absent fields are left as they are. Quantity here is a correction " +
+            "of the record — you recounted the pack and saw a different number — not a refill, and it leaves " +
+            "reservations alone."
+    )
     @ApiResponse(responseCode = "200", description = "Drug updated")
     @ApiResponse(responseCode = "400", description = "Invalid request", content = [Content()])
     @ApiResponse(responseCode = "404", description = "Drug does not exist or is not accessible", content = [Content()])
@@ -78,6 +98,11 @@ class DrugController(private val drugs: DrugApplicationService) {
 
     @DeleteMapping("/drugs/{drugId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(
+        security = [SecurityRequirement(name = OpenApiConfiguration.BEARER_SCHEME)],
+        summary = "Delete a drug",
+        description = "Destroys the package and every reservation placed on it."
+    )
     @ApiResponse(responseCode = "204", description = "Drug deleted")
     @ApiResponse(responseCode = "404", description = "Drug does not exist or is not accessible", content = [Content()])
     fun deleteDrug(
@@ -95,6 +120,15 @@ class DrugController(private val drugs: DrugApplicationService) {
      * приём опустошил пачку и та уничтожена.
      */
     @PostMapping("/drugs/{drugId}/intakes")
+    @Operation(
+        security = [SecurityRequirement(name = OpenApiConfiguration.BEARER_SCHEME)],
+        summary = "Record an intake",
+        description = "Takes the given amount out of the package — the only way its contents decrease. There is no " +
+            "distinction between a planned intake and an emergency one: what was taken reduces the package, and the " +
+            "reservation is the owner's to adjust. Taking more than the package holds is refused: a package cannot " +
+            "be refilled, so a second pack is a second package. Returns no body when the package ran out and was " +
+            "destroyed."
+    )
     @ApiResponse(responseCode = "200", description = "Package reduced")
     @ApiResponse(responseCode = "204", description = "Package ran out and was destroyed", content = [Content()])
     @ApiResponse(responseCode = "400", description = "Amount exceeds what is left in the package", content = [Content()])
@@ -115,6 +149,11 @@ class DrugController(private val drugs: DrugApplicationService) {
      * которому препарат окажется. Отдельного тела не нужно — обе стороны в пути.
      */
     @PutMapping("/med-kits/{targetMedKitId}/drugs/{drugId}")
+    @Operation(
+        security = [SecurityRequirement(name = OpenApiConfiguration.BEARER_SCHEME)],
+        summary = "Move a drug to another medicine kit",
+        description = "Transfers the drug between kits."
+    )
     @ApiResponse(responseCode = "200", description = "Drug moved")
     @ApiResponse(responseCode = "404", description = "Drug or target kit is not accessible", content = [Content()])
     fun moveDrug(
@@ -137,6 +176,11 @@ class DrugTemplateController(
     private val logger = LoggerFactory.getLogger(DrugTemplateController::class.java)
 
     @GetMapping
+    @Operation(
+        security = [SecurityRequirement(name = OpenApiConfiguration.BEARER_SCHEME)],
+        summary = "Search the catalogue",
+        description = "Searches by name, Latin name, active substance and manufacturer."
+    )
     @ApiResponse(responseCode = "200", description = "Matches found")
     @ApiResponse(responseCode = "400", description = "Invalid query or limit", content = [Content()])
     fun searchDrugTemplates(
@@ -156,6 +200,11 @@ class DrugTemplateController(
     }
 
     @GetMapping("/{templateId}")
+    @Operation(
+        security = [SecurityRequirement(name = OpenApiConfiguration.BEARER_SCHEME)],
+        summary = "Get a catalogue entry",
+        description = "Returns a single catalogue entry."
+    )
     @ApiResponse(responseCode = "200", description = "Entry found")
     @ApiResponse(responseCode = "404", description = "Entry does not exist", content = [Content()])
     fun getDrugTemplate(
@@ -184,6 +233,12 @@ class VocabularyController(
     private val logger = LoggerFactory.getLogger(VocabularyController::class.java)
 
     @GetMapping("/quantity-units")
+    @Operation(
+        security = [SecurityRequirement(name = OpenApiConfiguration.BEARER_SCHEME)],
+        summary = "List quantity units",
+        description = "Shared vocabulary of quantity units. A drug references a unit by identifier, so this list is " +
+            "where the identifier comes from."
+    )
     @ApiResponse(responseCode = "200", description = "Units returned")
     fun listQuantityUnits(authentication: Authentication): List<VocabularyEntryDTO> {
         logger.debug("GET /v1/quantity-units by user {}", authentication.userId)
@@ -191,6 +246,11 @@ class VocabularyController(
     }
 
     @GetMapping("/form-types")
+    @Operation(
+        security = [SecurityRequirement(name = OpenApiConfiguration.BEARER_SCHEME)],
+        summary = "List dosage forms",
+        description = "Shared vocabulary of dosage forms, used the same way as quantity units."
+    )
     @ApiResponse(responseCode = "200", description = "Dosage forms returned")
     fun listFormTypes(authentication: Authentication): List<VocabularyEntryDTO> {
         logger.debug("GET /v1/form-types by user {}", authentication.userId)
