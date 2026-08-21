@@ -101,7 +101,7 @@ class BasicWorkflowStoriesTest {
         entityManager.flush()
 
         // Anna takes 2 tablets of Aspirin
-        drugService.consume(drugService.require(aspirin.id, anna.id), qty(2.0))
+        drugService.consume(drugService.get(aspirin.id, anna.id), qty(2.0))
         entityManager.flush()
         entityManager.clear()
 
@@ -147,7 +147,7 @@ class BasicWorkflowStoriesTest {
         entityManager.flush()
 
         // Anna shares with Bob via share key
-        val shareKey = medKitService.invite(medKitService.require(medkit.id, anna.id), anna.id)
+        val shareKey = medKitService.invite(medKitService.get(medkit.id, anna.id), anna.id)
         medKitService.joinByInvitation(shareKey, bob.id)
         entityManager.flush()
         entityManager.clear()
@@ -182,7 +182,7 @@ class BasicWorkflowStoriesTest {
         dbHelper.insert(bob)
 
         val medkit = medKitService.create(anna.id)
-        val shareKey = medKitService.invite(medKitService.require(medkit.id, anna.id), anna.id)
+        val shareKey = medKitService.invite(medKitService.get(medkit.id, anna.id), anna.id)
         medKitService.joinByInvitation(shareKey, bob.id)
 
         val drugData = Drug(
@@ -308,9 +308,9 @@ class BasicWorkflowStoriesTest {
         entityManager.flush()
 
         // Consume all in steps
-        disposal.consume(drugService.require(drugData.id, userData.id), qty(10.0))
-        disposal.consume(drugService.require(drugData.id, userData.id), qty(10.0))
-        disposal.consume(drugService.require(drugData.id, userData.id), qty(10.0))
+        disposal.consume(drugService.get(drugData.id, userData.id), qty(10.0))
+        disposal.consume(drugService.get(drugData.id, userData.id), qty(10.0))
+        disposal.consume(drugService.get(drugData.id, userData.id), qty(10.0))
         entityManager.flush()
         entityManager.clear()
 

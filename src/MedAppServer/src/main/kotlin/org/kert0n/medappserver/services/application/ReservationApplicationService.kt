@@ -26,19 +26,19 @@ class ReservationApplicationService(
     fun ofUser(userId: UUID): List<ReservationDTO> = reservationService.ofUser(userId).map { it.toDto() }
 
     @Transactional(readOnly = true)
-    fun read(userId: UUID, drugId: UUID): ReservationDTO = reservationService.require(userId, drugId).toDto()
+    fun read(userId: UUID, drugId: UUID): ReservationDTO = reservationService.get(userId, drugId).toDto()
 
     @Transactional
     fun create(userId: UUID, drugId: UUID, amount: BigDecimal): ReservationDTO =
         // Упаковка читается здесь: бронировать можно только то, что видно, и прочитанная
         // пачка — доказательство этого. Она же приносит единицу величины.
-        reservationService.create(drugService.require(drugId, userId), userId, amount).toDto()
+        reservationService.create(drugService.get(drugId, userId), userId, amount).toDto()
 
     @Transactional
     fun changeTo(userId: UUID, drugId: UUID, amount: BigDecimal): ReservationDTO =
-        reservationService.changeTo(reservationService.require(userId, drugId), amount).toDto()
+        reservationService.changeTo(reservationService.get(userId, drugId), amount).toDto()
 
     @Transactional
     fun cancel(userId: UUID, drugId: UUID) =
-        reservationService.cancel(reservationService.require(userId, drugId))
+        reservationService.cancel(reservationService.get(userId, drugId))
 }

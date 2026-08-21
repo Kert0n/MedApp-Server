@@ -35,7 +35,7 @@ class ReservationServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        reservationService.create(drugService.require(drug.id, alice.id), alice.id, qty(10.0))
+        reservationService.create(drugService.get(drug.id, alice.id), alice.id, qty(10.0))
         dbHelper.flushAndClear()
 
         assertEquals(1, reservationService.ofUser(alice.id).size)
@@ -48,7 +48,7 @@ class ReservationServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        reservationService.create(drugService.require(drug.id, alice.id), alice.id, qty(10.0))
+        reservationService.create(drugService.get(drug.id, alice.id), alice.id, qty(10.0))
         dbHelper.flushAndClear()
 
         assertQty(10.0, dbHelper.userReservation(alice.id, drug.id))
@@ -62,7 +62,7 @@ class ReservationServiceTest {
         dbHelper.flushAndClear()
 
         assertFailsWith<DomainRuleViolated> {
-            reservationService.require(alice.id, drug.id)
+            reservationService.get(alice.id, drug.id)
         }
     }
 
@@ -73,10 +73,10 @@ class ReservationServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        reservationService.create(drugService.require(drug.id, alice.id), alice.id, qty(30.0))
+        reservationService.create(drugService.get(drug.id, alice.id), alice.id, qty(30.0))
         dbHelper.flushAndClear()
 
-        val dto = reservationService.require(alice.id, drug.id).toDto()
+        val dto = reservationService.get(alice.id, drug.id).toDto()
         assertEquals(drug.id, dto.drugId)
         assertQty(30.0, dto.amount)
     }

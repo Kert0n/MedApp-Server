@@ -48,7 +48,7 @@ class DrugApplicationService(
      */
     @Transactional(readOnly = true)
     fun read(drugId: UUID, userId: UUID): DrugDTO {
-        val drug = drugService.require(drugId, userId)
+        val drug = drugService.get(drugId, userId)
         return drug.toDto(reservationService.onDrugs(listOf(drug.id), userId))
     }
 
@@ -60,31 +60,31 @@ class DrugApplicationService(
         logger.debug("Creating drug {} in medkit {}", request.name, medKitId)
         // Аптечка читается, а не подразумевается: прочитанный агрегат и есть право завести в
         // нём упаковку, и он же аргумент команды.
-        val medKit = medKitService.require(medKitId, userId)
+        val medKit = medKitService.get(medKitId, userId)
         return drugService.create(request.toCommand(), medKit).toDto(emptyList())
     }
 
     @Transactional
     fun update(drugId: UUID, request: DrugPatchRequest, userId: UUID): DrugDTO {
-        val updated = drugService.update(drugService.require(drugId, userId), request.toCommand())
+        val updated = drugService.update(drugService.get(drugId, userId), request.toCommand())
         return updated.toDto(reservationService.onDrugs(listOf(updated.id), userId))
     }
 
     @Transactional
-    fun delete(drugId: UUID, userId: UUID) = disposal.destroy(drugService.require(drugId, userId))
+    fun delete(drugId: UUID, userId: UUID) = disposal.destroy(drugService.get(drugId, userId))
 
     /** `null` — приём опустошил пачку, и она уничтожена: отдавать нечего. */
     @Transactional
     fun recordIntake(drugId: UUID, quantity: BigDecimal, userId: UUID): DrugDTO? {
-        val left = disposal.consume(drugService.require(drugId, userId), quantity) ?: return null
+        val left = disposal.consume(drugService.get(drugId, userId), quantity) ?: return null
         return left.toDto(reservationService.onDrugs(listOf(left.id), userId))
     }
 
     @Transactional
     fun moveToMedKit(drugId: UUID, targetMedKitId: UUID, userId: UUID): DrugDTO {
         logger.debug("Moving drug {} to medkit {}", drugId, targetMedKitId)
-        val target = medKitService.require(targetMedKitId, userId)
-        val moved = relocation.moveOne(drugService.require(drugId, userId), target)
+        val target = medKitService.get(targetMedKitId, userId)
+        val moved = relocation.moveOne(drugService.get(drugId, userId), target)
         return moved.toDto(reservationService.onDrugs(listOf(moved.id), userId))
     }
 

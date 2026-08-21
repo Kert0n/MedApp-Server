@@ -71,7 +71,7 @@ class DrugMovementStoriesTest {
         entityManager.flush()
 
         // Reserve a share
-        reservationService.create(drugService.require(painkiller.id, userData.id), userData.id, qty(20.0))
+        reservationService.create(drugService.get(painkiller.id, userData.id), userData.id, qty(20.0))
         entityManager.flush()
 
         // Move drug to travel kit
@@ -109,7 +109,7 @@ class DrugMovementStoriesTest {
         dbHelper.insert(bob)
 
         val medkit = medKitService.create(anna.id)
-        val shareKey = medKitService.invite(medKitService.require(medkit.id, anna.id), anna.id)
+        val shareKey = medKitService.invite(medKitService.get(medkit.id, anna.id), anna.id)
         medKitService.joinByInvitation(shareKey, bob.id)
 
         val drugData = Drug(
@@ -122,18 +122,18 @@ class DrugMovementStoriesTest {
         entityManager.flush()
 
         // Anna reserves 40, Bob 30 — 70 of 100
-        reservationService.create(drugService.require(drugData.id, anna.id), anna.id, qty(40.0))
-        reservationService.create(drugService.require(drugData.id, bob.id), bob.id, qty(30.0))
+        reservationService.create(drugService.get(drugData.id, anna.id), anna.id, qty(40.0))
+        reservationService.create(drugService.get(drugData.id, bob.id), bob.id, qty(30.0))
         entityManager.flush()
 
-        val updated = reservationService.changeTo(reservationService.require(anna.id, drugData.id), qty(70.0))
+        val updated = reservationService.changeTo(reservationService.get(anna.id, drugData.id), qty(70.0))
         assertQty(70.0, updated.amount)
         entityManager.flush()
         entityManager.clear()
         assertQty(100.0, dbHelper.reservedOnDrug(drugData.id))
 
         // Выше содержимого пачки тоже можно: 200 + 30 на сотню таблеток — законное состояние.
-        reservationService.changeTo(reservationService.require(anna.id, drugData.id), qty(200.0))
+        reservationService.changeTo(reservationService.get(anna.id, drugData.id), qty(200.0))
         entityManager.flush()
         entityManager.clear()
         assertQty(230.0, dbHelper.reservedOnDrug(drugData.id))
@@ -158,7 +158,7 @@ class DrugMovementStoriesTest {
         entityManager.flush()
 
         // Reserve a share
-        reservationService.create(drugService.require(drugData.id, userData.id), userData.id, qty(25.0))
+        reservationService.create(drugService.get(drugData.id, userData.id), userData.id, qty(25.0))
         entityManager.flush()
         entityManager.clear()
 
@@ -167,7 +167,7 @@ class DrugMovementStoriesTest {
         assertNotNull(plan)
 
         // Delete the drug
-        disposal.destroy(drugService.require(drugData.id, userData.id))
+        disposal.destroy(drugService.get(drugData.id, userData.id))
         entityManager.flush()
         entityManager.clear()
 
@@ -191,12 +191,12 @@ class DrugMovementStoriesTest {
         val charlie = dbHelper.insert(User(id = UUID.randomUUID(), hashedKey = "charlie_${UUID.randomUUID()}"))
 
         val oldKit = medKitService.create(anna.id)
-        medKitService.joinByInvitation(medKitService.invite(medKitService.require(oldKit.id, anna.id), anna.id), bob.id)
-        medKitService.joinByInvitation(medKitService.invite(medKitService.require(oldKit.id, anna.id), anna.id), charlie.id)
+        medKitService.joinByInvitation(medKitService.invite(medKitService.get(oldKit.id, anna.id), anna.id), bob.id)
+        medKitService.joinByInvitation(medKitService.invite(medKitService.get(oldKit.id, anna.id), anna.id), charlie.id)
 
         // Setup: Anna and Bob share a New MedKit (Charlie is excluded)
         val newKit = medKitService.create(anna.id)
-        medKitService.joinByInvitation(medKitService.invite(medKitService.require(newKit.id, anna.id), anna.id), bob.id)
+        medKitService.joinByInvitation(medKitService.invite(medKitService.get(newKit.id, anna.id), anna.id), bob.id)
 
         // Add drug to old kit
         val drugData = dbHelper.insert(
@@ -210,9 +210,9 @@ class DrugMovementStoriesTest {
         )
 
         // Everyone reserves 30 pills
-        reservationService.create(drugService.require(drugData.id, anna.id), anna.id, qty(30.0))
-        reservationService.create(drugService.require(drugData.id, bob.id), bob.id, qty(30.0))
-        reservationService.create(drugService.require(drugData.id, charlie.id), charlie.id, qty(30.0))
+        reservationService.create(drugService.get(drugData.id, anna.id), anna.id, qty(30.0))
+        reservationService.create(drugService.get(drugData.id, bob.id), bob.id, qty(30.0))
+        reservationService.create(drugService.get(drugData.id, charlie.id), charlie.id, qty(30.0))
 
         entityManager.flush()
         entityManager.clear()

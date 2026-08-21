@@ -36,15 +36,15 @@ class MedKitService(
         return medKit
     }
 
-    /** Аптечка вызывающего или `null`: чужой для него не существует — так устроен запрос. */
+    /**
+     * Аптечка вызывающего. Недоступная и несуществующая неотличимы намеренно.
+     *
+     * Единственный способ получить `MedKit`: чтение и есть проверка доступа.
+     */
     @Transactional(propagation = MANDATORY, readOnly = true)
-    fun find(medKitId: UUID, userId: UUID): MedKit? = medKits.find(medKitId, userId)
-
-    /** Аптечка вызывающего или 404: недоступная и несуществующая неотличимы намеренно. */
-    @Transactional(propagation = MANDATORY, readOnly = true)
-    fun require(medKitId: UUID, userId: UUID): MedKit {
+    fun get(medKitId: UUID, userId: UUID): MedKit {
         logger.debug("Finding medkit {} for user {}", medKitId, userId)
-        return find(medKitId, userId) ?: throw NotAMember()
+        return medKits.find(medKitId, userId) ?: throw NotAMember()
     }
 
     /** Все аптечки участника — целиком и одним запросом. */
@@ -80,7 +80,7 @@ class MedKitService(
         val invitation = medKitTokenCache.getOrNull(securityService.hashToken(key))
             ?: throw NotAMember()
 
-        val joined = require(invitation.medKitId, invitation.invitedBy).join(userId)
+        val joined = get(invitation.medKitId, invitation.invitedBy).join(userId)
         medKits.save(joined)
         return joined
     }

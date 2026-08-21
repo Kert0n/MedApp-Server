@@ -95,12 +95,12 @@ class DatabaseTestHelper(
      */
     @Transactional
     fun join(medKitId: UUID, invitedBy: UUID, userId: UUID): MedKit =
-        medKitService.joinByInvitation(medKitService.invite(medKitService.require(medKitId, invitedBy), invitedBy), userId)
+        medKitService.joinByInvitation(medKitService.invite(medKitService.get(medKitId, invitedBy), invitedBy), userId)
 
     /** Бронь под подготовку сценария. */
     @Transactional
     fun reserve(userId: UUID, drugId: UUID, amount: BigDecimal): Reservation =
-        reservationService.create(drugService.require(drugId, userId), userId, amount)
+        reservationService.create(drugService.get(drugId, userId), userId, amount)
 
     /** Кладёт заранее собранный препарат: тестам нужны свои имена и количества. */
     @Transactional

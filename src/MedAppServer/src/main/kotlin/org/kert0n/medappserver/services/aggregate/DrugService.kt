@@ -29,16 +29,17 @@ class DrugService(
 
     // ── Чтение ───────────────────────────────────────────────────────────────────
 
-    /** `null`, если упаковки нет или она недоступна вызывающему. */
+    /**
+     * Упаковка вызывающего. Чужой для него не существует — так устроен запрос.
+     *
+     * Единственный способ получить `Drug`: отдельной проверки доступа нет и не нужно, само
+     * чтение ею и является. Отсюда и правило команд — они принимают то, что здесь получено.
+     */
     @Transactional(propagation = MANDATORY, readOnly = true)
-    fun find(drugId: UUID, userId: UUID): Drug? {
+    fun get(drugId: UUID, userId: UUID): Drug {
         logger.debug("Reading drug {} for user {}", drugId, userId)
-        return drugs.find(drugId, userId)
+        return drugs.find(drugId, userId) ?: throw notFound()
     }
-
-    /** Упаковка или 404. */
-    @Transactional(propagation = MANDATORY, readOnly = true)
-    fun require(drugId: UUID, userId: UUID): Drug = find(drugId, userId) ?: throw notFound()
 
     @Transactional(propagation = MANDATORY, readOnly = true)
     fun ofMedKit(medKitId: UUID, userId: UUID): List<Drug> {

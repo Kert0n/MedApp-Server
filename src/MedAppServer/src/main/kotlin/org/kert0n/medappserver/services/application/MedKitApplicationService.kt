@@ -37,7 +37,7 @@ class MedKitApplicationService(
     /** Аптечка вместе с содержимым: сама аптечка знает участников, упаковки — себя. */
     @Transactional(readOnly = true)
     fun read(medKitId: UUID, userId: UUID): MedKitDTO {
-        val medKit = medKitService.require(medKitId, userId)
+        val medKit = medKitService.get(medKitId, userId)
         val packages = drugService.ofMedKit(medKitId, userId)
         return medKit.toDto(packages.toDto(reservationService.onDrugs(packages.map { it.id }, userId)).toSet())
     }
@@ -49,7 +49,7 @@ class MedKitApplicationService(
 
     @Transactional
     fun invite(medKitId: UUID, userId: UUID): InvitationDTO =
-        InvitationDTO(medKitService.invite(medKitService.require(medKitId, userId), userId))
+        InvitationDTO(medKitService.invite(medKitService.get(medKitId, userId), userId))
 
     @Transactional
     fun joinByInvitation(key: String, userId: UUID): MedKitDTO {
@@ -72,7 +72,7 @@ class MedKitApplicationService(
     @Transactional
     fun leave(medKitId: UUID, userId: UUID) {
         logger.debug("Removing user {} from medkit {}", userId, medKitId)
-        medKitService.leave(medKitService.require(medKitId, userId), userId)
+        medKitService.leave(medKitService.get(medKitId, userId), userId)
     }
 
     /**
@@ -85,10 +85,10 @@ class MedKitApplicationService(
     fun delete(medKitId: UUID, userId: UUID, transferToMedKitId: UUID? = null) {
         logger.debug("Deleting medkit {} (transfer to {})", medKitId, transferToMedKitId)
         // Читается один раз: и переезд, и удаление работают с уже прочитанным агрегатом.
-        val medKit = medKitService.require(medKitId, userId)
+        val medKit = medKitService.get(medKitId, userId)
 
         transferToMedKitId?.let {
-            relocation.moveAll(medKit, medKitService.require(it, userId))
+            relocation.moveAll(medKit, medKitService.get(it, userId))
         }
 
         medKitService.delete(medKit)

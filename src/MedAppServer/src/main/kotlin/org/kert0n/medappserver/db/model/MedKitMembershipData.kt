@@ -19,22 +19,35 @@ class MedKitMembershipData(
     @EmbeddedId
     var membershipKey: MedKitMembershipKey = MedKitMembershipKey(),
 
+    /**
+     * Аптечка и пользователь — **только на чтение**.
+     *
+     * Строка пишется одним ключом: обе колонки в нём и так есть. Связи объявлены затем, чтобы
+     * Hibernate построил внешние ключи в схеме для тестов, — а не затем, чтобы их выставлять.
+     * Иначе хранилищу членства пришлось бы держать чужие репозитории и поднимать чужие строки
+     * ради ссылки, которую оно и так знает.
+     */
     @ManyToOne(fetch = FetchType.LAZY)
-    @MapsId("medKitId")
     @JoinColumn(
         name = "med_kit_id",
+        insertable = false,
+        updatable = false,
         foreignKey = ForeignKey(
             name = "user_med_kits_med_kit_fkey",
             foreignKeyDefinition =
                 "FOREIGN KEY (med_kit_id) REFERENCES med_kits (id) ON DELETE CASCADE"
         )
     )
-    var medKit: MedKitData,
+    var medKit: MedKitData? = null,
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @MapsId("userId")
-    @JoinColumn(name = "user_id", foreignKey = ForeignKey(name = "user_med_kits_user_fkey"))
-    var user: UserData
+    @JoinColumn(
+        name = "user_id",
+        insertable = false,
+        updatable = false,
+        foreignKey = ForeignKey(name = "user_med_kits_user_fkey")
+    )
+    var user: UserData? = null
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true

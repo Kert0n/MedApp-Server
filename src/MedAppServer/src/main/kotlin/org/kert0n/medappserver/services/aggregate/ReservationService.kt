@@ -43,12 +43,10 @@ class ReservationService(
     }
 
     /** Бронь или `null`, если её нет. */
+    /** Бронь вызывающего. Единственный способ её получить. */
     @Transactional(propagation = MANDATORY, readOnly = true)
-    fun find(userId: UUID, drugId: UUID): Reservation? = reservations.find(userId, drugId)
-
-    /** Бронь или 404. */
-    @Transactional(propagation = MANDATORY, readOnly = true)
-    fun require(userId: UUID, drugId: UUID): Reservation = find(userId, drugId) ?: throw NoSuchReservation()
+    fun get(userId: UUID, drugId: UUID): Reservation =
+        reservations.find(userId, drugId) ?: throw NoSuchReservation()
 
     /** Брони на перечисленные упаковки — чтобы ответить, сколько на пачку заявлено. */
     @Transactional(propagation = MANDATORY, readOnly = true)

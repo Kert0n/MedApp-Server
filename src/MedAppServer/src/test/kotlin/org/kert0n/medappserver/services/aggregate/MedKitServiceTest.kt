@@ -44,7 +44,7 @@ class MedKitServiceTest {
     @Test
     fun `require throws NOT_FOUND for non-existent medkit`() {
         assertThrows<DomainRuleViolated> {
-            medKitService.require(UUID.randomUUID(), UUID.randomUUID())
+            medKitService.get(UUID.randomUUID(), UUID.randomUUID())
         }
     }
 
@@ -58,7 +58,7 @@ class MedKitServiceTest {
         dbHelper.flushAndClear()
 
         assertFailsWith<DomainRuleViolated> {
-            medKitService.require(kit.id, eve.id)
+            medKitService.get(kit.id, eve.id)
         }
     }
 
@@ -96,7 +96,7 @@ class MedKitServiceTest {
         val kit = medKitService.create(owner.id)
         dbHelper.flushAndClear()
 
-        val key = medKitService.invite(medKitService.require(kit.id, owner.id), owner.id)
+        val key = medKitService.invite(medKitService.get(kit.id, owner.id), owner.id)
         medKitService.joinByInvitation(key, joiner.id)
         dbHelper.flushAndClear()
 
@@ -155,12 +155,12 @@ class MedKitServiceTest {
         dbHelper.join(kit.id, alice.id, bob.id)
         dbHelper.flushAndClear()
 
-        medKitService.leave(medKitService.require(kit.id, bob.id), bob.id)
+        medKitService.leave(medKitService.get(kit.id, bob.id), bob.id)
         dbHelper.flushAndClear()
 
-        assertNotNull(medKitService.require(kit.id, alice.id))
+        assertNotNull(medKitService.get(kit.id, alice.id))
         assertFailsWith<DomainRuleViolated> {
-            medKitService.require(kit.id, bob.id)
+            medKitService.get(kit.id, bob.id)
         }
     }
 
@@ -170,7 +170,7 @@ class MedKitServiceTest {
         val kit = medKitService.create(alice.id)
         dbHelper.flushAndClear()
 
-        medKitService.leave(medKitService.require(kit.id, alice.id), alice.id)
+        medKitService.leave(medKitService.get(kit.id, alice.id), alice.id)
         dbHelper.flushAndClear()
 
         assertNull(dbHelper.medKit(kit.id))

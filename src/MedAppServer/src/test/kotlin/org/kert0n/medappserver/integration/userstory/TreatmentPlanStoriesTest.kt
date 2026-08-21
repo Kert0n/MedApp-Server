@@ -77,7 +77,7 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
 
         // Reserve 30 tablets
-        val plan = reservationService.create(drugService.require(drugData.id, userId = userData.id), userId = userData.id, qty(30.0))
+        val plan = reservationService.create(drugService.get(drugData.id, userId = userData.id), userId = userData.id, qty(30.0))
         assertNotNull(plan)
         entityManager.flush()
 
@@ -87,8 +87,8 @@ class TreatmentPlanStoriesTest {
         assertQty(30.0, createdPlan, "Planned amount should be 30")
 
         // Record some intakes
-        drugService.consume(drugService.require(drugData.id, userData.id), qty(5.0))
-        drugService.consume(drugService.require(drugData.id, userData.id), qty(5.0))
+        drugService.consume(drugService.get(drugData.id, userData.id), qty(5.0))
+        drugService.consume(drugService.get(drugData.id, userData.id), qty(5.0))
         entityManager.flush()
         entityManager.clear()
 
@@ -110,7 +110,7 @@ class TreatmentPlanStoriesTest {
         dbHelper.insert(bob)
 
         val medkit = medKitService.create(anna.id)
-        val shareKey = medKitService.invite(medKitService.require(medkit.id, anna.id), anna.id)
+        val shareKey = medKitService.invite(medKitService.get(medkit.id, anna.id), anna.id)
         medKitService.joinByInvitation(shareKey, bob.id)
 
         val vitaminC = Drug(
@@ -127,11 +127,11 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
 
         // Anna reserves 40 tablets
-        reservationService.create(drugService.require(vitaminC.id, anna.id), anna.id, qty(40.0))
+        reservationService.create(drugService.get(vitaminC.id, anna.id), anna.id, qty(40.0))
         entityManager.flush()
 
         // Bob reserves 50 more
-        reservationService.create(drugService.require(vitaminC.id, bob.id), bob.id, qty(50.0))
+        reservationService.create(drugService.get(vitaminC.id, bob.id), bob.id, qty(50.0))
         entityManager.flush()
         entityManager.clear()
         // 90 reserved on the pack in total
@@ -167,9 +167,9 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
 
         val familyKit = medKitService.create(mom.id)
-        val dadKey = medKitService.invite(medKitService.require(familyKit.id, mom.id), mom.id)
+        val dadKey = medKitService.invite(medKitService.get(familyKit.id, mom.id), mom.id)
         medKitService.joinByInvitation(dadKey, dad.id)
-        val childKey = medKitService.invite(medKitService.require(familyKit.id, mom.id), mom.id)
+        val childKey = medKitService.invite(medKitService.get(familyKit.id, mom.id), mom.id)
         medKitService.joinByInvitation(childKey, child.id)
         entityManager.flush()
 
@@ -191,20 +191,20 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
 
         // Everyone reserves 30 vitamins
-        reservationService.create(drugService.require(vitamins.id, mom.id), mom.id, qty(30.0))
-        reservationService.create(drugService.require(vitamins.id, dad.id), dad.id, qty(30.0))
-        reservationService.create(drugService.require(vitamins.id, child.id), child.id, qty(30.0))
+        reservationService.create(drugService.get(vitamins.id, mom.id), mom.id, qty(30.0))
+        reservationService.create(drugService.get(vitamins.id, dad.id), dad.id, qty(30.0))
+        reservationService.create(drugService.get(vitamins.id, child.id), child.id, qty(30.0))
         entityManager.flush()
         entityManager.clear()
         // 90 reserved — the whole pack
         assertQty(90.0, dbHelper.reservedOnDrug(vitamins.id))
 
         // Everyone takes their daily vitamin
-        drugService.consume(drugService.require(vitamins.id, mom.id), qty(1.0))
+        drugService.consume(drugService.get(vitamins.id, mom.id), qty(1.0))
         entityManager.flush()
-        drugService.consume(drugService.require(vitamins.id, dad.id), qty(1.0))
+        drugService.consume(drugService.get(vitamins.id, dad.id), qty(1.0))
         entityManager.flush()
-        drugService.consume(drugService.require(vitamins.id, child.id), qty(1.0))
+        drugService.consume(drugService.get(vitamins.id, child.id), qty(1.0))
         entityManager.flush()
         entityManager.clear()
 
