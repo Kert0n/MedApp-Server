@@ -2,8 +2,11 @@ package org.kert0n.medappserver.db.store
 
 import kotlin.uuid.Uuid
 import kotlin.uuid.toKotlinUuid
+import org.jetbrains.exposed.v1.core.IColumnType
+import org.jetbrains.exposed.v1.core.IntegerColumnType
 import org.jetbrains.exposed.v1.core.JoinType
 import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.TextColumnType
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -82,36 +85,51 @@ class CatalogueStore {
     }
 
     fun quantityUnits(): List<QuantityUnit> =
-        QuantityUnits.selectAll().map { QuantityUnit(it[QuantityUnits.id], it[QuantityUnits.name]) }
-            .sortedBy { it.name }
+        QuantityUnits.selectAll().orderBy(QuantityUnits.name).map { it.toQuantityUnit() }
 
     fun formTypes(): List<FormType> =
-        FormTypes.selectAll().map { FormType(it[FormTypes.id], it[FormTypes.name]) }.sortedBy { it.name }
+        FormTypes.selectAll().orderBy(FormTypes.name).map { it.toFormType() }
 
     fun findQuantityUnit(id: Uuid): QuantityUnit? =
-        QuantityUnits.selectAll().where { QuantityUnits.id eq id }
-            .singleOrNull()?.let { QuantityUnit(it[QuantityUnits.id], it[QuantityUnits.name]) }
+        QuantityUnits.selectAll().where { QuantityUnits.id eq id }.singleOrNull()?.toQuantityUnit()
 
     fun findFormType(id: Uuid): FormType? =
-        FormTypes.selectAll().where { FormTypes.id eq id }
-            .singleOrNull()?.let { FormType(it[FormTypes.id], it[FormTypes.name]) }
+        FormTypes.selectAll().where { FormTypes.id eq id }.singleOrNull()?.toFormType()
 
     private val templateRows
         get() = DrugTemplates
             .join(FormTypes, JoinType.LEFT, DrugTemplates.formTypeId, FormTypes.id)
             .join(QuantityUnits, JoinType.LEFT, DrugTemplates.quantityUnitId, QuantityUnits.id)
 
-    private fun searchArguments(term: String, likeTerm: String, limit: Int) =
-        listOf<Pair<org.jetbrains.exposed.v1.core.IColumnType<*>, Any?>>(
-            *Array(1) { org.jetbrains.exposed.v1.core.TextColumnType() to term },
-            *Array(4) { org.jetbrains.exposed.v1.core.TextColumnType() to likeTerm },
-            *Array(4) { org.jetbrains.exposed.v1.core.TextColumnType() to term },
-            org.jetbrains.exposed.v1.core.TextColumnType() to term,
-            org.jetbrains.exposed.v1.core.TextColumnType() to term,
-            *Array(5) { org.jetbrains.exposed.v1.core.TextColumnType() to likeTerm },
-            *Array(4) { org.jetbrains.exposed.v1.core.TextColumnType() to term },
-            org.jetbrains.exposed.v1.core.IntegerColumnType() to limit
-        )
+    /**
+     * Значения по местам подстановки — в том же порядке, в каком они стоят в запросе.
+     *
+     * Список длинный не от сложности, а оттого, что одно и то же слово ищется по четырём полям
+     * и дважды: сперва чтобы найти, потом чтобы упорядочить. Поэтому он и разбит по строчкам
+     * запроса, а не свёрнут в одно выражение: сбитый порядок здесь ничем не проявится, кроме
+     * неверной выдачи.
+     */
+    private fun searchArguments(term: String, likeTerm: String, limit: Int): List<Pair<IColumnType<*>, Any?>> =
+        buildList {
+            fun text(value: String) = add(TextColumnType() to value)
+
+            text(term)                       // WHERE: полнотекст по документу
+            repeat(4) { text(likeTerm) }     // WHERE: подстрока по четырём полям
+            repeat(4) { text(term) }         // WHERE: триграммы по тем же полям
+
+            text(term)                       // ORDER BY: найденное полнотекстом выше
+            text(term)                       // ORDER BY: точное совпадение имени
+            repeat(5) { text(likeTerm) }     // ORDER BY: лестница префикса и подстроки
+            repeat(4) { text(term) }         // ORDER BY: сходство по четырём полям
+
+            add(IntegerColumnType() to limit)
+        }
+
+    private fun ResultRow.toQuantityUnit(): QuantityUnit =
+        QuantityUnit(this[QuantityUnits.id], this[QuantityUnits.name])
+
+    private fun ResultRow.toFormType(): FormType =
+        FormType(this[FormTypes.id], this[FormTypes.name])
 
     private fun ResultRow.toDomain(): DrugTemplate = DrugTemplate(
         id = this[DrugTemplates.id],
