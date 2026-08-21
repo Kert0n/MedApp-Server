@@ -15,24 +15,31 @@ import org.springframework.transaction.annotation.Transactional
 class CatalogueService(private val catalogue: CatalogueStore) {
 
     /**
-     * Поиск по названию, латинскому названию, действующему веществу и производителю.
+     * Поиск по словам запроса.
      *
-     * Метасимволы экранируются только для `LIKE`; полнотекстовый и trigram-поиск получают
-     * сырой термин, иначе обратные слэши попали бы в сам искомый текст.
+     * Что считать словом — решение политики поиска, а не хранилища, поэтому разбор живёт здесь.
+     * Слова короче трёх букв отбрасываются: триграмм из них не выходит, а в кандидаты они
+     * тянут пол-справочника. Если после отбрасывания не осталось ничего, весь запрос идёт одним
+     * словом — лучше поискать плохо, чем не поискать вовсе.
+     *
+     * Слов не больше восьми: иначе одна строка из поисковой формы разворачивается в
+     * произвольное число обращений к индексу.
      */
     @Transactional(propagation = MANDATORY, readOnly = true)
     fun fuzzySearch(searchTerm: String, limit: Int = DEFAULT_LIMIT): List<DrugTemplate> {
-        val term = searchTerm.trim()
-        if (term.isBlank()) {
+        val query = searchTerm.trim()
+        if (query.isBlank()) {
             return emptyList()
         }
-            //TODO proper sanitize
-        val likeTerm = term
-            .replace("\\", "\\\\")
-            .replace("%", "\\%")
-            .replace("_", "\\_")
-        return catalogue.searchTemplates(term, likeTerm, clampLimit(limit))
+        return catalogue.searchTemplates(query, wordsOf(query), clampLimit(limit))
     }
+
+    private fun wordsOf(query: String): List<String> =
+        query.split(WORDS)
+            .filter { it.length >= MIN_WORD_LENGTH }
+            .distinct()
+            .take(MAX_WORDS)
+            .ifEmpty { listOf(query) }
 
     /** Карточка справочника или `null`: отсутствие обрабатывает вызывающий. */
     @Transactional(propagation = MANDATORY, readOnly = true)
@@ -63,5 +70,8 @@ class CatalogueService(private val catalogue: CatalogueStore) {
         const val MIN_LIMIT = 1
         const val MAX_LIMIT = 50
         const val DEFAULT_LIMIT = 10
+        const val MIN_WORD_LENGTH = 3
+        const val MAX_WORDS = 8
+        val WORDS = Regex("\\s+")
     }
 }

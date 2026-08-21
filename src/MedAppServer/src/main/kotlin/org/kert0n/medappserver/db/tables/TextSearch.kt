@@ -3,11 +3,9 @@ package org.kert0n.medappserver.db.tables
 import org.jetbrains.exposed.v1.core.ComparisonOp
 import org.jetbrains.exposed.v1.core.CustomFunction
 import org.jetbrains.exposed.v1.core.Expression
-import org.jetbrains.exposed.v1.core.ExpressionWithColumnType
 import org.jetbrains.exposed.v1.core.FloatColumnType
 import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.QueryBuilder
-import org.jetbrains.exposed.v1.core.QueryParameter
 import org.jetbrains.exposed.v1.core.TextColumnType
 import org.jetbrains.exposed.v1.core.stringLiteral
 import org.jetbrains.exposed.v1.core.stringParam
@@ -21,39 +19,32 @@ import org.jetbrains.exposed.v1.core.stringParam
  */
 
 /**
- * Оператор `%` из `pg_trgm`: похоже настолько, что порог `pg_trgm.similarity_threshold` пройден.
+ * Оператор `<%` из `pg_trgm`: у слова есть похожий участок внутри текста.
  *
- * Порог — настройка базы, а не запроса, и в этом смысл оператора: «достаточно похоже» решает
- * тот, кто настраивает поиск, а не тот, кто его пишет.
+ * Слово слева, текст справа — оператор несимметричен. Порог берётся из настройки
+ * `pg_trgm.word_similarity_threshold`, а не из выражения: «достаточно похоже» решает тот, кто
+ * настраивает поиск. Зато оператор индексируемый, в отличие от сравнения с вызовом функции.
  */
-class TrigramSimilarOp<T : String?>(
-    left: Expression<T>,
-    right: Expression<T>
-) : ComparisonOp(left, right, "%")
+private class WordSimilarOp(
+    left: Expression<*>,
+    right: Expression<*>
+) : ComparisonOp(left, right, "<%")
 
-infix fun <T : String?> ExpressionWithColumnType<T>.trigramSimilar(other: T): Op<Boolean> =
-    TrigramSimilarOp(this, QueryParameter(other, columnType))
-
-/** `similarity(x, ?)` из `pg_trgm` — насколько похоже, числом от нуля до единицы. */
-fun <T : String?> Expression<T>.trigramSimilarity(query: String): CustomFunction<Float?> =
-    CustomFunction("similarity", FloatColumnType(), this, stringParam(query))
+fun hasSimilarWord(token: String, text: Expression<*>): Op<Boolean> =
+    WordSimilarOp(stringParam(token), text)
 
 /**
- * `ILIKE` — сравнение по образцу без учёта регистра.
+ * `word_similarity(?, текст)` — насколько похож на слово лучший участок текста.
  *
- * У Exposed есть только `LIKE`: регистронезависимость в стандарте не описана, и каждая СУБД
- * решает её по-своему.
+ * Не `similarity`: та сравнивает строки целиком, и короткое слово против склейки четырёх полей
+ * даёт почти ноль. Здесь ищется лучший участок, поэтому длина записи ответу не мешает — и
+ * поэтому же лишнее слово в запросе перестаёт прятать нужную запись.
  */
-class ILikeOp<T : String?>(
-    left: Expression<T>,
-    right: Expression<T>
-) : ComparisonOp(left, right, "ILIKE")
-
-infix fun <T : String?> ExpressionWithColumnType<T>.ilike(pattern: T): Op<Boolean> =
-    ILikeOp(this, QueryParameter(pattern, columnType))
+fun wordSimilarity(token: String, text: Expression<*>): CustomFunction<Float?> =
+    CustomFunction("word_similarity", FloatColumnType(), stringParam(token), text)
 
 /** `@@` — документ отвечает запросу. */
-class FullTextMatchOp(
+private class FullTextMatchOp(
     left: Expression<*>,
     right: Expression<*>
 ) : ComparisonOp(left, right, "@@")
@@ -82,3 +73,17 @@ val searchDocument: Expression<String> = object : Expression<String>() {
         queryBuilder.append("parsed_drugs.search_tsv")
     }
 }
+
+/**
+ * Колонка `search_text` — те же четыре поля одной строкой, посчитанные базой.
+ *
+ * Выражением по той же причине, что и `search_tsv`: `GENERATED ALWAYS AS` Exposed в DDL не
+ * выражает, и попади колонка в `Table`, `SchemaUtils.create` создал бы на её месте обычную
+ * пустую.
+ */
+val searchText: Expression<String> = object : Expression<String>() {
+    override fun toQueryBuilder(queryBuilder: QueryBuilder) {
+        queryBuilder.append("parsed_drugs.search_text")
+    }
+}
+

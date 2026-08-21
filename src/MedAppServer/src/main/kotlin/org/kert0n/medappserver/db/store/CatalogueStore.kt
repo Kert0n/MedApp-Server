@@ -5,6 +5,7 @@ import org.jetbrains.exposed.v1.core.IColumnType
 import org.jetbrains.exposed.v1.core.IntegerColumnType
 import org.jetbrains.exposed.v1.core.Case
 import org.jetbrains.exposed.v1.core.Coalesce
+import org.jetbrains.exposed.v1.core.ExpressionWithColumnType
 import org.jetbrains.exposed.v1.core.CustomFunction
 import org.jetbrains.exposed.v1.core.Expression
 import org.jetbrains.exposed.v1.core.FloatColumnType
@@ -12,19 +13,24 @@ import org.jetbrains.exposed.v1.core.JoinType
 import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
+import org.jetbrains.exposed.v1.core.floatLiteral
+import org.jetbrains.exposed.v1.core.greaterEq
 import org.jetbrains.exposed.v1.core.intLiteral
 import org.jetbrains.exposed.v1.core.lowerCase
 import org.jetbrains.exposed.v1.core.or
+import org.jetbrains.exposed.v1.core.plus
+import org.jetbrains.exposed.v1.core.times
 import org.jetbrains.exposed.v1.core.stringLiteral
 import org.jetbrains.exposed.v1.core.TextColumnType
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.kert0n.medappserver.db.tables.DrugTemplates
-import org.kert0n.medappserver.db.tables.ilike
 import org.kert0n.medappserver.db.tables.matchesText
 import org.kert0n.medappserver.db.tables.searchDocument
-import org.kert0n.medappserver.db.tables.trigramSimilar
-import org.kert0n.medappserver.db.tables.trigramSimilarity
+import org.kert0n.medappserver.db.tables.hasSimilarWord
+import org.kert0n.medappserver.db.tables.searchText
+import org.kert0n.medappserver.db.tables.wordSimilarity
 import org.kert0n.medappserver.db.tables.FormTypes
 import org.kert0n.medappserver.db.tables.QuantityUnits
 import org.kert0n.medappserver.domain.DrugTemplate
@@ -44,59 +50,81 @@ class CatalogueStore {
         templateRows.selectAll().where { DrugTemplates.id eq id }.singleOrNull()?.toDomain()
 
     /**
-     * Нечёткий поиск: полнотекст, подстрока и триграммы, упорядоченные по точности совпадения.
+     * Нечёткий поиск по словам запроса.
      *
-     * Постгресовые оператор и функция объявлены типами в `TextSearch.kt`, поэтому запрос
-     * собирается обычными выражениями: значения связываются сами, а порядок аргументов
-     * считать не приходится.
+     * Слово запроса ищется где угодно в записи — в названии, латинском написании, действующем
+     * веществе или производителе, склеенных в `search_text`. Сравнивать весь запрос целиком с
+     * отдельным полем нельзя: половина запроса в поле не встречается никогда, сходство падает у
+     * всех, и чем длиннее запрос, тем сильнее — вплоть до того, что нужная запись просто
+     * пропадает из выдачи.
+     *
+     * Условие по словам — `OR`, а не `AND`: одно испорченное слово не должно стоить человеку
+     * всей находки. Сколько слов совпало, учитывается порядком, а не отбором.
      */
-    fun searchTemplates(term: String, likeTerm: String, limit: Int): List<DrugTemplate> {
-        val anywhere = "%$likeTerm%"
-        val fromStart = "$likeTerm%"
+    fun searchTemplates(query: String, tokens: List<String>, limit: Int): List<DrugTemplate> {
+        // Порог `<%` живёт в настройке, выражением его не задать. SET LOCAL действует до конца
+        // транзакции и дальше не течёт. Умолчание 0.6 для опечаток слишком строгое.
+        TransactionManager.current().exec("SET LOCAL pg_trgm.word_similarity_threshold = $WORD_MATCH_THRESHOLD")
 
         return templateRows.selectAll()
-            .where { matchesAnywhere(term, anywhere) }
+            .where { anyWordMatches(tokens) }
             .orderBy(
-                (searchDocument matchesText term) to SortOrder.DESC,
-                matchRank(term, anywhere, fromStart) to SortOrder.ASC,
-                bestSimilarity(term) to SortOrder.DESC,
+                exactName(query) to SortOrder.ASC,
+                (searchDocument matchesText query) to SortOrder.DESC,
+                matchedWords(tokens) to SortOrder.DESC,
+                wordScore(tokens) to SortOrder.DESC,
                 DrugTemplates.name to SortOrder.ASC
             )
             .limit(limit)
             .map { it.toDomain() }
     }
 
-    /** Запись подходит, если её нашёл полнотекст, подстрока или триграммы. */
-    private fun matchesAnywhere(term: String, anywhere: String): Op<Boolean> =
-        (searchDocument matchesText term) or
-            (DrugTemplates.name ilike anywhere) or
-            (DrugTemplates.nameLat ilike anywhere) or
-            (DrugTemplates.activeSubstance ilike anywhere) or
-            (DrugTemplates.manufacturer ilike anywhere) or
-            (DrugTemplates.name trigramSimilar term) or
-            (DrugTemplates.nameLat trigramSimilar term) or
-            (DrugTemplates.activeSubstance trigramSimilar term) or
-            (DrugTemplates.manufacturer trigramSimilar term)
+    /** Запись годится в кандидаты, если в ней нашлось хоть одно слово запроса. */
+    private fun anyWordMatches(tokens: List<String>): Op<Boolean> =
+        tokens.map { hasSimilarWord(it, searchText) }.reduce { left, right -> left or right }
 
-    /** Чем точнее совпало, тем меньше число: точное имя — ноль, чужое поле — шесть. */
-    private fun matchRank(term: String, anywhere: String, fromStart: String): Expression<Int> =
+    /**
+     * Набранное точно идёт впереди похожего.
+     *
+     * Отдельной ступенью, а не через счёт слов: при запросе в одно слово все кандидаты набирают
+     * поровну, и то, что человек написал название целиком, иначе ничем не проявится.
+     *
+     * Только точное равенство, без «начинается с»: на многословном запросе такая ступень
+     * поднимала длинное название, содержащее оба слова, выше записи, у которой одно слово в
+     * названии, а другое в производителе — то есть выше правильного ответа.
+     */
+    private fun exactName(query: String): Expression<Int> =
         Case()
-            .When(DrugTemplates.name.lowerCase() eq term.lowercase(), intLiteral(0))
-            .When(DrugTemplates.name ilike fromStart, intLiteral(1))
-            .When(DrugTemplates.name ilike anywhere, intLiteral(2))
-            .When(DrugTemplates.nameLat ilike anywhere, intLiteral(3))
-            .When(DrugTemplates.activeSubstance ilike anywhere, intLiteral(4))
-            .When(DrugTemplates.manufacturer ilike anywhere, intLiteral(5))
-            .Else(intLiteral(6))
+            .When(DrugTemplates.name.lowerCase() eq query.lowercase(), intLiteral(0))
+            .Else(intLiteral(1))
 
-    /** Из четырёх полей берётся то, что похоже больше всех. */
-    private fun bestSimilarity(term: String): Expression<Float?> = CustomFunction(
-        "GREATEST", FloatColumnType(),
-        DrugTemplates.name.trigramSimilarity(term),
-        Coalesce(DrugTemplates.nameLat, stringLiteral("")).trigramSimilarity(term),
-        Coalesce(DrugTemplates.activeSubstance, stringLiteral("")).trigramSimilarity(term),
-        Coalesce(DrugTemplates.manufacturer, stringLiteral("")).trigramSimilarity(term)
-    )
+    /** Сколько слов запроса нашлось: каждое найденное поднимает запись выше. */
+    private fun matchedWords(tokens: List<String>): ExpressionWithColumnType<Int> {
+        var found: ExpressionWithColumnType<Int> = intLiteral(0)
+        tokens.forEach { token ->
+            val counted = Case()
+                .When(similarityOf(token) greaterEq WORD_MATCH_THRESHOLD, intLiteral(1))
+                .Else(intLiteral(0))
+            found = found plus counted
+        }
+        return found
+    }
+
+    /**
+     * Сумма квадратов похожести — тонкая настройка внутри одинакового числа совпавших слов.
+     *
+     * Квадрат, а не само значение: сильное совпадение ценнее двух слабых, а случайный
+     * триграммный шум почти ничего не прибавляет.
+     */
+    private fun wordScore(tokens: List<String>): ExpressionWithColumnType<Float> {
+        var score: ExpressionWithColumnType<Float> = floatLiteral(0f)
+        tokens.forEach { token -> score = score plus (similarityOf(token) times similarityOf(token)) }
+        return score
+    }
+
+    /** Похожесть без `null`: у не совпавшего слова она ноль, а не «неизвестно». */
+    private fun similarityOf(token: String): ExpressionWithColumnType<Float> =
+        Coalesce(wordSimilarity(token, searchText), floatLiteral(0f))
 
     fun quantityUnits(): List<QuantityUnit> =
         QuantityUnits.selectAll().orderBy(QuantityUnits.name).map { it.toQuantityUnit() }
@@ -138,6 +166,16 @@ class CatalogueStore {
 
             add(IntegerColumnType() to limit)
         }
+
+    private companion object {
+        /**
+         * Порог, ниже которого слово считается не найденным.
+         *
+         * Одно число на отбор кандидатов и на счёт совпавших слов: два разных значения означали
+         * бы, что запись попала в выдачу словом, которое при подсчёте не засчитано.
+         */
+        const val WORD_MATCH_THRESHOLD = 0.3f
+    }
 
     private fun ResultRow.toQuantityUnit(): QuantityUnit =
         QuantityUnit(this[QuantityUnits.id], this[QuantityUnits.name])

@@ -9,7 +9,7 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
-import org.kert0n.medappserver.db.store.CatalogueStore
+import org.kert0n.medappserver.services.aggregate.CatalogueService
 import org.kert0n.medappserver.db.tables.DrugTemplates
 import org.kert0n.medappserver.db.tables.FormTypes
 import org.kert0n.medappserver.services.application.CatalogueApplicationService
@@ -32,7 +32,7 @@ class CatalogueSearchTest {
     private lateinit var catalogue: CatalogueApplicationService
 
     @Autowired
-    private lateinit var store: CatalogueStore
+    private lateinit var catalogueService: CatalogueService
 
 
     @Autowired
@@ -64,7 +64,7 @@ class CatalogueSearchTest {
      * исходным. Экранирование проверяется отдельно, на уровне сервиса.
      */
     private fun search(term: String, limit: Int = 10) =
-        txTemplate.execute { store.searchTemplates(term, term, limit) }!!
+        txTemplate.execute { catalogueService.fuzzySearch(term, limit) }!!
 
     private fun template(
         name: String,
@@ -240,5 +240,93 @@ class CatalogueSearchTest {
 
         assertEquals("Ibuprofenum", found.nameLat)
         assertEquals("ибупрофен", found.activeSubstance)
+    }
+
+    // ── Несколько слов в запросе ───────────────────────────────────────────────────
+    //
+    // Сравнивать весь запрос целиком с каждым полем нельзя: половина запроса в поле не
+    // встречается никогда, сходство падает у всех, и чем длиннее запрос, тем сильнее.
+    // Считать надо по словам — сколько слов запроса нашлось в записи.
+
+    private fun aspirinFixture() {
+        txTemplate.execute {
+            DrugTemplates.deleteAll()
+            template("Аспирин", manufacturer = "Байер")
+            template("Аспирин", manufacturer = "Медисорб")
+            template("Парацетамол", manufacturer = "Байер")
+            template("Аспирин Байер Кардио Форте", manufacturer = "Другая Фирма")
+        }
+    }
+
+    @Test
+    fun `опечатки в обоих словах не прячут запись`() {
+        aspirinFixture()
+
+        val results = catalogue.search("асспирн байр", 10)
+
+        assertTrue(
+            results.any { it.name == "Аспирин" && it.manufacturer == "Байер" },
+            "две опечатки не должны стоить человеку всей выдачи: $results"
+        )
+    }
+
+    @Test
+    fun `лишнее слово в запросе не прячет запись`() {
+        aspirinFixture()
+
+        val results = catalogue.search("аспирин байер таблетки шипучие", 10)
+
+        assertTrue(
+            results.any { it.name == "Аспирин" && it.manufacturer == "Байер" },
+            "чем длиннее запрос, тем хуже искать не должно: $results"
+        )
+    }
+
+    @Test
+    fun `совпадение по двум полям идёт выше совпадения одним`() {
+        aspirinFixture()
+
+        val first = catalogue.search("аспирин байер", 10).first()
+
+        assertEquals("Аспирин", first.name, "имя и производитель вместе весомее одного длинного имени")
+        assertEquals("Байер", first.manufacturer)
+    }
+
+    @Test
+    fun `порядок слов в запросе не важен`() {
+        aspirinFixture()
+
+        val direct = catalogue.search("аспирин байер", 10).first()
+        val reversed = catalogue.search("байер аспирин", 10).first()
+
+        assertEquals(direct.id, reversed.id, "перестановка слов не должна менять победителя")
+    }
+
+    @Test
+    fun `одно испорченное слово не убивает выдачу`() {
+        aspirinFixture()
+
+        val results = catalogue.search("аспирин квфыжщп", 10)
+
+        assertTrue(results.any { it.name == "Аспирин" }, "мусор рядом не отменяет находку: $results")
+    }
+
+    /**
+     * Потерянный пробел не отменяет находку.
+     *
+     * `word_similarity` ищет лучший участок, а не сравнивает строки целиком, поэтому «Аспирин
+     * Байер» и «аспиринбайер» остаются похожими: замерено 0.69 при пороге 0.3. Слово при этом
+     * одно, а не два, так что запись стоит ниже, чем при правильном пробеле, — но находится.
+     */
+    @Test
+    fun `потерянный пробел не отменяет находку`() {
+        aspirinFixture()
+
+        val results = catalogue.search("аспиринбайер", 10)
+
+        assertTrue(
+            results.any { it.name == "Аспирин" && it.manufacturer == "Байер" },
+            "склеенные слова обязаны находить ту же запись: $results"
+        )
     }
 }
