@@ -110,13 +110,13 @@ class ComplexWorkflowStoriesTest {
         // PHASE 2: Everyone reserves a share
         // ==========================================
         // Allergy Meds: 60 total. Alice (20), Bob (20), Charlie (20) = 60 reserved.
-        reservationService.create(drugService.get(allergyMeds.id, alice.id), alice.id, qty(20.0))
-        reservationService.create(drugService.get(allergyMeds.id, bob.id), bob.id, qty(20.0))
-        reservationService.create(drugService.get(allergyMeds.id, charlie.id), charlie.id, qty(20.0))
+        dbHelper.reserve(alice.id, allergyMeds.id, qty(20.0))
+        dbHelper.reserve(bob.id, allergyMeds.id, qty(20.0))
+        dbHelper.reserve(charlie.id, allergyMeds.id, qty(20.0))
 
         // Painkillers: 100 total. Bob reserves 30, Charlie reserves 30.
-        reservationService.create(drugService.get(painkillers.id, bob.id), bob.id, qty(30.0))
-        reservationService.create(drugService.get(painkillers.id, charlie.id), charlie.id, qty(30.0))
+        dbHelper.reserve(bob.id, painkillers.id, qty(30.0))
+        dbHelper.reserve(charlie.id, painkillers.id, qty(30.0))
 
         entityManager.flush()
         entityManager.clear()
@@ -238,8 +238,8 @@ class ComplexWorkflowStoriesTest {
         dbHelper.flushAndClear()
 
         // Alice and Bob reserve 40 each, 80 of 100 in total
-        reservationService.create(drugService.get(drug.id, alice.id), alice.id, qty(40.0))
-        reservationService.create(drugService.get(drug.id, bob.id), bob.id, qty(40.0))
+        dbHelper.reserve(alice.id, drug.id, qty(40.0))
+        dbHelper.reserve(bob.id, drug.id, qty(40.0))
         dbHelper.flushAndClear()
 
         // ── Phase 1: Alter a reservation ──
@@ -299,6 +299,7 @@ class ComplexWorkflowStoriesTest {
 
         // Alice creates a drug
         val drug = drugService.create(NewDrug("Shared Meds", qty(10.0), dbHelper.unit().id), medKitService.get(kitA.id, alice.id))
+        dbHelper.flushAndClear()
 
         // Bob creates a private kit
         val kitB = medKitService.create(bob.id)
@@ -322,10 +323,11 @@ class ComplexWorkflowStoriesTest {
         medKitService.joinByInvitation(medKitService.invite(medKitService.get(kitA.id, alice.id), alice.id), bob.id)
 
         val drug = drugService.create(NewDrug("Audit Meds", qty(10.0), dbHelper.unit().id), medKitService.get(kitA.id, alice.id))
+        dbHelper.flushAndClear()
 
         // Both reserve a share
-        reservationService.create(drugService.get(drug.id, alice.id), alice.id, qty(5.0))
-        reservationService.create(drugService.get(drug.id, bob.id), bob.id, qty(2.0))
+        dbHelper.reserve(alice.id, drug.id, qty(5.0))
+        dbHelper.reserve(bob.id, drug.id, qty(2.0))
 
         // Alice has a private kit (Bob is NOT in this one)
         val kitB = medKitService.create(alice.id)

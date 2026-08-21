@@ -104,8 +104,8 @@ class MedKitApplicationServiceTest {
         val drug = dbHelper.freshDrug(sourceKit.id, 50.0)
         dbHelper.flushAndClear()
 
-        reservationService.create(drugService.get(drug.id, alice.id), alice.id, qty(10.0))
-        reservationService.create(drugService.get(drug.id, bob.id), bob.id, qty(10.0))
+        dbHelper.reserve(alice.id, drug.id, qty(10.0))
+        dbHelper.reserve(bob.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
         drugs.moveToMedKit(drug.id, targetKit.id, alice.id)
@@ -158,7 +158,7 @@ class MedKitApplicationServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        reservationService.create(drugService.get(drug.id, bob.id), bob.id, qty(10.0))
+        dbHelper.reserve(bob.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
         medKits.leave(kit.id, bob.id)
@@ -218,8 +218,8 @@ class MedKitApplicationServiceTest {
         val drug = dbHelper.freshDrug(oldKit.id, 90.0)
         dbHelper.flushAndClear()
 
-        reservationService.create(drugService.get(drug.id, alice.id), alice.id, qty(30.0))
-        reservationService.create(drugService.get(drug.id, charlie.id), charlie.id, qty(30.0))
+        dbHelper.reserve(alice.id, drug.id, qty(30.0))
+        dbHelper.reserve(charlie.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
         medKits.delete(oldKit.id, alice.id, newKit.id)

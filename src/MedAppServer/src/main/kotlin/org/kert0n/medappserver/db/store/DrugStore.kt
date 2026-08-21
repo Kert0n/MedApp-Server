@@ -2,13 +2,8 @@ package org.kert0n.medappserver.db.store
 
 import java.util.UUID
 import org.kert0n.medappserver.db.model.DrugData
-import org.kert0n.medappserver.db.model.MedKitData
-import org.kert0n.medappserver.db.model.parsed.FormTypeData
-import org.kert0n.medappserver.db.model.parsed.QuantityUnitData
 import org.kert0n.medappserver.db.repository.DrugRepository
-import org.kert0n.medappserver.db.repository.FormTypeRepository
-import org.kert0n.medappserver.db.repository.MedKitRepository
-import org.kert0n.medappserver.db.repository.QuantityUnitRepository
+import org.kert0n.medappserver.db.repository.ReservationRepository
 import org.kert0n.medappserver.domain.Drug
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Component
@@ -22,9 +17,7 @@ import org.springframework.stereotype.Component
 @Component
 class DrugStore(
     private val drugs: DrugRepository,
-    private val medKits: MedKitRepository,
-    private val units: QuantityUnitRepository,
-    private val forms: FormTypeRepository
+    private val reservations: ReservationRepository
 ) {
 
     // ── Чтение ───────────────────────────────────────────────────────────────────
@@ -39,13 +32,7 @@ class DrugStore(
     // ── Команды ──────────────────────────────────────────────────────────────────
 
     fun insert(drug: Drug) {
-        drugs.save(
-            drug.toNewEntity(
-                medKit = resolveMedKit(drug.medKitId),
-                unit = resolveUnit(drug.quantity.unit.id),
-                form = drug.formType?.let { resolveForm(it.id) }
-            )
-        )
+        drugs.save(drug.toNewEntity())
     }
 
     /**
@@ -56,7 +43,7 @@ class DrugStore(
      */
     fun save(drug: Drug) {
         val entity = managed(drug.id)
-        drug.applyTo(entity, ::resolveMedKit, ::resolveUnit, ::resolveForm)
+        drug.applyTo(entity)
         drugs.save(entity)
     }
 
@@ -73,20 +60,9 @@ class DrugStore(
 
     /** Все упаковки аптечки — в другую, одним запросом. Брони убирает вызывающий. */
     fun moveAllToMedKit(sourceMedKitId: UUID, targetMedKitId: UUID) {
-        drugs.moveAllToMedKit(sourceMedKitId, resolveMedKit(targetMedKitId))
+        drugs.moveAllToMedKit(sourceMedKitId, targetMedKitId)
     }
 
     private fun managed(drugId: UUID): DrugData =
         drugs.findByIdOrNull(drugId) ?: error("Упаковка $drugId исчезла во время записи")
-
-    private fun resolveMedKit(medKitId: UUID): MedKitData =
-        medKits.findByIdOrNull(medKitId) ?: error("Аптечка $medKitId исчезла во время записи упаковки")
-
-    // Отказ пользователю здесь невозможен: словарь проверил CatalogueService, когда собирал
-    // упаковку. Пустота на этом шаге — рассогласованность внутри, а не ошибка вызывающего.
-    private fun resolveUnit(unitId: UUID): QuantityUnitData =
-        units.findByIdOrNull(unitId) ?: error("Единица измерения $unitId исчезла во время записи упаковки")
-
-    private fun resolveForm(formId: UUID): FormTypeData =
-        forms.findByIdOrNull(formId) ?: error("Форма выпуска $formId исчезла во время записи упаковки")
 }

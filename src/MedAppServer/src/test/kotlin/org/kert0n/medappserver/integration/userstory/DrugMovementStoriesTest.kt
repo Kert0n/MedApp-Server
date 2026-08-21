@@ -71,7 +71,7 @@ class DrugMovementStoriesTest {
         entityManager.flush()
 
         // Reserve a share
-        reservationService.create(drugService.get(painkiller.id, userData.id), userData.id, qty(20.0))
+        dbHelper.reserve(userData.id, painkiller.id, qty(20.0))
         entityManager.flush()
 
         // Move drug to travel kit
@@ -122,8 +122,8 @@ class DrugMovementStoriesTest {
         entityManager.flush()
 
         // Anna reserves 40, Bob 30 — 70 of 100
-        reservationService.create(drugService.get(drugData.id, anna.id), anna.id, qty(40.0))
-        reservationService.create(drugService.get(drugData.id, bob.id), bob.id, qty(30.0))
+        dbHelper.reserve(anna.id, drugData.id, qty(40.0))
+        dbHelper.reserve(bob.id, drugData.id, qty(30.0))
         entityManager.flush()
 
         val updated = reservationService.changeTo(reservationService.get(anna.id, drugData.id), qty(70.0))
@@ -158,7 +158,7 @@ class DrugMovementStoriesTest {
         entityManager.flush()
 
         // Reserve a share
-        reservationService.create(drugService.get(drugData.id, userData.id), userData.id, qty(25.0))
+        dbHelper.reserve(userData.id, drugData.id, qty(25.0))
         entityManager.flush()
         entityManager.clear()
 
@@ -210,9 +210,9 @@ class DrugMovementStoriesTest {
         )
 
         // Everyone reserves 30 pills
-        reservationService.create(drugService.get(drugData.id, anna.id), anna.id, qty(30.0))
-        reservationService.create(drugService.get(drugData.id, bob.id), bob.id, qty(30.0))
-        reservationService.create(drugService.get(drugData.id, charlie.id), charlie.id, qty(30.0))
+        dbHelper.reserve(anna.id, drugData.id, qty(30.0))
+        dbHelper.reserve(bob.id, drugData.id, qty(30.0))
+        dbHelper.reserve(charlie.id, drugData.id, qty(30.0))
 
         entityManager.flush()
         entityManager.clear()

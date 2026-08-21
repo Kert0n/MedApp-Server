@@ -3,7 +3,6 @@ package org.kert0n.medappserver.db.store
 import java.util.UUID
 import org.kert0n.medappserver.db.model.ReservationData
 import org.kert0n.medappserver.db.model.ReservationKey
-import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.ReservationRepository
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.MedKit
@@ -20,8 +19,7 @@ import org.springframework.stereotype.Component
  */
 @Component
 class ReservationStore(
-    private val reservations: ReservationRepository,
-    private val drugs: DrugRepository
+    private val reservations: ReservationRepository
 ) {
 
     // ── Чтение ───────────────────────────────────────────────────────────────────
@@ -41,10 +39,13 @@ class ReservationStore(
 
     // ── Команды ──────────────────────────────────────────────────────────────────
 
-    fun insert(reservation: Reservation) {
-        val drug = drugs.findByIdOrNull(reservation.drugId)
-            ?: error("Упаковка ${reservation.drugId} исчезла во время записи брони")
-
+    /**
+     * Пачка приходит доменным объектом, а не поднимается из чужого репозитория.
+     *
+     * Нужна от неё одна вещь — аптечка для составного ключа, — и она уже есть у вызывающего:
+     * он эту пачку и прочитал.
+     */
+    fun insert(reservation: Reservation, drug: Drug) {
         // save, а не persist: у брони присвоенный составной ключ, поэтому Spring Data идёт
         // через merge и делает лишний SELECT. Это дешевле, чем строить запись на том, чем
         // именно persist отличается от merge, — на такой тонкости уже спотыкались.
@@ -52,11 +53,8 @@ class ReservationStore(
             ReservationData(
                 reservationKey = ReservationKey(reservation.userId, reservation.drugId),
                 // Аптечка берётся у самой пачки: рассогласовать копию с настоящей нельзя даже так.
-                medKitId = drug.medKit.id,
-                amount = reservation.amount.amount,
-                // Связь только на чтение: на вставку не влияет, но избавляет от лишнего чтения,
-                // когда строку тут же переводят в доменный вид — единица величины лежит у пачки.
-                drugData = drug
+                medKitId = drug.medKitId,
+                amount = reservation.amount.amount
             )
         )
     }
@@ -92,7 +90,7 @@ class ReservationStore(
     private fun ReservationData.toDomain(): Reservation = Reservation(
         userId = reservationKey.userId,
         drugId = reservationKey.drugId,
-        amount = Quantity(amount, drugData!!.quantityUnit.toDomain())
+        amount = Quantity(amount, drugData?.quantityUnit?.toDomain() ?: error("Бронь прочитана без пачки"))
     )
 
     private fun managed(userId: UUID, drugId: UUID): ReservationData =

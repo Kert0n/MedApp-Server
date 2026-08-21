@@ -98,7 +98,7 @@ class DrugServiceTest {
 
         assertEquals(0, reservationService.ofUser(alice.id).size)
 
-        reservationService.create(drugService.get(drug.id, alice.id), alice.id, qty(10.0))
+        dbHelper.reserve(alice.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
         assertEquals(1, reservationService.ofUser(alice.id).size)
@@ -186,8 +186,8 @@ class DrugServiceTest {
         val kit = medKitService.create(alice.id)
         medKitService.joinByInvitation(medKitService.invite(medKitService.get(kit.id, alice.id), alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
-        reservationService.create(drugService.get(drug.id, alice.id), alice.id, qty(60.0))
-        reservationService.create(drugService.get(drug.id, bob.id), bob.id, qty(40.0))
+        dbHelper.reserve(alice.id, drug.id, qty(60.0))
+        dbHelper.reserve(bob.id, drug.id, qty(40.0))
         dbHelper.flushAndClear()
 
         drugService.update(drugService.get(drug.id, alice.id), DrugEdit(quantity = qty(50.0)))
@@ -262,7 +262,8 @@ class DrugServiceTest {
             NewDrug(name = "Drug", quantity = qty(100.0), quantityUnitId = dbHelper.unit().id),
             medKitService.get(kit.id, alice.id)
         )
-        reservationService.create(drugService.get(drug.id, alice.id), alice.id, qty(25.0))
+        dbHelper.flushAndClear()
+        dbHelper.reserve(alice.id, drug.id, qty(25.0))
         dbHelper.flushAndClear()
 
         // Заявленное приходит извне упаковки: сама она про брони не знает.

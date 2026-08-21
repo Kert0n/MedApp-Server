@@ -75,7 +75,7 @@ class ReservationService(
         if (reservations.find(userId, drug.id) != null) throw ReservationAlreadyExists()
 
         val reservation = Reservation(userId, drug.id, Quantity(amount, drug.quantity.unit))
-        reservations.insert(reservation)
+        reservations.insert(reservation, drug)
         return reservation
     }
 

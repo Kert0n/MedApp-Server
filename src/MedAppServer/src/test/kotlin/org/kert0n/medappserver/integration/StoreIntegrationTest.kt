@@ -45,7 +45,7 @@ class StoreIntegrationTest {
         val kit = medKitService.create(alice.id)
         val first = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.freshDrug(kit.id, 20.0)
-        reservationService.create(drugService.get(first.id, alice.id), alice.id, qty(4.0))
+        dbHelper.reserve(alice.id, first.id, qty(4.0))
         dbHelper.flushAndClear()
 
         val loaded = drugs.findAllInMedKit(kit.id, alice.id)
@@ -103,8 +103,8 @@ class StoreIntegrationTest {
         val kit = medKitService.create(alice.id)
         val first = dbHelper.freshDrug(kit.id, 50.0)
         val second = dbHelper.freshDrug(kit.id, 50.0)
-        reservationService.create(drugService.get(first.id, alice.id), alice.id, qty(5.0))
-        reservationService.create(drugService.get(second.id, alice.id), alice.id, qty(7.0))
+        dbHelper.reserve(alice.id, first.id, qty(5.0))
+        dbHelper.reserve(alice.id, second.id, qty(7.0))
         dbHelper.flushAndClear()
 
         val mine = reservations.findAllOfUser(alice.id)
@@ -120,7 +120,7 @@ class StoreIntegrationTest {
         val kit = medKitService.create(alice.id)
         medKitService.joinByInvitation(medKitService.invite(medKitService.get(kit.id, alice.id), alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 50.0)
-        reservationService.create(drugService.get(drug.id, alice.id), alice.id, qty(5.0))
+        dbHelper.reserve(alice.id, drug.id, qty(5.0))
         dbHelper.flushAndClear()
 
         assertQty(5.0, reservations.find(alice.id, drug.id)?.amount)
@@ -222,8 +222,8 @@ class StoreIntegrationTest {
 
         val first = dbHelper.freshDrug(source.id, 50.0)
         val second = dbHelper.freshDrug(source.id, 30.0)
-        reservationService.create(drugService.get(first.id, alice.id), alice.id, qty(10.0))
-        reservationService.create(drugService.get(first.id, bob.id), bob.id, qty(20.0))
+        dbHelper.reserve(alice.id, first.id, qty(10.0))
+        dbHelper.reserve(bob.id, first.id, qty(20.0))
         dbHelper.flushAndClear()
 
         reservations.deleteInMedKitExcept(dbHelper.medKit(source.id)!!, setOf(alice.id))

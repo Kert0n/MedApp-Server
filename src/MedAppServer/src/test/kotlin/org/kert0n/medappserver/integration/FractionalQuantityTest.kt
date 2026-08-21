@@ -44,7 +44,7 @@ class FractionalQuantityTest {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.create(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 1.0)
-        reservationService.create(drugService.get(drug.id, alice.id), alice.id, qty(1.0))
+        dbHelper.reserve(alice.id, drug.id, qty(1.0))
         dbHelper.flushAndClear()
 
         val third = third("1")   // 0.333333

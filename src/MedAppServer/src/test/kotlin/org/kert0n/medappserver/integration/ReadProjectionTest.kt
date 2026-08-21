@@ -39,8 +39,8 @@ class ReadProjectionTest {
         medKitService.joinByInvitation(medKitService.invite(medKitService.get(kit.id, alice.id), alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
 
-        reservationService.create(drugService.get(drug.id, alice.id), alice.id, qty(30.0))
-        reservationService.create(drugService.get(drug.id, bob.id), bob.id, qty(20.0))
+        dbHelper.reserve(alice.id, drug.id, qty(30.0))
+        dbHelper.reserve(bob.id, drug.id, qty(20.0))
         dbHelper.flushAndClear()
 
         val view = drugService.get(drug.id, alice.id)
@@ -103,7 +103,7 @@ class ReadProjectionTest {
         val bob = dbHelper.freshUser("bob")
         medKitService.joinByInvitation(medKitService.invite(medKitService.get(kit.id, alice.id), alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
-        reservationService.create(drugService.get(drug.id, alice.id), alice.id, qty(30.0))
+        dbHelper.reserve(alice.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
         assertQty(30.0, reservationService.get(alice.id, drug.id).amount)

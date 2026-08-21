@@ -77,7 +77,7 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
 
         // Reserve 30 tablets
-        val plan = reservationService.create(drugService.get(drugData.id, userId = userData.id), userId = userData.id, qty(30.0))
+        val plan = dbHelper.reserve(userData.id, drugData.id, qty(30.0))
         assertNotNull(plan)
         entityManager.flush()
 
@@ -127,11 +127,11 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
 
         // Anna reserves 40 tablets
-        reservationService.create(drugService.get(vitaminC.id, anna.id), anna.id, qty(40.0))
+        dbHelper.reserve(anna.id, vitaminC.id, qty(40.0))
         entityManager.flush()
 
         // Bob reserves 50 more
-        reservationService.create(drugService.get(vitaminC.id, bob.id), bob.id, qty(50.0))
+        dbHelper.reserve(bob.id, vitaminC.id, qty(50.0))
         entityManager.flush()
         entityManager.clear()
         // 90 reserved on the pack in total
@@ -191,9 +191,9 @@ class TreatmentPlanStoriesTest {
         entityManager.flush()
 
         // Everyone reserves 30 vitamins
-        reservationService.create(drugService.get(vitamins.id, mom.id), mom.id, qty(30.0))
-        reservationService.create(drugService.get(vitamins.id, dad.id), dad.id, qty(30.0))
-        reservationService.create(drugService.get(vitamins.id, child.id), child.id, qty(30.0))
+        dbHelper.reserve(mom.id, vitamins.id, qty(30.0))
+        dbHelper.reserve(dad.id, vitamins.id, qty(30.0))
+        dbHelper.reserve(child.id, vitamins.id, qty(30.0))
         entityManager.flush()
         entityManager.clear()
         // 90 reserved — the whole pack

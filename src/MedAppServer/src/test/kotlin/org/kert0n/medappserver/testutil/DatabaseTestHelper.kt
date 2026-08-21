@@ -74,6 +74,7 @@ class DatabaseTestHelper(
             description = "Test description"
         )
         drugs.insert(drug)
+        flushAndClear()
         return drug
     }
 
@@ -101,11 +102,21 @@ class DatabaseTestHelper(
     @Transactional
     fun reserve(userId: UUID, drugId: UUID, amount: BigDecimal): Reservation =
         reservationService.create(drugService.get(drugId, userId), userId, amount)
+            .also { flushAndClear() }
 
     /** Кладёт заранее собранный препарат: тестам нужны свои имена и количества. */
+    /**
+     * Кладёт заранее собранный препарат: тестам нужны свои имена и количества.
+     *
+     * После записи контекст очищается: связи со словарями объявлены только на чтение, и у
+     * свежей строки они пусты — следующее чтение должно сходить в базу, а не получить
+     * полусобранную копию. В проде такого не бывает: там команда отдаёт доменный объект, а не
+     * перечитывает только что записанное.
+     */
     @Transactional
     fun insert(drug: Drug): Drug {
         drugs.insert(drug)
+        flushAndClear()
         return drug
     }
 

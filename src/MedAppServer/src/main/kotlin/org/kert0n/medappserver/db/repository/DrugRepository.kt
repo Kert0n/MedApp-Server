@@ -2,7 +2,6 @@ package org.kert0n.medappserver.db.repository
 
 import java.util.*
 import org.kert0n.medappserver.db.model.DrugData
-import org.kert0n.medappserver.db.model.MedKitData
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
@@ -21,7 +20,7 @@ interface DrugRepository : JpaRepository<DrugData, UUID> {
         SELECT d FROM DrugData d
         WHERE d.id = :drugId
           AND EXISTS (SELECT 1 FROM MedKitMembershipData m
-                      WHERE m.membershipKey.medKitId = d.medKit.id AND m.membershipKey.userId = :userId)
+                      WHERE m.membershipKey.medKitId = d.medKitId AND m.membershipKey.userId = :userId)
     """
     )
     fun find(@Param("drugId") drugId: UUID, @Param("userId") userId: UUID): DrugData?
@@ -38,9 +37,9 @@ interface DrugRepository : JpaRepository<DrugData, UUID> {
     @Query(
         """
         SELECT d FROM DrugData d
-        WHERE d.medKit.id = :medKitId
+        WHERE d.medKitId = :medKitId
           AND EXISTS (SELECT 1 FROM MedKitMembershipData m
-                      WHERE m.membershipKey.medKitId = d.medKit.id AND m.membershipKey.userId = :userId)
+                      WHERE m.membershipKey.medKitId = d.medKitId AND m.membershipKey.userId = :userId)
         ORDER BY d.name
     """
     )
@@ -51,7 +50,7 @@ interface DrugRepository : JpaRepository<DrugData, UUID> {
         """
         SELECT d FROM DrugData d
         WHERE EXISTS (SELECT 1 FROM MedKitMembershipData m
-                      WHERE m.membershipKey.medKitId = d.medKit.id AND m.membershipKey.userId = :userId)
+                      WHERE m.membershipKey.medKitId = d.medKitId AND m.membershipKey.userId = :userId)
         ORDER BY d.name
     """
     )
@@ -64,6 +63,9 @@ interface DrugRepository : JpaRepository<DrugData, UUID> {
      * пачек — сотня загрузок. Здесь важнее постоянное число запросов.
      */
     @Modifying
-    @Query("UPDATE DrugData d SET d.medKit = :target WHERE d.medKit.id = :sourceMedKitId")
-    fun moveAllToMedKit(@Param("sourceMedKitId") sourceMedKitId: UUID, @Param("target") target: MedKitData)
+    @Query("UPDATE DrugData d SET d.medKitId = :targetMedKitId WHERE d.medKitId = :sourceMedKitId")
+    fun moveAllToMedKit(
+        @Param("sourceMedKitId") sourceMedKitId: UUID,
+        @Param("targetMedKitId") targetMedKitId: UUID
+    )
 }
