@@ -59,8 +59,8 @@ class MedKitApplicationServiceTest {
             alice.id
         )
 
-        assertNotNull(drug.id)
-        assertEquals("Aspirin", drug.name)
+        assertNotNull(drug.drug.id)
+        assertEquals("Aspirin", drug.drug.name)
     }
 
     @Test
@@ -89,7 +89,7 @@ class MedKitApplicationServiceTest {
         val drug = dbHelper.freshDrug(kit1.id, 50.0)
         dbHelper.flushAndClear()
 
-        val moved = drugs.moveToMedKit(drug.id, kit2.id, alice.id)
+        val moved = drugs.moveToMedKit(drug.id, kit2.id, alice.id).drug
         assertEquals(kit2.id, moved.medKitId)
     }
 
@@ -201,7 +201,7 @@ class MedKitApplicationServiceTest {
         dbHelper.flushAndClear()
 
         assertNull(dbHelper.medKit(kitA.id))
-        val survivingDrug = dbHelper.drug(drug.id)
+        val survivingDrug = dbHelper.drug(drug.drug.id)
         assertNotNull(survivingDrug)
         assertEquals(kitB.id, survivingDrug.medKitId)
     }

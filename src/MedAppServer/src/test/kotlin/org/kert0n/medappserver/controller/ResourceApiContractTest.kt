@@ -14,6 +14,7 @@ import org.kert0n.medappserver.api.UserSnapshotDTO
 import org.kert0n.medappserver.api.ReservationCreateRequest
 import org.kert0n.medappserver.api.ReservationPatchRequest
 import org.kert0n.medappserver.api.toDto
+import org.kert0n.medappserver.api.toSnapshot
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.Quantity
@@ -82,7 +83,8 @@ class ResourceApiContractTest {
         id = drugId, medKitId = medKitId, name = "Aspirin",
         quantity = Quantity(qty(100.0), unit)
     )
-    private val drugDto = drug.toDto(emptyList())
+    private val drugDto = drug.toDto()
+    private val snapshot = drug.toSnapshot(emptyList(), userId)
 
     @BeforeEach
     fun setup() {
@@ -97,20 +99,22 @@ class ResourceApiContractTest {
 
     @Test
     fun `препарат читается по своему пути`() {
-        whenever(drugs.read(drugId, userId)).thenReturn(drugDto)
+        whenever(drugs.read(drugId, userId)).thenReturn(snapshot)
 
         mockMvc.perform(get(ApiRoutes.drug(drugId)).with(asUser()))
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.id").value(drugId.toString()))
-            .andExpect(jsonPath("$.medKitId").value(medKitId.toString()))
-            // Заявленное бронями — справка, и она может превышать остаток.
-            .andExpect(jsonPath("$.reservedQuantity").exists())
-            .andExpect(jsonPath("$.availableQuantity").doesNotExist())
+            .andExpect(jsonPath("$.drug.id").value(drugId.toString()))
+            .andExpect(jsonPath("$.drug.medKitId").value(medKitId.toString()))
+            // Заявленное отделено от самой пачки: сумма может превышать остаток, а своя доля
+            // показывается отдельно — по ней клиент рисует «сколько из этого моё».
+            .andExpect(jsonPath("$.reservations.total").exists())
+            .andExpect(jsonPath("$.drug.reservedQuantity").doesNotExist())
+            .andExpect(jsonPath("$.drug.quantityUnit").doesNotExist())
     }
 
     @Test
     fun `препарат создаётся в аптечке из пути`() {
-        whenever(drugs.createInMedKit(eq(medKitId), any(), eq(userId))).thenReturn(drugDto)
+        whenever(drugs.createInMedKit(eq(medKitId), any(), eq(userId))).thenReturn(snapshot)
         val body = DrugCreateRequest(name = "Aspirin", quantity = qty(100.0), quantityUnitId = unit.id)
 
         mockMvc.perform(
@@ -119,7 +123,7 @@ class ResourceApiContractTest {
                 .content(objectMapper.writeValueAsString(body))
         )
             .andExpect(status().isCreated)
-            .andExpect(jsonPath("$.id").value(drugId.toString()))
+            .andExpect(jsonPath("$.drug.id").value(drugId.toString()))
     }
 
     @Test
@@ -136,7 +140,7 @@ class ResourceApiContractTest {
 
     @Test
     fun `приём создаётся подчинённым ресурсом упаковки`() {
-        whenever(drugs.recordIntake(eq(drugId), any(), eq(userId))).thenReturn(drugDto)
+        whenever(drugs.recordIntake(eq(drugId), any(), eq(userId))).thenReturn(snapshot)
 
         mockMvc.perform(
             post(ApiRoutes.intakes(drugId)).with(asUser())
@@ -144,17 +148,17 @@ class ResourceApiContractTest {
                 .content("""{"quantity":2.0}""")
         )
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.id").value(drugId.toString()))
+            .andExpect(jsonPath("$.drug.id").value(drugId.toString()))
     }
 
     @Test
     fun `перенос выражен размещением препарата в целевой аптечке`() {
         val target = UUID.randomUUID()
-        whenever(drugs.moveToMedKit(drugId, target, userId)).thenReturn(drugDto)
+        whenever(drugs.moveToMedKit(drugId, target, userId)).thenReturn(snapshot)
 
         mockMvc.perform(put(ApiRoutes.drugIn(target, drugId)).with(asUser()))
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.id").value(drugId.toString()))
+            .andExpect(jsonPath("$.drug.id").value(drugId.toString()))
     }
 
     @Test
@@ -223,7 +227,7 @@ class ResourceApiContractTest {
     fun `аптечка создаётся и перечисляется`() {
         whenever(medKits.create(userId)).thenReturn(MedKitCreatedDTO(medKitId))
         whenever(medKits.summaries(userId))
-            .thenReturn(setOf(MedKitSummaryDTO(medKitId, 2, 17)))
+            .thenReturn(setOf(MedKitSummaryDTO(medKitId, 2, setOf(drugId))))
 
         mockMvc.perform(post(ApiRoutes.MED_KITS).with(asUser()))
             .andExpect(status().isCreated)
@@ -232,7 +236,7 @@ class ResourceApiContractTest {
         mockMvc.perform(get(ApiRoutes.MED_KITS).with(asUser()))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$[0].userCount").value(2))
-            .andExpect(jsonPath("$[0].drugCount").value(17))
+            .andExpect(jsonPath("$[0].drugIds[0]").value(drugId.toString()))
     }
 
     @Test
@@ -248,7 +252,7 @@ class ResourceApiContractTest {
     @Test
     fun `членство создаётся и удаляется`() {
         whenever(medKits.joinByInvitation("invite-key", userId))
-            .thenReturn(MedKitDTO(medKitId, emptySet()))
+            .thenReturn(MedKitDTO(medKitId, 2, emptySet()))
         doNothing().whenever(medKits).leave(medKitId, userId)
 
         mockMvc.perform(
@@ -280,7 +284,7 @@ class ResourceApiContractTest {
     @Test
     fun `снимок пользователя лежит по пути me`() {
         whenever(users.snapshot(userId))
-            .thenReturn(UserSnapshotDTO(userId, setOf(MedKitDTO(medKitId, setOf(drugDto)))))
+            .thenReturn(UserSnapshotDTO(userId, setOf(MedKitDTO(medKitId, 2, setOf(snapshot)))))
 
         mockMvc.perform(get(ApiRoutes.ME).with(asUser()))
             .andExpect(status().isOk)

@@ -163,8 +163,8 @@ class CatalogueSearchTest {
     fun `service fuzzySearch returns results with accessible formType`() {
         val results = catalogue.search("аспир", 10)
         assertTrue(results.isNotEmpty())
-        val drugWithForm = results.first { it.formType != null }
-        assertNotNull(drugWithForm.formType, "FormTypeData should be accessible via service results")
+        val drugWithForm = results.first { it.formTypeId != null }
+        assertNotNull(drugWithForm.formTypeId, "FormTypeData should be accessible via service results")
     }
 
     @Test

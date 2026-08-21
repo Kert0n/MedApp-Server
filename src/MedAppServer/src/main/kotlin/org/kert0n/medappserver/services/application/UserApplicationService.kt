@@ -3,6 +3,7 @@ package org.kert0n.medappserver.services.application
 import java.util.UUID
 import org.kert0n.medappserver.api.UserSnapshotDTO
 import org.kert0n.medappserver.api.toDto
+import org.kert0n.medappserver.api.toSnapshots
 import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.services.aggregate.ReservationService
@@ -25,7 +26,7 @@ class UserApplicationService(
     @Transactional(readOnly = true)
     fun snapshot(userId: UUID): UserSnapshotDTO {
         val packages = drugService.allOf(userId)
-        val drugs = packages.toDto(reservationService.onDrugs(packages.map { it.id }, userId))
+        val drugs = packages.toSnapshots(reservationService.onDrugs(packages.map { it.id }, userId), userId)
         return UserSnapshotDTO(id = userId, medKits = medKitService.allOfUser(userId).toDto(drugs))
     }
 }

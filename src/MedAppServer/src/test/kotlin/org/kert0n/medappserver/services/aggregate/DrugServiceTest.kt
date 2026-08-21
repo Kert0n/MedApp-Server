@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.api.DrugPatchRequest
-import org.kert0n.medappserver.api.toDto
+import org.kert0n.medappserver.api.toSnapshot
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.domain.DomainRuleViolated
 import org.kert0n.medappserver.domain.InsufficientStock
@@ -267,8 +267,10 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         // Заявленное приходит извне упаковки: сама она про брони не знает.
-        val dto = drugService.get(drug.id, alice.id).toDto(reservationService.onDrugs(listOf(drug.id), alice.id))
-        assertQty(100.0, dto.quantity)
-        assertQty(25.0, dto.reservedQuantity)
+        val snapshot = drugService.get(drug.id, alice.id)
+            .toSnapshot(reservationService.onDrugs(listOf(drug.id), alice.id), alice.id)
+        assertQty(100.0, snapshot.drug.quantity)
+        assertQty(25.0, snapshot.reservations.total)
+        assertQty(25.0, snapshot.reservations.mine!!, "своя доля видна отдельно от общей")
     }
 }

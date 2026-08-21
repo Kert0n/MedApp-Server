@@ -6,6 +6,7 @@ import org.kert0n.medappserver.api.MedKitCreatedDTO
 import org.kert0n.medappserver.api.MedKitDTO
 import org.kert0n.medappserver.api.MedKitSummaryDTO
 import org.kert0n.medappserver.api.toDto
+import org.kert0n.medappserver.api.toSnapshots
 import org.kert0n.medappserver.api.toSummaryDto
 import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.MedKitService
@@ -39,7 +40,8 @@ class MedKitApplicationService(
     fun read(medKitId: UUID, userId: UUID): MedKitDTO {
         val medKit = medKitService.get(medKitId, userId)
         val packages = drugService.ofMedKit(medKitId, userId)
-        return medKit.toDto(packages.toDto(reservationService.onDrugs(packages.map { it.id }, userId)).toSet())
+        val reservations = reservationService.onDrugs(packages.map { it.id }, userId)
+        return medKit.toDto(packages.toSnapshots(reservations, userId).toSet())
     }
 
     /** Список аптечек со счётчиками — два чтения на весь ответ, сколько бы их ни было. */

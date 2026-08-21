@@ -13,7 +13,7 @@ import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.Size
 import org.kert0n.medappserver.api.IntakeRequest
 import org.kert0n.medappserver.api.DrugCreateRequest
-import org.kert0n.medappserver.api.DrugDTO
+import org.kert0n.medappserver.api.DrugSnapshotDTO
 import org.kert0n.medappserver.api.DrugPatchRequest
 import org.kert0n.medappserver.api.DrugTemplateDTO
 import org.kert0n.medappserver.api.VocabularyEntryDTO
@@ -48,7 +48,7 @@ class DrugController(private val drugs: DrugApplicationService) {
     fun getDrug(
         authentication: Authentication,
         @Parameter(description = "Drug identifier") @PathVariable drugId: UUID
-    ): DrugDTO {
+    ): DrugSnapshotDTO {
         logger.debug("GET /v1/drugs/{} by user {}", drugId, authentication.userId)
         return drugs.read(drugId, authentication.userId)
     }
@@ -69,7 +69,7 @@ class DrugController(private val drugs: DrugApplicationService) {
         @Parameter(description = "Medicine kit identifier") @PathVariable medKitId: UUID,
         @SwaggerRequestBody(description = "Drug to create")
         @Valid @RequestBody request: DrugCreateRequest
-    ): DrugDTO {
+    ): DrugSnapshotDTO {
         logger.debug("POST /v1/med-kits/{}/drugs by user {}", medKitId, authentication.userId)
         return drugs.createInMedKit(medKitId, request, authentication.userId)
     }
@@ -91,7 +91,7 @@ class DrugController(private val drugs: DrugApplicationService) {
         @Parameter(description = "Drug identifier") @PathVariable drugId: UUID,
         @SwaggerRequestBody(description = "Fields to change")
         @Valid @RequestBody request: DrugPatchRequest
-    ): DrugDTO {
+    ): DrugSnapshotDTO {
         logger.debug("PATCH /v1/drugs/{} by user {}", drugId, authentication.userId)
         return drugs.update(drugId, request, authentication.userId)
     }
@@ -138,7 +138,7 @@ class DrugController(private val drugs: DrugApplicationService) {
         @Parameter(description = "Package identifier") @PathVariable drugId: UUID,
         @SwaggerRequestBody(description = "Amount taken")
         @Valid @RequestBody request: IntakeRequest
-    ): DrugDTO? {
+    ): DrugSnapshotDTO? {
         logger.debug("POST /v1/drugs/{}/intakes by user {}", drugId, authentication.userId)
         // null означает, что пачка кончилась и уничтожена этим списанием.
         return drugs.recordIntake(drugId, request.quantity, authentication.userId)
@@ -160,7 +160,7 @@ class DrugController(private val drugs: DrugApplicationService) {
         authentication: Authentication,
         @Parameter(description = "Target medicine kit identifier") @PathVariable targetMedKitId: UUID,
         @Parameter(description = "Drug identifier") @PathVariable drugId: UUID
-    ): DrugDTO {
+    ): DrugSnapshotDTO {
         logger.debug("PUT /v1/med-kits/{}/drugs/{} by user {}", targetMedKitId, drugId, authentication.userId)
         return drugs.moveToMedKit(drugId, targetMedKitId, authentication.userId)
     }

@@ -30,21 +30,15 @@ data class DrugDTO(
     @Schema(description = "Current stock", example = "100.000000")
     val quantity: BigDecimal,
     /**
-     * Сколько на эту пачку заявлено бронями.
+     * Только идентификаторы: имя единицы и формы клиент разворачивает сам.
      *
-     * Справка, а не ограничение: заявленное может превышать остаток, и чью бронь ужать, решает
-     * её владелец, а не сервер.
+     * Словари он тянет один раз и держит у себя; посылать «имя» рядом с «идентификатором для
+     * получения имени» в каждой пачке — платить трафиком за то, что у клиента уже есть.
      */
-    @Schema(description = "Sum of all reservations on this package; may exceed the stock", example = "40.000000")
-    val reservedQuantity: BigDecimal,
     @Schema(description = "Quantity unit identifier")
     val quantityUnitId: UUID,
-    @Schema(description = "Quantity unit name", example = "mg")
-    val quantityUnit: String,
     @Schema(description = "Dosage form identifier", nullable = true)
     val formTypeId: UUID?,
-    @Schema(description = "Dosage form name", example = "tablet")
-    val formType: String?,
     @Schema(description = "Category", example = "painkiller")
     val category: String?,
     @Schema(description = "Manufacturer", example = "Bayer")
@@ -156,14 +150,10 @@ data class DrugTemplateDTO(
     val activeSubstance: String?,
     @Schema(description = "Dosage form identifier", nullable = true)
     val formTypeId: UUID?,
-    @Schema(description = "Dosage form name", example = "таблетки")
-    val formType: String?,
     @Schema(description = "Category")
     val category: String?,
     @Schema(description = "Quantity unit identifier", nullable = true)
     val quantityUnitId: UUID?,
-    @Schema(description = "Quantity unit name", example = "шт")
-    val quantityUnit: String?,
     @Schema(description = "Manufacturer", example = "Bayer")
     val manufacturer: String?,
     @Schema(description = "Country", example = "Германия")
@@ -183,4 +173,34 @@ data class VocabularyEntryDTO(
     val id: UUID,
     @Schema(description = "Display name", example = "mg")
     val name: String
+)
+
+/**
+ * Что заявлено на упаковку бронями.
+ *
+ * Две величины, а не одна: общая сумма нужна, чтобы понять, разобрана пачка или нет, а своя
+ * доля — чтобы показать её владельцу. Сумма может превышать остаток, и это не ошибка: чью
+ * бронь ужать, решает её владелец, а не сервер.
+ */
+@Schema(description = "What is claimed on the package")
+data class ReservationsDTO(
+    @Schema(description = "Sum of all reservations; may exceed the stock", example = "40.000000")
+    val total: BigDecimal,
+    @Schema(description = "Reserved by the caller; absent when they claimed nothing", nullable = true)
+    val mine: BigDecimal?
+)
+
+/**
+ * Упаковка вместе с тем, что на неё заявлено.
+ *
+ * Разделено намеренно: `drug` — состояние самой пачки, и только за него она отвечает;
+ * `reservations` считается снаружи и меняется от чужих действий. Слитые в один объект, они
+ * дали бы тег версии, который меняется от того, к чему пачка отношения не имеет.
+ */
+@Schema(description = "Package with what is claimed on it")
+data class DrugSnapshotDTO(
+    @Schema(description = "The package itself")
+    val drug: DrugDTO,
+    @Schema(description = "What is claimed on it")
+    val reservations: ReservationsDTO
 )
