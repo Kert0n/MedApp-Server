@@ -36,15 +36,15 @@ class MedKitService(
         return medKit
     }
 
-    /** Аптечка, доступная вызывающему, или `null`. Доступ проверяет сам запрос. */
+    /** Аптечка вызывающего или `null`: чужой для него не существует — так устроен запрос. */
     @Transactional(propagation = MANDATORY, readOnly = true)
-    fun findAccessible(medKitId: UUID, userId: UUID): MedKit? = medKits.findAccessible(medKitId, userId)
+    fun find(medKitId: UUID, userId: UUID): MedKit? = medKits.find(medKitId, userId)
 
-    /** Аптечка, доступная вызывающему, или 404 — недоступная и несуществующая неотличимы. */
+    /** Аптечка вызывающего или 404: недоступная и несуществующая неотличимы намеренно. */
     @Transactional(propagation = MANDATORY, readOnly = true)
-    fun requireAccessible(medKitId: UUID, userId: UUID): MedKit {
+    fun require(medKitId: UUID, userId: UUID): MedKit {
         logger.debug("Finding medkit {} for user {}", medKitId, userId)
-        return findAccessible(medKitId, userId) ?: throw NotAMember()
+        return find(medKitId, userId) ?: throw NotAMember()
     }
 
     /** Все аптечки участника — целиком и одним запросом. */
@@ -59,7 +59,7 @@ class MedKitService(
         logger.debug("Sharing medkit {} by user: {}", medKitId, userId)
         // Право проверяет чтение состава. Версией это не проверяется: чужое вступление в ту же
         // аптечку к правам приглашающего отношения не имеет.
-        requireAccessible(medKitId, userId)
+        require(medKitId, userId)
         val key = securityService.generateKey(16)
         // Кешируется только хеш: сырой ключ приглашения на сервере не хранится.
         medKitTokenCache[securityService.hashToken(key)] = medKitId
@@ -82,7 +82,7 @@ class MedKitService(
         // чужая аптечка. Ключ ниже страхует гонку двух одновременных вступлений.
         if (medKits.isMember(medKitId, userId)) throw AlreadyMember()
         medKits.addMember(medKitId, userId)
-        return requireAccessible(medKitId, userId)
+        return require(medKitId, userId)
     }
 
     @Transactional(propagation = MANDATORY)
@@ -100,7 +100,7 @@ class MedKitService(
     @Transactional(propagation = MANDATORY)
     fun leave(medKitId: UUID, userId: UUID): MedKit? {
         logger.debug("Removing user {} from medkit {}", userId, medKitId)
-        val left = requireAccessible(medKitId, userId).leave(userId)
+        val left = require(medKitId, userId).leave(userId)
 
         if (left == null) {
             medKits.delete(medKitId)

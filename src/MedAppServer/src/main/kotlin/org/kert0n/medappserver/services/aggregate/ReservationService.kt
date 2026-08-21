@@ -91,18 +91,6 @@ class ReservationService(
         return changed
     }
 
-    /**
-     * Снятие броней, потерявших доступ.
-     *
-     * Массово, а не обходом: у аптечки со ста пачками поднимать каждую ради одной строки
-     * незачем. Кто именно потерял доступ, решает вызывающий — состав знает он.
-     */
-    @Transactional(propagation = MANDATORY)
-    fun dropOfUserInMedKit(userId: UUID, medKitId: UUID) {
-        logger.debug("Dropping reservations of user {} in medkit {}", userId, medKitId)
-        reservations.deleteOfUserInMedKit(userId, medKitId)
-    }
-
     /** Брони всех, кто целевую аптечку не видит, — при удалении с переносом. */
     @Transactional(propagation = MANDATORY)
     fun dropInMedKitExcept(medKitId: UUID, accessibleUserIds: Set<UUID>) {

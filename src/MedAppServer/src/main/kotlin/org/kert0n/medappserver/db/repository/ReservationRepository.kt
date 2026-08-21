@@ -52,13 +52,6 @@ interface ReservationRepository : JpaRepository<ReservationData, ReservationKey>
         @Param("userId") userId: UUID
     ): List<ReservationData>
 
-    /** Выход из аптечки: пачек в ней много, поднимать каждую ради одной строки незачем. */
-    @Modifying
-    @Query(
-        "DELETE FROM ReservationData r WHERE r.reservationKey.userId = :userId AND r.drugData.medKit.id = :medKitId"
-    )
-    fun deleteOfUserInMedKit(@Param("userId") userId: UUID, @Param("medKitId") medKitId: UUID)
-
     /** Пара к массовому переезду упаковок: бронь не переживает утрату доступа к пачке. */
     @Modifying
     @Query(

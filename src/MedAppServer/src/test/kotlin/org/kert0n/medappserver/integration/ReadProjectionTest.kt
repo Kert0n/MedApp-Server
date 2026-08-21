@@ -85,7 +85,7 @@ class ReadProjectionTest {
         dbHelper.freshDrug(foreign.id, 4.0)
         dbHelper.flushAndClear()
 
-        val views = drugService.accessibleTo(alice.id)
+        val views = drugService.allOf(alice.id)
 
         assertEquals(3, views.size, "видны препараты обеих своих аптечек и только их")
         assertEquals(2, views.count { it.medKitId == first.id })

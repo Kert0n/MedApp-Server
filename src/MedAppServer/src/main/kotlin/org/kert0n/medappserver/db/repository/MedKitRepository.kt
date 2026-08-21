@@ -46,7 +46,7 @@ interface MedKitMembershipRepository : JpaRepository<MedKitMembershipData, org.k
                       WHERE mine.membershipKey.medKitId = :medKitId AND mine.membershipKey.userId = :userId)
     """
     )
-    fun findAccessibleMemberships(
+    fun findMembershipsOf(
         @Param("medKitId") medKitId: UUID,
         @Param("userId") userId: UUID
     ): List<MedKitMembershipData>

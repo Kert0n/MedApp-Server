@@ -32,7 +32,7 @@ class DrugService(
     @Transactional(propagation = MANDATORY, readOnly = true)
     fun find(drugId: UUID, userId: UUID): Drug? {
         logger.debug("Reading drug {} for user {}", drugId, userId)
-        return drugs.findAccessible(drugId, userId)
+        return drugs.find(drugId, userId)
     }
 
     /** Упаковка или 404. */
@@ -47,9 +47,9 @@ class DrugService(
 
     /** Упаковки всех аптечек участника — одним запросом. */
     @Transactional(propagation = MANDATORY, readOnly = true)
-    fun accessibleTo(userId: UUID): List<Drug> {
+    fun allOf(userId: UUID): List<Drug> {
         logger.debug("Reading all drugs available to user {}", userId)
-        return drugs.findAllAccessibleTo(userId)
+        return drugs.findAllOfUser(userId)
     }
 
     /** Недоступная и несуществующая упаковка отвечают одинаково: иначе чужая обнаружится. */
@@ -103,8 +103,9 @@ class DrugService(
     fun delete(drugId: UUID, userId: UUID) {
         logger.debug("Deleting drug: {}", drugId)
 
-        val drug = require(drugId, userId)
-        drugs.delete(drug.id)
+        // Чтение и есть проверка доступа: не нашли — удалять нечего.
+        require(drugId, userId)
+        drugs.delete(drugId)
     }
 
     /**

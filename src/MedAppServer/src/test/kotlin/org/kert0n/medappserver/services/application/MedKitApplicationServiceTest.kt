@@ -164,9 +164,9 @@ class MedKitApplicationServiceTest {
         medKits.leave(kit.id, bob.id)
         dbHelper.flushAndClear()
 
-        assertNotNull(medKitService.requireAccessible(kit.id, alice.id))
+        assertNotNull(medKitService.require(kit.id, alice.id))
         assertFailsWith<DomainRuleViolated> {
-            medKitService.requireAccessible(kit.id, bob.id)
+            medKitService.require(kit.id, bob.id)
         }
     }
 
@@ -183,7 +183,7 @@ class MedKitApplicationServiceTest {
         dbHelper.flushAndClear()
 
         assertThrows<DomainRuleViolated> {
-            medKitService.requireAccessible(kit.id, alice.id)
+            medKitService.require(kit.id, alice.id)
         }
     }
 

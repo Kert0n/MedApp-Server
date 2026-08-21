@@ -36,8 +36,8 @@ class MedKitStore(
      * ней, и различать эти случаи мы не собираемся. Состав приходит целиком: агрегат аптечки и
      * есть её состав, а решения по нему принимает не только тот, кто её читал.
      */
-    fun findAccessible(medKitId: UUID, userId: UUID): MedKit? {
-        val rows = memberships.findAccessibleMemberships(medKitId, userId)
+    fun find(medKitId: UUID, userId: UUID): MedKit? {
+        val rows = memberships.findMembershipsOf(medKitId, userId)
         if (rows.isEmpty()) return null
         return MedKit(medKitId, rows.map { it.membershipKey.userId }.toSet())
     }

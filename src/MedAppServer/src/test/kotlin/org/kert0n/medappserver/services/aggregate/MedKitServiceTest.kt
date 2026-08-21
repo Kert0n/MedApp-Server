@@ -39,26 +39,26 @@ class MedKitServiceTest {
         assertTrue(medKit.members.contains(alice.id))
     }
 
-    // ── requireAccessible ──
+    // ── require ──
 
     @Test
-    fun `requireAccessible throws NOT_FOUND for non-existent medkit`() {
+    fun `require throws NOT_FOUND for non-existent medkit`() {
         assertThrows<DomainRuleViolated> {
-            medKitService.requireAccessible(UUID.randomUUID(), UUID.randomUUID())
+            medKitService.require(UUID.randomUUID(), UUID.randomUUID())
         }
     }
 
     // ── findByIdForUser ──
 
     @Test
-    fun `requireAccessible throws when user has no access`() {
+    fun `require throws when user has no access`() {
         val alice = dbHelper.freshUser("alice")
         val eve = dbHelper.freshUser("eve")
         val kit = medKitService.create(alice.id)
         dbHelper.flushAndClear()
 
         assertFailsWith<DomainRuleViolated> {
-            medKitService.requireAccessible(kit.id, eve.id)
+            medKitService.require(kit.id, eve.id)
         }
     }
 
@@ -158,9 +158,9 @@ class MedKitServiceTest {
         medKitService.leave(kit.id, bob.id)
         dbHelper.flushAndClear()
 
-        assertNotNull(medKitService.requireAccessible(kit.id, alice.id))
+        assertNotNull(medKitService.require(kit.id, alice.id))
         assertFailsWith<DomainRuleViolated> {
-            medKitService.requireAccessible(kit.id, bob.id)
+            medKitService.require(kit.id, bob.id)
         }
     }
 

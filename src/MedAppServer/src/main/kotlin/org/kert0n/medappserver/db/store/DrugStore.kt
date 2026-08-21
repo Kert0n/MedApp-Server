@@ -33,17 +33,14 @@ class DrugStore(
 
     // ── Чтение ───────────────────────────────────────────────────────────────────
 
-    fun findAccessible(drugId: UUID, userId: UUID): Drug? = drugs.findAccessible(drugId, userId)?.toDomain()
+    fun find(drugId: UUID, userId: UUID): Drug? = drugs.find(drugId, userId)?.toDomain()
 
     fun findAllInMedKit(medKitId: UUID, userId: UUID): List<Drug> =
         drugs.findAllInMedKit(medKitId, userId).map { it.toDomain() }
 
-    fun findAllAccessibleTo(userId: UUID): List<Drug> = drugs.findAllAccessible(userId).map { it.toDomain() }
+    fun findAllOfUser(userId: UUID): List<Drug> = drugs.findAllOfUser(userId).map { it.toDomain() }
 
     // ── Команды ──────────────────────────────────────────────────────────────────
-
-    /** Загрузка под блокировкой строки: с неё начинается любая команда над упаковкой. */
-    fun lockAccessible(drugId: UUID, userId: UUID): Drug? = drugs.lockAccessible(drugId, userId)?.toDomain()
 
     fun insert(drug: Drug) {
         drugs.save(

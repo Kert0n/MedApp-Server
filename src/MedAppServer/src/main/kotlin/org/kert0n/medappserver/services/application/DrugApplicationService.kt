@@ -56,7 +56,7 @@ class DrugApplicationService(
     @Transactional
     fun createInMedKit(medKitId: UUID, request: DrugCreateRequest, userId: UUID): DrugDTO {
         logger.debug("Creating drug {} in medkit {}", request.name, medKitId)
-        medKitService.requireAccessible(medKitId, userId)
+        medKitService.require(medKitId, userId)
         return drugService.create(request.toCommand(), medKitId, userId).toDto(emptyList())
     }
 
@@ -80,7 +80,7 @@ class DrugApplicationService(
     @Transactional
     fun moveToMedKit(drugId: UUID, targetMedKitId: UUID, userId: UUID): DrugDTO {
         logger.debug("Moving drug {} to medkit {}", drugId, targetMedKitId)
-        val target = medKitService.requireAccessible(targetMedKitId, userId)
+        val target = medKitService.require(targetMedKitId, userId)
         relocation.moveOne(drugId, target, userId)
         return read(drugId, userId)
     }

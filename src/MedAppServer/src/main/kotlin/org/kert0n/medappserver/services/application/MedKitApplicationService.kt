@@ -37,7 +37,7 @@ class MedKitApplicationService(
     /** Аптечка вместе с содержимым: сама аптечка знает участников, упаковки — себя. */
     @Transactional(readOnly = true)
     fun read(medKitId: UUID, userId: UUID): MedKitDTO {
-        val medKit = medKitService.requireAccessible(medKitId, userId)
+        val medKit = medKitService.require(medKitId, userId)
         val packages = drugService.ofMedKit(medKitId, userId)
         return medKit.toDto(packages.toDto(reservationService.onDrugs(packages.map { it.id }, userId)).toSet())
     }
@@ -45,7 +45,7 @@ class MedKitApplicationService(
     /** Список аптечек со счётчиками — два чтения на весь ответ, сколько бы их ни было. */
     @Transactional(readOnly = true)
     fun summaries(userId: UUID): Set<MedKitSummaryDTO> =
-        medKitService.allOfUser(userId).toSummaryDto(drugService.accessibleTo(userId))
+        medKitService.allOfUser(userId).toSummaryDto(drugService.allOf(userId))
 
     @Transactional
     fun invite(medKitId: UUID, userId: UUID): InvitationDTO =
@@ -60,21 +60,19 @@ class MedKitApplicationService(
     /**
      * Выход из аптечки.
      *
-     * Правило: **человек ушёл от хранилища — его назначения на пачки внутри него сняты.** Это
-     * не то же самое, что переезд коробки: там человек никуда не девался и назначение остаётся,
-     * если он допущен к новому месту — см. `DrugRelocation`.
+     * Правило: **человек ушёл от хранилища — его назначения на пачки внутри него сняты.**
      *
-     * Брони выходящего лежат на упаковках, и их может быть много: снимаются одним запросом, а
-     * не обходом пачек.
+     * Снимать их отдельным запросом больше не нужно и нечего: бронь ссылается на членство, и
+     * вместе со строкой членства уходит по каскаду. Это не «уборка, которая может не
+     * отработать», а то же самое правило, выраженное ключом — см. `AccessKeysTest`.
+     *
+     * Не путать с переездом коробки: там человек никуда не девался, и назначение остаётся,
+     * если он допущен к новому месту. Там ключ правило выразить не может — см. `DrugRelocation`.
      */
     @Transactional
     fun leave(medKitId: UUID, userId: UUID) {
         logger.debug("Removing user {} from medkit {}", userId, medKitId)
-        val left = medKitService.leave(medKitId, userId)
-        // Аптечки не стало — брони ушли вместе с упаковками по каскаду.
-        if (left != null) {
-            reservationService.dropOfUserInMedKit(userId, medKitId)
-        }
+        medKitService.leave(medKitId, userId)
     }
 
     /**
@@ -87,10 +85,10 @@ class MedKitApplicationService(
     fun delete(medKitId: UUID, userId: UUID, transferToMedKitId: UUID? = null) {
         logger.debug("Deleting medkit {} (transfer to {})", medKitId, transferToMedKitId)
         // Читается один раз: и переезд, и удаление работают с уже прочитанным агрегатом.
-        val medKit = medKitService.requireAccessible(medKitId, userId)
+        val medKit = medKitService.require(medKitId, userId)
 
         transferToMedKitId?.let {
-            relocation.moveAll(medKit.id, medKitService.requireAccessible(it, userId))
+            relocation.moveAll(medKit.id, medKitService.require(it, userId))
         }
 
         medKitService.delete(medKit)

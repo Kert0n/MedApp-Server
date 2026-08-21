@@ -73,8 +73,8 @@ class StoreIntegrationTest {
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
-        assertEquals(drug.id, drugs.findAccessible(drug.id, alice.id)?.id)
-        assertNull(drugs.findAccessible(drug.id, eve.id), "чужая аптечка не читается")
+        assertEquals(drug.id, drugs.find(drug.id, alice.id)?.id)
+        assertNull(drugs.find(drug.id, eve.id), "чужая аптечка не читается")
     }
 
     @Test
@@ -89,24 +89,10 @@ class StoreIntegrationTest {
         dbHelper.freshDrug(foreign.id, 3.0)
         dbHelper.flushAndClear()
 
-        val accessible = drugs.findAllAccessibleTo(alice.id)
+        val accessible = drugs.findAllOfUser(alice.id)
 
         assertEquals(2, accessible.size)
         assertTrue(accessible.none { it.medKitId == foreign.id })
-    }
-
-    @Test
-    fun `блокирующая загрузка отдаёт то же состояние, что и обычная`() {
-        val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
-        val drug = dbHelper.freshDrug(kit.id, 30.0)
-        reservationService.create(alice.id, drug.id, qty(10.0))
-        dbHelper.flushAndClear()
-
-        val locked = drugs.lockAccessible(drug.id, alice.id)!!
-
-        assertQty(30.0, locked.quantity)
-        assertQty(10.0, dbHelper.reservedOnDrug(locked.id))
     }
 
     // ── Брони ────────────────────────────────────────────────────────────────────

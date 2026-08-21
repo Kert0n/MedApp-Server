@@ -24,7 +24,7 @@ class UserApplicationService(
 
     @Transactional(readOnly = true)
     fun snapshot(userId: UUID): UserSnapshotDTO {
-        val packages = drugService.accessibleTo(userId)
+        val packages = drugService.allOf(userId)
         val drugs = packages.toDto(reservationService.onDrugs(packages.map { it.id }, userId))
         return UserSnapshotDTO(id = userId, medKits = medKitService.allOfUser(userId).toDto(drugs))
     }
