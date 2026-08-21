@@ -48,7 +48,7 @@ class StoreIntegrationTest {
         reservationService.create(alice.id, first.id, qty(4.0))
         dbHelper.flushAndClear()
 
-        val loaded = drugs.findAllInMedKit(kit.id)
+        val loaded = drugs.findAllInMedKit(kit.id, alice.id)
 
         assertEquals(2, loaded.size)
         assertQty(10.0, loaded.single { it.id == first.id }.quantity)
@@ -62,7 +62,7 @@ class StoreIntegrationTest {
         val kit = medKitService.create(alice.id)
         dbHelper.flushAndClear()
 
-        assertTrue(drugs.findAllInMedKit(kit.id).isEmpty())
+        assertTrue(drugs.findAllInMedKit(kit.id, alice.id).isEmpty())
     }
 
     @Test
@@ -159,7 +159,7 @@ class StoreIntegrationTest {
         val kit = medKitService.create(alice.id)
         dbHelper.flushAndClear()
 
-        val loaded = medKits.findById(kit.id)!!
+        val loaded = dbHelper.medKit(kit.id)!!
 
         assertEquals(setOf(alice.id), loaded.members)
     }
@@ -191,7 +191,7 @@ class StoreIntegrationTest {
         val mine = medKits.findAllOfUser(alice.id).single()
 
         assertEquals(2, mine.members.size)
-        assertEquals(3, drugs.findAllInMedKit(kit.id).size)
+        assertEquals(3, drugs.findAllInMedKit(kit.id, alice.id).size)
     }
 
     @Test
@@ -204,8 +204,8 @@ class StoreIntegrationTest {
         medKits.delete(kit.id)
         dbHelper.flushAndClear()
 
-        assertNull(medKits.findById(kit.id))
-        assertNull(drugs.findById(drug.id), "препараты не переживают свою аптечку")
+        assertNull(dbHelper.medKit(kit.id))
+        assertNull(dbHelper.drug(drug.id), "препараты не переживают свою аптечку")
         assertTrue(medKits.findAllOfUser(alice.id).map { it.id }.isEmpty())
     }
 

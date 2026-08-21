@@ -171,7 +171,7 @@ class ComplexWorkflowStoriesTest {
         entityManager.clear()
 
         // Verify Home Kit is dead
-        assertNull(medKitStore.findById(homeKit.id), "Home kit must be completely deleted")
+        assertNull(dbHelper.medKit(homeKit.id), "Home kit must be completely deleted")
 
         // Verify Allergy Meds survived the migration
         val migratedAllergyMeds = dbHelper.drug(allergyMeds.id)
@@ -197,7 +197,7 @@ class ComplexWorkflowStoriesTest {
         entityManager.flush()
         entityManager.clear()
 
-        val duoKitCheck1 = medKitStore.findById(duoKit.id)!!
+        val duoKitCheck1 = dbHelper.medKit(duoKit.id)!!
         assertEquals(1, duoKitCheck1.members.size, "Only Alice remains")
 
         // Alice is the last one out, so the kit auto-deletes. medKitService directly: the
@@ -207,7 +207,7 @@ class ComplexWorkflowStoriesTest {
         entityManager.flush()
         entityManager.clear()
 
-        assertNull(medKitStore.findById(duoKit.id), "Duo kit must auto-delete when last user leaves")
+        assertNull(dbHelper.medKit(duoKit.id), "Duo kit must auto-delete when last user leaves")
         assertNull(
             dbHelper.drug(allergyMeds.id),
             "Cascade should kill the drugs inside the abandoned kit"

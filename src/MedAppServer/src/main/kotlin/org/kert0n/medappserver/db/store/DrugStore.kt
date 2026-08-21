@@ -35,11 +35,10 @@ class DrugStore(
 
     fun findAccessible(drugId: UUID, userId: UUID): Drug? = drugs.findAccessible(drugId, userId)?.toDomain()
 
-    fun findAllInMedKit(medKitId: UUID): List<Drug> = drugs.findAllInMedKit(medKitId).map { it.toDomain() }
+    fun findAllInMedKit(medKitId: UUID, userId: UUID): List<Drug> =
+        drugs.findAllInMedKit(medKitId, userId).map { it.toDomain() }
 
     fun findAllAccessibleTo(userId: UUID): List<Drug> = drugs.findAllAccessible(userId).map { it.toDomain() }
-
-    fun findById(drugId: UUID): Drug? = drugs.findFullById(drugId)?.toDomain()
 
     // ── Команды ──────────────────────────────────────────────────────────────────
 

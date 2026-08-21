@@ -200,7 +200,7 @@ class MedKitApplicationServiceTest {
         medKits.delete(kitA.id, alice.id, kitB.id)
         dbHelper.flushAndClear()
 
-        assertNull(medKitStore.findById(kitA.id))
+        assertNull(dbHelper.medKit(kitA.id))
         val survivingDrug = dbHelper.drug(drug.id)
         assertNotNull(survivingDrug)
         assertEquals(kitB.id, survivingDrug.medKitId)

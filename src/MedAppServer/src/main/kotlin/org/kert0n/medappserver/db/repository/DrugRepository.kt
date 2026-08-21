@@ -41,10 +41,12 @@ interface DrugRepository : JpaRepository<DrugData, UUID> {
         """
         SELECT d FROM DrugData d
         WHERE d.medKit.id = :medKitId
+          AND EXISTS (SELECT 1 FROM MedKitMembershipData m
+                      WHERE m.membershipKey.medKitId = d.medKit.id AND m.membershipKey.userId = :userId)
         ORDER BY d.name
     """
     )
-    fun findAllInMedKit(@Param("medKitId") medKitId: UUID): List<DrugData>
+    fun findAllInMedKit(@Param("medKitId") medKitId: UUID, @Param("userId") userId: UUID): List<DrugData>
 
     /** Все упаковки всех аптечек участника — одним запросом. */
     @Query(

@@ -86,7 +86,7 @@ class DrugServiceTest {
         dbHelper.freshDrug(kit.id, 20.0)
         dbHelper.flushAndClear()
 
-        assertEquals(2, drugService.ofMedKit(kit.id).size)
+        assertEquals(2, drugService.ofMedKit(kit.id, alice.id).size)
     }
 
     @Test
@@ -266,7 +266,7 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         // Заявленное приходит извне упаковки: сама она про брони не знает.
-        val dto = drugService.require(drug.id, alice.id).toDto(reservationService.onDrugs(listOf(drug.id)))
+        val dto = drugService.require(drug.id, alice.id).toDto(reservationService.onDrugs(listOf(drug.id), alice.id))
         assertQty(100.0, dto.quantity)
         assertQty(25.0, dto.reservedQuantity)
     }

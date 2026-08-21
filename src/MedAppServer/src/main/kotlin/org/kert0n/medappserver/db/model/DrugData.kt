@@ -19,6 +19,9 @@ import org.kert0n.medappserver.domain.QUANTITY_SCALE
 @Entity
 @Table(
     name = "user_drugs",
+    // Избыточно при первичном ключе по id, но составной ключ брони может ссылаться только на
+    // объявленную уникальность. Существует ради reservations_drug_med_kit_fkey.
+    uniqueConstraints = [UniqueConstraint(name = "user_drugs_id_med_kit_key", columnNames = ["id", "med_kit_id"])],
     indexes = [
         Index(name = "ix_user_drugs_name", columnList = "name"),
         Index(name = "ix_user_drugs_med_kit_id", columnList = "med_kit_id")

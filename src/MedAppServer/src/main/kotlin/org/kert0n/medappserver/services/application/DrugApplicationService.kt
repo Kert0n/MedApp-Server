@@ -47,7 +47,7 @@ class DrugApplicationService(
     @Transactional(readOnly = true)
     fun read(drugId: UUID, userId: UUID): DrugDTO {
         val drug = drugService.require(drugId, userId)
-        return drug.toDto(reservationService.onDrugs(listOf(drug.id)))
+        return drug.toDto(reservationService.onDrugs(listOf(drug.id), userId))
     }
 
     // ── Команды ──────────────────────────────────────────────────────────────────

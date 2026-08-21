@@ -52,7 +52,8 @@ class ReservationService(
 
     /** Брони на перечисленные упаковки — чтобы ответить, сколько на пачку заявлено. */
     @Transactional(propagation = MANDATORY, readOnly = true)
-    fun onDrugs(drugIds: Collection<UUID>): List<Reservation> = reservations.findAllOfDrugs(drugIds)
+    fun onDrugs(drugIds: Collection<UUID>, userId: UUID): List<Reservation> =
+        reservations.findAllOfDrugs(drugIds, userId)
 
     // ── Команды ──────────────────────────────────────────────────────────────────
 
@@ -72,8 +73,9 @@ class ReservationService(
         logger.debug("Creating reservation of user {} on drug {}", userId, drugId)
 
         val drug = drugs.require(drugId, userId)
-        if (reservations.find(userId, drugId) != null) throw ReservationAlreadyExists()
-
+        // Одна бронь на пару «человек и пачка» — это первичный ключ. Читать перед записью
+        // значило бы заплатить лишним запросом и всё равно проиграть гонку: отказ приходит
+        // нарушением ключа и переводится в правило хранилищем.
         val reservation = Reservation(userId, drugId, Quantity(amount, drug.quantity.unit))
         reservations.insert(reservation)
         return reservation

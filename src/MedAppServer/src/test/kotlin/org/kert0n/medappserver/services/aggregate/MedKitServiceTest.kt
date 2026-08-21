@@ -8,12 +8,10 @@ import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.domain.DomainRuleViolated
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.test.context.ActiveProfiles
+import org.kert0n.medappserver.PostgresIntegrationTest
 import org.springframework.transaction.annotation.Transactional
 
-@SpringBootTest
-@ActiveProfiles("test")
+@PostgresIntegrationTest
 @Transactional
 class MedKitServiceTest {
 
@@ -41,12 +39,12 @@ class MedKitServiceTest {
         assertTrue(medKit.members.contains(alice.id))
     }
 
-    // ── findById ──
+    // ── requireAccessible ──
 
     @Test
-    fun `requireById throws NOT_FOUND for non-existent medkit`() {
+    fun `requireAccessible throws NOT_FOUND for non-existent medkit`() {
         assertThrows<DomainRuleViolated> {
-            medKitService.requireById(UUID.randomUUID())
+            medKitService.requireAccessible(UUID.randomUUID(), UUID.randomUUID())
         }
     }
 
@@ -175,6 +173,6 @@ class MedKitServiceTest {
         medKitService.leave(kit.id, alice.id)
         dbHelper.flushAndClear()
 
-        assertNull(medKitStore.findById(kit.id))
+        assertNull(dbHelper.medKit(kit.id))
     }
 }

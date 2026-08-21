@@ -81,11 +81,11 @@ class DrugMovementStoriesTest {
         assertEquals(travelKit.id, movedDrug.medKitId)
 
         // Home kit is empty
-        val homeKitDrugs = drugService.ofMedKit(homeKit.id)
+        val homeKitDrugs = drugService.ofMedKit(homeKit.id, userData.id)
         assertTrue(homeKitDrugs.isEmpty())
 
         // Travel kit has the drug
-        val travelKitDrugs = drugService.ofMedKit(travelKit.id)
+        val travelKitDrugs = drugService.ofMedKit(travelKit.id, userData.id)
         assertEquals(1, travelKitDrugs.size)
 
         // The reservation survives

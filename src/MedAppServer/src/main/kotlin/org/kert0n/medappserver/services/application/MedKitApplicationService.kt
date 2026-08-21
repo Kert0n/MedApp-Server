@@ -38,8 +38,8 @@ class MedKitApplicationService(
     @Transactional(readOnly = true)
     fun read(medKitId: UUID, userId: UUID): MedKitDTO {
         val medKit = medKitService.requireAccessible(medKitId, userId)
-        val packages = drugService.ofMedKit(medKitId)
-        return medKit.toDto(packages.toDto(reservationService.onDrugs(packages.map { it.id })).toSet())
+        val packages = drugService.ofMedKit(medKitId, userId)
+        return medKit.toDto(packages.toDto(reservationService.onDrugs(packages.map { it.id }, userId)).toSet())
     }
 
     /** Список аптечек со счётчиками — два чтения на весь ответ, сколько бы их ни было. */
@@ -86,12 +86,13 @@ class MedKitApplicationService(
     @Transactional
     fun delete(medKitId: UUID, userId: UUID, transferToMedKitId: UUID? = null) {
         logger.debug("Deleting medkit {} (transfer to {})", medKitId, transferToMedKitId)
-        medKitService.requireAccessible(medKitId, userId)
+        // Читается один раз: и переезд, и удаление работают с уже прочитанным агрегатом.
+        val medKit = medKitService.requireAccessible(medKitId, userId)
 
         transferToMedKitId?.let {
-            relocation.moveAll(medKitId, medKitService.requireAccessible(it, userId))
+            relocation.moveAll(medKit.id, medKitService.requireAccessible(it, userId))
         }
 
-        medKitService.delete(medKitId, userId)
+        medKitService.delete(medKit)
     }
 }

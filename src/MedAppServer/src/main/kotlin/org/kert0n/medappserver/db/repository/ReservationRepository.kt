@@ -43,9 +43,14 @@ interface ReservationRepository : JpaRepository<ReservationData, ReservationKey>
         JOIN FETCH r.drugData d
         JOIN FETCH d.quantityUnit
         WHERE r.reservationKey.drugId IN :drugIds
+          AND EXISTS (SELECT 1 FROM MedKitMembershipData m
+                      WHERE m.membershipKey.medKitId = r.medKitId AND m.membershipKey.userId = :userId)
     """
     )
-    fun findAllOfDrugs(@Param("drugIds") drugIds: Collection<UUID>): List<ReservationData>
+    fun findAllOfDrugs(
+        @Param("drugIds") drugIds: Collection<UUID>,
+        @Param("userId") userId: UUID
+    ): List<ReservationData>
 
     /** Выход из аптечки: пачек в ней много, поднимать каждую ради одной строки незачем. */
     @Modifying

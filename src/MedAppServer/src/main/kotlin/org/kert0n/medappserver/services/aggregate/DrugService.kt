@@ -40,9 +40,9 @@ class DrugService(
     fun require(drugId: UUID, userId: UUID): Drug = find(drugId, userId) ?: throw notFound()
 
     @Transactional(propagation = MANDATORY, readOnly = true)
-    fun ofMedKit(medKitId: UUID): List<Drug> {
-        logger.debug("Reading drugs of medkit {}", medKitId)
-        return drugs.findAllInMedKit(medKitId)
+    fun ofMedKit(medKitId: UUID, userId: UUID): List<Drug> {
+        logger.debug("Reading drugs of medkit {} for user {}", medKitId, userId)
+        return drugs.findAllInMedKit(medKitId, userId)
     }
 
     /** Упаковки всех аптечек участника — одним запросом. */

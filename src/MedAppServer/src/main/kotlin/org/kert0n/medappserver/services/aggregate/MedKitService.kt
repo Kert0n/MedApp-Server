@@ -3,6 +3,7 @@ package org.kert0n.medappserver.services.aggregate
 import com.sksamuel.aedile.core.Cache
 import java.util.UUID
 import org.kert0n.medappserver.db.store.MedKitStore
+import org.kert0n.medappserver.domain.AlreadyMember
 import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.services.security.SecurityService
@@ -35,21 +36,15 @@ class MedKitService(
         return medKit
     }
 
-    /** Аптечка или `null`, если её нет. */
+    /** Аптечка, доступная вызывающему, или `null`. Доступ проверяет сам запрос. */
     @Transactional(propagation = MANDATORY, readOnly = true)
-    fun findById(medKitId: UUID): MedKit? = medKits.findById(medKitId)
-
-    /** Аптечка или 404. */
-    @Transactional(propagation = MANDATORY, readOnly = true)
-    fun requireById(medKitId: UUID): MedKit = findById(medKitId) ?: throw NotAMember()
+    fun findAccessible(medKitId: UUID, userId: UUID): MedKit? = medKits.findAccessible(medKitId, userId)
 
     /** Аптечка, доступная вызывающему, или 404 — недоступная и несуществующая неотличимы. */
     @Transactional(propagation = MANDATORY, readOnly = true)
     fun requireAccessible(medKitId: UUID, userId: UUID): MedKit {
         logger.debug("Finding medkit {} for user {}", medKitId, userId)
-        val medKit = requireById(medKitId)
-        medKit.requireMember(userId)
-        return medKit
+        return findAccessible(medKitId, userId) ?: throw NotAMember()
     }
 
     /** Все аптечки участника — целиком и одним запросом. */
@@ -71,12 +66,23 @@ class MedKitService(
         return key
     }
 
+    /**
+     * Вступление — единственное место, где вызывающего в аптечке ещё нет.
+     *
+     * Поэтому оно не читает её: чтение чужой аптечки было бы дырой в правиле «доступ проверяет
+     * запрос». Сначала пишется членство, и только потом аптечка читается уже как своя.
+     * Правила в домене нет и быть не может: `MedKit` — это состав, а прочитать состав аптечки,
+     * к которой доступа ещё нет, нельзя. Поэтому «дважды не вступают» проверяется по
+     * собственной строке членства, а несуществующая аптечка приезжает нарушением ключа.
+     */
     @Transactional(propagation = MANDATORY)
     fun join(medKitId: UUID, userId: UUID): MedKit {
         logger.debug("Adding user {} to medkit {}", userId, medKitId)
-        val joined = requireById(medKitId).join(userId)
-        medKits.save(joined)
-        return joined
+        // Правило читается здесь; собственную строку членства для этого читать можно — это не
+        // чужая аптечка. Ключ ниже страхует гонку двух одновременных вступлений.
+        if (medKits.isMember(medKitId, userId)) throw AlreadyMember()
+        medKits.addMember(medKitId, userId)
+        return requireAccessible(medKitId, userId)
     }
 
     @Transactional(propagation = MANDATORY)
@@ -104,10 +110,12 @@ class MedKitService(
         return left
     }
 
-    /** Доступ проверяется здесь: команда по одному идентификатору однажды придёт без проверки. */
+    /**
+     * Удаляется уже прочитанная аптечка.
+     *
+     * Идентификатора здесь нет намеренно: получить `MedKit` можно только скоупленным чтением,
+     * поэтому команде нечего перепроверять — а перепроверка стоила бы второго запроса.
+     */
     @Transactional(propagation = MANDATORY)
-    fun delete(medKitId: UUID, userId: UUID) {
-        requireAccessible(medKitId, userId)
-        medKits.delete(medKitId)
-    }
+    fun delete(medKit: MedKit) = medKits.delete(medKit.id)
 }

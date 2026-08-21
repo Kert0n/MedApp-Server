@@ -4,8 +4,12 @@ import jakarta.persistence.EntityManager
 import java.math.BigDecimal
 import java.util.*
 import org.kert0n.medappserver.db.model.parsed.QuantityUnitData
+import org.kert0n.medappserver.db.repository.DrugRepository
+import org.kert0n.medappserver.db.repository.MedKitMembershipRepository
 import org.kert0n.medappserver.db.repository.QuantityUnitRepository
+import org.kert0n.medappserver.db.repository.ReservationRepository
 import org.kert0n.medappserver.db.store.DrugStore
+import org.kert0n.medappserver.db.store.toDomain
 import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.db.store.ReservationStore
 import org.kert0n.medappserver.db.store.UserStore
@@ -31,8 +35,11 @@ import org.springframework.transaction.annotation.Transactional
 class DatabaseTestHelper(
     private val users: UserStore,
     private val drugs: DrugStore,
+    private val drugRows: DrugRepository,
     private val reservations: ReservationStore,
+    private val reservationRows: ReservationRepository,
     private val medKits: MedKitStore,
+    private val memberships: MedKitMembershipRepository,
     private val quantityUnits: QuantityUnitRepository,
     private val medKitService: MedKitService,
     private val reservationService: ReservationService,
@@ -78,6 +85,10 @@ class DatabaseTestHelper(
     @Transactional
     fun freshMedKit(ownerId: UUID): MedKit = medKitService.create(ownerId)
 
+    /** Вступление без приглашения: сценарию нужен состав, а не проверка ключа. */
+    @Transactional
+    fun join(medKitId: UUID, userId: UUID): MedKit = medKitService.join(medKitId, userId)
+
     /** Бронь под подготовку сценария. */
     @Transactional
     fun reserve(userId: UUID, drugId: UUID, amount: BigDecimal): Reservation =
@@ -108,18 +119,34 @@ class DatabaseTestHelper(
      * В приложении такого чтения нет — там доступ проверяется всегда; тесту же нужно
      * убедиться, что строки не стало, безотносительно того, кто спрашивает.
      */
-    fun drug(id: UUID): Drug? = drugs.findById(id)
+    /** Упаковка без оглядки на доступ — под проверки состояния, как и `medKit`. */
+    fun drug(id: UUID): Drug? = drugRows.findFullById(id)?.toDomain()
 
-    fun medKit(medKitId: UUID): MedKit? = medKits.findById(medKitId)
+    /**
+     * Аптечка без оглядки на доступ — под проверки состояния.
+     *
+     * Единственное место, где чтение идёт мимо хранилища: скоупленное чтение приложения по
+     * замыслу не покажет ни удалённую аптечку, ни ту, из которой участник вышел, а проверять
+     * надо именно это. Подготовка сценария по-прежнему идёт через хранилища.
+     */
+    fun medKit(medKitId: UUID): MedKit? {
+        val members = memberships.findMemberIds(medKitId)
+        return if (members.isEmpty()) null else MedKit(medKitId, members)
+    }
 
     fun requireDrug(id: UUID): Drug = drug(id) ?: error("Препарат $id не найден")
 
     // Проверки, существенные для privacy-by-default: `null` означает, что записи больше нет.
-    fun drugQuantity(id: UUID): BigDecimal? = drugs.findById(id)?.quantity?.amount
+    fun drugQuantity(id: UUID): BigDecimal? = drug(id)?.quantity?.amount
 
-    /** Заявленное бронями: считается снаружи упаковки и может превышать её остаток. */
+    /**
+     * Заявленное бронями: считается снаружи упаковки и может превышать её остаток.
+     *
+     * Мимо хранилища, как и `medKit`: у проверки состояния нет вызывающего, а скоупленное
+     * чтение без него не работает.
+     */
     fun reservedOnDrug(id: UUID): BigDecimal =
-        reservations.findAllOfDrugs(listOf(id)).sumOf { it.amount.amount }
+        reservationRows.findAll().filter { it.reservationKey.drugId == id }.sumOf { it.amount }
 
     fun userReservation(userId: UUID, drugId: UUID): BigDecimal? =
         reservations.find(userId, drugId)?.amount?.amount

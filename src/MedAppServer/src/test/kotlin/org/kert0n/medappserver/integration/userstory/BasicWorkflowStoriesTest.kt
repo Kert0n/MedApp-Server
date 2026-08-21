@@ -106,7 +106,7 @@ class BasicWorkflowStoriesTest {
         assertNotNull(updatedAspirin)
         assertQty(98.0, updatedAspirin.quantity, "Should have 98 tablets left")
 
-        val drugs = drugService.ofMedKit(homeMedkit.id)
+        val drugs = drugService.ofMedKit(homeMedkit.id, anna.id)
         assertEquals(2, drugs.size, "Should have 2 drugs in medkit")
 
         println("✅ Story 1 passed: Anna successfully created medkit and managed drugs")
@@ -157,7 +157,7 @@ class BasicWorkflowStoriesTest {
         assertEquals(annaMedkits[0], bobMedkits[0], "Should be the same medkit")
 
         // Verify the medkit has 2 users
-        val sharedMedkit = medKitStore.findById(medkit.id)
+        val sharedMedkit = dbHelper.medKit(medkit.id)
         assertNotNull(sharedMedkit)
         assertEquals(2, sharedMedkit.members.size, "Medkit should have 2 users")
 
@@ -196,7 +196,7 @@ class BasicWorkflowStoriesTest {
         entityManager.clear()
 
         // Verify both users have access
-        val loadedMedkit = medKitStore.findById(medkit.id)!!
+        val loadedMedkit = dbHelper.medKit(medkit.id)!!
         assertEquals(2, loadedMedkit.members.size)
 
         // Bob leaves (drugs stay)
@@ -205,7 +205,7 @@ class BasicWorkflowStoriesTest {
         entityManager.clear()
 
         // Medkit still exists with Anna only
-        val updatedMedkit = medKitStore.findById(medkit.id)
+        val updatedMedkit = dbHelper.medKit(medkit.id)
         assertNotNull(updatedMedkit)
         assertEquals(1, updatedMedkit.members.size, "Only Anna should be in medkit")
         assertTrue(updatedMedkit.members.contains(anna.id))
@@ -267,14 +267,14 @@ class BasicWorkflowStoriesTest {
         entityManager.clear()
 
         // Verify migration
-        val drugsInNew = drugService.ofMedKit(newMedkit.id)
+        val drugsInNew = drugService.ofMedKit(newMedkit.id, userData.id)
         assertEquals(2, drugsInNew.size, "All drugs should be in new medkit")
         val drugNames = drugsInNew.map { drug -> drug.name }
         assertTrue(drugNames.contains("Drug A"))
         assertTrue(drugNames.contains("Drug B"))
 
         // Old medkit should be gone
-        val oldMedkitCheck = medKitStore.findById(oldMedkit.id)
+        val oldMedkitCheck = dbHelper.medKit(oldMedkit.id)
         assertNull(oldMedkitCheck, "Old medkit should be deleted")
 
         // User should have only 1 medkit now

@@ -214,7 +214,7 @@ class TreatmentPlanStoriesTest {
         assertQty(87.0, updatedVitamins.quantity, "Should be 90 - 3 = 87")
 
         // 3 users in the medkit
-        val medkit = medKitStore.findById(familyKit.id)
+        val medkit = dbHelper.medKit(familyKit.id)
         assertNotNull(medkit)
         assertEquals(3, medkit.members.size)
 
@@ -224,7 +224,7 @@ class TreatmentPlanStoriesTest {
         entityManager.clear()
 
         // Medkit still has mom and dad
-        val updatedKit = medKitStore.findById(familyKit.id)
+        val updatedKit = dbHelper.medKit(familyKit.id)
         assertNotNull(updatedKit)
         assertEquals(2, updatedKit.members.size)
 
