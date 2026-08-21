@@ -1,17 +1,30 @@
 package org.kert0n.medappserver.db.store
 
 import kotlin.uuid.Uuid
-import kotlin.uuid.toKotlinUuid
 import org.jetbrains.exposed.v1.core.IColumnType
 import org.jetbrains.exposed.v1.core.IntegerColumnType
+import org.jetbrains.exposed.v1.core.Case
+import org.jetbrains.exposed.v1.core.Coalesce
+import org.jetbrains.exposed.v1.core.CustomFunction
+import org.jetbrains.exposed.v1.core.Expression
+import org.jetbrains.exposed.v1.core.FloatColumnType
 import org.jetbrains.exposed.v1.core.JoinType
+import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.SortOrder
+import org.jetbrains.exposed.v1.core.intLiteral
+import org.jetbrains.exposed.v1.core.lowerCase
+import org.jetbrains.exposed.v1.core.or
+import org.jetbrains.exposed.v1.core.stringLiteral
 import org.jetbrains.exposed.v1.core.TextColumnType
 import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.kert0n.medappserver.db.tables.DrugTemplates
+import org.kert0n.medappserver.db.tables.ilike
+import org.kert0n.medappserver.db.tables.matchesText
+import org.kert0n.medappserver.db.tables.searchDocument
+import org.kert0n.medappserver.db.tables.trigramSimilar
+import org.kert0n.medappserver.db.tables.trigramSimilarity
 import org.kert0n.medappserver.db.tables.FormTypes
 import org.kert0n.medappserver.db.tables.QuantityUnits
 import org.kert0n.medappserver.domain.DrugTemplate
@@ -31,58 +44,59 @@ class CatalogueStore {
         templateRows.selectAll().where { DrugTemplates.id eq id }.singleOrNull()?.toDomain()
 
     /**
-     * Нечёткий поиск остаётся сырым SQL — и это честнее, чем прятать его за DSL.
+     * Нечёткий поиск: полнотекст, подстрока и триграммы, упорядоченные по точности совпадения.
      *
-     * Здесь и полнотекст по документу, который считает сама база, и триграммное сходство, и
-     * порядок выдачи «точное совпадение выше префикса, префикс выше подстроки». Ни одно из
-     * этого в переносимых выражениях не выражается, а прятать `similarity()` за обёрткой
-     * значило бы делать вид, что запрос переносим.
+     * Постгресовые оператор и функция объявлены типами в `TextSearch.kt`, поэтому запрос
+     * собирается обычными выражениями: значения связываются сами, а порядок аргументов
+     * считать не приходится.
      */
     fun searchTemplates(term: String, likeTerm: String, limit: Int): List<DrugTemplate> {
-        val found = mutableListOf<Uuid>()
-        TransactionManager.current().exec(
-            """
-            SELECT id FROM parsed_drugs
-            WHERE search_tsv @@ plainto_tsquery('simple', ?)
-               OR name ILIKE ('%' || ? || '%')
-               OR name_lat ILIKE ('%' || ? || '%')
-               OR active_substance ILIKE ('%' || ? || '%')
-               OR manufacturer ILIKE ('%' || ? || '%')
-               OR name % ?
-               OR name_lat % ?
-               OR active_substance % ?
-               OR manufacturer % ?
-            ORDER BY
-                (search_tsv @@ plainto_tsquery('simple', ?)) DESC,
-                CASE
-                    WHEN lower(name) = lower(?) THEN 0
-                    WHEN name ILIKE (? || '%') THEN 1
-                    WHEN name ILIKE ('%' || ? || '%') THEN 2
-                    WHEN name_lat ILIKE ('%' || ? || '%') THEN 3
-                    WHEN active_substance ILIKE ('%' || ? || '%') THEN 4
-                    WHEN manufacturer ILIKE ('%' || ? || '%') THEN 5
-                    ELSE 6
-                END,
-                GREATEST(
-                    similarity(name, ?),
-                    similarity(coalesce(name_lat, ''), ?),
-                    similarity(coalesce(active_substance, ''), ?),
-                    similarity(coalesce(manufacturer, ''), ?)
-                ) DESC,
-                name
-            LIMIT ?
-            """.trimIndent(),
-            searchArguments(term, likeTerm, limit)
-        // Сырой запрос читается драйвером, а он знает только джавовый тип: перевод стоит
-        // здесь, на границе с JDBC, и дальше идентификатор всюду котлиновский.
-        ) { rs -> while (rs.next()) found += rs.getObject(1, java.util.UUID::class.java).toKotlinUuid() }
+        val anywhere = "%$likeTerm%"
+        val fromStart = "$likeTerm%"
 
-        if (found.isEmpty()) return emptyList()
-        // Порядок задаёт запрос выше, поэтому выборка по идентификаторам пересортировывается им.
-        val byId = templateRows.selectAll().where { DrugTemplates.id inList found }
-            .associate { it[DrugTemplates.id] to it.toDomain() }
-        return found.mapNotNull { byId[it] }
+        return templateRows.selectAll()
+            .where { matchesAnywhere(term, anywhere) }
+            .orderBy(
+                (searchDocument matchesText term) to SortOrder.DESC,
+                matchRank(term, anywhere, fromStart) to SortOrder.ASC,
+                bestSimilarity(term) to SortOrder.DESC,
+                DrugTemplates.name to SortOrder.ASC
+            )
+            .limit(limit)
+            .map { it.toDomain() }
     }
+
+    /** Запись подходит, если её нашёл полнотекст, подстрока или триграммы. */
+    private fun matchesAnywhere(term: String, anywhere: String): Op<Boolean> =
+        (searchDocument matchesText term) or
+            (DrugTemplates.name ilike anywhere) or
+            (DrugTemplates.nameLat ilike anywhere) or
+            (DrugTemplates.activeSubstance ilike anywhere) or
+            (DrugTemplates.manufacturer ilike anywhere) or
+            (DrugTemplates.name trigramSimilar term) or
+            (DrugTemplates.nameLat trigramSimilar term) or
+            (DrugTemplates.activeSubstance trigramSimilar term) or
+            (DrugTemplates.manufacturer trigramSimilar term)
+
+    /** Чем точнее совпало, тем меньше число: точное имя — ноль, чужое поле — шесть. */
+    private fun matchRank(term: String, anywhere: String, fromStart: String): Expression<Int> =
+        Case()
+            .When(DrugTemplates.name.lowerCase() eq term.lowercase(), intLiteral(0))
+            .When(DrugTemplates.name ilike fromStart, intLiteral(1))
+            .When(DrugTemplates.name ilike anywhere, intLiteral(2))
+            .When(DrugTemplates.nameLat ilike anywhere, intLiteral(3))
+            .When(DrugTemplates.activeSubstance ilike anywhere, intLiteral(4))
+            .When(DrugTemplates.manufacturer ilike anywhere, intLiteral(5))
+            .Else(intLiteral(6))
+
+    /** Из четырёх полей берётся то, что похоже больше всех. */
+    private fun bestSimilarity(term: String): Expression<Float?> = CustomFunction(
+        "GREATEST", FloatColumnType(),
+        DrugTemplates.name.trigramSimilarity(term),
+        Coalesce(DrugTemplates.nameLat, stringLiteral("")).trigramSimilarity(term),
+        Coalesce(DrugTemplates.activeSubstance, stringLiteral("")).trigramSimilarity(term),
+        Coalesce(DrugTemplates.manufacturer, stringLiteral("")).trigramSimilarity(term)
+    )
 
     fun quantityUnits(): List<QuantityUnit> =
         QuantityUnits.selectAll().orderBy(QuantityUnits.name).map { it.toQuantityUnit() }
