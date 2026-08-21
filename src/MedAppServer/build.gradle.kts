@@ -22,7 +22,10 @@ repositories {
 
 dependencies {
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.1")
+    // ЭКСПЕРИМЕНТ: Exposed вместо JPA. JPA пока оставлена — снимаем неизвестности до переезда.
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+    implementation("org.jetbrains.exposed:exposed-spring-boot-starter:0.61.0")
+    implementation("org.jetbrains.exposed:exposed-jdbc:0.61.0")
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-webmvc")
