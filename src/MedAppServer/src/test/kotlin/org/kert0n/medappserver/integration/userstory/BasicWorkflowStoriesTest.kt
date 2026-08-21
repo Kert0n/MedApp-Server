@@ -1,10 +1,10 @@
 package org.kert0n.medappserver.integration.userstory
 
-import java.util.*
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.uuid.Uuid
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.db.store.MedKitStore
@@ -12,10 +12,10 @@ import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.aggregate.DrugService
-import org.kert0n.medappserver.services.orchestrator.DrugDisposal
 import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.services.application.DrugApplicationService
 import org.kert0n.medappserver.services.application.MedKitApplicationService
+import org.kert0n.medappserver.services.orchestrator.DrugDisposal
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -61,8 +61,8 @@ class BasicWorkflowStoriesTest {
     fun `Story 1 - New user Anna creates and manages her medkit`() {
         // Anna signs up
         val anna = User(
-            id = UUID.randomUUID(),
-            hashedKey = "anna_hashed_key_${UUID.randomUUID()}"
+            id = Uuid.random(),
+            hashedKey = "anna_hashed_key_${Uuid.random()}"
         )
         dbHelper.insert(anna)
 
@@ -72,7 +72,7 @@ class BasicWorkflowStoriesTest {
 
         // Adds drugs through the store directly
         val aspirin = Drug(
-            id = UUID.randomUUID(),
+            id = Uuid.random(),
             name = "Aspirin",
             quantity = Quantity(qty(100.0), dbHelper.unit()),
             category = "painkiller",
@@ -84,7 +84,7 @@ class BasicWorkflowStoriesTest {
         dbHelper.insert(aspirin)
 
         val ibuprofen = Drug(
-            id = UUID.randomUUID(),
+            id = Uuid.random(),
             name = "Ibuprofen",
             quantity = Quantity(qty(50.0), dbHelper.unit()),
             category = "painkiller",
@@ -117,12 +117,12 @@ class BasicWorkflowStoriesTest {
     @Test
     fun `Story 2 - Anna shares medkit with roommate Bob`() {
         // Anna's medkit
-        val anna = User(id = UUID.randomUUID(), hashedKey = "anna_${UUID.randomUUID()}")
+        val anna = User(id = Uuid.random(), hashedKey = "anna_${Uuid.random()}")
         dbHelper.insert(anna)
         val medkit = medKitService.create(anna.id)
 
         val vitamins = Drug(
-            id = UUID.randomUUID(),
+            id = Uuid.random(),
             name = "Vitamin C",
             quantity = Quantity(qty(30.0), dbHelper.unit()),
             category = null,
@@ -134,7 +134,7 @@ class BasicWorkflowStoriesTest {
         dbHelper.insert(vitamins)
 
         // Bob signs up
-        val bob = User(id = UUID.randomUUID(), hashedKey = "bob_${UUID.randomUUID()}")
+        val bob = User(id = Uuid.random(), hashedKey = "bob_${Uuid.random()}")
         dbHelper.insert(bob)
 
         // Anna shares with Bob via share key
@@ -165,8 +165,8 @@ class BasicWorkflowStoriesTest {
     @Test
     fun `Story 3 - Bob leaves shared medkit, cleanup works correctly`() {
         // Setup shared medkit
-        val anna = User(id = UUID.randomUUID(), hashedKey = "anna_${UUID.randomUUID()}")
-        val bob = User(id = UUID.randomUUID(), hashedKey = "bob_${UUID.randomUUID()}")
+        val anna = User(id = Uuid.random(), hashedKey = "anna_${Uuid.random()}")
+        val bob = User(id = Uuid.random(), hashedKey = "bob_${Uuid.random()}")
         dbHelper.insert(anna)
         dbHelper.insert(bob)
 
@@ -175,7 +175,7 @@ class BasicWorkflowStoriesTest {
         medKitService.joinByInvitation(shareKey, bob.id)
 
         val drugData = Drug(
-            id = UUID.randomUUID(),
+            id = Uuid.random(),
             name = "Test Drug",
             quantity = Quantity(qty(100.0), dbHelper.unit()),
             category = null,
@@ -214,13 +214,13 @@ class BasicWorkflowStoriesTest {
     @Test
     fun `Story 4 - User migrates drugs when deleting old medkit`() {
         // Create user and first medkit
-        val userData = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
+        val userData = User(id = Uuid.random(), hashedKey = "user_${Uuid.random()}")
         dbHelper.insert(userData)
         val oldMedkit = medKitService.create(userData.id)
 
         // Add drugs
         val drugData1 = Drug(
-            id = UUID.randomUUID(),
+            id = Uuid.random(),
             name = "Drug A",
             quantity = Quantity(qty(50.0), dbHelper.unit()),
             category = null,
@@ -230,7 +230,7 @@ class BasicWorkflowStoriesTest {
             medKitId = oldMedkit.id
         )
         val drugData2 = Drug(
-            id = UUID.randomUUID(),
+            id = Uuid.random(),
             name = "Drug B",
             quantity = Quantity(qty(100.0), dbHelper.unit()),
             category = null,
@@ -271,12 +271,12 @@ class BasicWorkflowStoriesTest {
     /** Story 5: the pack emptied by an intake is destroyed, not left at zero. */
     @Test
     fun `Story 5 - User consumes all available drug quantity`() {
-        val userData = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
+        val userData = User(id = Uuid.random(), hashedKey = "user_${Uuid.random()}")
         dbHelper.insert(userData)
 
         val medkit = medKitService.create(userData.id)
         val drugData = Drug(
-            id = UUID.randomUUID(),
+            id = Uuid.random(),
             name = "Limited Drug",
             quantity = Quantity(qty(30.0), dbHelper.unit()),
             category = null,

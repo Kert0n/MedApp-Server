@@ -3,6 +3,8 @@ package org.kert0n.medappserver.integration
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.uuid.toJavaUuid
+import kotlin.uuid.toKotlinUuid
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
@@ -33,11 +35,14 @@ class AccessKeysTest {
         dbHelper.reserve(alice.id, drug.id, qty(4.0))
 
         // Строка членства удаляется в обход сервисов: приложение свои брони убрало бы само.
-        jdbc.update("DELETE FROM user_med_kits WHERE med_kit_id = ? AND user_id = ?", kit.id, alice.id)
+        jdbc.update(
+            "DELETE FROM user_med_kits WHERE med_kit_id = ? AND user_id = ?",
+            kit.id.toJavaUuid(), alice.id.toJavaUuid()
+        )
 
         assertEquals(
             0,
-            jdbc.queryForObject("SELECT count(*) FROM reservations WHERE drug_id = ?", Int::class.java, drug.id),
+            jdbc.queryForObject("SELECT count(*) FROM reservations WHERE drug_id = ?", Int::class.java, drug.id.toJavaUuid()),
             "бронь обязана уйти каскадом с членством"
         )
     }
@@ -55,7 +60,10 @@ class AccessKeysTest {
 
         // Переезд без уборки: ровно то, что делает DrugRelocation, но без снятия чужих броней.
         val refused = runCatching {
-            jdbc.update("UPDATE user_drugs SET med_kit_id = ? WHERE id = ?", aliceOnly.id, drug.id)
+            jdbc.update(
+                "UPDATE user_drugs SET med_kit_id = ? WHERE id = ?",
+                aliceOnly.id.toJavaUuid(), drug.id.toJavaUuid()
+            )
         }.exceptionOrNull()
 
         assertTrue(
@@ -64,7 +72,7 @@ class AccessKeysTest {
         )
         assertEquals(
             shared.id,
-            jdbc.queryForObject("SELECT med_kit_id FROM user_drugs WHERE id = ?", java.util.UUID::class.java, drug.id),
+            jdbc.queryForObject("SELECT med_kit_id FROM user_drugs WHERE id = ?", java.util.UUID::class.java, drug.id.toJavaUuid())?.toKotlinUuid(),
             "упаковка осталась на месте"
         )
     }
@@ -77,17 +85,20 @@ class AccessKeysTest {
         val drug = dbHelper.freshDrug(from.id, 10.0)
         dbHelper.reserve(alice.id, drug.id, qty(4.0))
 
-        jdbc.update("UPDATE user_drugs SET med_kit_id = ? WHERE id = ?", to.id, drug.id)
+        jdbc.update(
+            "UPDATE user_drugs SET med_kit_id = ? WHERE id = ?",
+            to.id.toJavaUuid(), drug.id.toJavaUuid()
+        )
 
         assertEquals(
             to.id,
             jdbc.queryForObject(
-                "SELECT med_kit_id FROM reservations WHERE drug_id = ?", java.util.UUID::class.java, drug.id
-            ),
+                "SELECT med_kit_id FROM reservations WHERE drug_id = ?", java.util.UUID::class.java, drug.id.toJavaUuid()
+            )?.toKotlinUuid(),
             "ON UPDATE CASCADE обязан сдвинуть аптечку брони вслед за пачкой"
         )
         assertNull(
-            jdbc.queryForObject("SELECT count(*) FROM reservations WHERE med_kit_id = ?", Int::class.java, from.id)
+            jdbc.queryForObject("SELECT count(*) FROM reservations WHERE med_kit_id = ?", Int::class.java, from.id.toJavaUuid())
                 .takeIf { it != 0 },
             "в исходной аптечке броней не осталось"
         )

@@ -1,9 +1,9 @@
 package org.kert0n.medappserver.services.aggregate
 
-import java.util.*
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.uuid.Uuid
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.kert0n.medappserver.api.DrugCreateRequest
@@ -42,7 +42,7 @@ class DrugServiceTest {
     fun `несуществующий препарат неотличим от недоступного`() {
         val alice = dbHelper.freshUser("alice")
 
-        assertThrows<NotAMember> { drugService.get(UUID.randomUUID(), alice.id) }
+        assertThrows<NotAMember> { drugService.get(Uuid.random(), alice.id) }
     }
 
     // ── findByIdForUser / findByIdForUserForUpdate ──

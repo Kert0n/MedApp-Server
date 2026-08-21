@@ -1,6 +1,6 @@
 package org.kert0n.medappserver.services.orchestrator
 
-import java.util.UUID
+import kotlin.uuid.Uuid
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.services.aggregate.DrugService
@@ -34,6 +34,6 @@ class DrugPlacement(
 
     /** По идентификатору — то же самое плюс чтение аптечки. */
     @Transactional(propagation = MANDATORY)
-    fun place(request: NewDrug, medKitId: UUID, userId: UUID): Drug =
+    fun place(request: NewDrug, medKitId: Uuid, userId: Uuid): Drug =
         place(request, medKitService.get(medKitId, userId))
 }

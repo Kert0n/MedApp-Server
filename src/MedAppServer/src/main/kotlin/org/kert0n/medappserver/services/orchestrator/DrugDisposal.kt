@@ -1,7 +1,7 @@
 package org.kert0n.medappserver.services.orchestrator
 
 import java.math.BigDecimal
-import java.util.UUID
+import kotlin.uuid.Uuid
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.ReservationService
@@ -29,7 +29,7 @@ class DrugDisposal(
 
     /** По идентификатору — то же самое плюс чтение пачки. */
     @Transactional(propagation = MANDATORY)
-    fun destroy(drugId: UUID, userId: UUID) = destroy(drugService.get(drugId, userId))
+    fun destroy(drugId: Uuid, userId: Uuid) = destroy(drugService.get(drugId, userId))
 
     /** Пачку выбросили — назначений на неё больше нет. */
     @Transactional(propagation = MANDATORY)
@@ -46,7 +46,7 @@ class DrugDisposal(
      * для соседнего агрегата.
      */
     @Transactional(propagation = MANDATORY)
-    fun consume(drugId: UUID, quantity: BigDecimal, userId: UUID): Drug? =
+    fun consume(drugId: Uuid, quantity: BigDecimal, userId: Uuid): Drug? =
         consume(drugService.get(drugId, userId), quantity)
 
     @Transactional(propagation = MANDATORY)

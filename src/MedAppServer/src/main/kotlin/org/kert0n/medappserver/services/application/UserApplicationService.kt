@@ -1,6 +1,6 @@
 package org.kert0n.medappserver.services.application
 
-import java.util.UUID
+import kotlin.uuid.Uuid
 import org.kert0n.medappserver.api.UserSnapshotDTO
 import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.api.toSnapshots
@@ -24,7 +24,7 @@ class UserApplicationService(
 ) {
 
     @Transactional(readOnly = true)
-    fun snapshot(userId: UUID): UserSnapshotDTO {
+    fun snapshot(userId: Uuid): UserSnapshotDTO {
         val packages = drugService.allOf(userId)
         val drugs = packages.toSnapshots(reservationService.onDrugs(packages.map { it.id }, userId), userId)
         return UserSnapshotDTO(id = userId, medKits = medKitService.allOfUser(userId).toDto(drugs))

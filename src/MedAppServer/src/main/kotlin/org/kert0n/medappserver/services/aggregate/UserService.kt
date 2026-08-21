@@ -1,6 +1,6 @@
 package org.kert0n.medappserver.services.aggregate
 
-import java.util.UUID
+import kotlin.uuid.Uuid
 import org.kert0n.medappserver.db.store.UserStore
 import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.security.SecurityService
@@ -21,7 +21,7 @@ class UserService(
     private val logger = LoggerFactory.getLogger(UserService::class.java)
 
     @Transactional(propagation = MANDATORY)
-    fun registerNewUser(login: UUID, password: String, ip: String): User {
+    fun registerNewUser(login: Uuid, password: String, ip: String): User {
         logger.debug("Register new user {}", login)
         val user = User(id = login, hashedKey = securityService.hashPassword(password))
         users.insert(user)
@@ -31,11 +31,11 @@ class UserService(
 
 
     @Transactional(propagation = MANDATORY, readOnly = true)
-    fun findById(id: UUID): User? {
+    fun findById(id: Uuid): User? {
         logger.debug("Find user by id {}", id)
         return users.findById(id)
     }
 }
 
-val Authentication.userId: UUID
-    get() = UUID.fromString(this.name)
+val Authentication.userId: Uuid
+    get() = Uuid.parse(this.name)

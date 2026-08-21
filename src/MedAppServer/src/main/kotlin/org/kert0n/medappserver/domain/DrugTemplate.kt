@@ -1,6 +1,6 @@
 package org.kert0n.medappserver.domain
 
-import java.util.UUID
+import kotlin.uuid.Uuid
 
 /**
  * Карточка справочника: заготовка, из которой человек заводит свою упаковку.
@@ -9,7 +9,7 @@ import java.util.UUID
  * здесь те же значения, что у упаковки: это и есть общая часть двух контекстов.
  */
 data class DrugTemplate(
-    val id: UUID,
+    val id: Uuid,
     val name: String,
     val nameLat: String?,
     val activeSubstance: String?,
@@ -23,6 +23,6 @@ data class DrugTemplate(
 
 /** Форма выпуска из общего справочника. */
 data class FormType(
-    val id: UUID,
+    val id: Uuid,
     val name: String
 )

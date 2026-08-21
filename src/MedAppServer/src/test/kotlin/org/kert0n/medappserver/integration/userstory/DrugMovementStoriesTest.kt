@@ -1,8 +1,7 @@
 package org.kert0n.medappserver.integration.userstory
 
-import org.kert0n.medappserver.services.aggregate.ReservationService
-import java.util.*
 import kotlin.test.*
+import kotlin.uuid.Uuid
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.domain.Drug
@@ -10,10 +9,11 @@ import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.aggregate.DrugService
-import org.kert0n.medappserver.services.orchestrator.DrugDisposal
 import org.kert0n.medappserver.services.aggregate.MedKitService
+import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.kert0n.medappserver.services.application.DrugApplicationService
 import org.kert0n.medappserver.services.application.MedKitApplicationService
+import org.kert0n.medappserver.services.orchestrator.DrugDisposal
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -52,14 +52,14 @@ class DrugMovementStoriesTest {
     /** Story 11: a move keeps the reservations of everyone who still sees the pack. */
     @Test
     fun `Story 11 - Moving drug between medkits`() {
-        val userData = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
+        val userData = User(id = Uuid.random(), hashedKey = "user_${Uuid.random()}")
         dbHelper.insert(userData)
 
         val homeKit = medKitService.create(userData.id)
         val travelKit = medKitService.create(userData.id)
 
         val painkiller = Drug(
-            id = UUID.randomUUID(), name = "Ibuprofen",
+            id = Uuid.random(), name = "Ibuprofen",
             quantity = Quantity(qty(60.0), dbHelper.unit()),
             category = "painkiller", manufacturer = null, country = null,
             description = null, medKitId = homeKit.id
@@ -96,8 +96,8 @@ class DrugMovementStoriesTest {
     /** Story 12: a reservation may be raised freely — nothing weighs it against the pack. */
     @Test
     fun `Story 12 - Updating treatment plan correctly checks available quantity`() {
-        val anna = User(id = UUID.randomUUID(), hashedKey = "anna_${UUID.randomUUID()}")
-        val bob = User(id = UUID.randomUUID(), hashedKey = "bob_${UUID.randomUUID()}")
+        val anna = User(id = Uuid.random(), hashedKey = "anna_${Uuid.random()}")
+        val bob = User(id = Uuid.random(), hashedKey = "bob_${Uuid.random()}")
         dbHelper.insert(anna)
         dbHelper.insert(bob)
 
@@ -106,7 +106,7 @@ class DrugMovementStoriesTest {
         medKitService.joinByInvitation(shareKey, bob.id)
 
         val drugData = Drug(
-            id = UUID.randomUUID(), name = "Medicine X",
+            id = Uuid.random(), name = "Medicine X",
             quantity = Quantity(qty(100.0), dbHelper.unit()),
             category = null, manufacturer = null, country = null,
             description = null, medKitId = medkit.id
@@ -131,12 +131,12 @@ class DrugMovementStoriesTest {
     /** Story 13: a destroyed pack takes its reservations with it. */
     @Test
     fun `Story 13 - Deleting drug removes its treatment plans`() {
-        val userData = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
+        val userData = User(id = Uuid.random(), hashedKey = "user_${Uuid.random()}")
         dbHelper.insert(userData)
 
         val medkit = medKitService.create(userData.id)
         val drugData = Drug(
-            id = UUID.randomUUID(), name = "Expired Drug",
+            id = Uuid.random(), name = "Expired Drug",
             quantity = Quantity(qty(50.0), dbHelper.unit()), formType = null,
             category = null, manufacturer = null, country = null,
             description = null, medKitId = medkit.id
@@ -168,9 +168,9 @@ class DrugMovementStoriesTest {
     @Test
     fun `Story 14 - Moving shared drug to private medkit removes other users treatment plans`() {
         // Setup: Anna, Bob, and Charlie share an Old MedKit
-        val anna = dbHelper.insert(User(id = UUID.randomUUID(), hashedKey = "anna_${UUID.randomUUID()}"))
-        val bob = dbHelper.insert(User(id = UUID.randomUUID(), hashedKey = "bob_${UUID.randomUUID()}"))
-        val charlie = dbHelper.insert(User(id = UUID.randomUUID(), hashedKey = "charlie_${UUID.randomUUID()}"))
+        val anna = dbHelper.insert(User(id = Uuid.random(), hashedKey = "anna_${Uuid.random()}"))
+        val bob = dbHelper.insert(User(id = Uuid.random(), hashedKey = "bob_${Uuid.random()}"))
+        val charlie = dbHelper.insert(User(id = Uuid.random(), hashedKey = "charlie_${Uuid.random()}"))
 
         val oldKit = medKitService.create(anna.id)
         medKitService.joinByInvitation(medKitService.invite(medKitService.get(oldKit.id, anna.id), anna.id), bob.id)
@@ -183,7 +183,7 @@ class DrugMovementStoriesTest {
         // Add drug to old kit
         val drugData = dbHelper.insert(
             Drug(
-                id = UUID.randomUUID(), name = "Special Meds", quantity = Quantity(qty(90.0), dbHelper.unit()), medKitId = oldKit.id, formType = null,
+                id = Uuid.random(), name = "Special Meds", quantity = Quantity(qty(90.0), dbHelper.unit()), medKitId = oldKit.id, formType = null,
                 category = null,
                 manufacturer = null,
                 country = null,
@@ -216,14 +216,14 @@ class DrugMovementStoriesTest {
     /** Story 16: moving one pack out of a kit leaves it and the others intact. */
     @Test
     fun `Story 16 - Moving single drug preserves it from orphan removal`() {
-        val userData = dbHelper.insert(User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}"))
+        val userData = dbHelper.insert(User(id = Uuid.random(), hashedKey = "user_${Uuid.random()}"))
 
         val sourceKit = medKitService.create(userData.id)
         val targetKit = medKitService.create(userData.id)
 
         val drugDataToMove = dbHelper.insert(
             Drug(
-                id = UUID.randomUUID(), name = "Moving Pill", quantity = Quantity(qty(10.0), dbHelper.unit()), medKitId = sourceKit.id, formType = null,
+                id = Uuid.random(), name = "Moving Pill", quantity = Quantity(qty(10.0), dbHelper.unit()), medKitId = sourceKit.id, formType = null,
                 category = null,
                 manufacturer = null,
                 country = null,
@@ -233,7 +233,7 @@ class DrugMovementStoriesTest {
 
         val drugDataToStay = dbHelper.insert(
             Drug(
-                id = UUID.randomUUID(), name = "Staying Pill", quantity = Quantity(qty(10.0), dbHelper.unit()), medKitId = sourceKit.id, formType = null,
+                id = Uuid.random(), name = "Staying Pill", quantity = Quantity(qty(10.0), dbHelper.unit()), medKitId = sourceKit.id, formType = null,
                 category = null,
                 manufacturer = null,
                 country = null,

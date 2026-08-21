@@ -1,6 +1,6 @@
 package org.kert0n.medappserver.domain
 
-import java.util.UUID
+import kotlin.uuid.Uuid
 
 /**
  * Аптечка — корень агрегата членства.
@@ -9,24 +9,24 @@ import java.util.UUID
  * решить по одной строке: кто участник, можно ли войти, что будет, когда выйдет последний.
  */
 data class MedKit(
-    val id: UUID = UUID.randomUUID(),
-    val members: Set<UUID>
+    val id: Uuid = Uuid.random(),
+    val members: Set<Uuid>
 ) {
 
     init {
         if (members.isEmpty()) throw MedKitWithoutMembers()
     }
 
-    fun isMember(userId: UUID): Boolean = userId in members
+    fun isMember(userId: Uuid): Boolean = userId in members
 
     /** Вступление по приглашению. Повторное — отказ: вступать второй раз некуда. */
-    fun join(userId: UUID): MedKit {
+    fun join(userId: Uuid): MedKit {
         if (isMember(userId)) throw AlreadyMember()
         return copy(members = members + userId)
     }
 
     /** `null` — вышел последний: аптечки без участников не бывает, и она уходит вместе с ним. */
-    fun leave(userId: UUID): MedKit? {
+    fun leave(userId: Uuid): MedKit? {
         if (!isMember(userId)) throw NotAMember()
         val left = members - userId
         return if (left.isEmpty()) null else copy(members = left)

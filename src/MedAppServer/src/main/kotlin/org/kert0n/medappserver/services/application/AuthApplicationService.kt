@@ -1,6 +1,6 @@
 package org.kert0n.medappserver.services.application
 
-import java.util.UUID
+import kotlin.uuid.Uuid
 import org.kert0n.medappserver.domain.InvalidRegistrationSecret
 import org.kert0n.medappserver.domain.TooManyRegistrations
 import org.kert0n.medappserver.domain.User
@@ -37,7 +37,7 @@ class AuthApplicationService(
         // Лимит по адресу: сдерживает автоматическую регистрацию, ничего не храня о человеке.
         if (!securityService.validateRequest(clientAddress)) throw TooManyRegistrations()
 
-        val login = UUID.randomUUID()
+        val login = Uuid.random()
         val key = securityService.generateKey(32)
         userService.registerNewUser(login, key, clientAddress)
         return Credentials(login, key)
@@ -48,5 +48,5 @@ class AuthApplicationService(
     fun issueToken(user: User): String = securityService.generateToken(user)
 
     /** Сгенерированные учётные данные. Доменного понятия за ними нет — это ответ на регистрацию. */
-    data class Credentials(val login: UUID, val key: String)
+    data class Credentials(val login: Uuid, val key: String)
 }

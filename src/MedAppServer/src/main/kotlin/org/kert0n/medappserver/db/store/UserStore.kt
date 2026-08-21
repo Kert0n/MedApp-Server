@@ -1,6 +1,6 @@
 package org.kert0n.medappserver.db.store
 
-import java.util.UUID
+import kotlin.uuid.Uuid
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component
 @Component
 class UserStore {
 
-    fun findById(userId: UUID): User? =
+    fun findById(userId: Uuid): User? =
         Users.selectAll().where { Users.id eq userId }
             .singleOrNull()
             ?.let { User(it[Users.id], it[Users.hashedKey]) }

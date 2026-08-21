@@ -1,6 +1,6 @@
 package org.kert0n.medappserver.integration
 
-import java.util.UUID
+import kotlin.uuid.Uuid
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.domain.User
@@ -75,7 +75,7 @@ class PublicEndpointScopeTest {
 
     @Test
     fun `business endpoints reject HTTP Basic credentials`() {
-        val userId = UUID.randomUUID()
+        val userId = Uuid.random()
         val user = User(id = userId, hashedKey = "{noop}password")
         whenever(authenticatedUserService.loadUserByUsername(userId.toString())).thenReturn(user)
 
@@ -87,7 +87,7 @@ class PublicEndpointScopeTest {
 
     @Test
     fun `token issuance still accepts HTTP Basic`() {
-        val userId = UUID.randomUUID()
+        val userId = Uuid.random()
         val user = User(id = userId, hashedKey = "{noop}password")
         whenever(authenticatedUserService.loadUserByUsername(userId.toString())).thenReturn(user)
 

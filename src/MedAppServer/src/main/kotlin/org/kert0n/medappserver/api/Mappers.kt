@@ -1,6 +1,6 @@
 package org.kert0n.medappserver.api
 
-import java.util.UUID
+import kotlin.uuid.Uuid
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.DrugTemplate
 import org.kert0n.medappserver.domain.FormType
@@ -56,7 +56,7 @@ fun DrugTemplate.toDto(): DrugTemplateDTO = DrugTemplateDTO(
  * Своя доля отделена от общей суммы: одну показывают владельцу, по другой судят, разобрана ли
  * пачка. Упаковка про брони не знает — их приносит вызывающий.
  */
-fun Drug.toSnapshot(reservations: List<Reservation>, userId: UUID): DrugSnapshotDTO =
+fun Drug.toSnapshot(reservations: List<Reservation>, userId: Uuid): DrugSnapshotDTO =
     DrugSnapshotDTO(
         drug = toDto(),
         reservations = ReservationsDTO(
@@ -80,7 +80,7 @@ fun MedKit.toDto(drugs: Set<DrugSnapshotDTO>): MedKitDTO = MedKitDTO(
  *
  * Брони приходят одним списком на весь набор — тем самым, что читается одним запросом.
  */
-fun List<Drug>.toSnapshots(reservations: List<Reservation>, userId: UUID): List<DrugSnapshotDTO> {
+fun List<Drug>.toSnapshots(reservations: List<Reservation>, userId: Uuid): List<DrugSnapshotDTO> {
     val byDrug = reservations.groupBy { it.drugId }
     return map { it.toSnapshot(byDrug[it.id].orEmpty(), userId) }
 }
@@ -107,7 +107,7 @@ fun FormType.toDto(): VocabularyEntryDTO = VocabularyEntryDTO(id = id, name = na
  * Счётчики — по тому, что уже на руках: участники в агрегате, число пачек от вызывающего,
  * который их всё равно читал. Отдельный запрос ради двух чисел незачем.
  */
-fun MedKit.toSummaryDto(drugIds: Set<UUID>): MedKitSummaryDTO = MedKitSummaryDTO(
+fun MedKit.toSummaryDto(drugIds: Set<Uuid>): MedKitSummaryDTO = MedKitSummaryDTO(
     id = id,
     userCount = members.size.toLong(),
     drugIds = drugIds

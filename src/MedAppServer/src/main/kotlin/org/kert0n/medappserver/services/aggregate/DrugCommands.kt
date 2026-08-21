@@ -1,7 +1,7 @@
 package org.kert0n.medappserver.services.aggregate
 
 import java.math.BigDecimal
-import java.util.UUID
+import kotlin.uuid.Uuid
 
 /**
  * Чего просят у агрегата упаковки.
@@ -17,8 +17,8 @@ import java.util.UUID
 data class NewDrug(
     val name: String,
     val quantity: BigDecimal,
-    val quantityUnitId: UUID,
-    val formTypeId: UUID? = null,
+    val quantityUnitId: Uuid,
+    val formTypeId: Uuid? = null,
     val category: String? = null,
     val manufacturer: String? = null,
     val country: String? = null,
@@ -29,8 +29,8 @@ data class NewDrug(
 data class DrugEdit(
     val name: String? = null,
     val quantity: BigDecimal? = null,
-    val quantityUnitId: UUID? = null,
-    val formTypeId: UUID? = null,
+    val quantityUnitId: Uuid? = null,
+    val formTypeId: Uuid? = null,
     val category: String? = null,
     val manufacturer: String? = null,
     val country: String? = null,

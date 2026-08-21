@@ -1,6 +1,6 @@
 package org.kert0n.medappserver.domain
 
-import java.util.UUID
+import kotlin.uuid.Uuid
 
 /**
  * Упаковка — корень агрегата.
@@ -13,8 +13,8 @@ import java.util.UUID
  * Состояние неизменяемо — команда возвращает следующее, а не меняет текущее.
  */
 data class Drug(
-    val id: UUID = UUID.randomUUID(),
-    val medKitId: UUID,
+    val id: Uuid = Uuid.random(),
+    val medKitId: Uuid,
     val name: String,
     val quantity: Quantity,
     val formType: FormType? = null,
@@ -62,7 +62,7 @@ data class Drug(
     }
 
     /** Переезд. Брони тех, кто целевую аптечку не видит, убирает вызывающий: чужой агрегат. */
-    fun moveTo(targetMedKitId: UUID): Drug = copy(medKitId = targetMedKitId)
+    fun moveTo(targetMedKitId: Uuid): Drug = copy(medKitId = targetMedKitId)
 
     private fun requirePositive(amount: Quantity): Quantity {
         if (!amount.isPositive) throw InvalidQuantity()

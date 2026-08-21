@@ -1,12 +1,12 @@
 package org.kert0n.medappserver.services.aggregate
 
-import java.util.UUID
+import kotlin.uuid.Uuid
 import org.kert0n.medappserver.db.store.CatalogueStore
 import org.kert0n.medappserver.domain.DrugTemplate
 import org.kert0n.medappserver.domain.FormType
+import org.kert0n.medappserver.domain.QuantityUnit
 import org.kert0n.medappserver.domain.UnknownFormType
 import org.kert0n.medappserver.domain.UnknownQuantityUnit
-import org.kert0n.medappserver.domain.QuantityUnit
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Propagation.MANDATORY
 import org.springframework.transaction.annotation.Transactional
@@ -36,7 +36,7 @@ class CatalogueService(private val catalogue: CatalogueStore) {
 
     /** Карточка справочника или `null`: отсутствие обрабатывает вызывающий. */
     @Transactional(propagation = MANDATORY, readOnly = true)
-    fun find(id: UUID): DrugTemplate? = catalogue.findTemplate(id)
+    fun find(id: Uuid): DrugTemplate? = catalogue.findTemplate(id)
 
     /** Словари, из которых клиент выбирает единицу и форму: препарат ссылается на них по id. */
     @Transactional(propagation = MANDATORY, readOnly = true)
@@ -46,11 +46,11 @@ class CatalogueService(private val catalogue: CatalogueStore) {
     fun formTypes(): List<FormType> = catalogue.formTypes()
 
     @Transactional(propagation = MANDATORY, readOnly = true)
-    fun requireQuantityUnit(id: UUID): QuantityUnit =
+    fun requireQuantityUnit(id: Uuid): QuantityUnit =
         catalogue.findQuantityUnit(id) ?: throw UnknownQuantityUnit()
 
     @Transactional(propagation = MANDATORY, readOnly = true)
-    fun requireFormType(id: UUID): FormType =
+    fun requireFormType(id: Uuid): FormType =
         catalogue.findFormType(id) ?: throw UnknownFormType()
 
     /**

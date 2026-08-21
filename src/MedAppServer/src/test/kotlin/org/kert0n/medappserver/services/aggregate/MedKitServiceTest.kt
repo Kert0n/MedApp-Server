@@ -1,14 +1,14 @@
 package org.kert0n.medappserver.services.aggregate
 
-import java.util.*
 import kotlin.test.*
+import kotlin.uuid.Uuid
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.domain.DomainRuleViolated
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.springframework.beans.factory.annotation.Autowired
-import org.kert0n.medappserver.PostgresIntegrationTest
 import org.springframework.transaction.annotation.Transactional
 
 @PostgresIntegrationTest
@@ -44,7 +44,7 @@ class MedKitServiceTest {
     @Test
     fun `require throws NOT_FOUND for non-existent medkit`() {
         assertThrows<DomainRuleViolated> {
-            medKitService.get(UUID.randomUUID(), UUID.randomUUID())
+            medKitService.get(Uuid.random(), Uuid.random())
         }
     }
 

@@ -1,18 +1,19 @@
 package org.kert0n.medappserver.controller
 
-import java.util.*
+import kotlin.uuid.Uuid
+import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.api.IntakeRequest
-import org.kert0n.medappserver.api.MembershipCreateRequest
+import org.kert0n.medappserver.api.InvitationDTO
 import org.kert0n.medappserver.api.MedKitCreatedDTO
 import org.kert0n.medappserver.api.MedKitDTO
 import org.kert0n.medappserver.api.MedKitSummaryDTO
-import org.kert0n.medappserver.api.InvitationDTO
-import org.kert0n.medappserver.api.UserSnapshotDTO
+import org.kert0n.medappserver.api.MembershipCreateRequest
 import org.kert0n.medappserver.api.ReservationCreateRequest
 import org.kert0n.medappserver.api.ReservationPatchRequest
+import org.kert0n.medappserver.api.UserSnapshotDTO
 import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.api.toSnapshot
 import org.kert0n.medappserver.domain.Drug
@@ -24,7 +25,10 @@ import org.kert0n.medappserver.services.aggregate.CatalogueService
 import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.services.aggregate.ReservationService
+import org.kert0n.medappserver.services.application.DrugApplicationService
 import org.kert0n.medappserver.services.application.MedKitApplicationService
+import org.kert0n.medappserver.services.application.ReservationApplicationService
+import org.kert0n.medappserver.services.application.UserApplicationService
 import org.kert0n.medappserver.testutil.ApiRoutes
 import org.kert0n.medappserver.testutil.qty
 import org.mockito.kotlin.any
@@ -44,10 +48,6 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.*
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
-import tools.jackson.databind.ObjectMapper
-import org.kert0n.medappserver.services.application.DrugApplicationService
-import org.kert0n.medappserver.services.application.ReservationApplicationService
-import org.kert0n.medappserver.services.application.UserApplicationService
 
 /**
  * Опубликованная поверхность API.
@@ -61,7 +61,9 @@ import org.kert0n.medappserver.services.application.UserApplicationService
 class ResourceApiContractTest {
 
     @Autowired private lateinit var context: WebApplicationContext
-    @Autowired private lateinit var objectMapper: ObjectMapper
+    // Тем же Json, что читает сервер: тело запроса в тесте должно быть тем же
+    // текстом, что придёт с клиента, иначе проверяется не тот провод.
+    @Autowired private lateinit var json: Json
 
     // Подменяются ровно те, кого зовёт контроллер: по одному прикладному сервису на ресурс.
     // Раньше здесь стояли и сервисы агрегатов — контроллер ходил и туда тоже.
@@ -73,12 +75,12 @@ class ResourceApiContractTest {
 
     private lateinit var mockMvc: MockMvc
 
-    private val userId: UUID = UUID.randomUUID()
-    private val medKitId: UUID = UUID.randomUUID()
-    private val drugId: UUID = UUID.randomUUID()
+    private val userId: Uuid = Uuid.random()
+    private val medKitId: Uuid = Uuid.random()
+    private val drugId: Uuid = Uuid.random()
 
     private val medKit = MedKit(medKitId, setOf(userId))
-    private val unit = QuantityUnit(UUID.randomUUID(), "mg")
+    private val unit = QuantityUnit(Uuid.random(), "mg")
     private val drug = Drug(
         id = drugId, medKitId = medKitId, name = "Aspirin",
         quantity = Quantity(qty(100.0), unit)
@@ -120,7 +122,7 @@ class ResourceApiContractTest {
         mockMvc.perform(
             post(ApiRoutes.drugsOf(medKitId)).with(asUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(body))
+                .content(json.encodeToString(body))
         )
             .andExpect(status().isCreated)
             .andExpect(jsonPath("$.drug.id").value(drugId.toString()))
@@ -133,7 +135,7 @@ class ResourceApiContractTest {
         mockMvc.perform(
             post(ApiRoutes.drugsOf(medKitId)).with(asUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(body))
+                .content(json.encodeToString(body))
         )
             .andExpect(status().isBadRequest)
     }
@@ -145,7 +147,7 @@ class ResourceApiContractTest {
         mockMvc.perform(
             post(ApiRoutes.intakes(drugId)).with(asUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"quantity":2.0}""")
+                .content("""{"quantity":"2.0"}""")
         )
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.drug.id").value(drugId.toString()))
@@ -153,7 +155,7 @@ class ResourceApiContractTest {
 
     @Test
     fun `перенос выражен размещением препарата в целевой аптечке`() {
-        val target = UUID.randomUUID()
+        val target = Uuid.random()
         whenever(drugs.moveToMedKit(drugId, target, userId)).thenReturn(snapshot)
 
         mockMvc.perform(put(ApiRoutes.drugIn(target, drugId)).with(asUser()))
@@ -197,7 +199,7 @@ class ResourceApiContractTest {
         mockMvc.perform(
             post(ApiRoutes.RESERVATIONS).with(asUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(ReservationCreateRequest(drugId, qty(20.0))))
+                .content(json.encodeToString(ReservationCreateRequest(drugId, qty(20.0))))
         )
             .andExpect(status().isCreated)
             .andExpect(jsonPath("$.drugId").value(drugId.toString()))
@@ -208,7 +210,7 @@ class ResourceApiContractTest {
         mockMvc.perform(
             patch(ApiRoutes.reservation(drugId)).with(asUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(ReservationPatchRequest(qty(15.0))))
+                .content(json.encodeToString(ReservationPatchRequest(qty(15.0))))
         )
             .andExpect(status().isOk)
     }
@@ -258,7 +260,7 @@ class ResourceApiContractTest {
         mockMvc.perform(
             post(ApiRoutes.MEMBERSHIPS).with(asUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(MembershipCreateRequest("invite-key")))
+                .content(json.encodeToString(MembershipCreateRequest("invite-key")))
         )
             .andExpect(status().isCreated)
 
@@ -268,7 +270,7 @@ class ResourceApiContractTest {
 
     @Test
     fun `удаление аптечки принимает целевую параметром запроса`() {
-        val target = UUID.randomUUID()
+        val target = Uuid.random()
         doNothing().whenever(medKits).delete(medKitId, userId, target)
 
         mockMvc.perform(

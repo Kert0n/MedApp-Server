@@ -1,10 +1,9 @@
 package org.kert0n.medappserver.integration.userstory
 
-import org.kert0n.medappserver.services.aggregate.ReservationService
-import java.util.*
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.uuid.Uuid
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertDoesNotThrow
 import org.kert0n.medappserver.PostgresIntegrationTest
@@ -14,11 +13,12 @@ import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.aggregate.DrugService
-import org.kert0n.medappserver.services.orchestrator.DrugDisposal
-import org.kert0n.medappserver.services.aggregate.NewDrug
 import org.kert0n.medappserver.services.aggregate.MedKitService
+import org.kert0n.medappserver.services.aggregate.NewDrug
+import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.kert0n.medappserver.services.application.DrugApplicationService
 import org.kert0n.medappserver.services.application.MedKitApplicationService
+import org.kert0n.medappserver.services.orchestrator.DrugDisposal
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -72,9 +72,9 @@ class ComplexWorkflowStoriesTest {
         // ==========================================
         // PHASE 1: Setup and Sharing
         // ==========================================
-        val alice = dbHelper.insert(User(id = UUID.randomUUID(), hashedKey = "alice_${UUID.randomUUID()}"))
-        val bob = dbHelper.insert(User(id = UUID.randomUUID(), hashedKey = "bob_${UUID.randomUUID()}"))
-        val charlie = dbHelper.insert(User(id = UUID.randomUUID(), hashedKey = "charlie_${UUID.randomUUID()}"))
+        val alice = dbHelper.insert(User(id = Uuid.random(), hashedKey = "alice_${Uuid.random()}"))
+        val bob = dbHelper.insert(User(id = Uuid.random(), hashedKey = "bob_${Uuid.random()}"))
+        val charlie = dbHelper.insert(User(id = Uuid.random(), hashedKey = "charlie_${Uuid.random()}"))
 
         val homeKit = medKitService.create(alice.id)
         medKitService.joinByInvitation(medKitService.invite(medKitService.get(homeKit.id, alice.id), alice.id), bob.id)
@@ -82,7 +82,7 @@ class ComplexWorkflowStoriesTest {
 
         val allergyMeds = dbHelper.insert(
             Drug(
-                id = UUID.randomUUID(), name = "Allergy Meds", quantity = Quantity(qty(60.0), dbHelper.unit()), medKitId = homeKit.id, formType = null,
+                id = Uuid.random(), name = "Allergy Meds", quantity = Quantity(qty(60.0), dbHelper.unit()), medKitId = homeKit.id, formType = null,
                 category = null,
                 manufacturer = null,
                 country = null,
@@ -91,7 +91,7 @@ class ComplexWorkflowStoriesTest {
         )
         val painkillers = dbHelper.insert(
             Drug(
-                id = UUID.randomUUID(), name = "Painkillers", quantity = Quantity(qty(100.0), dbHelper.unit()), medKitId = homeKit.id, formType = null,
+                id = Uuid.random(), name = "Painkillers", quantity = Quantity(qty(100.0), dbHelper.unit()), medKitId = homeKit.id, formType = null,
                 category = null,
                 manufacturer = null,
                 country = null,
@@ -264,7 +264,7 @@ class ComplexWorkflowStoriesTest {
     }
 
     private fun createTestUser(name: String): User =
-        dbHelper.insert(User(id = UUID.randomUUID(), hashedKey = name))
+        dbHelper.insert(User(id = Uuid.random(), hashedKey = name))
 
     @Test
     fun `Story 19 - Roommate can move drug even without personal treatment plan`() {

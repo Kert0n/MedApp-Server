@@ -1,6 +1,6 @@
 package org.kert0n.medappserver.domain
 
-import java.util.UUID
+import kotlin.uuid.Uuid
 
 /**
  * Выданное приглашение в аптечку.
@@ -13,6 +13,6 @@ import java.util.UUID
  * приглашённого в ней ещё нет. Отсюда следствие, которое стоит знать: пригласивший вышел —
  * приглашение перестало работать. Оно выдано на его правах, а не само по себе.
  */
-class Invitation(medKit: MedKit, val invitedBy: UUID) {
-    val medKitId: UUID = medKit.id
+class Invitation(medKit: MedKit, val invitedBy: Uuid) {
+    val medKitId: Uuid = medKit.id
 }

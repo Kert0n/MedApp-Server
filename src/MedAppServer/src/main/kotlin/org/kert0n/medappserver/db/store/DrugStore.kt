@@ -1,14 +1,14 @@
 package org.kert0n.medappserver.db.store
 
-import java.util.UUID
+import kotlin.uuid.Uuid
 import org.jetbrains.exposed.v1.core.Join
 import org.jetbrains.exposed.v1.core.JoinType
 import org.jetbrains.exposed.v1.core.Op
-import org.jetbrains.exposed.v1.jdbc.Query
 import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inSubQuery
-import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.jdbc.Query
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.select
@@ -38,15 +38,15 @@ class DrugStore {
 
     // ── Чтение ───────────────────────────────────────────────────────────────────
 
-    fun find(drugId: UUID, userId: UUID): Drug? =
+    fun find(drugId: Uuid, userId: Uuid): Drug? =
         rows { (Drugs.id eq drugId) and accessibleTo(userId) }.singleOrNull()?.toDomain()
 
-    fun findAllInMedKit(medKitId: UUID, userId: UUID): List<Drug> =
+    fun findAllInMedKit(medKitId: Uuid, userId: Uuid): List<Drug> =
         rows { (Drugs.medKitId eq medKitId) and accessibleTo(userId) }
             .orderBy(Drugs.name)
             .map { it.toDomain() }
 
-    fun findAllOfUser(userId: UUID): List<Drug> =
+    fun findAllOfUser(userId: Uuid): List<Drug> =
         rows { accessibleTo(userId) }.orderBy(Drugs.name).map { it.toDomain() }
 
     // ── Команды ──────────────────────────────────────────────────────────────────
@@ -70,7 +70,7 @@ class DrugStore {
     }
 
     /** Все упаковки аптечки — в другую, одним запросом. Брони убирает вызывающий. */
-    fun moveAllToMedKit(sourceMedKitId: UUID, targetMedKitId: UUID) {
+    fun moveAllToMedKit(sourceMedKitId: Uuid, targetMedKitId: Uuid) {
         Drugs.update({ Drugs.medKitId eq sourceMedKitId }) { it[medKitId] = targetMedKitId }
     }
 
@@ -80,7 +80,7 @@ class DrugStore {
      * Предикат вынесен, чтобы его нельзя было забыть в новом чтении, — единственное место,
      * где он написан.
      */
-    private fun accessibleTo(userId: UUID): Op<Boolean> =
+    private fun accessibleTo(userId: Uuid): Op<Boolean> =
         Drugs.medKitId inSubQuery MedKitMemberships
             .select(MedKitMemberships.medKitId)
             .where { MedKitMemberships.userId eq userId }

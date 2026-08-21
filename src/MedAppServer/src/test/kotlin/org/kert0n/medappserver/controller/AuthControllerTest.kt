@@ -1,6 +1,6 @@
 package org.kert0n.medappserver.controller
 
-import java.util.*
+import kotlin.uuid.Uuid
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.domain.User
@@ -69,7 +69,7 @@ class AuthControllerTest {
 
     @Test
     fun `POST register - returns login and key with correct secret`() {
-        val userId = UUID.randomUUID()
+        val userId = Uuid.random()
         val user = User(id = userId, hashedKey = "hashed")
         whenever(securityService.validateRequest(any())).thenReturn(true)
         whenever(securityService.generateKey(32)).thenReturn("generated-key")
@@ -98,7 +98,7 @@ class AuthControllerTest {
 
     @Test
     fun `POST token - returns the token`() {
-        val userId = UUID.randomUUID()
+        val userId = Uuid.random()
         val user = User(id = userId, hashedKey = "{noop}password")
         whenever(authenticatedUserService.loadUserByUsername(userId.toString())).thenReturn(user)
         whenever(securityService.generateToken(any<User>(), any())).thenReturn("jwt-token-123")
@@ -115,7 +115,7 @@ class AuthControllerTest {
 
     @Test
     fun `POST token - returns 401 with wrong password`() {
-        val userId = UUID.randomUUID()
+        val userId = Uuid.random()
         val user = User(id = userId, hashedKey = "{noop}correct-password")
         whenever(authenticatedUserService.loadUserByUsername(userId.toString())).thenReturn(user)
 
@@ -131,7 +131,7 @@ class AuthControllerTest {
 
     @Test
     fun `старый маршрут выдачи токена больше не существует`() {
-        val userId = UUID.randomUUID()
+        val userId = Uuid.random()
         val user = User(id = userId, hashedKey = "{noop}password")
         whenever(authenticatedUserService.loadUserByUsername(userId.toString())).thenReturn(user)
 

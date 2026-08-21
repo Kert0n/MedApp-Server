@@ -1,6 +1,6 @@
 package org.kert0n.medappserver.integration
 
-import java.util.UUID
+import kotlin.uuid.Uuid
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.services.aggregate.CatalogueService
@@ -51,7 +51,7 @@ class InputSizeLimitsTest {
 
     private lateinit var mockMvc: MockMvc
 
-    private val userId = UUID.randomUUID()
+    private val userId = Uuid.random()
 
     @BeforeEach
     fun setup() {
@@ -91,12 +91,12 @@ class InputSizeLimitsTest {
     @Test
     fun `oversized description is rejected`() {
         val body = """
-            {"name":"Aspirin","quantity":10.0,"quantityUnit":"tab",
+            {"name":"Aspirin","quantity":"10.0","quantityUnit":"tab",
              "description":"${"x".repeat(4001)}"}
         """.trimIndent()
 
         mockMvc.perform(
-            post(ApiRoutes.drugsOf(UUID.randomUUID()))
+            post(ApiRoutes.drugsOf(Uuid.random()))
                 .with(jwt().jwt { it.subject(userId.toString()) })
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body)
@@ -119,7 +119,7 @@ class InputSizeLimitsTest {
             post(ApiRoutes.drugsOf(kit.id))
                 .with(jwt().jwt { it.subject(owner.id.toString()) })
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"name":"Aspirin","quantity":$quantity,"quantityUnitId":"${dbHelper.unit().id}"}""")
+                .content("""{"name":"Aspirin","quantity":"$quantity","quantityUnitId":"${dbHelper.unit().id}"}""")
         )
     }
 

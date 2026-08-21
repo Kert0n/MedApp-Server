@@ -1,10 +1,10 @@
 package org.kert0n.medappserver.domain
 
 import java.math.BigDecimal
-import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
+import kotlin.uuid.Uuid
 import org.junit.jupiter.api.Test
 
 /**
@@ -13,8 +13,8 @@ import org.junit.jupiter.api.Test
  */
 class QuantityTest {
 
-    private val tablets = QuantityUnit(UUID.randomUUID(), "таб")
-    private val millilitres = QuantityUnit(UUID.randomUUID(), "мл")
+    private val tablets = QuantityUnit(Uuid.random(), "таб")
+    private val millilitres = QuantityUnit(Uuid.random(), "мл")
 
     private fun q(value: String, unit: QuantityUnit = tablets) = Quantity(BigDecimal(value), unit)
 

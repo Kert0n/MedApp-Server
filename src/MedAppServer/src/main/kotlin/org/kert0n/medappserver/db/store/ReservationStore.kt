@@ -1,16 +1,16 @@
 package org.kert0n.medappserver.db.store
 
-import java.util.UUID
+import kotlin.uuid.Uuid
 import org.jetbrains.exposed.v1.core.Join
 import org.jetbrains.exposed.v1.core.JoinType
 import org.jetbrains.exposed.v1.core.Op
-import org.jetbrains.exposed.v1.jdbc.Query
 import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
-import org.jetbrains.exposed.v1.core.notInList
 import org.jetbrains.exposed.v1.core.inSubQuery
-import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.notInList
+import org.jetbrains.exposed.v1.jdbc.Query
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.select
@@ -44,10 +44,10 @@ class ReservationStore {
      * Предиката членства здесь нет намеренно: бронь ссылается на членство составным ключом,
      * и её существование само по себе доказывает доступ.
      */
-    fun findAllOfUser(userId: UUID): List<Reservation> =
+    fun findAllOfUser(userId: Uuid): List<Reservation> =
         rows { Reservations.userId eq userId }.orderBy(Drugs.name).map { it.toDomain() }
 
-    fun find(userId: UUID, drugId: UUID): Reservation? =
+    fun find(userId: Uuid, drugId: Uuid): Reservation? =
         rows { (Reservations.userId eq userId) and (Reservations.drugId eq drugId) }
             .singleOrNull()?.toDomain()
 
@@ -57,7 +57,7 @@ class ReservationStore {
      * Отдаёт чужие брони, поэтому предикат про вызывающего: видеть заявленное можно там, куда
      * есть доступ.
      */
-    fun findAllOfDrugs(drugIds: Collection<UUID>, userId: UUID): List<Reservation> =
+    fun findAllOfDrugs(drugIds: Collection<Uuid>, userId: Uuid): List<Reservation> =
         if (drugIds.isEmpty()) emptyList()
         else rows { (Reservations.drugId inList drugIds) and visibleTo(userId) }.map { it.toDomain() }
 
@@ -92,14 +92,14 @@ class ReservationStore {
     }
 
     /** Брони тех, кто аптечку не видит, — при удалении аптечки с переносом. */
-    fun deleteInMedKitExcept(medKit: MedKit, accessibleUserIds: Set<UUID>) {
+    fun deleteInMedKitExcept(medKit: MedKit, accessibleUserIds: Set<Uuid>) {
         Reservations.deleteWhere {
             (Reservations.medKitId eq medKit.id) and (Reservations.userId notInList accessibleUserIds)
         }
     }
 
     /** То же для одной переехавшей упаковки. */
-    fun deleteOfDrugExcept(drug: Drug, accessibleUserIds: Set<UUID>) {
+    fun deleteOfDrugExcept(drug: Drug, accessibleUserIds: Set<Uuid>) {
         Reservations.deleteWhere {
             (Reservations.drugId eq drug.id) and (Reservations.userId notInList accessibleUserIds)
         }
@@ -108,7 +108,7 @@ class ReservationStore {
     private fun key(reservation: Reservation): Op<Boolean> =
         (Reservations.userId eq reservation.userId) and (Reservations.drugId eq reservation.drugId)
 
-    private fun visibleTo(userId: UUID): Op<Boolean> =
+    private fun visibleTo(userId: Uuid): Op<Boolean> =
         Reservations.medKitId inSubQuery MedKitMemberships
             .select(MedKitMemberships.medKitId)
             .where { MedKitMemberships.userId eq userId }

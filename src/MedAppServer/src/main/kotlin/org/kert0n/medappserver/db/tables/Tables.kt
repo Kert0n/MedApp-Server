@@ -1,12 +1,9 @@
 package org.kert0n.medappserver.db.tables
 
-import org.jetbrains.exposed.v1.core.Table
-// v1 по умолчанию отдаёт kotlin.uuid.Uuid; домен живёт на java.util.UUID, поэтому колонки
-// объявлены javaUUID — граница типов проходит по схеме, а не по коду выше.
-import org.jetbrains.exposed.v1.core.java.javaUUID
-import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.ReferenceOption.CASCADE
 import org.jetbrains.exposed.v1.core.ReferenceOption.NO_ACTION
+import org.jetbrains.exposed.v1.core.Table
+import org.jetbrains.exposed.v1.core.greater
 import org.kert0n.medappserver.domain.QUANTITY_PRECISION
 import org.kert0n.medappserver.domain.QUANTITY_SCALE
 
@@ -22,7 +19,7 @@ import org.kert0n.medappserver.domain.QUANTITY_SCALE
 // Для наших случаев поведение то же — ключи родителей не меняются, — но схема должна совпадать
 // с тем, что было, поэтому правило задано явно всюду.
 object Users : Table("users") {
-    val id = javaUUID("id")
+    val id = uuid("id")
     val hashedKey = varchar("hashed_key", 255).uniqueIndex("ix_users_hashed_key")
 
     override val primaryKey = PrimaryKey(id, name = "users_pkey")
@@ -30,7 +27,7 @@ object Users : Table("users") {
 
 /** У аптечки нет ни владельца, ни названия: участники равноправны. */
 object MedKits : Table("med_kits") {
-    val id = javaUUID("id")
+    val id = uuid("id")
 
     override val primaryKey = PrimaryKey(id, name = "med_kits_pkey")
 }
@@ -42,21 +39,21 @@ object MedKits : Table("med_kits") {
  * и каскад молча вынес бы из чужой аптечки чужие данные.
  */
 object MedKitMemberships : Table("user_med_kits") {
-    val medKitId = javaUUID("med_kit_id").references(MedKits.id, onDelete = CASCADE, onUpdate = NO_ACTION, fkName = "user_med_kits_med_kit_fkey")
-    val userId = javaUUID("user_id").references(Users.id, onDelete = NO_ACTION, onUpdate = NO_ACTION, fkName = "user_med_kits_user_fkey")
+    val medKitId = uuid("med_kit_id").references(MedKits.id, onDelete = CASCADE, onUpdate = NO_ACTION, fkName = "user_med_kits_med_kit_fkey")
+    val userId = uuid("user_id").references(Users.id, onDelete = NO_ACTION, onUpdate = NO_ACTION, fkName = "user_med_kits_user_fkey")
 
     override val primaryKey = PrimaryKey(medKitId, userId, name = "user_med_kits_pkey")
 }
 
 object FormTypes : Table("form_types") {
-    val id = javaUUID("id")
+    val id = uuid("id")
     val name = varchar("name", 100).uniqueIndex("form_types_name_key")
 
     override val primaryKey = PrimaryKey(id, name = "form_types_pkey")
 }
 
 object QuantityUnits : Table("quantity_units") {
-    val id = javaUUID("id")
+    val id = uuid("id")
     val name = varchar("name", 30).uniqueIndex("quantity_units_name_key")
 
     override val primaryKey = PrimaryKey(id, name = "quantity_units_pkey")
@@ -69,16 +66,16 @@ object QuantityUnits : Table("quantity_units") {
  * должна превращаться в `0.49999999999999994`.
  */
 object Drugs : Table("user_drugs") {
-    val id = javaUUID("id")
+    val id = uuid("id")
     val name = varchar("name", 300).index("ix_user_drugs_name")
     val quantity = decimal("quantity", QUANTITY_PRECISION, QUANTITY_SCALE)
-    val quantityUnitId = javaUUID("quantity_unit_id").references(QuantityUnits.id, onDelete = NO_ACTION, onUpdate = NO_ACTION, fkName = "user_drugs_quantity_unit_fkey")
-    val formTypeId = javaUUID("form_type_id").references(FormTypes.id, onDelete = NO_ACTION, onUpdate = NO_ACTION, fkName = "user_drugs_form_type_fkey").nullable()
+    val quantityUnitId = uuid("quantity_unit_id").references(QuantityUnits.id, onDelete = NO_ACTION, onUpdate = NO_ACTION, fkName = "user_drugs_quantity_unit_fkey")
+    val formTypeId = uuid("form_type_id").references(FormTypes.id, onDelete = NO_ACTION, onUpdate = NO_ACTION, fkName = "user_drugs_form_type_fkey").nullable()
     val category = varchar("category", 200).nullable()
     val manufacturer = varchar("manufacturer", 300).nullable()
     val country = varchar("country", 100).nullable()
     val description = text("description").nullable()
-    val medKitId = javaUUID("med_kit_id")
+    val medKitId = uuid("med_kit_id")
         .references(MedKits.id, onDelete = CASCADE, onUpdate = NO_ACTION, fkName = "user_drugs_med_kit_fkey")
         .index("ix_user_drugs_med_kit_id")
 
@@ -100,9 +97,9 @@ object Drugs : Table("user_drugs") {
  * Переезд пачки тянет копию за собой, `ON UPDATE CASCADE`.
  */
 object Reservations : Table("reservations") {
-    val userId = javaUUID("user_id")
-    val drugId = javaUUID("drug_id")
-    val medKitId = javaUUID("med_kit_id")
+    val userId = uuid("user_id")
+    val drugId = uuid("drug_id")
+    val medKitId = uuid("med_kit_id")
     val amount = decimal("amount", QUANTITY_PRECISION, QUANTITY_SCALE)
 
     override val primaryKey = PrimaryKey(drugId, userId, name = "reservations_pkey")
@@ -125,12 +122,12 @@ object Reservations : Table("reservations") {
 
 /** Справочник из скраппера. Поисковый документ считает сама база, поэтому колонка только читается. */
 object DrugTemplates : Table("parsed_drugs") {
-    val id = javaUUID("id")
+    val id = uuid("id")
     val name = varchar("name", 300).index("ix_parsed_drugs_name")
     val nameLat = varchar("name_lat", 300).nullable()
-    val formTypeId = javaUUID("form_type_id").references(FormTypes.id, onDelete = NO_ACTION, onUpdate = NO_ACTION, fkName = "parsed_drugs_form_type_fkey").nullable()
+    val formTypeId = uuid("form_type_id").references(FormTypes.id, onDelete = NO_ACTION, onUpdate = NO_ACTION, fkName = "parsed_drugs_form_type_fkey").nullable()
     val quantity = integer("quantity").nullable()
-    val quantityUnitId = javaUUID("quantity_unit_id")
+    val quantityUnitId = uuid("quantity_unit_id")
         .references(QuantityUnits.id, onDelete = NO_ACTION, onUpdate = NO_ACTION, fkName = "parsed_drugs_quantity_unit_fkey").nullable()
     val activeSubstance = varchar("active_substance", 300).nullable()
     val category = varchar("category", 300).nullable()

@@ -1,6 +1,6 @@
 package org.kert0n.medappserver.services.application
 
-import java.util.UUID
+import kotlin.uuid.Uuid
 import org.kert0n.medappserver.api.InvitationDTO
 import org.kert0n.medappserver.api.MedKitCreatedDTO
 import org.kert0n.medappserver.api.MedKitDTO
@@ -33,11 +33,11 @@ class MedKitApplicationService(
     private val logger = LoggerFactory.getLogger(MedKitApplicationService::class.java)
 
     @Transactional
-    fun create(userId: UUID): MedKitCreatedDTO = MedKitCreatedDTO(medKitService.create(userId).id)
+    fun create(userId: Uuid): MedKitCreatedDTO = MedKitCreatedDTO(medKitService.create(userId).id)
 
     /** Аптечка вместе с содержимым: сама аптечка знает участников, упаковки — себя. */
     @Transactional(readOnly = true)
-    fun read(medKitId: UUID, userId: UUID): MedKitDTO {
+    fun read(medKitId: Uuid, userId: Uuid): MedKitDTO {
         val medKit = medKitService.get(medKitId, userId)
         val packages = drugService.ofMedKit(medKitId, userId)
         val reservations = reservationService.onDrugs(packages.map { it.id }, userId)
@@ -46,15 +46,15 @@ class MedKitApplicationService(
 
     /** Список аптечек со счётчиками — два чтения на весь ответ, сколько бы их ни было. */
     @Transactional(readOnly = true)
-    fun summaries(userId: UUID): Set<MedKitSummaryDTO> =
+    fun summaries(userId: Uuid): Set<MedKitSummaryDTO> =
         medKitService.allOfUser(userId).toSummaryDto(drugService.allOf(userId))
 
     @Transactional
-    fun invite(medKitId: UUID, userId: UUID): InvitationDTO =
+    fun invite(medKitId: Uuid, userId: Uuid): InvitationDTO =
         InvitationDTO(medKitService.invite(medKitId, userId))
 
     @Transactional
-    fun joinByInvitation(key: String, userId: UUID): MedKitDTO {
+    fun joinByInvitation(key: String, userId: Uuid): MedKitDTO {
         val joined = medKitService.joinByInvitation(key, userId)
         return read(joined.id, userId)
     }
@@ -72,7 +72,7 @@ class MedKitApplicationService(
      * если он допущен к новому месту. Там ключ правило выразить не может — см. `DrugRelocation`.
      */
     @Transactional
-    fun leave(medKitId: UUID, userId: UUID) {
+    fun leave(medKitId: Uuid, userId: Uuid) {
         logger.debug("Removing user {} from medkit {}", userId, medKitId)
         medKitService.leave(medKitId, userId)
     }
@@ -84,7 +84,7 @@ class MedKitApplicationService(
      * переезде одной пачки, поэтому и живёт оно в одном месте на оба случая.
      */
     @Transactional
-    fun delete(medKitId: UUID, userId: UUID, transferToMedKitId: UUID? = null) {
+    fun delete(medKitId: Uuid, userId: Uuid, transferToMedKitId: Uuid? = null) {
         logger.debug("Deleting medkit {} (transfer to {})", medKitId, transferToMedKitId)
         transferToMedKitId?.let { relocation.moveAll(medKitId, it, userId) }
         medKitService.delete(medKitId, userId)

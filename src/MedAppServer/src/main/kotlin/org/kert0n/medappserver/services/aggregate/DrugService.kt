@@ -1,12 +1,12 @@
 package org.kert0n.medappserver.services.aggregate
 
 import java.math.BigDecimal
-import java.util.UUID
+import kotlin.uuid.Uuid
 import org.kert0n.medappserver.db.store.DrugStore
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.DrugDetails
-import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.MedKit
+import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.Quantity
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -36,20 +36,20 @@ class DrugService(
      * чтение ею и является. Отсюда и правило команд — они принимают то, что здесь получено.
      */
     @Transactional(propagation = MANDATORY, readOnly = true)
-    fun get(drugId: UUID, userId: UUID): Drug {
+    fun get(drugId: Uuid, userId: Uuid): Drug {
         logger.debug("Reading drug {} for user {}", drugId, userId)
         return drugs.find(drugId, userId) ?: throw notFound()
     }
 
     @Transactional(propagation = MANDATORY, readOnly = true)
-    fun ofMedKit(medKitId: UUID, userId: UUID): List<Drug> {
+    fun ofMedKit(medKitId: Uuid, userId: Uuid): List<Drug> {
         logger.debug("Reading drugs of medkit {} for user {}", medKitId, userId)
         return drugs.findAllInMedKit(medKitId, userId)
     }
 
     /** Упаковки всех аптечек участника — одним запросом. */
     @Transactional(propagation = MANDATORY, readOnly = true)
-    fun allOf(userId: UUID): List<Drug> {
+    fun allOf(userId: Uuid): List<Drug> {
         logger.debug("Reading all drugs available to user {}", userId)
         return drugs.findAllOfUser(userId)
     }
@@ -80,7 +80,7 @@ class DrugService(
 
     /** По идентификатору — то же самое плюс своё чтение, в котором и проверяется доступ. */
     @Transactional(propagation = MANDATORY)
-    fun update(drugId: UUID, request: DrugEdit, userId: UUID): Drug =
+    fun update(drugId: Uuid, request: DrugEdit, userId: Uuid): Drug =
         update(get(drugId, userId), request)
 
     @Transactional(propagation = MANDATORY)
@@ -107,7 +107,7 @@ class DrugService(
     }
 
     @Transactional(propagation = MANDATORY)
-    fun delete(drugId: UUID, userId: UUID) = delete(get(drugId, userId))
+    fun delete(drugId: Uuid, userId: Uuid) = delete(get(drugId, userId))
 
     @Transactional(propagation = MANDATORY)
     fun delete(drug: Drug) {
@@ -122,7 +122,7 @@ class DrugService(
      * ещё до списания.
      */
     @Transactional(propagation = MANDATORY)
-    fun consume(drugId: UUID, quantity: BigDecimal, userId: UUID): Drug? =
+    fun consume(drugId: Uuid, quantity: BigDecimal, userId: Uuid): Drug? =
         consume(get(drugId, userId), quantity)
 
     @Transactional(propagation = MANDATORY)
