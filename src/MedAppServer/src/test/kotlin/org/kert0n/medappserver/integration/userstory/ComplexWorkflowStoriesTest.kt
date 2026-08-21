@@ -234,7 +234,7 @@ class ComplexWorkflowStoriesTest {
         val createDrugDto = DrugCreateRequest(
             name = "LifePill", quantity = qty(100.0), quantityUnitId = dbHelper.unit().id
             )
-        val drug = drugs.createInMedKit(sourceKit.id, createDrugDto, alice.id)
+        val drug = drugs.createInMedKit(sourceKit.id, createDrugDto, alice.id).drug
         dbHelper.flushAndClear()
 
         // Alice and Bob reserve 40 each, 80 of 100 in total
@@ -362,7 +362,7 @@ class ComplexWorkflowStoriesTest {
         entityManager.flush()
         entityManager.clear()
         // VERIFY: Kit A is gone, but the drug survives in Kit B
-        val survivingDrug = dbHelper.drug(drug.id)
+        val survivingDrug = dbHelper.drug(drug.drug.id)
 
         assertNotNull(survivingDrug, "Drug should not have been deleted")
         assertEquals(kitB.id, survivingDrug.medKitId, "Drug should be re-parented to Kit B")

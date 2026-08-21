@@ -1,5 +1,6 @@
 package org.kert0n.medappserver.api
 
+import java.util.UUID
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.DrugTemplate
 import org.kert0n.medappserver.domain.FormType
@@ -18,15 +19,12 @@ import org.kert0n.medappserver.domain.Reservation
  * знает, а тип-носитель между доменом и DTO незачем. Сумма может превышать содержимое пачки —
  * законное состояние.
  */
-fun Drug.toDto(reservations: List<Reservation>): DrugDTO = DrugDTO(
+fun Drug.toDto(): DrugDTO = DrugDTO(
     id = id,
     name = name,
     quantity = quantity.amount,
-    reservedQuantity = reservations.sumOf { it.amount.amount },
     quantityUnitId = quantity.unit.id,
-    quantityUnit = quantity.unit.name,
     formTypeId = formType?.id,
-    formType = formType?.name,
     category = category,
     manufacturer = manufacturer,
     country = country,
@@ -45,18 +43,32 @@ fun DrugTemplate.toDto(): DrugTemplateDTO = DrugTemplateDTO(
     nameLat = nameLat,
     activeSubstance = activeSubstance,
     formTypeId = formType?.id,
-    formType = formType?.name,
     category = category,
     quantityUnitId = quantityUnit?.id,
-    quantityUnit = quantityUnit?.name,
     manufacturer = manufacturer,
     country = country,
     description = description
 )
 
-/** Аптечка с содержимым: состав она знает сама, упаковки приносит вызывающий. */
-fun MedKit.toDto(drugs: Set<DrugDTO>): MedKitDTO = MedKitDTO(
+/**
+ * Снимок упаковки: сама пачка и то, что на неё заявлено.
+ *
+ * Своя доля отделена от общей суммы: одну показывают владельцу, по другой судят, разобрана ли
+ * пачка. Упаковка про брони не знает — их приносит вызывающий.
+ */
+fun Drug.toSnapshot(reservations: List<Reservation>, userId: UUID): DrugSnapshotDTO =
+    DrugSnapshotDTO(
+        drug = toDto(),
+        reservations = ReservationsDTO(
+            total = reservations.sumOf { it.amount.amount },
+            mine = reservations.firstOrNull { it.userId == userId }?.amount?.amount
+        )
+    )
+
+/** Аптечка с содержимым: число участников она знает сама, упаковки приносит вызывающий. */
+fun MedKit.toDto(drugs: Set<DrugSnapshotDTO>): MedKitDTO = MedKitDTO(
     id = id,
+    userCount = members.size.toLong(),
     drugs = drugs
 )
 
@@ -68,20 +80,20 @@ fun MedKit.toDto(drugs: Set<DrugDTO>): MedKitDTO = MedKitDTO(
  *
  * Брони приходят одним списком на весь набор — тем самым, что читается одним запросом.
  */
-fun List<Drug>.toDto(reservations: List<Reservation>): List<DrugDTO> {
+fun List<Drug>.toSnapshots(reservations: List<Reservation>, userId: UUID): List<DrugSnapshotDTO> {
     val byDrug = reservations.groupBy { it.drugId }
-    return map { it.toDto(byDrug[it.id].orEmpty()) }
+    return map { it.toSnapshot(byDrug[it.id].orEmpty(), userId) }
 }
 
-/** Аптечки со счётчиками: число пачек считается по тому набору, который вызывающий уже читал. */
+/** Справка: по каким аптечкам и каким пачкам клиент может свериться, что ничего не исчезло. */
 fun List<MedKit>.toSummaryDto(accessiblePackages: List<Drug>): Set<MedKitSummaryDTO> {
-    val perMedKit = accessiblePackages.groupingBy { it.medKitId }.eachCount()
-    return map { it.toSummaryDto(perMedKit[it.id] ?: 0) }.toSet()
+    val perMedKit = accessiblePackages.groupBy { it.medKitId }
+    return map { it.toSummaryDto(perMedKit[it.id].orEmpty().map { drug -> drug.id }.toSet()) }.toSet()
 }
 
 /** Аптечки вместе с содержимым: пачки разбираются по аптечкам, к которым принадлежат. */
-fun List<MedKit>.toDto(accessibleDrugs: List<DrugDTO>): Set<MedKitDTO> {
-    val perMedKit = accessibleDrugs.groupBy { it.medKitId }
+fun List<MedKit>.toDto(accessibleDrugs: List<DrugSnapshotDTO>): Set<MedKitDTO> {
+    val perMedKit = accessibleDrugs.groupBy { it.drug.medKitId }
     return map { it.toDto(perMedKit[it.id].orEmpty().toSet()) }.toSet()
 }
 
@@ -95,8 +107,8 @@ fun FormType.toDto(): VocabularyEntryDTO = VocabularyEntryDTO(id = id, name = na
  * Счётчики — по тому, что уже на руках: участники в агрегате, число пачек от вызывающего,
  * который их всё равно читал. Отдельный запрос ради двух чисел незачем.
  */
-fun MedKit.toSummaryDto(drugCount: Int): MedKitSummaryDTO = MedKitSummaryDTO(
+fun MedKit.toSummaryDto(drugIds: Set<UUID>): MedKitSummaryDTO = MedKitSummaryDTO(
     id = id,
     userCount = members.size.toLong(),
-    drugCount = drugCount.toLong()
+    drugIds = drugIds
 )

@@ -52,7 +52,7 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/DrugDTO"
+                $ref: "#/components/schemas/DrugSnapshotDTO"
         "404":
           description: Drug or target kit is not accessible
         "401":
@@ -206,7 +206,7 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/DrugDTO"
+                $ref: "#/components/schemas/DrugSnapshotDTO"
         "400":
           description: Invalid request
         "404":
@@ -275,7 +275,7 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/DrugDTO"
+                $ref: "#/components/schemas/DrugSnapshotDTO"
         "204":
           description: Package ran out and was destroyed
         "400":
@@ -443,7 +443,7 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/DrugDTO"
+                $ref: "#/components/schemas/DrugSnapshotDTO"
         "404":
           description: Drug does not exist or is not accessible
         "401":
@@ -502,7 +502,7 @@ paths:
           content:
             '*/*':
               schema:
-                $ref: "#/components/schemas/DrugDTO"
+                $ref: "#/components/schemas/DrugSnapshotDTO"
         "400":
           description: Invalid request
         "404":
@@ -745,26 +745,14 @@ components:
           type: number
           description: Current stock
           example: 100.0
-        reservedQuantity:
-          type: number
-          description: Sum of all reservations on this package; may exceed the stock
-          example: 40.0
         quantityUnitId:
           type: string
           format: uuid
           description: Quantity unit identifier
-        quantityUnit:
-          type: string
-          description: Quantity unit name
-          example: mg
         formTypeId:
           type: string
           format: uuid
           description: Dosage form identifier
-        formType:
-          type: string
-          description: Dosage form name
-          example: tablet
         category:
           type: string
           description: Category
@@ -784,6 +772,27 @@ components:
           type: string
           format: uuid
           description: Medicine kit the drug belongs to
+    DrugSnapshotDTO:
+      type: object
+      description: Package with what is claimed on it
+      properties:
+        drug:
+          $ref: "#/components/schemas/DrugDTO"
+          description: The package itself
+        reservations:
+          $ref: "#/components/schemas/ReservationsDTO"
+          description: What is claimed on it
+    ReservationsDTO:
+      type: object
+      description: What is claimed on the package
+      properties:
+        total:
+          type: number
+          description: Sum of all reservations; may exceed the stock
+          example: 40.0
+        mine:
+          type: number
+          description: Reserved by the caller; absent when they claimed nothing
     ReservationCreateRequest:
       type: object
       description: Request to reserve part of a package
@@ -899,11 +908,16 @@ components:
           type: string
           format: uuid
           description: Medicine kit identifier
+        userCount:
+          type: integer
+          format: int64
+          description: Number of participants
+          example: 2
         drugs:
           type: array
-          description: Drugs stored in the kit
+          description: "Drugs stored in the kit, with what is claimed on them"
           items:
-            $ref: "#/components/schemas/DrugDTO"
+            $ref: "#/components/schemas/DrugSnapshotDTO"
           uniqueItems: true
     IntakeRequest:
       type: object
@@ -1034,11 +1048,13 @@ components:
           format: int64
           description: Number of participants
           example: 2
-        drugCount:
-          type: integer
-          format: int64
-          description: Number of drugs
-          example: 17
+        drugIds:
+          type: array
+          description: Identifiers of the drugs in the kit
+          items:
+            type: string
+            format: uuid
+          uniqueItems: true
     DrugTemplateDTO:
       type: object
       description: Catalogue entry used as a template for a new drug
@@ -1063,10 +1079,6 @@ components:
           type: string
           format: uuid
           description: Dosage form identifier
-        formType:
-          type: string
-          description: Dosage form name
-          example: таблетки
         category:
           type: string
           description: Category
@@ -1074,10 +1086,6 @@ components:
           type: string
           format: uuid
           description: Quantity unit identifier
-        quantityUnit:
-          type: string
-          description: Quantity unit name
-          example: шт
         manufacturer:
           type: string
           description: Manufacturer

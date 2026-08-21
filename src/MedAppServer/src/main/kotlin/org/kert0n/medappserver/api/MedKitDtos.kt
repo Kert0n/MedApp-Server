@@ -8,8 +8,10 @@ import java.util.UUID
 data class MedKitDTO(
     @Schema(description = "Medicine kit identifier")
     val id: UUID,
-    @Schema(description = "Drugs stored in the kit")
-    val drugs: Set<DrugDTO>
+    @Schema(description = "Number of participants", example = "2")
+    val userCount: Long,
+    @Schema(description = "Drugs stored in the kit, with what is claimed on them")
+    val drugs: Set<DrugSnapshotDTO>
 )
 
 @Schema(description = "Medicine kit counters without loading its contents")
@@ -18,8 +20,12 @@ data class MedKitSummaryDTO(
     val id: UUID,
     @Schema(description = "Number of participants", example = "2")
     val userCount: Long,
-    @Schema(description = "Number of drugs", example = "17")
-    val drugCount: Long
+    /**
+     * Только идентификаторы: справка отвечает на вопрос «что ещё на месте», а не «что внутри».
+     * Состояние пачек клиент берёт полным обновлением.
+     */
+    @Schema(description = "Identifiers of the drugs in the kit")
+    val drugIds: Set<UUID>
 )
 
 @Schema(description = "Created medicine kit")

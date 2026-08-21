@@ -3,9 +3,9 @@ package org.kert0n.medappserver.services.application
 import java.math.BigDecimal
 import java.util.UUID
 import org.kert0n.medappserver.api.DrugCreateRequest
-import org.kert0n.medappserver.api.DrugDTO
+import org.kert0n.medappserver.api.DrugSnapshotDTO
 import org.kert0n.medappserver.api.DrugPatchRequest
-import org.kert0n.medappserver.api.toDto
+import org.kert0n.medappserver.api.toSnapshot
 import org.kert0n.medappserver.services.aggregate.DrugEdit
 import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.NewDrug
@@ -49,24 +49,24 @@ class DrugApplicationService(
      * контроллеру нужен готовый ответ, а не два агрегата.
      */
     @Transactional(readOnly = true)
-    fun read(drugId: UUID, userId: UUID): DrugDTO {
+    fun read(drugId: UUID, userId: UUID): DrugSnapshotDTO {
         val drug = drugService.get(drugId, userId)
-        return drug.toDto(reservationService.onDrugs(listOf(drug.id), userId))
+        return drug.toSnapshot(reservationService.onDrugs(listOf(drug.id), userId), userId)
     }
 
     // ── Команды ──────────────────────────────────────────────────────────────────
 
     /** Доступ решает аптечка, заведение упаковки — упаковка. */
     @Transactional
-    fun createInMedKit(medKitId: UUID, request: DrugCreateRequest, userId: UUID): DrugDTO {
+    fun createInMedKit(medKitId: UUID, request: DrugCreateRequest, userId: UUID): DrugSnapshotDTO {
         logger.debug("Creating drug {} in medkit {}", request.name, medKitId)
-        return placement.place(request.toCommand(), medKitId, userId).toDto(emptyList())
+        return placement.place(request.toCommand(), medKitId, userId).toSnapshot(emptyList(), userId)
     }
 
     @Transactional
-    fun update(drugId: UUID, request: DrugPatchRequest, userId: UUID): DrugDTO {
+    fun update(drugId: UUID, request: DrugPatchRequest, userId: UUID): DrugSnapshotDTO {
         val updated = drugService.update(drugId, request.toCommand(), userId)
-        return updated.toDto(reservationService.onDrugs(listOf(updated.id), userId))
+        return updated.toSnapshot(reservationService.onDrugs(listOf(updated.id), userId), userId)
     }
 
     @Transactional
@@ -74,16 +74,16 @@ class DrugApplicationService(
 
     /** `null` — приём опустошил пачку, и она уничтожена: отдавать нечего. */
     @Transactional
-    fun recordIntake(drugId: UUID, quantity: BigDecimal, userId: UUID): DrugDTO? {
+    fun recordIntake(drugId: UUID, quantity: BigDecimal, userId: UUID): DrugSnapshotDTO? {
         val left = disposal.consume(drugId, quantity, userId) ?: return null
-        return left.toDto(reservationService.onDrugs(listOf(left.id), userId))
+        return left.toSnapshot(reservationService.onDrugs(listOf(left.id), userId), userId)
     }
 
     @Transactional
-    fun moveToMedKit(drugId: UUID, targetMedKitId: UUID, userId: UUID): DrugDTO {
+    fun moveToMedKit(drugId: UUID, targetMedKitId: UUID, userId: UUID): DrugSnapshotDTO {
         logger.debug("Moving drug {} to medkit {}", drugId, targetMedKitId)
         val moved = relocation.moveOne(drugId, targetMedKitId, userId)
-        return moved.toDto(reservationService.onDrugs(listOf(moved.id), userId))
+        return moved.toSnapshot(reservationService.onDrugs(listOf(moved.id), userId), userId)
     }
 
     /**
