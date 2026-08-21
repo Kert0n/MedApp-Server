@@ -1,9 +1,7 @@
-package org.kert0n.medappserver.services.models
+package org.kert0n.medappserver.services.aggregate
 
 import java.math.BigDecimal
 import java.util.UUID
-import org.kert0n.medappserver.api.DrugCreateRequest
-import org.kert0n.medappserver.api.DrugPatchRequest
 import org.kert0n.medappserver.db.store.DrugStore
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.DrugDetails
@@ -11,13 +9,14 @@ import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.Quantity
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Propagation.MANDATORY
 import org.springframework.transaction.annotation.Transactional
 
 /**
  * Единственный вход к агрегату упаковки.
  *
- * Команды однотипны: взять состояние под блокировкой, вызвать метод домена, отдать результат
- * хранилищу. Правила — в `domain.Drug`, запросы — за `DrugStore`, брони — в своём агрегате.
+ * Команды однотипны: прочитать состояние, вызвать метод домена, отдать результат хранилищу.
+ * Правила — в `domain.Drug`, запросы — за `DrugStore`, брони — в своём агрегате.
  */
 @Service
 class DrugService(
@@ -30,24 +29,24 @@ class DrugService(
     // ── Чтение ───────────────────────────────────────────────────────────────────
 
     /** `null`, если упаковки нет или она недоступна вызывающему. */
-    @Transactional(readOnly = true)
+    @Transactional(propagation = MANDATORY, readOnly = true)
     fun find(drugId: UUID, userId: UUID): Drug? {
         logger.debug("Reading drug {} for user {}", drugId, userId)
         return drugs.findAccessible(drugId, userId)
     }
 
     /** Упаковка или 404. */
-    @Transactional(readOnly = true)
+    @Transactional(propagation = MANDATORY, readOnly = true)
     fun require(drugId: UUID, userId: UUID): Drug = find(drugId, userId) ?: throw notFound()
 
-    @Transactional(readOnly = true)
+    @Transactional(propagation = MANDATORY, readOnly = true)
     fun ofMedKit(medKitId: UUID): List<Drug> {
         logger.debug("Reading drugs of medkit {}", medKitId)
         return drugs.findAllInMedKit(medKitId)
     }
 
     /** Упаковки всех аптечек участника — одним запросом. */
-    @Transactional(readOnly = true)
+    @Transactional(propagation = MANDATORY, readOnly = true)
     fun accessibleTo(userId: UUID): List<Drug> {
         logger.debug("Reading all drugs available to user {}", userId)
         return drugs.findAllAccessibleTo(userId)
@@ -56,13 +55,10 @@ class DrugService(
     /** Недоступная и несуществующая упаковка отвечают одинаково: иначе чужая обнаружится. */
     private fun notFound() = NotAMember()
 
-    private fun lock(drugId: UUID, userId: UUID): Drug =
-        drugs.lockAccessible(drugId, userId) ?: throw notFound()
-
     // ── Команды препарата ────────────────────────────────────────────────────────
 
-    @Transactional
-    fun create(request: DrugCreateRequest, medKitId: UUID, userId: UUID): Drug {
+    @Transactional(propagation = MANDATORY)
+    fun create(request: NewDrug, medKitId: UUID, userId: UUID): Drug {
         logger.debug("Creating drug: {} for user: {}", request.name, userId)
 
         val drug = Drug(
@@ -80,11 +76,11 @@ class DrugService(
         return drug
     }
 
-    @Transactional
-    fun update(drugId: UUID, request: DrugPatchRequest, userId: UUID): Drug {
+    @Transactional(propagation = MANDATORY)
+    fun update(drugId: UUID, request: DrugEdit, userId: UUID): Drug {
         logger.debug("Updating drug: {}", drugId)
 
-        var drug = lock(drugId, userId)
+        var drug = require(drugId, userId)
         // Единица перевешивается первой: количество ниже собирается уже в ней.
         request.quantityUnitId?.let { drug = drug.relabelUnitTo(catalogue.requireQuantityUnit(it)) }
         request.quantity?.let { drug = drug.changeQuantityTo(Quantity(it, drug.quantity.unit)) }
@@ -103,7 +99,7 @@ class DrugService(
         return drug
     }
 
-    @Transactional
+    @Transactional(propagation = MANDATORY)
     fun delete(drugId: UUID, userId: UUID) {
         logger.debug("Deleting drug: {}", drugId)
 
@@ -117,11 +113,11 @@ class DrugService(
      * `null` — «пачка кончилась и уничтожена», а не «не найдена»: недоступная отвергается 404
      * ещё до списания.
      */
-    @Transactional
+    @Transactional(propagation = MANDATORY)
     fun consume(drugId: UUID, quantity: BigDecimal, userId: UUID): Drug? {
         logger.debug("Consuming {} of drug {}", quantity, drugId)
 
-        val drug = lock(drugId, userId)
+        val drug = require(drugId, userId)
         val left = drug.consume(Quantity(quantity, drug.quantity.unit))
         if (left == null) {
             drugs.delete(drugId)
@@ -131,12 +127,24 @@ class DrugService(
         return left
     }
 
+    /**
+     * Все упаковки аптечки — в другую, одним запросом.
+     *
+     * Поштучный переезд честнее по слоям, но стоит команды на пачку: сотня пачек — сотня
+     * загрузок. Судьбу броней решает вызывающий: они в чужом агрегате.
+     */
+    @Transactional(propagation = MANDATORY)
+    fun moveAllToMedKit(sourceMedKitId: UUID, targetMedKitId: UUID) {
+        logger.debug("Moving all drugs of medkit {} to {}", sourceMedKitId, targetMedKitId)
+        drugs.moveAllToMedKit(sourceMedKitId, targetMedKitId)
+    }
+
     /** Брони, потерявшие доступ, убирает межагрегатный сценарий: они в чужом агрегате. */
-    @Transactional
+    @Transactional(propagation = MANDATORY)
     fun moveTo(drugId: UUID, targetMedKitId: UUID, userId: UUID): Drug {
         logger.debug("Moving drug {} to medkit {}", drugId, targetMedKitId)
 
-        val moved = lock(drugId, userId).moveTo(targetMedKitId)
+        val moved = require(drugId, userId).moveTo(targetMedKitId)
         drugs.save(moved)
         return moved
     }

@@ -1,6 +1,6 @@
 package org.kert0n.medappserver.integration.userstory
 
-import org.kert0n.medappserver.services.models.ReservationService
+import org.kert0n.medappserver.services.aggregate.ReservationService
 import jakarta.persistence.EntityManager
 import java.util.*
 import kotlin.test.assertEquals
@@ -13,9 +13,10 @@ import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.User
-import org.kert0n.medappserver.services.models.DrugService
-import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
+import org.kert0n.medappserver.services.aggregate.DrugService
+import org.kert0n.medappserver.services.aggregate.MedKitService
+import org.kert0n.medappserver.services.application.DrugApplicationService
+import org.kert0n.medappserver.services.application.MedKitApplicationService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -49,7 +50,10 @@ class TreatmentPlanStoriesTest {
     private lateinit var medKitService: MedKitService
 
     @Autowired
-    private lateinit var medKitDrugOrchestrator: MedKitDrugOrchestrator
+    private lateinit var drugs: DrugApplicationService
+
+    @Autowired
+    private lateinit var medKits: MedKitApplicationService
 
 
     /** Story 6: reserve a share, then take from the pack. */
@@ -215,7 +219,7 @@ class TreatmentPlanStoriesTest {
         assertEquals(3, medkit.members.size)
 
         // Child leaves the medkit
-        medKitDrugOrchestrator.leaveMedKit(familyKit.id, child.id)
+        medKits.leave(familyKit.id, child.id)
         entityManager.flush()
         entityManager.clear()
 

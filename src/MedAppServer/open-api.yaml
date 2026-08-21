@@ -6,8 +6,6 @@ info:
 servers:
 - url: http://localhost
   description: Generated server url
-security:
-- Bearer Authentication: []
 tags:
 - name: Medicine kit memberships
   description: Participation of the caller in shared kits
@@ -59,6 +57,8 @@ paths:
           description: Drug or target kit is not accessible
         "401":
           description: Authentication is required
+      security:
+      - Bearer Authentication: []
   /v1/reservations:
     get:
       tags:
@@ -77,6 +77,8 @@ paths:
                   $ref: "#/components/schemas/ReservationDTO"
         "401":
           description: Authentication is required
+      security:
+      - Bearer Authentication: []
     post:
       tags:
       - Reservations
@@ -107,6 +109,8 @@ paths:
           description: Reservation on this package already exists
         "401":
           description: Authentication is required
+      security:
+      - Bearer Authentication: []
   /v1/med-kits:
     get:
       tags:
@@ -127,6 +131,8 @@ paths:
                 uniqueItems: true
         "401":
           description: Authentication is required
+      security:
+      - Bearer Authentication: []
     post:
       tags:
       - Medicine kits
@@ -142,6 +148,8 @@ paths:
                 $ref: "#/components/schemas/MedKitCreatedDTO"
         "401":
           description: Authentication is required
+      security:
+      - Bearer Authentication: []
   /v1/med-kits/{medKitId}/invitations:
     post:
       tags:
@@ -168,6 +176,8 @@ paths:
           description: Kit does not exist or is not accessible
         "401":
           description: Authentication is required
+      security:
+      - Bearer Authentication: []
   /v1/med-kits/{medKitId}/drugs:
     post:
       tags:
@@ -203,6 +213,8 @@ paths:
           description: Medicine kit is not accessible
         "401":
           description: Authentication is required
+      security:
+      - Bearer Authentication: []
   /v1/med-kit-memberships:
     post:
       tags:
@@ -228,6 +240,8 @@ paths:
           description: Invitation expired or unknown
         "401":
           description: Authentication is required
+      security:
+      - Bearer Authentication: []
   /v1/drugs/{drugId}/intakes:
     post:
       tags:
@@ -270,6 +284,8 @@ paths:
           description: Package does not exist or is not accessible
         "401":
           description: Authentication is required
+      security:
+      - Bearer Authentication: []
   /v1/auth/token:
     post:
       tags:
@@ -344,6 +360,8 @@ paths:
           description: No reservation on this package
         "401":
           description: Authentication is required
+      security:
+      - Bearer Authentication: []
     delete:
       tags:
       - Reservations
@@ -366,6 +384,8 @@ paths:
           description: No reservation on this package
         "401":
           description: Authentication is required
+      security:
+      - Bearer Authentication: []
     patch:
       tags:
       - Reservations
@@ -400,6 +420,8 @@ paths:
           description: No reservation on this package
         "401":
           description: Authentication is required
+      security:
+      - Bearer Authentication: []
   /v1/drugs/{drugId}:
     get:
       tags:
@@ -426,6 +448,8 @@ paths:
           description: Drug does not exist or is not accessible
         "401":
           description: Authentication is required
+      security:
+      - Bearer Authentication: []
     delete:
       tags:
       - Drugs
@@ -447,6 +471,8 @@ paths:
           description: Drug does not exist or is not accessible
         "401":
           description: Authentication is required
+      security:
+      - Bearer Authentication: []
     patch:
       tags:
       - Drugs
@@ -483,6 +509,8 @@ paths:
           description: Drug does not exist or is not accessible
         "401":
           description: Authentication is required
+      security:
+      - Bearer Authentication: []
   /v1/users/me:
     get:
       tags:
@@ -500,6 +528,8 @@ paths:
                 $ref: "#/components/schemas/UserSnapshotDTO"
         "401":
           description: Authentication is required
+      security:
+      - Bearer Authentication: []
   /v1/quantity-units:
     get:
       tags:
@@ -519,6 +549,8 @@ paths:
                   $ref: "#/components/schemas/VocabularyEntryDTO"
         "401":
           description: Authentication is required
+      security:
+      - Bearer Authentication: []
   /v1/med-kits/{medKitId}:
     get:
       tags:
@@ -545,6 +577,8 @@ paths:
           description: Kit does not exist or is not accessible
         "401":
           description: Authentication is required
+      security:
+      - Bearer Authentication: []
     delete:
       tags:
       - Medicine kits
@@ -577,6 +611,8 @@ paths:
           description: Kit does not exist or is not accessible
         "401":
           description: Authentication is required
+      security:
+      - Bearer Authentication: []
   /v1/form-types:
     get:
       tags:
@@ -596,6 +632,8 @@ paths:
                   $ref: "#/components/schemas/VocabularyEntryDTO"
         "401":
           description: Authentication is required
+      security:
+      - Bearer Authentication: []
   /v1/drug-templates:
     get:
       tags:
@@ -634,6 +672,8 @@ paths:
           description: Invalid query or limit
         "401":
           description: Authentication is required
+      security:
+      - Bearer Authentication: []
   /v1/drug-templates/{templateId}:
     get:
       tags:
@@ -660,6 +700,8 @@ paths:
           description: Entry does not exist
         "401":
           description: Authentication is required
+      security:
+      - Bearer Authentication: []
   /v1/med-kit-memberships/{medKitId}:
     delete:
       tags:
@@ -683,6 +725,8 @@ paths:
           description: Kit does not exist or is not accessible
         "401":
           description: Authentication is required
+      security:
+      - Bearer Authentication: []
 components:
   schemas:
     DrugDTO:

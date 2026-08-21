@@ -10,7 +10,7 @@ import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.db.model.parsed.DrugTemplateData
 import org.kert0n.medappserver.db.model.parsed.FormTypeData
 import org.kert0n.medappserver.db.repository.VidalDrugRepository
-import org.kert0n.medappserver.services.models.CatalogueService
+import org.kert0n.medappserver.services.application.CatalogueApplicationService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.support.TransactionTemplate
@@ -29,7 +29,7 @@ class CatalogueSearchTest {
     private lateinit var vidalDrugRepository: VidalDrugRepository
 
     @Autowired
-    private lateinit var catalogueService: CatalogueService
+    private lateinit var catalogue: CatalogueApplicationService
 
     @Autowired
     private lateinit var entityManager: EntityManager
@@ -161,7 +161,7 @@ class CatalogueSearchTest {
 
     @Test
     fun `service fuzzySearch returns results with accessible formType`() {
-        val results = catalogueService.fuzzySearch("аспир", 10)
+        val results = catalogue.search("аспир", 10)
         assertTrue(results.isNotEmpty())
         val drugWithForm = results.first { it.formType != null }
         assertNotNull(drugWithForm.formType, "FormTypeData should be accessible via service results")
@@ -169,13 +169,13 @@ class CatalogueSearchTest {
 
     @Test
     fun `service fuzzySearch returns empty for blank input`() {
-        val results = catalogueService.fuzzySearch("   ", 10)
+        val results = catalogue.search("   ", 10)
         assertTrue(results.isEmpty(), "Should return empty for blank input")
     }
 
     @Test
     fun `service fuzzySearch sanitizes special characters`() {
-        val results = catalogueService.fuzzySearch("аспир%", 10)
+        val results = catalogue.search("аспир%", 10)
         assertNotNull(results)
     }
 
@@ -231,7 +231,7 @@ class CatalogueSearchTest {
     fun `выдача содержит поля, по которым идёт поиск`() {
         // Иначе результат не объясняет, почему запись нашлась: набрали «Ibuprofenum»,
         // а в ответе одно торговое название.
-        val found = catalogueService.fuzzySearch("Ibuprofenum").first { it.name == "Ибупрофен" }
+        val found = catalogue.search("Ibuprofenum", 10).first { it.name == "Ибупрофен" }
 
         assertEquals("Ibuprofenum", found.nameLat)
         assertEquals("ибупрофен", found.activeSubstance)

@@ -3,11 +3,18 @@ package org.kert0n.medappserver.services
 import io.swagger.v3.oas.models.Components
 import io.swagger.v3.oas.models.OpenAPI
 import io.swagger.v3.oas.models.info.Info
-import io.swagger.v3.oas.models.security.SecurityRequirement
 import io.swagger.v3.oas.models.security.SecurityScheme
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 
+/**
+ * Схемы аутентификации и общие сведения о контракте.
+ *
+ * Требования на уровне документа нет намеренно: каждая операция объявляет свой `security`
+ * сама. Умолчание здесь означало бы, что операция может о нём умолчать, а тогда «отвечает без
+ * токена» и «забыли написать» становятся одним и тем же — и один раз уже стали: регистрация
+ * наследовала Bearer и была документирована как защищённая.
+ */
 @Configuration
 class OpenApiConfiguration {
 
@@ -25,7 +32,6 @@ class OpenApiConfiguration {
                     .description("REST API for MedApp medicine kit synchronization and catalog search.")
                     .version("0.0.1")
             )
-            .addSecurityItem(SecurityRequirement().addList(BEARER_SCHEME))
             .components(
                 Components()
                     .addSecuritySchemes(

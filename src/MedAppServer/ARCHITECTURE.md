@@ -7,21 +7,31 @@
 
 ## Компоненты
 
-- **Контроллеры** (`controller/`) — REST API:
+Слои названы по тому, за что отвечают, и разговаривают строго вниз.
+
+- **Контроллеры** (`controller/`) — перевод HTTP: путь и тело в аргументы, доменный отказ в код
+  ответа. У каждого ресурса **один** прикладной сервис; выбирать между несколькими значило бы
+  знать устройство слоя под собой.
     - `AuthController`: регистрация и выдача JWT.
-    - `UserController`: полный снимок данных пользователя для синхронизации.
-    - `MedKitController`: управление аптечками и доступом.
-    - `DrugController`: CRUD для препаратов и поиск по каталогу.
-    - Операции, затрагивающие сразу аптечку и препараты (перемещение, создание, удаление), собраны не в
-      контроллере, а в сервисе-оркестраторе `MedKitDrugServices` — вызывается из `MedKitController` и
-      `DrugController`.
-    - `UsingsController`: планы лечения и фиксация приема.
-- **Сервисы** (`services/`) — бизнес-логика:
-    - `MedKitService`, `DrugService`, `UsingService` — core-операции.
-    - `VidalDrugService` — поиск по справочнику.
-    - `SecurityService` — генерация ключей, JWT, rate-limit регистрации.
-    - `CacheService` — кэш share-ключей и регистраций.
-- **Хранилище** (`db/`) — сущности JPA и репозитории.
+    - `UserController`: снимок всего, что видит вызывающий.
+    - `MedKitController`: аптечки и членство.
+    - `DrugController`, `DrugTemplateController`, `VocabularyController`: упаковки, каталог, словари.
+    - `ReservationController`: брони.
+- **Прикладные сервисы** (`services/application/`) — по одному на ресурс, тонкие координаторы.
+  Знают клиента: переводят запрос в команду и домен в DTO. Транзакцию открывают только они.
+- **Оркестраторы** (`services/orchestrator/`) — сложные сочетания нескольких агрегатов.
+  Домен на входе, домен на выходе; про контракт не знают. Сейчас один — `DrugRelocation`.
+- **Сервисы агрегатов** (`services/aggregate/`) — по одному на агрегат, единственные, кому видно
+  хранилище. Работают внутри чужой транзакции (`propagation = MANDATORY`).
+- **Домен** (`domain/`) — неизменяемые `Drug`, `MedKit`, `Reservation`, `User`, `DrugTemplate`,
+  `Quantity` и правила над ними. Про Spring и JPA не знает ничего.
+- **Хранилище** (`db/`) — `model/` отображает таблицы, `repository/` даёт Spring Data,
+  `store/` держит границу агрегата и переводит строки в домен.
+- **Безопасность** (`services/security/`) — JWT, ключи, ограничение частоты регистраций.
+
+Границы закреплены `LayerBoundariesTest`: он читает импорты исходников и падает, если хранилище
+стало видно мимо агрегата, контроллер завёл второго собеседника, фасад позвал фасад, оркестратор
+узнал про `api` или транзакция открылась ниже прикладного слоя.
 
 ## Модель данных
 
@@ -30,8 +40,8 @@
 | **User**      | Пользователь без персональных данных | `id`, `hashedKey`                                                                                              |
 | **MedKit**    | Общая аптечка                        | `id`, связи с пользователями и препаратами                                                                     |
 | **Drug**      | Препарат пользователя                | `name`, `quantity`, `quantityUnit`, `formType`, `category`, `manufacturer`, `country`, `description`, `medKit` |
-| **Using**     | План лечения по препарату            | `plannedAmount`, `createdAt`, `lastModified`, связи с `User` и `Drug`                                          |
-| **VidalDrug** | Каталог препаратов                   | `name`, `formType`,`quantity`, `quantityUnit`, `manufacturer`, `category`, `description`                       |
+| **Reservation** | Заявленная доля пачки — «назначение врача» | `userId`, `drugId`, `amount`                                                                            |
+| **DrugTemplate** | Каталог препаратов                   | `name`, `formType`,`quantity`, `quantityUnit`, `manufacturer`, `category`, `description`                       |
 
 ## Безопасность и приватность
 

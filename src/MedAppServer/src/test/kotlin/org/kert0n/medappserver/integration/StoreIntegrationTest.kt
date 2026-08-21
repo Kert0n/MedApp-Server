@@ -1,6 +1,6 @@
 package org.kert0n.medappserver.integration
 
-import org.kert0n.medappserver.services.models.ReservationService
+import org.kert0n.medappserver.services.aggregate.ReservationService
 import java.util.*
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -11,8 +11,8 @@ import org.kert0n.medappserver.db.store.DrugStore
 import org.kert0n.medappserver.db.store.ReservationStore
 import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.db.store.UserStore
-import org.kert0n.medappserver.services.models.DrugService
-import org.kert0n.medappserver.services.models.MedKitService
+import org.kert0n.medappserver.services.aggregate.DrugService
+import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty

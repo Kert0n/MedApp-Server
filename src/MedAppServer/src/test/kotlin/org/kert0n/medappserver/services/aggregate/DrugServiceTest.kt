@@ -1,4 +1,4 @@
-package org.kert0n.medappserver.services.models
+package org.kert0n.medappserver.services.aggregate
 
 import java.util.*
 import kotlin.test.assertEquals
@@ -113,7 +113,7 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         val drug = drugService.create(
-            DrugCreateRequest(name = "Aspirin", quantity = qty(100.0), quantityUnitId = dbHelper.unit().id),
+            NewDrug(name = "Aspirin", quantity = qty(100.0), quantityUnitId = dbHelper.unit().id),
             kit.id, alice.id
         )
 
@@ -132,7 +132,7 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
-        val emptyUpdate = DrugPatchRequest(null, null, null, null, null, null, null, null)
+        val emptyUpdate = DrugEdit(null, null, null, null, null, null, null, null)
         drugService.update(drug.id, emptyUpdate, alice.id)
         dbHelper.flushAndClear()
 
@@ -146,7 +146,7 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 50.0)
         dbHelper.flushAndClear()
 
-        val fullUpdate = DrugPatchRequest(
+        val fullUpdate = DrugEdit(
             name = "New Name", quantity = qty(100.0), category = "cat", manufacturer = "man",
             country = "co", description = "desc"
         )
@@ -169,7 +169,7 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
-        drugService.update(drug.id, DrugPatchRequest(quantity = qty(20.0)), alice.id)
+        drugService.update(drug.id, DrugEdit(quantity = qty(20.0)), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(20.0, dbHelper.drugQuantity(drug.id))
@@ -190,7 +190,7 @@ class DrugServiceTest {
         reservationService.create(bob.id, drug.id, qty(40.0))
         dbHelper.flushAndClear()
 
-        drugService.update(drug.id, DrugPatchRequest(quantity = qty(50.0)), alice.id)
+        drugService.update(drug.id, DrugEdit(quantity = qty(50.0)), alice.id)
         dbHelper.flushAndClear()
 
         assertQty(50.0, dbHelper.drugQuantity(drug.id)!!)
@@ -208,7 +208,7 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         assertThrows<InvalidQuantity> {
-            drugService.update(drug.id, DrugPatchRequest(quantity = qty(0.0)), alice.id)
+            drugService.update(drug.id, DrugEdit(quantity = qty(0.0)), alice.id)
         }
     }
 
@@ -259,7 +259,7 @@ class DrugServiceTest {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.create(alice.id)
         val drug = drugService.create(
-            DrugCreateRequest(name = "Drug", quantity = qty(100.0), quantityUnitId = dbHelper.unit().id),
+            NewDrug(name = "Drug", quantity = qty(100.0), quantityUnitId = dbHelper.unit().id),
             kit.id, alice.id
         )
         reservationService.create(alice.id, drug.id, qty(25.0))

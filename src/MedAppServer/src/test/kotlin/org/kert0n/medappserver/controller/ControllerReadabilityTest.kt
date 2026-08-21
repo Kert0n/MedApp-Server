@@ -8,11 +8,12 @@ import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
 
 /**
- * Контроллеры остаются читаемыми: тексты живут в `OPERATION_TEXTS`, а не в `@Operation`, и
- * `@ApiResponse` повторяется вместо обёртки `@ApiResponses`.
+ * Аннотации контроллера остаются плоскими и полными.
  *
- * Без этого теста следующий эндпойнт вернёт аннотации на треть исходника, и через несколько PR
- * файл снова станет нечитаемым.
+ * `@ApiResponse` повторяется вместо обёртки `@ApiResponses`, а `@Operation` у каждой операции
+ * несёт и текст, и требование аутентификации. Без этих правил следующий эндпойнт добавит три
+ * строки лесов на метод, уедет в контракт безымянным или молча окажется документирован как
+ * открытый.
  */
 class ControllerReadabilityTest {
 
@@ -20,20 +21,6 @@ class ControllerReadabilityTest {
         Files.list(Path.of("src/main/kotlin/org/kert0n/medappserver/controller")).asSequence()
             .filter { it.name.endsWith("Controller.kt") }
             .toList()
-
-    @Test
-    fun `тексты операций не возвращаются в контроллеры`() {
-        controllers.forEach { file ->
-            val text = Files.readString(file)
-            // Допустимо только описание требований безопасности: это поведение, а не текст.
-            val forbidden = Regex("@Operation\\((?!security = )")
-            assertTrue(
-                !forbidden.containsMatchIn(text),
-                "${file.name}: summary и description операций живут в OPERATION_TEXTS, " +
-                    "а не в аннотациях. @Operation допустима только для security."
-            )
-        }
-    }
 
     @Test
     fun `список ответов не заворачивается в ApiResponses`() {
@@ -47,18 +34,48 @@ class ControllerReadabilityTest {
         }
     }
 
+    /**
+     * Проверяется по исходнику, а не рефлексией, и в этом весь смысл.
+     *
+     * Пустой `security = []` — это ещё и значение по умолчанию у `@Operation`, поэтому в
+     * class-файле «объявили, что требований нет» неотличимо от «не объявляли»: `MergedAnnotation`
+     * сравнивает значение, а собранная springdoc операция в обоих случаях отдаёт `null` —
+     * замерено. Отличить можно только там, где видно написанное, то есть здесь.
+     */
     @Test
-    fun `у каждой операции есть текст`() {
-        // То же, что проверяет OperationTextCustomizer на старте, но с внятным падением.
-        val declared = controllers.flatMap { file ->
-            Regex("\\n    fun (\\w+)\\(").findAll(Files.readString(file)).map { it.groupValues[1] }
-        }.toSet()
+    fun `каждая операция объявляет текст и требование аутентификации`() {
+        controllers.forEach { file ->
+            val lines = Files.readString(file).lines()
+            lines.forEachIndexed { index, line ->
+                val method = Regex("^    fun (\\w+)\\(").find(line) ?: return@forEachIndexed
 
-        val documented = org.kert0n.medappserver.services.OPERATION_TEXTS.keys
-        val missing = declared - documented
-        assertTrue(
-            missing.isEmpty(),
-            "нет текста для операций: $missing — добавьте их в OPERATION_TEXTS"
-        )
+                // Блок аннотаций — непрерывные строки над `fun`: сама аннотация, её
+                // продолжение или закрывающая скобка многострочной. KDoc начинается с пяти
+                // пробелов и подъём останавливает.
+                var start = index
+                while (start > 0 && lines[start - 1].let {
+                        it.startsWith("    @") || it.startsWith("        ") || it == "    )"
+                    }
+                ) {
+                    start--
+                }
+                // Берётся именно кусок @Operation: `description` есть и у каждого @ApiResponse.
+                val operation = lines.subList(start, index).joinToString("\n")
+                    .substringAfter("@Operation(", "")
+                    .substringBefore("\n    @")
+
+                val missing = buildList {
+                    if ("summary = " !in operation) add("summary")
+                    if ("description = " !in operation) add("description")
+                    // Умолчания на уровне документа нет: промолчавшая операция станет открытой.
+                    if ("security = " !in operation) add("security")
+                }
+                assertTrue(
+                    missing.isEmpty(),
+                    "${file.name}: у операции ${method.groupValues[1]} в @Operation нет " +
+                        "${missing.joinToString(", ")} — объявляется явно у каждой"
+                )
+            }
+        }
     }
 }

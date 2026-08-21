@@ -1,4 +1,4 @@
-package org.kert0n.medappserver.services.models
+package org.kert0n.medappserver.services.aggregate
 
 import java.util.UUID
 import org.kert0n.medappserver.db.store.CatalogueStore
@@ -6,6 +6,7 @@ import org.kert0n.medappserver.domain.DrugTemplate
 import org.kert0n.medappserver.domain.FormType
 import org.kert0n.medappserver.domain.QuantityUnit
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Propagation.MANDATORY
 import org.springframework.transaction.annotation.Transactional
 
 @Service
@@ -17,7 +18,7 @@ class CatalogueService(private val catalogue: CatalogueStore) {
      * Метасимволы экранируются только для `LIKE`; полнотекстовый и trigram-поиск получают
      * сырой термин, иначе обратные слэши попали бы в сам искомый текст.
      */
-    @Transactional(readOnly = true)
+    @Transactional(propagation = MANDATORY, readOnly = true)
     fun fuzzySearch(searchTerm: String, limit: Int = DEFAULT_LIMIT): List<DrugTemplate> {
         val term = searchTerm.trim()
         if (term.isBlank()) {
@@ -32,20 +33,20 @@ class CatalogueService(private val catalogue: CatalogueStore) {
     }
 
     /** Карточка справочника или `null`: отсутствие обрабатывает вызывающий. */
-    @Transactional(readOnly = true)
+    @Transactional(propagation = MANDATORY, readOnly = true)
     fun find(id: UUID): DrugTemplate? = catalogue.findTemplate(id)
 
     /** Словари, из которых клиент выбирает единицу и форму: препарат ссылается на них по id. */
-    @Transactional(readOnly = true)
+    @Transactional(propagation = MANDATORY, readOnly = true)
     fun quantityUnits(): List<QuantityUnit> = catalogue.quantityUnits()
 
-    @Transactional(readOnly = true)
+    @Transactional(propagation = MANDATORY, readOnly = true)
     fun formTypes(): List<FormType> = catalogue.formTypes()
 
-    @Transactional(readOnly = true)
+    @Transactional(propagation = MANDATORY, readOnly = true)
     fun requireQuantityUnit(id: UUID): QuantityUnit = catalogue.requireQuantityUnit(id)
 
-    @Transactional(readOnly = true)
+    @Transactional(propagation = MANDATORY, readOnly = true)
     fun requireFormType(id: UUID): FormType = catalogue.requireFormType(id)
 
     /**

@@ -1,4 +1,4 @@
-package org.kert0n.medappserver.services.models
+package org.kert0n.medappserver.services.aggregate
 
 import com.sksamuel.aedile.core.Cache
 import java.util.UUID
@@ -8,6 +8,7 @@ import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.services.security.SecurityService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Propagation.MANDATORY
 import org.springframework.transaction.annotation.Transactional
 
 /**
@@ -26,7 +27,7 @@ class MedKitService(
 
     private val logger = LoggerFactory.getLogger(MedKitService::class.java)
 
-    @Transactional
+    @Transactional(propagation = MANDATORY)
     fun create(userId: UUID): MedKit {
         logger.debug("Creating new medkit for user: {}", userId)
         val medKit = MedKit(members = setOf(userId))
@@ -35,15 +36,15 @@ class MedKitService(
     }
 
     /** Аптечка или `null`, если её нет. */
-    @Transactional(readOnly = true)
+    @Transactional(propagation = MANDATORY, readOnly = true)
     fun findById(medKitId: UUID): MedKit? = medKits.findById(medKitId)
 
     /** Аптечка или 404. */
-    @Transactional(readOnly = true)
+    @Transactional(propagation = MANDATORY, readOnly = true)
     fun requireById(medKitId: UUID): MedKit = findById(medKitId) ?: throw NotAMember()
 
     /** Аптечка, доступная вызывающему, или 404 — недоступная и несуществующая неотличимы. */
-    @Transactional(readOnly = true)
+    @Transactional(propagation = MANDATORY, readOnly = true)
     fun requireAccessible(medKitId: UUID, userId: UUID): MedKit {
         logger.debug("Finding medkit {} for user {}", medKitId, userId)
         val medKit = requireById(medKitId)
@@ -52,15 +53,17 @@ class MedKitService(
     }
 
     /** Все аптечки участника — целиком и одним запросом. */
-    @Transactional(readOnly = true)
+    @Transactional(propagation = MANDATORY, readOnly = true)
     fun allOfUser(userId: UUID): List<MedKit> {
         logger.debug("Finding all medkits for user: {}", userId)
         return medKits.findAllOfUser(userId)
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(propagation = MANDATORY)
     fun invite(medKitId: UUID, userId: UUID): String {
         logger.debug("Sharing medkit {} by user: {}", medKitId, userId)
+        // Право проверяет чтение состава. Версией это не проверяется: чужое вступление в ту же
+        // аптечку к правам приглашающего отношения не имеет.
         requireAccessible(medKitId, userId)
         val key = securityService.generateKey(16)
         // Кешируется только хеш: сырой ключ приглашения на сервере не хранится.
@@ -68,7 +71,7 @@ class MedKitService(
         return key
     }
 
-    @Transactional
+    @Transactional(propagation = MANDATORY)
     fun join(medKitId: UUID, userId: UUID): MedKit {
         logger.debug("Adding user {} to medkit {}", userId, medKitId)
         val joined = requireById(medKitId).join(userId)
@@ -76,7 +79,7 @@ class MedKitService(
         return joined
     }
 
-    @Transactional
+    @Transactional(propagation = MANDATORY)
     fun joinByInvitation(key: String, userId: UUID): MedKit {
         val medKitId = medKitTokenCache.getOrNull(securityService.hashToken(key))
             ?: throw NotAMember()
@@ -88,7 +91,7 @@ class MedKitService(
      *
      * Брони выходящего лежат в чужом агрегате: их убирает оркестратор.
      */
-    @Transactional
+    @Transactional(propagation = MANDATORY)
     fun leave(medKitId: UUID, userId: UUID): MedKit? {
         logger.debug("Removing user {} from medkit {}", userId, medKitId)
         val left = requireAccessible(medKitId, userId).leave(userId)
@@ -102,7 +105,7 @@ class MedKitService(
     }
 
     /** Доступ проверяется здесь: команда по одному идентификатору однажды придёт без проверки. */
-    @Transactional
+    @Transactional(propagation = MANDATORY)
     fun delete(medKitId: UUID, userId: UUID) {
         requireAccessible(medKitId, userId)
         medKits.delete(medKitId)

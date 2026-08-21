@@ -1,6 +1,5 @@
 package org.kert0n.medappserver.integration
 
-import org.kert0n.medappserver.services.models.ReservationService
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -9,9 +8,8 @@ import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.InsufficientStock
-import org.kert0n.medappserver.services.models.DrugService
-import org.kert0n.medappserver.services.models.MedKitService
-import org.kert0n.medappserver.services.orchestrators.MedKitDrugOrchestrator
+import org.kert0n.medappserver.services.application.DrugApplicationService
+import org.kert0n.medappserver.services.application.MedKitApplicationService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -27,10 +25,8 @@ import org.springframework.beans.factory.annotation.Autowired
 @PostgresIntegrationTest
 class RollbackTest {
 
-    @Autowired private lateinit var drugService: DrugService
-    @Autowired private lateinit var reservationService: ReservationService
-    @Autowired private lateinit var medKitService: MedKitService
-    @Autowired private lateinit var orchestrator: MedKitDrugOrchestrator
+    @Autowired private lateinit var drugs: DrugApplicationService
+    @Autowired private lateinit var medKits: MedKitApplicationService
     @Autowired private lateinit var dbHelper: DatabaseTestHelper
 
     /**
@@ -40,11 +36,11 @@ class RollbackTest {
     @Test
     fun `отвергнутое списание не меняет пачку`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
+        val kit = dbHelper.freshMedKit(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 10.0)
-        reservationService.create(alice.id, drug.id, qty(4.0))
+        dbHelper.reserve(alice.id, drug.id, qty(4.0))
 
-        assertFailsWith<InsufficientStock> { drugService.consume(drug.id, qty(11.0), alice.id) }
+        assertFailsWith<InsufficientStock> { drugs.recordIntake(drug.id, qty(11.0), alice.id) }
 
         assertQty(10.0, dbHelper.drugQuantity(drug.id))
         assertQty(4.0, dbHelper.userReservation(alice.id, drug.id))
@@ -58,12 +54,12 @@ class RollbackTest {
     fun `перенос в недоступную аптечку не двигает ни пачку, ни брони`() {
         val alice = dbHelper.freshUser("alice")
         val eve = dbHelper.freshUser("eve")
-        val kit = medKitService.create(alice.id)
-        val foreign = medKitService.create(eve.id)
+        val kit = dbHelper.freshMedKit(alice.id)
+        val foreign = dbHelper.freshMedKit(eve.id)
         val drug = dbHelper.freshDrug(kit.id, 10.0)
-        reservationService.create(alice.id, drug.id, qty(4.0))
+        dbHelper.reserve(alice.id, drug.id, qty(4.0))
 
-        assertFailsWith<NotAMember> { orchestrator.moveDrug(drug.id, foreign.id, alice.id) }
+        assertFailsWith<NotAMember> { drugs.moveToMedKit(drug.id, foreign.id, alice.id) }
 
         val stored = dbHelper.requireDrug(drug.id)
         assertEquals(kit.id, stored.medKitId, "упаковка осталась в своей аптечке")
@@ -74,20 +70,20 @@ class RollbackTest {
     fun `удаление чужой аптечки не удаляет её и не трогает препараты`() {
         val alice = dbHelper.freshUser("alice")
         val eve = dbHelper.freshUser("eve")
-        val kit = medKitService.create(alice.id)
+        val kit = dbHelper.freshMedKit(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 10.0)
 
-        assertFailsWith<NotAMember> { orchestrator.delete(kit.id, eve.id) }
+        assertFailsWith<NotAMember> { medKits.delete(kit.id, eve.id) }
 
-        assertNotNull(medKitService.findById(kit.id), "аптечка на месте")
+        assertNotNull(dbHelper.medKit(kit.id), "аптечка на месте")
         assertNotNull(dbHelper.drug(drug.id), "препарат на месте")
     }
 
     @Test
     fun `команда над несуществующим препаратом ничего не создаёт`() {
         val alice = dbHelper.freshUser("alice")
-        medKitService.create(alice.id)
+        dbHelper.freshMedKit(alice.id)
 
-        assertFailsWith<NotAMember> { drugService.consume(UUID.randomUUID(), qty(1.0), alice.id) }
+        assertFailsWith<NotAMember> { drugs.recordIntake(UUID.randomUUID(), qty(1.0), alice.id) }
     }
 }
