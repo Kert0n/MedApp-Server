@@ -1,11 +1,10 @@
 package org.kert0n.medappserver.integration.userstory
 
-import org.kert0n.medappserver.services.aggregate.ReservationService
-import java.util.*
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kotlin.uuid.Uuid
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.db.store.MedKitStore
@@ -14,6 +13,7 @@ import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.MedKitService
+import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.kert0n.medappserver.services.application.DrugApplicationService
 import org.kert0n.medappserver.services.application.MedKitApplicationService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
@@ -56,12 +56,12 @@ class TreatmentPlanStoriesTest {
     /** Story 6: reserve a share, then take from the pack. */
     @Test
     fun `Story 6 - User creates treatment plan and records intakes`() {
-        val userData = User(id = UUID.randomUUID(), hashedKey = "user_${UUID.randomUUID()}")
+        val userData = User(id = Uuid.random(), hashedKey = "user_${Uuid.random()}")
         dbHelper.insert(userData)
 
         val medkit = medKitService.create(userData.id)
         val drugData = Drug(
-            id = UUID.randomUUID(),
+            id = Uuid.random(),
             name = "Treatment Drug",
             quantity = Quantity(qty(100.0), dbHelper.unit()),
             category = null,
@@ -97,8 +97,8 @@ class TreatmentPlanStoriesTest {
     @Test
     fun `Story 7 - Multiple users create treatment plans on shared drug`() {
         // Setup: Anna and Bob share a medkit with 100 tablets of Vitamin C
-        val anna = User(id = UUID.randomUUID(), hashedKey = "anna_${UUID.randomUUID()}")
-        val bob = User(id = UUID.randomUUID(), hashedKey = "bob_${UUID.randomUUID()}")
+        val anna = User(id = Uuid.random(), hashedKey = "anna_${Uuid.random()}")
+        val bob = User(id = Uuid.random(), hashedKey = "bob_${Uuid.random()}")
         dbHelper.insert(anna)
         dbHelper.insert(bob)
 
@@ -107,7 +107,7 @@ class TreatmentPlanStoriesTest {
         medKitService.joinByInvitation(shareKey, bob.id)
 
         val vitaminC = Drug(
-            id = UUID.randomUUID(),
+            id = Uuid.random(),
             name = "Vitamin C",
             quantity = Quantity(qty(100.0), dbHelper.unit()),
             category = null,
@@ -147,9 +147,9 @@ class TreatmentPlanStoriesTest {
     @Test
     fun `Story 10 - Complete family medkit lifecycle`() {
         // Mom creates a family medkit
-        val mom = User(id = UUID.randomUUID(), hashedKey = "mom_${UUID.randomUUID()}")
-        val dad = User(id = UUID.randomUUID(), hashedKey = "dad_${UUID.randomUUID()}")
-        val child = User(id = UUID.randomUUID(), hashedKey = "child_${UUID.randomUUID()}")
+        val mom = User(id = Uuid.random(), hashedKey = "mom_${Uuid.random()}")
+        val dad = User(id = Uuid.random(), hashedKey = "dad_${Uuid.random()}")
+        val child = User(id = Uuid.random(), hashedKey = "child_${Uuid.random()}")
         dbHelper.insert(mom)
         dbHelper.insert(dad)
         dbHelper.insert(child)
@@ -162,13 +162,13 @@ class TreatmentPlanStoriesTest {
 
         // Add family medications
         val aspirin = Drug(
-            id = UUID.randomUUID(), name = "Children's Aspirin",
+            id = Uuid.random(), name = "Children's Aspirin",
             quantity = Quantity(qty(200.0), dbHelper.unit()),
             category = "painkiller", manufacturer = null, country = null,
             description = null, medKitId = familyKit.id
         )
         val vitamins = Drug(
-            id = UUID.randomUUID(), name = "Multivitamins",
+            id = Uuid.random(), name = "Multivitamins",
             quantity = Quantity(qty(90.0), dbHelper.unit()),
             category = "supplement", manufacturer = null, country = null,
             description = null, medKitId = familyKit.id

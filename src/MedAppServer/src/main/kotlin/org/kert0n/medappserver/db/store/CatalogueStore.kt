@@ -1,6 +1,7 @@
 package org.kert0n.medappserver.db.store
 
-import java.util.UUID
+import kotlin.uuid.Uuid
+import kotlin.uuid.toKotlinUuid
 import org.jetbrains.exposed.v1.core.JoinType
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.eq
@@ -23,7 +24,7 @@ import org.springframework.stereotype.Component
 @Component
 class CatalogueStore {
 
-    fun findTemplate(id: UUID): DrugTemplate? =
+    fun findTemplate(id: Uuid): DrugTemplate? =
         templateRows.selectAll().where { DrugTemplates.id eq id }.singleOrNull()?.toDomain()
 
     /**
@@ -35,7 +36,7 @@ class CatalogueStore {
      * значило бы делать вид, что запрос переносим.
      */
     fun searchTemplates(term: String, likeTerm: String, limit: Int): List<DrugTemplate> {
-        val found = mutableListOf<UUID>()
+        val found = mutableListOf<Uuid>()
         TransactionManager.current().exec(
             """
             SELECT id FROM parsed_drugs
@@ -69,7 +70,9 @@ class CatalogueStore {
             LIMIT ?
             """.trimIndent(),
             searchArguments(term, likeTerm, limit)
-        ) { rs -> while (rs.next()) found += rs.getObject(1, UUID::class.java) }
+        // Сырой запрос читается драйвером, а он знает только джавовый тип: перевод стоит
+        // здесь, на границе с JDBC, и дальше идентификатор всюду котлиновский.
+        ) { rs -> while (rs.next()) found += rs.getObject(1, java.util.UUID::class.java).toKotlinUuid() }
 
         if (found.isEmpty()) return emptyList()
         // Порядок задаёт запрос выше, поэтому выборка по идентификаторам пересортировывается им.
@@ -85,11 +88,11 @@ class CatalogueStore {
     fun formTypes(): List<FormType> =
         FormTypes.selectAll().map { FormType(it[FormTypes.id], it[FormTypes.name]) }.sortedBy { it.name }
 
-    fun findQuantityUnit(id: UUID): QuantityUnit? =
+    fun findQuantityUnit(id: Uuid): QuantityUnit? =
         QuantityUnits.selectAll().where { QuantityUnits.id eq id }
             .singleOrNull()?.let { QuantityUnit(it[QuantityUnits.id], it[QuantityUnits.name]) }
 
-    fun findFormType(id: UUID): FormType? =
+    fun findFormType(id: Uuid): FormType? =
         FormTypes.selectAll().where { FormTypes.id eq id }
             .singleOrNull()?.let { FormType(it[FormTypes.id], it[FormTypes.name]) }
 

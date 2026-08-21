@@ -4,7 +4,7 @@ package org.kert0n.medappserver.api
 
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.NotBlank
-import java.util.UUID
+import kotlin.uuid.Uuid
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
 
@@ -12,7 +12,7 @@ import kotlinx.serialization.UseSerializers
 @Serializable
 data class MedKitDTO(
     @Schema(description = "Medicine kit identifier")
-    val id: UUID,
+    val id: Uuid,
     @Schema(description = "Number of participants", example = "2")
     val userCount: Long,
     @Schema(description = "Drugs stored in the kit, with what is claimed on them")
@@ -23,7 +23,7 @@ data class MedKitDTO(
 @Serializable
 data class MedKitSummaryDTO(
     @Schema(description = "Medicine kit identifier")
-    val id: UUID,
+    val id: Uuid,
     @Schema(description = "Number of participants", example = "2")
     val userCount: Long,
     /**
@@ -31,14 +31,14 @@ data class MedKitSummaryDTO(
      * Состояние пачек клиент берёт полным обновлением.
      */
     @Schema(description = "Identifiers of the drugs in the kit")
-    val drugIds: Set<UUID>
+    val drugIds: Set<Uuid>
 )
 
 @Schema(description = "Created medicine kit")
 @Serializable
 data class MedKitCreatedDTO(
     @Schema(description = "Medicine kit identifier")
-    val id: UUID
+    val id: Uuid
 )
 
 /** Объектом, а не голой строкой: срок жизни или ссылку рядом с ней добавить было бы некуда. */

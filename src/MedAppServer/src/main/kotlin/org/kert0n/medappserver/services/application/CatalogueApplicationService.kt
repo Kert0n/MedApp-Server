@@ -1,6 +1,6 @@
 package org.kert0n.medappserver.services.application
 
-import java.util.UUID
+import kotlin.uuid.Uuid
 import org.kert0n.medappserver.api.DrugTemplateDTO
 import org.kert0n.medappserver.api.VocabularyEntryDTO
 import org.kert0n.medappserver.api.toDto
@@ -23,7 +23,7 @@ class CatalogueApplicationService(private val catalogue: CatalogueService) {
         catalogue.fuzzySearch(query, limit).map { it.toDto() }
 
     @Transactional(readOnly = true)
-    fun template(templateId: UUID): DrugTemplateDTO? = catalogue.find(templateId)?.toDto()
+    fun template(templateId: Uuid): DrugTemplateDTO? = catalogue.find(templateId)?.toDto()
 
     @Transactional(readOnly = true)
     fun quantityUnits(): List<VocabularyEntryDTO> = catalogue.quantityUnits().map { it.toDto() }

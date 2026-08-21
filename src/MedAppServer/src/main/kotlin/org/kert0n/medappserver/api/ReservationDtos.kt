@@ -7,7 +7,7 @@ import jakarta.validation.constraints.DecimalMin
 import jakarta.validation.constraints.Digits
 import jakarta.validation.constraints.NotNull
 import java.math.BigDecimal
-import java.util.UUID
+import kotlin.uuid.Uuid
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
 
@@ -21,7 +21,7 @@ import kotlinx.serialization.UseSerializers
 @Serializable
 data class ReservationDTO(
     @Schema(description = "Package the reservation is placed on")
-    val drugId: UUID,
+    val drugId: Uuid,
     /**
      * Может превышать содержимое пачки, и это не ошибка: сколько из своей брони оставить,
      * решает её владелец.
@@ -38,7 +38,7 @@ data class ReservationDTO(
 data class ReservationCreateRequest(
     @field:NotNull
     @Schema(description = "Package identifier", required = true)
-    val drugId: UUID,
+    val drugId: Uuid,
 
     @field:NotNull
     @field:DecimalMin(value = "0.0", inclusive = false)

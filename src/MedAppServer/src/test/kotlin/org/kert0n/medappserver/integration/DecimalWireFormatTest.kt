@@ -1,6 +1,6 @@
 package org.kert0n.medappserver.integration
 
-import java.util.UUID
+import kotlin.uuid.Uuid
 import org.hamcrest.Matcher
 import org.hamcrest.Matchers.instanceOf
 import org.junit.jupiter.api.BeforeEach
@@ -140,7 +140,7 @@ class DecimalWireFormatTest {
      */
     @Test
     fun `ошибка остаётся ProblemDetail`() {
-        mockMvc.perform(get(ApiRoutes.drug(UUID.randomUUID())))
+        mockMvc.perform(get(ApiRoutes.drug(Uuid.random())))
             .andExpect(status().isUnauthorized)
             .andExpect(jsonPath("$.status").value(401))
             .andExpect(jsonPath("$.detail").value(isJsonString()))
@@ -149,10 +149,10 @@ class DecimalWireFormatTest {
     /** Узел JSON — именно строка: число под тем же значением тест обязан отличить. */
     private fun isJsonString(): Matcher<Any> = instanceOf(String::class.java)
 
-    private fun asUser(userId: UUID) = jwt().jwt { it.subject(userId.toString()) }
+    private fun asUser(userId: Uuid) = jwt().jwt { it.subject(userId.toString()) }
 
     /** `quantity` подставляется куском JSON, а не значением: испытывается именно написание. */
-    private fun createDrug(medKitId: UUID, userId: UUID, quantity: String): ResultActions =
+    private fun createDrug(medKitId: Uuid, userId: Uuid, quantity: String): ResultActions =
         mockMvc.perform(
             post(ApiRoutes.drugsOf(medKitId))
                 .with(asUser(userId))

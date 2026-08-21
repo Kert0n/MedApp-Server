@@ -1,6 +1,6 @@
 package org.kert0n.medappserver.domain
 
-import java.util.UUID
+import kotlin.uuid.Uuid
 import org.springframework.security.core.GrantedAuthority
 import org.springframework.security.core.userdetails.UserDetails
 
@@ -14,7 +14,7 @@ import org.springframework.security.core.userdetails.UserDetails
  * `spring-security-core`, зато отображение о нём не знает.
  */
 data class User(
-    val id: UUID = UUID.randomUUID(),
+    val id: Uuid = Uuid.random(),
     val hashedKey: String
 ) : UserDetails {
 

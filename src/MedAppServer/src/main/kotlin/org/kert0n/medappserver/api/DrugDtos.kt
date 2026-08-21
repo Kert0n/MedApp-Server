@@ -8,7 +8,7 @@ import jakarta.validation.constraints.Digits
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
 import java.math.BigDecimal
-import java.util.UUID
+import kotlin.uuid.Uuid
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
 
@@ -38,7 +38,7 @@ const val POSITIVE_QUANTITY_PATTERN: String = "^(?!0+(\\.0+)?$)\\d{1,13}(\\.\\d{
 @Serializable
 data class DrugDTO(
     @Schema(description = "Drug identifier")
-    val id: UUID,
+    val id: Uuid,
     @Schema(description = "Drug name", example = "Aspirin")
     val name: String,
     @Schema(description = "Current stock", example = "100.000000", type = "string", pattern = QUANTITY_PATTERN)
@@ -50,9 +50,9 @@ data class DrugDTO(
      * получения имени» в каждой пачке — платить трафиком за то, что у клиента уже есть.
      */
     @Schema(description = "Quantity unit identifier")
-    val quantityUnitId: UUID,
+    val quantityUnitId: Uuid,
     @Schema(description = "Dosage form identifier", nullable = true)
-    val formTypeId: UUID?,
+    val formTypeId: Uuid?,
     @Schema(description = "Category", example = "painkiller")
     val category: String?,
     @Schema(description = "Manufacturer", example = "Bayer")
@@ -62,7 +62,7 @@ data class DrugDTO(
     @Schema(description = "Description")
     val description: String?,
     @Schema(description = "Medicine kit the drug belongs to")
-    val medKitId: UUID
+    val medKitId: Uuid
 )
 
 /** Аптечка задаётся путём, поэтому её идентификатора в теле нет. */
@@ -85,10 +85,10 @@ data class DrugCreateRequest(
 
     @field:NotNull
     @Schema(description = "Quantity unit identifier from the shared vocabulary", required = true)
-    val quantityUnitId: UUID,
+    val quantityUnitId: Uuid,
 
     @Schema(description = "Dosage form identifier from the shared vocabulary")
-    val formTypeId: UUID? = null,
+    val formTypeId: Uuid? = null,
 
     @field:Size(max = 200)
     @Schema(description = "Category", example = "painkiller")
@@ -131,10 +131,10 @@ data class DrugPatchRequest(
     val quantity: BigDecimal? = null,
 
     @Schema(description = "Quantity unit identifier from the shared vocabulary")
-    val quantityUnitId: UUID? = null,
+    val quantityUnitId: Uuid? = null,
 
     @Schema(description = "Dosage form identifier from the shared vocabulary")
-    val formTypeId: UUID? = null,
+    val formTypeId: Uuid? = null,
 
     @field:Size(max = 200)
     @Schema(description = "Category", example = "painkiller")
@@ -157,7 +157,7 @@ data class DrugPatchRequest(
 @Serializable
 data class DrugTemplateDTO(
     @Schema(description = "Template identifier")
-    val id: UUID,
+    val id: Uuid,
     @Schema(description = "Drug name", example = "Аспирин")
     val name: String,
     // Поля, по которым идёт поиск: без них выдача не объясняет, почему запись нашлась.
@@ -166,11 +166,11 @@ data class DrugTemplateDTO(
     @Schema(description = "Active substance", example = "Acetylsalicylic acid")
     val activeSubstance: String?,
     @Schema(description = "Dosage form identifier", nullable = true)
-    val formTypeId: UUID?,
+    val formTypeId: Uuid?,
     @Schema(description = "Category")
     val category: String?,
     @Schema(description = "Quantity unit identifier", nullable = true)
-    val quantityUnitId: UUID?,
+    val quantityUnitId: Uuid?,
     @Schema(description = "Manufacturer", example = "Bayer")
     val manufacturer: String?,
     @Schema(description = "Country", example = "Германия")
@@ -188,7 +188,7 @@ data class DrugTemplateDTO(
 @Serializable
 data class VocabularyEntryDTO(
     @Schema(description = "Identifier")
-    val id: UUID,
+    val id: Uuid,
     @Schema(description = "Display name", example = "mg")
     val name: String
 )

@@ -1,10 +1,10 @@
 package org.kert0n.medappserver.domain
 
-import java.util.UUID
 import kotlin.test.assertEquals
-import kotlin.test.assertNotEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
+import kotlin.uuid.Uuid
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -17,9 +17,9 @@ import org.kert0n.medappserver.testutil.qty
  */
 class DrugAggregateTest {
 
-    private val kit = UUID.randomUUID()
-    private val pills = QuantityUnit(UUID.randomUUID(), "pills")
-    private val millilitres = QuantityUnit(UUID.randomUUID(), "ml")
+    private val kit = Uuid.random()
+    private val pills = QuantityUnit(Uuid.random(), "pills")
+    private val millilitres = QuantityUnit(Uuid.random(), "ml")
 
     private fun q(value: Double, unit: QuantityUnit = pills) = Quantity(qty(value), unit)
 
@@ -104,7 +104,7 @@ class DrugAggregateTest {
      */
     @Test
     fun `переезд меняет только аптечку`() {
-        val target = UUID.randomUUID()
+        val target = Uuid.random()
         val moved = drug(10.0).moveTo(target)
 
         assertEquals(target, moved.medKitId)

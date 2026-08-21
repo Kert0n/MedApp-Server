@@ -3,11 +3,11 @@ package org.kert0n.medappserver.integration
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
-import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Test
-import java.util.UUID
+import kotlin.uuid.Uuid
 import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.db.store.CatalogueStore
 import org.kert0n.medappserver.db.tables.DrugTemplates
@@ -47,7 +47,7 @@ class CatalogueSearchTest {
             DrugTemplates.deleteAll()
             FormTypes.deleteAll()
 
-            val tablet = UUID.randomUUID()
+            val tablet = Uuid.random()
             FormTypes.insert { it[id] = tablet; it[name] = "таблетки" }
 
             template("Аспирин", manufacturer = "Байер", formTypeId = tablet)
@@ -71,10 +71,10 @@ class CatalogueSearchTest {
         nameLat: String? = null,
         substance: String? = null,
         manufacturer: String,
-        formTypeId: UUID? = null
+        formTypeId: Uuid? = null
     ) {
         DrugTemplates.insert {
-            it[DrugTemplates.id] = UUID.randomUUID()
+            it[DrugTemplates.id] = Uuid.random()
             it[DrugTemplates.name] = name
             it[DrugTemplates.nameLat] = nameLat
             it[DrugTemplates.activeSubstance] = substance

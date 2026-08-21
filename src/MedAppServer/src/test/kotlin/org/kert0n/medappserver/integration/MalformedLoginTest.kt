@@ -57,7 +57,7 @@ class MalformedLoginTest {
 
     @Test
     fun `логин не в форме идентификатора отвергается`() {
-        // loadUserByUsername парсит логин как UUID: неразобранная строка не должна
+        // loadUserByUsername парсит логин как Uuid: неразобранная строка не должна
         // превращаться в 500.
         api.tokenWithAuthorization(basic("не-uuid:пароль"))
             .andExpect(status().isUnauthorized)

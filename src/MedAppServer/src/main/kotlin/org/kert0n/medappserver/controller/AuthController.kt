@@ -10,7 +10,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.servlet.http.HttpServletRequest
-import java.util.*
+import kotlin.uuid.Uuid
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
 import org.kert0n.medappserver.api.UuidAsString
@@ -29,7 +29,7 @@ class AuthController(private val auth: AuthApplicationService) {
     @Serializable
     data class RegisterResponse(
         @Schema(description = "Generated login identifier")
-        val login: UUID,
+        val login: Uuid,
         @Schema(description = "Generated secret key for authentication")
         val key: String
     )

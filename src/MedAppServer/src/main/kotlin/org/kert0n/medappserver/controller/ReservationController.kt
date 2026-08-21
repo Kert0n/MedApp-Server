@@ -3,11 +3,12 @@ package org.kert0n.medappserver.controller
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.media.Content
+import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBody
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
-import java.util.*
+import kotlin.uuid.Uuid
 import org.kert0n.medappserver.api.ReservationCreateRequest
 import org.kert0n.medappserver.api.ReservationDTO
 import org.kert0n.medappserver.api.ReservationPatchRequest
@@ -18,7 +19,6 @@ import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
-import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBody
 
 /**
  * Бронь адресуется упаковкой: двух броней на одну пачку у человека быть не может, поэтому пары
@@ -53,7 +53,7 @@ class ReservationController(private val reservations: ReservationApplicationServ
     @ApiResponse(responseCode = "404", description = "No reservation on this package", content = [Content()])
     fun getReservation(
         authentication: Authentication,
-        @Parameter(description = "Package identifier") @PathVariable drugId: UUID
+        @Parameter(description = "Package identifier") @PathVariable drugId: Uuid
     ): ReservationDTO {
         logger.debug("GET /v1/reservations/{} by user {}", drugId, authentication.userId)
         return reservations.read(authentication.userId, drugId)
@@ -91,7 +91,7 @@ class ReservationController(private val reservations: ReservationApplicationServ
     @ApiResponse(responseCode = "404", description = "No reservation on this package", content = [Content()])
     fun patchReservation(
         authentication: Authentication,
-        @Parameter(description = "Package identifier") @PathVariable drugId: UUID,
+        @Parameter(description = "Package identifier") @PathVariable drugId: Uuid,
         @SwaggerRequestBody(description = "New reserved amount")
         @Valid @RequestBody request: ReservationPatchRequest
     ): ReservationDTO {
@@ -110,7 +110,7 @@ class ReservationController(private val reservations: ReservationApplicationServ
     @ApiResponse(responseCode = "404", description = "No reservation on this package", content = [Content()])
     fun deleteReservation(
         authentication: Authentication,
-        @Parameter(description = "Package identifier") @PathVariable drugId: UUID
+        @Parameter(description = "Package identifier") @PathVariable drugId: Uuid
     ) {
         logger.debug("DELETE /v1/reservations/{} by user {}", drugId, authentication.userId)
         reservations.cancel(authentication.userId, drugId)

@@ -1,10 +1,10 @@
 package org.kert0n.medappserver.services.aggregate
 
-import java.util.*
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.uuid.Uuid
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.db.store.CatalogueStore
 import org.kert0n.medappserver.domain.DrugTemplate
@@ -54,7 +54,7 @@ class CatalogueServiceTest {
     @Test
     fun `fuzzySearch returns repository results`() {
         val template = DrugTemplate(
-            UUID.randomUUID(), "Аспирин", null, null, null, null, null, "Байер", null, null
+            Uuid.random(), "Аспирин", null, null, null, null, null, "Байер", null, null
         )
         whenever(catalogueStore.searchTemplates("аспир", "аспир", 10)).thenReturn(listOf(template))
 
@@ -87,7 +87,7 @@ class CatalogueServiceTest {
 
     @Test
     fun `findView returns entry when found`() {
-        val id = UUID.randomUUID()
+        val id = Uuid.random()
         val drug = DrugTemplate(id, "Test", null, null, null, null, null, "Pharma", null, null)
         whenever(catalogueStore.findTemplate(id)).thenReturn(drug)
 
@@ -98,7 +98,7 @@ class CatalogueServiceTest {
 
     @Test
     fun `findView returns null when not found`() {
-        val id = UUID.randomUUID()
+        val id = Uuid.random()
         whenever(catalogueStore.findTemplate(id)).thenReturn(null)
 
         val result = catalogueService.find(id)

@@ -1,7 +1,7 @@
 package org.kert0n.medappserver.api
 
 import java.math.BigDecimal
-import java.util.UUID
+import kotlin.uuid.Uuid
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.PrimitiveKind
@@ -49,25 +49,25 @@ object BigDecimalAsString : KSerializer<BigDecimal> {
 /**
  * Идентификатор едет строкой.
  *
- * Тип поля остаётся `java.util.UUID`, хотя у kotlinx встроен сериализатор для `kotlin.uuid.Uuid`:
+ * Тип поля остаётся `java.util.Uuid`, хотя у kotlinx встроен сериализатор для `kotlin.uuid.Uuid`:
  * springdoc узнаёт именно джавовый тип и публикует `format: uuid`. Перевод полей на котлиновский
  * тип стоил бы контракту этой строчки — ради того же самого написания на проводе.
  */
-object UuidAsString : KSerializer<UUID> {
+object UuidAsString : KSerializer<Uuid> {
 
     override val descriptor: SerialDescriptor =
-        PrimitiveSerialDescriptor("java.util.UUID", PrimitiveKind.STRING)
+        PrimitiveSerialDescriptor("java.util.Uuid", PrimitiveKind.STRING)
 
-    override fun serialize(encoder: Encoder, value: UUID) {
+    override fun serialize(encoder: Encoder, value: Uuid) {
         encoder.encodeString(value.toString())
     }
 
-    override fun deserialize(decoder: Decoder): UUID {
+    override fun deserialize(decoder: Decoder): Uuid {
         val text = decoder.decodeString()
         return try {
-            UUID.fromString(text)
+            Uuid.parse(text)
         } catch (e: IllegalArgumentException) {
-            throw SerializationException("Not a UUID: '$text'", e)
+            throw SerializationException("Not a Uuid: '$text'", e)
         }
     }
 }

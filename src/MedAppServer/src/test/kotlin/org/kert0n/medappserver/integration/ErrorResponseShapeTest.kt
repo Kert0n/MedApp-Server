@@ -1,8 +1,8 @@
 package org.kert0n.medappserver.integration
 
-import java.util.UUID
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.uuid.Uuid
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.api.ReservationCreateRequest
@@ -64,8 +64,8 @@ class ErrorResponseShapeTest {
 
     @Test
     fun `not found does not disclose the requested identifier`() {
-        val userId = UUID.randomUUID()
-        val missingDrugId = UUID.randomUUID()
+        val userId = Uuid.random()
+        val missingDrugId = Uuid.random()
 
         val body = mockMvc.perform(
             get(ApiRoutes.drug(missingDrugId)).with(jwt().jwt { it.subject(userId.toString()) })
@@ -104,7 +104,7 @@ class ErrorResponseShapeTest {
             .andReturn().response.contentAsString
 
         // `instance` несёт путь запроса и нового не раскрывает, поэтому вырезан: иначе
-        // проверка ловит подстроку «500» в случайном UUID. В остальном теле не должно быть ни
+        // проверка ловит подстроку «500» в случайном Uuid. В остальном теле не должно быть ни
         // количеств, ни имени исключения.
         val described = body.replace(Regex("\"instance\":\"[^\"]*\""), "")
         assertFalse(described.contains("500"), "error body leaked the requested amount: $body")
@@ -114,9 +114,9 @@ class ErrorResponseShapeTest {
 
     @Test
     fun `body validation reports fields without echoing values`() {
-        val userId = UUID.randomUUID()
+        val userId = Uuid.random()
         // amount below the @DecimalMin("0.0") constraint.
-        val invalid = """{"drugId":"${UUID.randomUUID()}","amount":"-42.5"}"""
+        val invalid = """{"drugId":"${Uuid.random()}","amount":"-42.5"}"""
 
         val body = mockMvc.perform(
             post(ApiRoutes.RESERVATIONS)

@@ -1,6 +1,6 @@
 package org.kert0n.medappserver.integration
 
-import java.util.UUID
+import kotlin.uuid.Uuid
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.services.aggregate.CatalogueService
@@ -51,7 +51,7 @@ class InputSizeLimitsTest {
 
     private lateinit var mockMvc: MockMvc
 
-    private val userId = UUID.randomUUID()
+    private val userId = Uuid.random()
 
     @BeforeEach
     fun setup() {
@@ -96,7 +96,7 @@ class InputSizeLimitsTest {
         """.trimIndent()
 
         mockMvc.perform(
-            post(ApiRoutes.drugsOf(UUID.randomUUID()))
+            post(ApiRoutes.drugsOf(Uuid.random()))
                 .with(jwt().jwt { it.subject(userId.toString()) })
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body)

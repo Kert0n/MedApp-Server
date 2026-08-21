@@ -1,11 +1,11 @@
 package org.kert0n.medappserver.services.aggregate
 
 import java.math.BigDecimal
-import java.util.UUID
+import kotlin.uuid.Uuid
 import org.kert0n.medappserver.db.store.ReservationStore
-import org.kert0n.medappserver.domain.NoSuchReservation
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.MedKit
+import org.kert0n.medappserver.domain.NoSuchReservation
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.Reservation
 import org.kert0n.medappserver.domain.ReservationAlreadyExists
@@ -37,7 +37,7 @@ class ReservationService(
 
     /** Все брони вызывающего — одним запросом. */
     @Transactional(propagation = MANDATORY, readOnly = true)
-    fun ofUser(userId: UUID): List<Reservation> {
+    fun ofUser(userId: Uuid): List<Reservation> {
         logger.debug("Reading reservations of user {}", userId)
         return reservations.findAllOfUser(userId)
     }
@@ -45,12 +45,12 @@ class ReservationService(
     /** Бронь или `null`, если её нет. */
     /** Бронь вызывающего. Единственный способ её получить. */
     @Transactional(propagation = MANDATORY, readOnly = true)
-    fun get(userId: UUID, drugId: UUID): Reservation =
+    fun get(userId: Uuid, drugId: Uuid): Reservation =
         reservations.find(userId, drugId) ?: throw NoSuchReservation()
 
     /** Брони на перечисленные упаковки — чтобы ответить, сколько на пачку заявлено. */
     @Transactional(propagation = MANDATORY, readOnly = true)
-    fun onDrugs(drugIds: Collection<UUID>, userId: UUID): List<Reservation> =
+    fun onDrugs(drugIds: Collection<Uuid>, userId: Uuid): List<Reservation> =
         reservations.findAllOfDrugs(drugIds, userId)
 
     // ── Команды ──────────────────────────────────────────────────────────────────
@@ -67,7 +67,7 @@ class ReservationService(
      * ключ на членство: он же не даёт вставке разойтись с одновременным выходом.
      */
     @Transactional(propagation = MANDATORY)
-    fun create(drug: Drug, userId: UUID, amount: BigDecimal): Reservation {
+    fun create(drug: Drug, userId: Uuid, amount: BigDecimal): Reservation {
         logger.debug("Creating reservation of user {} on drug {}", userId, drug.id)
 
         // Правило читается здесь, как и у вступления в аптечку: одна бронь на пару «человек и
@@ -81,7 +81,7 @@ class ReservationService(
 
     /** По идентификаторам — то же самое плюс своё чтение. */
     @Transactional(propagation = MANDATORY)
-    fun changeTo(userId: UUID, drugId: UUID, amount: BigDecimal): Reservation =
+    fun changeTo(userId: Uuid, drugId: Uuid, amount: BigDecimal): Reservation =
         changeTo(get(userId, drugId), amount)
 
     @Transactional(propagation = MANDATORY)
@@ -95,7 +95,7 @@ class ReservationService(
 
     /** Брони всех, кто целевую аптечку не видит, — при удалении с переносом. */
     @Transactional(propagation = MANDATORY)
-    fun dropInMedKitExcept(medKit: MedKit, accessibleUserIds: Set<UUID>) {
+    fun dropInMedKitExcept(medKit: MedKit, accessibleUserIds: Set<Uuid>) {
         logger.debug("Dropping reservations in medkit {} outside {} users", medKit.id, accessibleUserIds.size)
         reservations.deleteInMedKitExcept(medKit, accessibleUserIds)
     }
@@ -109,14 +109,14 @@ class ReservationService(
     }
 
     @Transactional(propagation = MANDATORY)
-    fun dropOnDrugExcept(drug: Drug, accessibleUserIds: Set<UUID>) {
+    fun dropOnDrugExcept(drug: Drug, accessibleUserIds: Set<Uuid>) {
         logger.debug("Dropping reservations on drug {} outside {} users", drug.id, accessibleUserIds.size)
         reservations.deleteOfDrugExcept(drug, accessibleUserIds)
     }
 
     /** Отмена — это удаление: брони с нулём не бывает. */
     @Transactional(propagation = MANDATORY)
-    fun cancel(userId: UUID, drugId: UUID) = cancel(get(userId, drugId))
+    fun cancel(userId: Uuid, drugId: Uuid) = cancel(get(userId, drugId))
 
     @Transactional(propagation = MANDATORY)
     fun cancel(reservation: Reservation) {

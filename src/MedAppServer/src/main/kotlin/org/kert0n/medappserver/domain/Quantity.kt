@@ -2,7 +2,7 @@ package org.kert0n.medappserver.domain
 
 import java.math.BigDecimal
 import java.math.RoundingMode
-import java.util.UUID
+import kotlin.uuid.Uuid
 
 /** Разрядность колонок количества: `NUMERIC(19,6)`. */
 const val QUANTITY_PRECISION: Int = 19
@@ -58,6 +58,6 @@ class Quantity(amount: BigDecimal, val unit: QuantityUnit) : Comparable<Quantity
  * руками упаковки и «шт» у карточки каталога — одна единица, а не две одинаковые строки.
  */
 data class QuantityUnit(
-    val id: UUID,
+    val id: Uuid,
     val name: String
 )

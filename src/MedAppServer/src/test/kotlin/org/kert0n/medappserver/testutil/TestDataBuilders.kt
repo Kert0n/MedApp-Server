@@ -1,6 +1,6 @@
 package org.kert0n.medappserver.testutil
 
-import java.util.*
+import kotlin.uuid.Uuid
 import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.api.DrugPatchRequest
 import org.kert0n.medappserver.domain.Drug
@@ -9,8 +9,8 @@ import org.kert0n.medappserver.domain.QuantityUnit
 
 /** Сборщики тестовых данных. Строятся доменные значения — сущностей тест не видит. */
 
-class DrugBuilder(private val medKitId: UUID, private val unit: QuantityUnit) {
-    private var id: UUID = UUID.randomUUID()
+class DrugBuilder(private val medKitId: Uuid, private val unit: QuantityUnit) {
+    private var id: Uuid = Uuid.random()
     private var name: String = "Test Drug"
     private var quantity: Double = 100.0
     private var category: String? = "painkiller"
@@ -18,7 +18,7 @@ class DrugBuilder(private val medKitId: UUID, private val unit: QuantityUnit) {
     private var country: String? = "TestLand"
     private var description: String? = "Test description"
 
-    fun withId(id: UUID) = apply { this.id = id }
+    fun withId(id: Uuid) = apply { this.id = id }
     fun withName(name: String) = apply { this.name = name }
     fun withQuantity(quantity: Double) = apply { this.quantity = quantity }
     fun withCategory(category: String?) = apply { this.category = category }
@@ -38,7 +38,7 @@ class DrugBuilder(private val medKitId: UUID, private val unit: QuantityUnit) {
     )
 }
 
-class DrugCreateRequestBuilder(private val quantityUnitId: UUID) {
+class DrugCreateRequestBuilder(private val quantityUnitId: Uuid) {
     private var name: String = "Test Drug"
     private var quantity: Double = 100.0
 
@@ -69,6 +69,6 @@ class DrugPatchRequestBuilder {
     )
 }
 
-fun drugBuilder(medKitId: UUID, unit: QuantityUnit) = DrugBuilder(medKitId, unit)
-fun drugCreateDTOBuilder(quantityUnitId: UUID) = DrugCreateRequestBuilder(quantityUnitId)
+fun drugBuilder(medKitId: Uuid, unit: QuantityUnit) = DrugBuilder(medKitId, unit)
+fun drugCreateDTOBuilder(quantityUnitId: Uuid) = DrugCreateRequestBuilder(quantityUnitId)
 fun drugUpdateDTOBuilder() = DrugPatchRequestBuilder()

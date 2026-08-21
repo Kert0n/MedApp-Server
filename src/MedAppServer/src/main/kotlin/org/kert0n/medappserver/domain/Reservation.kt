@@ -1,6 +1,6 @@
 package org.kert0n.medappserver.domain
 
-import java.util.UUID
+import kotlin.uuid.Uuid
 
 /**
  * Бронь — заявка человека на часть упаковки: «эти двадцать таблеток мои».
@@ -15,8 +15,8 @@ import java.util.UUID
  * целостности данных, а не владение.
  */
 data class Reservation(
-    val userId: UUID,
-    val drugId: UUID,
+    val userId: Uuid,
+    val drugId: Uuid,
     val amount: Quantity
 ) {
 

@@ -1,10 +1,10 @@
 package org.kert0n.medappserver.services.application
 
-import java.util.*
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.uuid.Uuid
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertDoesNotThrow
 import org.junit.jupiter.api.assertThrows
@@ -12,8 +12,8 @@ import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.domain.DomainRuleViolated
 import org.kert0n.medappserver.services.aggregate.DrugService
-import org.kert0n.medappserver.services.aggregate.NewDrug
 import org.kert0n.medappserver.services.aggregate.MedKitService
+import org.kert0n.medappserver.services.aggregate.NewDrug
 import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.qty
@@ -143,7 +143,7 @@ class MedKitApplicationServiceTest {
         dbHelper.flushAndClear()
 
         assertThrows<DomainRuleViolated> {
-            drugs.moveToMedKit(drug.id, UUID.randomUUID(), alice.id)
+            drugs.moveToMedKit(drug.id, Uuid.random(), alice.id)
         }
     }
 
@@ -235,7 +235,7 @@ class MedKitApplicationServiceTest {
         dbHelper.flushAndClear()
 
         assertThrows<DomainRuleViolated> {
-            medKits.delete(UUID.randomUUID(), alice.id, null)
+            medKits.delete(Uuid.random(), alice.id, null)
         }
     }
 

@@ -1,24 +1,24 @@
 package org.kert0n.medappserver.testutil
 
 import java.math.BigDecimal
-import java.util.*
+import kotlin.uuid.Uuid
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.core.eq
-import org.kert0n.medappserver.db.tables.Drugs
-import org.kert0n.medappserver.db.tables.MedKitMemberships
-import org.kert0n.medappserver.db.tables.QuantityUnits
-import org.kert0n.medappserver.db.tables.Reservations
 import org.kert0n.medappserver.db.store.DrugStore
 import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.db.store.ReservationStore
 import org.kert0n.medappserver.db.store.UserStore
+import org.kert0n.medappserver.db.tables.Drugs
+import org.kert0n.medappserver.db.tables.MedKitMemberships
+import org.kert0n.medappserver.db.tables.QuantityUnits
+import org.kert0n.medappserver.db.tables.Reservations
 import org.kert0n.medappserver.domain.Drug
+import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.QuantityUnit
-import org.kert0n.medappserver.domain.User
-import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.Reservation
+import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.services.aggregate.ReservationService
@@ -44,7 +44,7 @@ class DatabaseTestHelper(
 ) {
     @Transactional
     fun freshUser(tag: String): User {
-        val user = User(hashedKey = "${tag}_${UUID.randomUUID()}")
+        val user = User(hashedKey = "${tag}_${Uuid.random()}")
         users.insert(user)
         return user
     }
@@ -55,16 +55,16 @@ class DatabaseTestHelper(
         val stored = QuantityUnits.selectAll().where { QuantityUnits.name eq name }.singleOrNull()
         if (stored != null) return QuantityUnit(stored[QuantityUnits.id], stored[QuantityUnits.name])
 
-        val id = UUID.randomUUID()
+        val id = Uuid.random()
         QuantityUnits.insert { it[QuantityUnits.id] = id; it[QuantityUnits.name] = name }
         return QuantityUnit(id, name)
     }
 
     @Transactional
-    fun freshDrug(medKitId: UUID, quantity: Double): Drug {
+    fun freshDrug(medKitId: Uuid, quantity: Double): Drug {
         val drug = Drug(
             medKitId = medKitId,
-            name = "Drug_${UUID.randomUUID()}",
+            name = "Drug_${Uuid.random()}",
             quantity = Quantity(qty(quantity), unit()),
             category = "painkiller",
             manufacturer = "Test Pharma",
@@ -84,7 +84,7 @@ class DatabaseTestHelper(
      * через фасад: тем же входом, что и приложение.
      */
     @Transactional
-    fun freshMedKit(ownerId: UUID): MedKit = medKitService.create(ownerId)
+    fun freshMedKit(ownerId: Uuid): MedKit = medKitService.create(ownerId)
 
     /**
      * Вступление под подготовку сценария — тем же путём, что и приложение.
@@ -93,12 +93,12 @@ class DatabaseTestHelper(
      * нет. Ключ выписывается от имени участника, который в ней уже состоит.
      */
     @Transactional
-    fun join(medKitId: UUID, invitedBy: UUID, userId: UUID): MedKit =
+    fun join(medKitId: Uuid, invitedBy: Uuid, userId: Uuid): MedKit =
         medKitService.joinByInvitation(medKitService.invite(medKitService.get(medKitId, invitedBy), invitedBy), userId)
 
     /** Бронь под подготовку сценария. */
     @Transactional
-    fun reserve(userId: UUID, drugId: UUID, amount: BigDecimal): Reservation =
+    fun reserve(userId: Uuid, drugId: Uuid, amount: BigDecimal): Reservation =
         reservationService.create(drugService.get(drugId, userId), userId, amount)
             .also { flushAndClear() }
 
@@ -142,7 +142,7 @@ class DatabaseTestHelper(
      */
     /** Упаковка без оглядки на доступ — под проверки состояния, как и `medKit`. */
     @Transactional
-    fun drug(id: UUID): Drug? =
+    fun drug(id: Uuid): Drug? =
         Drugs.selectAll().where { Drugs.id eq id }.singleOrNull()?.let { drugs.find(id, it[Drugs.medKitId].let { _ ->
             MedKitMemberships.selectAll().where { MedKitMemberships.medKitId eq it[Drugs.medKitId] }
                 .first()[MedKitMemberships.userId]
@@ -156,7 +156,7 @@ class DatabaseTestHelper(
      * надо именно это. Подготовка сценария по-прежнему идёт через хранилища.
      */
     @Transactional
-    fun medKit(medKitId: UUID): MedKit? {
+    fun medKit(medKitId: Uuid): MedKit? {
         val members = MedKitMemberships.selectAll()
             .where { MedKitMemberships.medKitId eq medKitId }
             .map { it[MedKitMemberships.userId] }
@@ -165,11 +165,11 @@ class DatabaseTestHelper(
     }
 
     @Transactional
-    fun requireDrug(id: UUID): Drug = drug(id) ?: error("Препарат $id не найден")
+    fun requireDrug(id: Uuid): Drug = drug(id) ?: error("Препарат $id не найден")
 
     // Проверки, существенные для privacy-by-default: `null` означает, что записи больше нет.
     @Transactional
-    fun drugQuantity(id: UUID): BigDecimal? = drug(id)?.quantity?.amount
+    fun drugQuantity(id: Uuid): BigDecimal? = drug(id)?.quantity?.amount
 
     /**
      * Заявленное бронями: считается снаружи упаковки и может превышать её остаток.
@@ -178,10 +178,10 @@ class DatabaseTestHelper(
      * чтение без него не работает.
      */
     @Transactional
-    fun reservedOnDrug(id: UUID): BigDecimal =
+    fun reservedOnDrug(id: Uuid): BigDecimal =
         Reservations.selectAll().where { Reservations.drugId eq id }.sumOf { it[Reservations.amount] }
 
     @Transactional
-    fun userReservation(userId: UUID, drugId: UUID): BigDecimal? =
+    fun userReservation(userId: Uuid, drugId: Uuid): BigDecimal? =
         reservations.find(userId, drugId)?.amount?.amount
 }

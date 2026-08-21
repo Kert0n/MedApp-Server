@@ -3,7 +3,7 @@
 package org.kert0n.medappserver.api
 
 import io.swagger.v3.oas.annotations.media.Schema
-import java.util.UUID
+import kotlin.uuid.Uuid
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
 
@@ -17,7 +17,7 @@ import kotlinx.serialization.UseSerializers
 @Serializable
 data class UserSnapshotDTO(
     @Schema(description = "Caller identifier")
-    val id: UUID,
+    val id: Uuid,
     @Schema(description = "All medicine kits available to the caller")
     val medKits: Set<MedKitDTO>
 )
