@@ -4,6 +4,8 @@ import java.math.BigDecimal
 import java.util.UUID
 import org.kert0n.medappserver.db.store.ReservationStore
 import org.kert0n.medappserver.domain.NoSuchReservation
+import org.kert0n.medappserver.domain.Drug
+import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.Reservation
 import org.kert0n.medappserver.domain.ReservationAlreadyExists
@@ -26,9 +28,7 @@ import org.springframework.transaction.annotation.Transactional
  */
 @Service
 class ReservationService(
-    private val reservations: ReservationStore,
-    private val drugs: DrugService,
-    private val medKits: MedKitService
+    private val reservations: ReservationStore
 ) {
 
     private val logger = LoggerFactory.getLogger(ReservationService::class.java)
@@ -69,56 +69,52 @@ class ReservationService(
      * ключ на членство: он же не даёт вставке разойтись с одновременным выходом.
      */
     @Transactional(propagation = MANDATORY)
-    fun create(userId: UUID, drugId: UUID, amount: BigDecimal): Reservation {
-        logger.debug("Creating reservation of user {} on drug {}", userId, drugId)
+    fun create(drug: Drug, userId: UUID, amount: BigDecimal): Reservation {
+        logger.debug("Creating reservation of user {} on drug {}", userId, drug.id)
 
-        val drug = drugs.require(drugId, userId)
         // Правило читается здесь, как и у вступления в аптечку: одна бронь на пару «человек и
         // пачка». Первичный ключ его страхует, но выражено оно в коде.
-        if (reservations.find(userId, drugId) != null) throw ReservationAlreadyExists()
+        if (reservations.find(userId, drug.id) != null) throw ReservationAlreadyExists()
 
-        val reservation = Reservation(userId, drugId, Quantity(amount, drug.quantity.unit))
+        val reservation = Reservation(userId, drug.id, Quantity(amount, drug.quantity.unit))
         reservations.insert(reservation)
         return reservation
     }
 
     @Transactional(propagation = MANDATORY)
-    fun changeTo(userId: UUID, drugId: UUID, amount: BigDecimal): Reservation {
-        logger.debug("Changing reservation of user {} on drug {}", userId, drugId)
+    fun changeTo(reservation: Reservation, amount: BigDecimal): Reservation {
+        logger.debug("Changing reservation of user {} on drug {}", reservation.userId, reservation.drugId)
 
-        val current = require(userId, drugId)
-        val changed = current.changeTo(Quantity(amount, current.amount.unit))
+        val changed = reservation.changeTo(Quantity(amount, reservation.amount.unit))
         reservations.save(changed)
         return changed
     }
 
     /** Брони всех, кто целевую аптечку не видит, — при удалении с переносом. */
     @Transactional(propagation = MANDATORY)
-    fun dropInMedKitExcept(medKitId: UUID, accessibleUserIds: Set<UUID>) {
-        logger.debug("Dropping reservations in medkit {} outside {} users", medKitId, accessibleUserIds.size)
-        reservations.deleteInMedKitExcept(medKitId, accessibleUserIds)
+    fun dropInMedKitExcept(medKit: MedKit, accessibleUserIds: Set<UUID>) {
+        logger.debug("Dropping reservations in medkit {} outside {} users", medKit.id, accessibleUserIds.size)
+        reservations.deleteInMedKitExcept(medKit, accessibleUserIds)
     }
 
     /** То же для одной переехавшей упаковки. */
     /** Все брони на упаковку: зовётся, когда упаковка уничтожается. */
     @Transactional(propagation = MANDATORY)
-    fun dropOnDrug(drugId: UUID) {
-        logger.debug("Dropping all reservations on drug {}", drugId)
-        reservations.deleteOfDrug(drugId)
+    fun dropOnDrug(drug: Drug) {
+        logger.debug("Dropping all reservations on drug {}", drug.id)
+        reservations.deleteOfDrug(drug)
     }
 
     @Transactional(propagation = MANDATORY)
-    fun dropOnDrugExcept(drugId: UUID, accessibleUserIds: Set<UUID>) {
-        logger.debug("Dropping reservations on drug {} outside {} users", drugId, accessibleUserIds.size)
-        reservations.deleteOfDrugExcept(drugId, accessibleUserIds)
+    fun dropOnDrugExcept(drug: Drug, accessibleUserIds: Set<UUID>) {
+        logger.debug("Dropping reservations on drug {} outside {} users", drug.id, accessibleUserIds.size)
+        reservations.deleteOfDrugExcept(drug, accessibleUserIds)
     }
 
     /** Отмена — это удаление: брони с нулём не бывает. */
     @Transactional(propagation = MANDATORY)
-    fun cancel(userId: UUID, drugId: UUID) {
-        logger.debug("Cancelling reservation of user {} on drug {}", userId, drugId)
-
-        require(userId, drugId)
-        reservations.delete(userId, drugId)
+    fun cancel(reservation: Reservation) {
+        logger.debug("Cancelling reservation of user {} on drug {}", reservation.userId, reservation.drugId)
+        reservations.delete(reservation)
     }
 }

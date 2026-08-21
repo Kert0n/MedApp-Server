@@ -19,6 +19,7 @@ import org.kert0n.medappserver.domain.QuantityUnit
 import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.Reservation
+import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.springframework.stereotype.Component
@@ -42,6 +43,7 @@ class DatabaseTestHelper(
     private val memberships: MedKitMembershipRepository,
     private val quantityUnits: QuantityUnitRepository,
     private val medKitService: MedKitService,
+    private val drugService: DrugService,
     private val reservationService: ReservationService,
     private val entityManager: EntityManager
 ) {
@@ -93,12 +95,12 @@ class DatabaseTestHelper(
      */
     @Transactional
     fun join(medKitId: UUID, invitedBy: UUID, userId: UUID): MedKit =
-        medKitService.joinByInvitation(medKitService.invite(medKitId, invitedBy), userId)
+        medKitService.joinByInvitation(medKitService.invite(medKitService.require(medKitId, invitedBy), invitedBy), userId)
 
     /** Бронь под подготовку сценария. */
     @Transactional
     fun reserve(userId: UUID, drugId: UUID, amount: BigDecimal): Reservation =
-        reservationService.create(userId, drugId, amount)
+        reservationService.create(drugService.require(drugId, userId), userId, amount)
 
     /** Кладёт заранее собранный препарат: тестам нужны свои имена и количества. */
     @Transactional

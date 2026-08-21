@@ -66,8 +66,8 @@ class DrugStore(
      * Брони снимает `DrugDisposal`: их исчезновение вслед за упаковкой — правило, а не
      * подробность записи, и в запросе ему не место.
      */
-    fun delete(drugId: UUID) {
-        val entity = drugs.findByIdOrNull(drugId) ?: return
+    fun delete(drug: Drug) {
+        val entity = drugs.findByIdOrNull(drug.id) ?: return
         drugs.delete(entity)
     }
 

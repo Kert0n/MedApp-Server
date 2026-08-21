@@ -74,9 +74,9 @@ class MedKitStore(
      * загружены и ссылаются на удаляемую аптечку — Hibernate упал бы на ближайшем flush.
      * Поэтому явно: участников столько, сколько людей ею пользуется, обход дешёвый.
      */
-    fun delete(medKitId: UUID) {
-        val row = medKits.findByIdOrNull(medKitId) ?: return
-        memberships.deleteAll(memberships.findAllOfMedKit(medKitId))
+    fun delete(medKit: MedKit) {
+        val row = medKits.findByIdOrNull(medKit.id) ?: return
+        memberships.deleteAll(memberships.findAllOfMedKit(medKit.id))
         medKits.delete(row)
     }
 

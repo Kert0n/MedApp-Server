@@ -96,7 +96,7 @@ class MedKitServiceTest {
         val kit = medKitService.create(owner.id)
         dbHelper.flushAndClear()
 
-        val key = medKitService.invite(kit.id, owner.id)
+        val key = medKitService.invite(medKitService.require(kit.id, owner.id), owner.id)
         medKitService.joinByInvitation(key, joiner.id)
         dbHelper.flushAndClear()
 
@@ -155,7 +155,7 @@ class MedKitServiceTest {
         dbHelper.join(kit.id, alice.id, bob.id)
         dbHelper.flushAndClear()
 
-        medKitService.leave(kit.id, bob.id)
+        medKitService.leave(medKitService.require(kit.id, bob.id), bob.id)
         dbHelper.flushAndClear()
 
         assertNotNull(medKitService.require(kit.id, alice.id))
@@ -170,7 +170,7 @@ class MedKitServiceTest {
         val kit = medKitService.create(alice.id)
         dbHelper.flushAndClear()
 
-        medKitService.leave(kit.id, alice.id)
+        medKitService.leave(medKitService.require(kit.id, alice.id), alice.id)
         dbHelper.flushAndClear()
 
         assertNull(dbHelper.medKit(kit.id))

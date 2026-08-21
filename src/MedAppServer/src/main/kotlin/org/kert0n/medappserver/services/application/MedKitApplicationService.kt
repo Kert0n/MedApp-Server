@@ -49,7 +49,7 @@ class MedKitApplicationService(
 
     @Transactional
     fun invite(medKitId: UUID, userId: UUID): InvitationDTO =
-        InvitationDTO(medKitService.invite(medKitId, userId))
+        InvitationDTO(medKitService.invite(medKitService.require(medKitId, userId), userId))
 
     @Transactional
     fun joinByInvitation(key: String, userId: UUID): MedKitDTO {
@@ -72,7 +72,7 @@ class MedKitApplicationService(
     @Transactional
     fun leave(medKitId: UUID, userId: UUID) {
         logger.debug("Removing user {} from medkit {}", userId, medKitId)
-        medKitService.leave(medKitId, userId)
+        medKitService.leave(medKitService.require(medKitId, userId), userId)
     }
 
     /**
@@ -88,7 +88,7 @@ class MedKitApplicationService(
         val medKit = medKitService.require(medKitId, userId)
 
         transferToMedKitId?.let {
-            relocation.moveAll(medKit.id, medKitService.require(it, userId))
+            relocation.moveAll(medKit, medKitService.require(it, userId))
         }
 
         medKitService.delete(medKit)

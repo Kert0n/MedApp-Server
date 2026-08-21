@@ -33,11 +33,11 @@ class ReadProjectionTest {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.create(alice.id)
         val bob = dbHelper.freshUser("bob")
-        medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
+        medKitService.joinByInvitation(medKitService.invite(medKitService.require(kit.id, alice.id), alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
 
-        reservationService.create(alice.id, drug.id, qty(30.0))
-        reservationService.create(bob.id, drug.id, qty(20.0))
+        reservationService.create(drugService.require(drug.id, alice.id), alice.id, qty(30.0))
+        reservationService.create(drugService.require(drug.id, bob.id), bob.id, qty(20.0))
         dbHelper.flushAndClear()
 
         val view = drugService.require(drug.id, alice.id)
@@ -98,9 +98,9 @@ class ReadProjectionTest {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.create(alice.id)
         val bob = dbHelper.freshUser("bob")
-        medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
+        medKitService.joinByInvitation(medKitService.invite(medKitService.require(kit.id, alice.id), alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
-        reservationService.create(alice.id, drug.id, qty(30.0))
+        reservationService.create(drugService.require(drug.id, alice.id), alice.id, qty(30.0))
         dbHelper.flushAndClear()
 
         assertQty(30.0, reservationService.require(alice.id, drug.id).amount)

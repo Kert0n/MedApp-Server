@@ -33,9 +33,9 @@ class DrugRelocation(
      * участников, и решение принимается по ним.
      */
     @Transactional(propagation = MANDATORY)
-    fun moveOne(drugId: UUID, target: MedKit, userId: UUID): Drug {
-        val moved = drugService.moveTo(drugId, target.id, userId)
-        reservationService.dropOnDrugExcept(drugId, target.members)
+    fun moveOne(drug: Drug, target: MedKit): Drug {
+        val moved = drugService.moveTo(drug, target)
+        reservationService.dropOnDrugExcept(drug, target.members)
         return moved
     }
 
@@ -46,9 +46,9 @@ class DrugRelocation(
      * стоить ста загрузок.
      */
     @Transactional(propagation = MANDATORY)
-    fun moveAll(sourceMedKitId: UUID, target: MedKit) {
+    fun moveAll(source: MedKit, target: MedKit) {
         // Порядок важен: брони выбираются по исходной аптечке, пока упаковки ещё в ней.
-        reservationService.dropInMedKitExcept(sourceMedKitId, target.members)
-        drugService.moveAllToMedKit(sourceMedKitId, target.id)
+        reservationService.dropInMedKitExcept(source, target.members)
+        drugService.moveAll(source, target)
     }
 }

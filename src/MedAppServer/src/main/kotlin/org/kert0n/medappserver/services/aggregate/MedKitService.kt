@@ -55,15 +55,13 @@ class MedKitService(
     }
 
     @Transactional(propagation = MANDATORY)
-    fun invite(medKitId: UUID, userId: UUID): String {
-        logger.debug("Sharing medkit {} by user: {}", medKitId, userId)
-        // Право проверяет чтение состава. Версией это не проверяется: чужое вступление в ту же
-        // аптечку к правам приглашающего отношения не имеет.
-        require(medKitId, userId)
+    fun invite(medKit: MedKit, invitedBy: UUID): String {
+        logger.debug("Sharing medkit {} by user: {}", medKit.id, invitedBy)
+        // Аптечка приходит прочитанной — читал её тот, кто приглашает, и это и есть его право.
+        val invitation = Invitation(medKit, invitedBy)
         val key = securityService.generateKey(16)
-        // Кешируется только хеш: сырой ключ приглашения на сервере не хранится. Вместе с
-        // аптечкой запоминается пригласивший — его правами будет читать вступающий.
-        medKitTokenCache[securityService.hashToken(key)] = Invitation(medKitId, userId)
+        // Кешируется только хеш: сырой ключ приглашения на сервере не хранится.
+        medKitTokenCache[securityService.hashToken(key)] = invitation
         return key
     }
 
@@ -93,12 +91,12 @@ class MedKitService(
      * Брони выходящего лежат в чужом агрегате: их убирает оркестратор.
      */
     @Transactional(propagation = MANDATORY)
-    fun leave(medKitId: UUID, userId: UUID): MedKit? {
-        logger.debug("Removing user {} from medkit {}", userId, medKitId)
-        val left = require(medKitId, userId).leave(userId)
+    fun leave(medKit: MedKit, userId: UUID): MedKit? {
+        logger.debug("Removing user {} from medkit {}", userId, medKit.id)
+        val left = medKit.leave(userId)
 
         if (left == null) {
-            medKits.delete(medKitId)
+            medKits.delete(medKit)
             return null
         }
         medKits.save(left)
@@ -112,5 +110,5 @@ class MedKitService(
      * поэтому команде нечего перепроверять — а перепроверка стоила бы второго запроса.
      */
     @Transactional(propagation = MANDATORY)
-    fun delete(medKit: MedKit) = medKits.delete(medKit.id)
+    fun delete(medKit: MedKit) = medKits.delete(medKit)
 }

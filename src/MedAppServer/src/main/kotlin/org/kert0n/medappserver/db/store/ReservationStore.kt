@@ -5,6 +5,8 @@ import org.kert0n.medappserver.db.model.ReservationData
 import org.kert0n.medappserver.db.model.ReservationKey
 import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.db.repository.ReservationRepository
+import org.kert0n.medappserver.domain.Drug
+import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.Reservation
 import org.springframework.data.repository.findByIdOrNull
@@ -66,23 +68,24 @@ class ReservationStore(
         reservations.save(row)
     }
 
-    fun delete(userId: UUID, drugId: UUID) {
-        reservations.findByIdOrNull(ReservationKey(userId, drugId))?.let { reservations.delete(it) }
+    fun delete(reservation: Reservation) {
+        reservations.findByIdOrNull(ReservationKey(reservation.userId, reservation.drugId))
+            ?.let { reservations.delete(it) }
     }
 
     /** Все брони на упаковку — когда упаковки не станет. */
-    fun deleteOfDrug(drugId: UUID) {
-        reservations.deleteOfDrug(drugId)
+    fun deleteOfDrug(drug: Drug) {
+        reservations.deleteOfDrug(drug.id)
     }
 
     /** Брони тех, кто аптечку не видит, — при удалении аптечки с переносом. */
-    fun deleteInMedKitExcept(medKitId: UUID, accessibleUserIds: Set<UUID>) {
-        reservations.deleteInMedKitExcept(medKitId, accessibleUserIds)
+    fun deleteInMedKitExcept(medKit: MedKit, accessibleUserIds: Set<UUID>) {
+        reservations.deleteInMedKitExcept(medKit.id, accessibleUserIds)
     }
 
     /** То же для одной переехавшей упаковки. */
-    fun deleteOfDrugExcept(drugId: UUID, accessibleUserIds: Set<UUID>) {
-        reservations.deleteOfDrugExcept(drugId, accessibleUserIds)
+    fun deleteOfDrugExcept(drug: Drug, accessibleUserIds: Set<UUID>) {
+        reservations.deleteOfDrugExcept(drug.id, accessibleUserIds)
     }
 
     /** Единица величины лежит у упаковки: бронь в «штуках вообще» смысла не имеет. */

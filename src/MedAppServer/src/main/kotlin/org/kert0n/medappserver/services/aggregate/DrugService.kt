@@ -6,6 +6,7 @@ import org.kert0n.medappserver.db.store.DrugStore
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.DrugDetails
 import org.kert0n.medappserver.domain.NotAMember
+import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.Quantity
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -58,11 +59,11 @@ class DrugService(
     // ── Команды препарата ────────────────────────────────────────────────────────
 
     @Transactional(propagation = MANDATORY)
-    fun create(request: NewDrug, medKitId: UUID, userId: UUID): Drug {
-        logger.debug("Creating drug: {} for user: {}", request.name, userId)
+    fun create(request: NewDrug, medKit: MedKit): Drug {
+        logger.debug("Creating drug {} in medkit {}", request.name, medKit.id)
 
         val drug = Drug(
-            medKitId = medKitId,
+            medKitId = medKit.id,
             name = request.name,
             quantity = Quantity(request.quantity, catalogue.requireQuantityUnit(request.quantityUnitId)),
             formType = request.formTypeId?.let { catalogue.requireFormType(it) },
@@ -77,10 +78,10 @@ class DrugService(
     }
 
     @Transactional(propagation = MANDATORY)
-    fun update(drugId: UUID, request: DrugEdit, userId: UUID): Drug {
-        logger.debug("Updating drug: {}", drugId)
+    fun update(drug: Drug, request: DrugEdit): Drug {
+        logger.debug("Updating drug: {}", drug.id)
 
-        var drug = require(drugId, userId)
+        var drug = drug
         // Единица перевешивается первой: количество ниже собирается уже в ней.
         request.quantityUnitId?.let { drug = drug.relabelUnitTo(catalogue.requireQuantityUnit(it)) }
         request.quantity?.let { drug = drug.changeQuantityTo(Quantity(it, drug.quantity.unit)) }
@@ -100,12 +101,9 @@ class DrugService(
     }
 
     @Transactional(propagation = MANDATORY)
-    fun delete(drugId: UUID, userId: UUID) {
-        logger.debug("Deleting drug: {}", drugId)
-
-        // Чтение и есть проверка доступа: не нашли — удалять нечего.
-        require(drugId, userId)
-        drugs.delete(drugId)
+    fun delete(drug: Drug) {
+        logger.debug("Deleting drug: {}", drug.id)
+        drugs.delete(drug)
     }
 
     /**
@@ -115,10 +113,9 @@ class DrugService(
      * ещё до списания.
      */
     @Transactional(propagation = MANDATORY)
-    fun consume(drugId: UUID, quantity: BigDecimal, userId: UUID): Drug? {
-        logger.debug("Consuming {} of drug {}", quantity, drugId)
+    fun consume(drug: Drug, quantity: BigDecimal): Drug? {
+        logger.debug("Consuming {} of drug {}", quantity, drug.id)
 
-        val drug = require(drugId, userId)
         // `null` — приём опустошил пачку. Уничтожать её отсюда нельзя: вместе с пачкой
         // исчезают брони, а это чужой агрегат. Решение принимает `DrugDisposal`.
         val left = drug.consume(Quantity(quantity, drug.quantity.unit)) ?: return null
@@ -133,17 +130,17 @@ class DrugService(
      * загрузок. Судьбу броней решает вызывающий: они в чужом агрегате.
      */
     @Transactional(propagation = MANDATORY)
-    fun moveAllToMedKit(sourceMedKitId: UUID, targetMedKitId: UUID) {
-        logger.debug("Moving all drugs of medkit {} to {}", sourceMedKitId, targetMedKitId)
-        drugs.moveAllToMedKit(sourceMedKitId, targetMedKitId)
+    fun moveAll(source: MedKit, target: MedKit) {
+        logger.debug("Moving all drugs of medkit {} to {}", source.id, target.id)
+        drugs.moveAllToMedKit(source.id, target.id)
     }
 
     /** Брони, потерявшие доступ, убирает межагрегатный сценарий: они в чужом агрегате. */
     @Transactional(propagation = MANDATORY)
-    fun moveTo(drugId: UUID, targetMedKitId: UUID, userId: UUID): Drug {
-        logger.debug("Moving drug {} to medkit {}", drugId, targetMedKitId)
+    fun moveTo(drug: Drug, target: MedKit): Drug {
+        logger.debug("Moving drug {} to medkit {}", drug.id, target.id)
 
-        val moved = require(drugId, userId).moveTo(targetMedKitId)
+        val moved = drug.moveTo(target.id)
         drugs.save(moved)
         return moved
     }

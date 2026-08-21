@@ -29,9 +29,9 @@ class DrugDisposal(
 
     /** Пачку выбросили — назначений на неё больше нет. */
     @Transactional(propagation = MANDATORY)
-    fun destroy(drugId: UUID, userId: UUID) {
-        reservationService.dropOnDrug(drugId)
-        drugService.delete(drugId, userId)
+    fun destroy(drug: Drug) {
+        reservationService.dropOnDrug(drug)
+        drugService.delete(drug)
     }
 
     /**
@@ -42,9 +42,9 @@ class DrugDisposal(
      * для соседнего агрегата.
      */
     @Transactional(propagation = MANDATORY)
-    fun consume(drugId: UUID, quantity: BigDecimal, userId: UUID): Drug? {
-        val left = drugService.consume(drugId, quantity, userId)
-        if (left == null) destroy(drugId, userId)
+    fun consume(drug: Drug, quantity: BigDecimal): Drug? {
+        val left = drugService.consume(drug, quantity)
+        if (left == null) destroy(drug)
         return left
     }
 }
