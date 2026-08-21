@@ -1,6 +1,6 @@
 package org.kert0n.medappserver.services.orchestrator
 
-import java.util.UUID
+import kotlin.uuid.Uuid
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.services.aggregate.DrugService
@@ -41,14 +41,16 @@ class DrugRelocation(
      * положено. Оба чтения скоуплены вызывающим, и оба — проверка доступа.
      */
     @Transactional(propagation = MANDATORY)
-    fun moveOne(drugId: UUID, targetMedKitId: UUID, userId: UUID): Drug =
+    fun moveOne(drugId: Uuid, targetMedKitId: Uuid, userId: Uuid): Drug =
         moveOne(drugService.get(drugId, userId), medKitService.get(targetMedKitId, userId))
 
     @Transactional(propagation = MANDATORY)
     fun moveOne(drug: Drug, target: MedKit): Drug {
-        val moved = drugService.moveTo(drug, target)
+        // Порядок важен, как и в массовом переезде: сначала снять брони тех, кто цель не
+        // видит, и только потом двигать пачку. Иначе `ON UPDATE CASCADE` потащит их
+        // `med_kit_id` в целевую аптечку, и ключ членства отвергнет весь переезд.
         reservationService.dropOnDrugExcept(drug, target.members)
-        return moved
+        return drugService.moveTo(drug, target)
     }
 
     /**
@@ -59,7 +61,7 @@ class DrugRelocation(
      */
     /** По идентификаторам — то же самое плюс два чтения, и оба проверяют доступ. */
     @Transactional(propagation = MANDATORY)
-    fun moveAll(sourceMedKitId: UUID, targetMedKitId: UUID, userId: UUID) =
+    fun moveAll(sourceMedKitId: Uuid, targetMedKitId: Uuid, userId: Uuid) =
         moveAll(medKitService.get(sourceMedKitId, userId), medKitService.get(targetMedKitId, userId))
 
     @Transactional(propagation = MANDATORY)

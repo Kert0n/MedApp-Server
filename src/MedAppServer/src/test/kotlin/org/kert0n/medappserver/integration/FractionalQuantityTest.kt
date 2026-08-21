@@ -6,8 +6,6 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
-import org.kert0n.medappserver.db.repository.DrugRepository
-import org.kert0n.medappserver.db.repository.ReservationRepository
 import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.orchestrator.DrugDisposal
 import org.kert0n.medappserver.services.aggregate.MedKitService
@@ -28,8 +26,6 @@ import org.springframework.transaction.annotation.Transactional
 @Transactional
 class FractionalQuantityTest {
 
-    @Autowired private lateinit var drugRepository: DrugRepository
-    @Autowired private lateinit var treatmentPlanRepository: ReservationRepository
     @Autowired private lateinit var drugService: DrugService
     @Autowired private lateinit var disposal: DrugDisposal
     @Autowired private lateinit var medKitService: MedKitService
@@ -62,7 +58,7 @@ class FractionalQuantityTest {
 
         assertNull(afterLast, "план исчезает вместе с кончившимся препаратом")
         assertTrue(
-            drugRepository.findById(drug.id).isEmpty,
+            dbHelper.drug(drug.id) == null,
             "препарат с нулевым остатком должен быть удалён"
         )
         assertQty(0.0, dbHelper.reservedOnDrug(drug.id), "броней не должно остаться")

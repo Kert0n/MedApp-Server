@@ -1,7 +1,7 @@
 package org.kert0n.medappserver.integration
 
 import com.sksamuel.aedile.core.Cache
-import java.util.UUID
+import kotlin.uuid.Uuid
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.domain.User
@@ -61,7 +61,7 @@ class LoginThrottleTest {
 
     @Test
     fun `token requests are capped`() {
-        val userId = UUID.randomUUID()
+        val userId = Uuid.random()
         val user = User(id = userId, hashedKey = "{noop}password")
         whenever(authenticatedUserService.loadUserByUsername(userId.toString())).thenReturn(user)
 
@@ -78,7 +78,7 @@ class LoginThrottleTest {
 
     @Test
     fun `throttled request never reaches credential verification`() {
-        val userId = UUID.randomUUID()
+        val userId = Uuid.random()
         val user = User(id = userId, hashedKey = "{noop}password")
         whenever(authenticatedUserService.loadUserByUsername(userId.toString())).thenReturn(user)
 

@@ -1,6 +1,6 @@
 package org.kert0n.medappserver.services.security
 
-import java.util.UUID
+import kotlin.uuid.Uuid
 import org.kert0n.medappserver.services.aggregate.UserService
 import org.springframework.security.core.userdetails.UserDetails
 import org.springframework.security.core.userdetails.UserDetailsService
@@ -23,5 +23,5 @@ class AuthenticatedUserService(private val users: UserService) : UserDetailsServ
 
     @Transactional(readOnly = true)
     override fun loadUserByUsername(username: String): UserDetails =
-        users.findById(UUID.fromString(username)) ?: throw UsernameNotFoundException(username)
+        users.findById(Uuid.parse(username)) ?: throw UsernameNotFoundException(username)
 }

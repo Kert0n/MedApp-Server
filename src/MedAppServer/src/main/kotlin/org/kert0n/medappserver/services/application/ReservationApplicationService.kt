@@ -1,7 +1,7 @@
 package org.kert0n.medappserver.services.application
 
 import java.math.BigDecimal
-import java.util.UUID
+import kotlin.uuid.Uuid
 import org.kert0n.medappserver.api.ReservationDTO
 import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.services.aggregate.ReservationService
@@ -23,20 +23,20 @@ class ReservationApplicationService(
 ) {
 
     @Transactional(readOnly = true)
-    fun ofUser(userId: UUID): List<ReservationDTO> = reservationService.ofUser(userId).map { it.toDto() }
+    fun ofUser(userId: Uuid): List<ReservationDTO> = reservationService.ofUser(userId).map { it.toDto() }
 
     @Transactional(readOnly = true)
-    fun read(userId: UUID, drugId: UUID): ReservationDTO = reservationService.get(userId, drugId).toDto()
+    fun read(userId: Uuid, drugId: Uuid): ReservationDTO = reservationService.get(userId, drugId).toDto()
 
     @Transactional
-    fun create(userId: UUID, drugId: UUID, amount: BigDecimal): ReservationDTO =
+    fun create(userId: Uuid, drugId: Uuid, amount: BigDecimal): ReservationDTO =
         placement.place(drugId, userId, amount).toDto()
 
     @Transactional
-    fun changeTo(userId: UUID, drugId: UUID, amount: BigDecimal): ReservationDTO =
+    fun changeTo(userId: Uuid, drugId: Uuid, amount: BigDecimal): ReservationDTO =
         reservationService.changeTo(userId, drugId, amount).toDto()
 
     @Transactional
-    fun cancel(userId: UUID, drugId: UUID) =
+    fun cancel(userId: Uuid, drugId: Uuid) =
         reservationService.cancel(userId, drugId)
 }

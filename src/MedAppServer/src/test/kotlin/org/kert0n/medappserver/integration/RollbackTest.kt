@@ -1,13 +1,13 @@
 package org.kert0n.medappserver.integration
 
-import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
+import kotlin.uuid.Uuid
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
-import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.InsufficientStock
+import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.services.application.DrugApplicationService
 import org.kert0n.medappserver.services.application.MedKitApplicationService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
@@ -84,6 +84,6 @@ class RollbackTest {
         val alice = dbHelper.freshUser("alice")
         dbHelper.freshMedKit(alice.id)
 
-        assertFailsWith<NotAMember> { drugs.recordIntake(UUID.randomUUID(), qty(1.0), alice.id) }
+        assertFailsWith<NotAMember> { drugs.recordIntake(Uuid.random(), qty(1.0), alice.id) }
     }
 }

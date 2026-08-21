@@ -1,8 +1,8 @@
 package org.kert0n.medappserver.domain
 
-import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.uuid.Uuid
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -16,10 +16,10 @@ import org.kert0n.medappserver.testutil.qty
  */
 class ReservationTest {
 
-    private val alice = UUID.randomUUID()
-    private val drug = UUID.randomUUID()
-    private val pills = QuantityUnit(UUID.randomUUID(), "pills")
-    private val millilitres = QuantityUnit(UUID.randomUUID(), "ml")
+    private val alice = Uuid.random()
+    private val drug = Uuid.random()
+    private val pills = QuantityUnit(Uuid.random(), "pills")
+    private val millilitres = QuantityUnit(Uuid.random(), "ml")
 
     private fun q(value: Double, unit: QuantityUnit = pills) = Quantity(qty(value), unit)
 

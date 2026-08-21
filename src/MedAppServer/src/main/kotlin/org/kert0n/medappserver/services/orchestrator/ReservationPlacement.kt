@@ -1,7 +1,7 @@
 package org.kert0n.medappserver.services.orchestrator
 
 import java.math.BigDecimal
-import java.util.UUID
+import kotlin.uuid.Uuid
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.Reservation
 import org.kert0n.medappserver.services.aggregate.DrugService
@@ -31,11 +31,11 @@ class ReservationPlacement(
 
     /** Основная форма: пачка уже прочитана, значит доступ к ней доказан. */
     @Transactional(propagation = MANDATORY)
-    fun place(drug: Drug, userId: UUID, amount: BigDecimal): Reservation =
+    fun place(drug: Drug, userId: Uuid, amount: BigDecimal): Reservation =
         reservationService.create(drug, userId, amount)
 
     /** По идентификатору — то же самое плюс чтение пачки, оно же проверка доступа. */
     @Transactional(propagation = MANDATORY)
-    fun place(drugId: UUID, userId: UUID, amount: BigDecimal): Reservation =
+    fun place(drugId: Uuid, userId: Uuid, amount: BigDecimal): Reservation =
         place(drugService.get(drugId, userId), userId, amount)
 }

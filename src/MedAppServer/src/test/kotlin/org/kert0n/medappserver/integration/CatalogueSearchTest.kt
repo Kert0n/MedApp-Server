@@ -1,15 +1,17 @@
 package org.kert0n.medappserver.integration
 
-import jakarta.persistence.EntityManager
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kotlin.uuid.Uuid
+import org.jetbrains.exposed.v1.jdbc.deleteAll
+import org.jetbrains.exposed.v1.jdbc.insert
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
-import org.kert0n.medappserver.db.model.parsed.DrugTemplateData
-import org.kert0n.medappserver.db.model.parsed.FormTypeData
-import org.kert0n.medappserver.db.repository.VidalDrugRepository
+import org.kert0n.medappserver.services.aggregate.CatalogueService
+import org.kert0n.medappserver.db.tables.DrugTemplates
+import org.kert0n.medappserver.db.tables.FormTypes
 import org.kert0n.medappserver.services.application.CatalogueApplicationService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.transaction.PlatformTransactionManager
@@ -25,14 +27,13 @@ import org.springframework.transaction.support.TransactionTemplate
 @PostgresIntegrationTest
 class CatalogueSearchTest {
 
-    @Autowired
-    private lateinit var vidalDrugRepository: VidalDrugRepository
 
     @Autowired
     private lateinit var catalogue: CatalogueApplicationService
 
     @Autowired
-    private lateinit var entityManager: EntityManager
+    private lateinit var catalogueService: CatalogueService
+
 
     @Autowired
     private lateinit var transactionManager: PlatformTransactionManager
@@ -43,28 +44,18 @@ class CatalogueSearchTest {
     fun setup() {
         txTemplate = TransactionTemplate(transactionManager)
         txTemplate.execute {
-            vidalDrugRepository.deleteAll()
-            entityManager.createNativeQuery("DELETE FROM form_types").executeUpdate()
+            DrugTemplates.deleteAll()
+            FormTypes.deleteAll()
 
-            val tabletType = FormTypeData(name = "таблетки")
-            entityManager.persist(tabletType)
-            entityManager.flush()
+            val tablet = Uuid.random()
+            FormTypes.insert { it[id] = tablet; it[name] = "таблетки" }
 
-            val drugs = listOf(
-                DrugTemplateData(name = "Аспирин", manufacturer = "Байер", otc = true, formType = tabletType),
-                DrugTemplateData(name = "Аспирин Кардио", manufacturer = "Байер", otc = true, formType = tabletType),
-                DrugTemplateData(
-                    name = "Ибупрофен", nameLat = "Ibuprofenum", manufacturer = "Фармстандарт",
-                    activeSubstance = "ибупрофен", otc = true
-                ),
-                DrugTemplateData(
-                    name = "Парацетамол", nameLat = "Paracetamolum", manufacturer = "Медисорб",
-                    activeSubstance = "парацетамол", otc = true
-                ),
-                DrugTemplateData(name = "Aspirin", manufacturer = "Bayer", otc = true, formType = tabletType),
-                DrugTemplateData(name = "Ibuprofen", manufacturer = "Generic", otc = true)
-            )
-            vidalDrugRepository.saveAll(drugs)
+            template("Аспирин", manufacturer = "Байер", formTypeId = tablet)
+            template("Аспирин Кардио", manufacturer = "Байер", formTypeId = tablet)
+            template("Ибупрофен", nameLat = "Ibuprofenum", manufacturer = "Фармстандарт", substance = "ибупрофен")
+            template("Парацетамол", nameLat = "Paracetamolum", manufacturer = "Медисорб", substance = "парацетамол")
+            template("Aspirin", manufacturer = "Bayer", formTypeId = tablet)
+            template("Ibuprofen", manufacturer = "Generic")
         }
     }
 
@@ -73,7 +64,25 @@ class CatalogueSearchTest {
      * исходным. Экранирование проверяется отдельно, на уровне сервиса.
      */
     private fun search(term: String, limit: Int = 10) =
-        vidalDrugRepository.fuzzySearch(term, term, limit)
+        txTemplate.execute { catalogueService.fuzzySearch(term, limit) }!!
+
+    private fun template(
+        name: String,
+        nameLat: String? = null,
+        substance: String? = null,
+        manufacturer: String,
+        formTypeId: Uuid? = null
+    ) {
+        DrugTemplates.insert {
+            it[DrugTemplates.id] = Uuid.random()
+            it[DrugTemplates.name] = name
+            it[DrugTemplates.nameLat] = nameLat
+            it[DrugTemplates.activeSubstance] = substance
+            it[DrugTemplates.manufacturer] = manufacturer
+            it[DrugTemplates.formTypeId] = formTypeId
+            it[DrugTemplates.otc] = true
+        }
+    }
 
     @Test
     fun `fuzzySearch finds Cyrillic drugs by prefix`() {
@@ -135,14 +144,10 @@ class CatalogueSearchTest {
     @Test
     fun `fuzzySearch prioritizes exact and prefix matches`() {
         txTemplate.execute {
-            vidalDrugRepository.deleteAll()
-            vidalDrugRepository.saveAll(
-                listOf(
-                    DrugTemplateData(name = "Aspirin", manufacturer = "Bayer", otc = true),
-                    DrugTemplateData(name = "Aspirin Cardio", manufacturer = "Bayer", otc = true),
-                    DrugTemplateData(name = "Baby Aspirin", manufacturer = "Generic", otc = true)
-                )
-            )
+            DrugTemplates.deleteAll()
+            template("Aspirin", manufacturer = "Bayer")
+            template("Aspirin Cardio", manufacturer = "Bayer")
+            template("Baby Aspirin", manufacturer = "Generic")
         }
 
         val results = search("Aspirin", 10)
@@ -235,5 +240,93 @@ class CatalogueSearchTest {
 
         assertEquals("Ibuprofenum", found.nameLat)
         assertEquals("ибупрофен", found.activeSubstance)
+    }
+
+    // ── Несколько слов в запросе ───────────────────────────────────────────────────
+    //
+    // Сравнивать весь запрос целиком с каждым полем нельзя: половина запроса в поле не
+    // встречается никогда, сходство падает у всех, и чем длиннее запрос, тем сильнее.
+    // Считать надо по словам — сколько слов запроса нашлось в записи.
+
+    private fun aspirinFixture() {
+        txTemplate.execute {
+            DrugTemplates.deleteAll()
+            template("Аспирин", manufacturer = "Байер")
+            template("Аспирин", manufacturer = "Медисорб")
+            template("Парацетамол", manufacturer = "Байер")
+            template("Аспирин Байер Кардио Форте", manufacturer = "Другая Фирма")
+        }
+    }
+
+    @Test
+    fun `опечатки в обоих словах не прячут запись`() {
+        aspirinFixture()
+
+        val results = catalogue.search("асспирн байр", 10)
+
+        assertTrue(
+            results.any { it.name == "Аспирин" && it.manufacturer == "Байер" },
+            "две опечатки не должны стоить человеку всей выдачи: $results"
+        )
+    }
+
+    @Test
+    fun `лишнее слово в запросе не прячет запись`() {
+        aspirinFixture()
+
+        val results = catalogue.search("аспирин байер таблетки шипучие", 10)
+
+        assertTrue(
+            results.any { it.name == "Аспирин" && it.manufacturer == "Байер" },
+            "чем длиннее запрос, тем хуже искать не должно: $results"
+        )
+    }
+
+    @Test
+    fun `совпадение по двум полям идёт выше совпадения одним`() {
+        aspirinFixture()
+
+        val first = catalogue.search("аспирин байер", 10).first()
+
+        assertEquals("Аспирин", first.name, "имя и производитель вместе весомее одного длинного имени")
+        assertEquals("Байер", first.manufacturer)
+    }
+
+    @Test
+    fun `порядок слов в запросе не важен`() {
+        aspirinFixture()
+
+        val direct = catalogue.search("аспирин байер", 10).first()
+        val reversed = catalogue.search("байер аспирин", 10).first()
+
+        assertEquals(direct.id, reversed.id, "перестановка слов не должна менять победителя")
+    }
+
+    @Test
+    fun `одно испорченное слово не убивает выдачу`() {
+        aspirinFixture()
+
+        val results = catalogue.search("аспирин квфыжщп", 10)
+
+        assertTrue(results.any { it.name == "Аспирин" }, "мусор рядом не отменяет находку: $results")
+    }
+
+    /**
+     * Потерянный пробел не отменяет находку.
+     *
+     * `word_similarity` ищет лучший участок, а не сравнивает строки целиком, поэтому «Аспирин
+     * Байер» и «аспиринбайер» остаются похожими: замерено 0.69 при пороге 0.3. Слово при этом
+     * одно, а не два, так что запись стоит ниже, чем при правильном пробеле, — но находится.
+     */
+    @Test
+    fun `потерянный пробел не отменяет находку`() {
+        aspirinFixture()
+
+        val results = catalogue.search("аспиринбайер", 10)
+
+        assertTrue(
+            results.any { it.name == "Аспирин" && it.manufacturer == "Байер" },
+            "склеенные слова обязаны находить ту же запись: $results"
+        )
     }
 }

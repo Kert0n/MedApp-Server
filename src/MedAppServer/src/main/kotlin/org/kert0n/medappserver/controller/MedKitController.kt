@@ -3,16 +3,18 @@ package org.kert0n.medappserver.controller
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.media.Content
+import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBody
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
+import kotlin.uuid.Uuid
 import org.kert0n.medappserver.api.InvitationDTO
 import org.kert0n.medappserver.api.MedKitCreatedDTO
 import org.kert0n.medappserver.api.MedKitDTO
 import org.kert0n.medappserver.api.MedKitSummaryDTO
-import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.api.MembershipCreateRequest
+import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.services.OpenApiConfiguration
 import org.kert0n.medappserver.services.aggregate.userId
 import org.kert0n.medappserver.services.application.MedKitApplicationService
@@ -20,8 +22,6 @@ import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
-import java.util.*
-import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBody
 
 @RestController
 @RequestMapping("/v1/med-kits")
@@ -67,7 +67,7 @@ class MedKitController(
     @ApiResponse(responseCode = "404", description = "Kit does not exist or is not accessible", content = [Content()])
     fun getMedKit(
         authentication: Authentication,
-        @Parameter(description = "Medicine kit identifier") @PathVariable medKitId: UUID
+        @Parameter(description = "Medicine kit identifier") @PathVariable medKitId: Uuid
     ): MedKitDTO {
         logger.debug("GET /v1/med-kits/{} by user {}", medKitId, authentication.userId)
         return medKits.read(medKitId, authentication.userId)
@@ -89,7 +89,7 @@ class MedKitController(
     @ApiResponse(responseCode = "404", description = "Kit does not exist or is not accessible", content = [Content()])
     fun createInvitation(
         authentication: Authentication,
-        @Parameter(description = "Medicine kit identifier") @PathVariable medKitId: UUID
+        @Parameter(description = "Medicine kit identifier") @PathVariable medKitId: Uuid
     ): InvitationDTO {
         logger.debug("POST /v1/med-kits/{}/invitations by user {}", medKitId, authentication.userId)
         return medKits.invite(medKitId, authentication.userId)
@@ -109,9 +109,9 @@ class MedKitController(
     @ApiResponse(responseCode = "404", description = "Kit does not exist or is not accessible", content = [Content()])
     fun deleteMedKit(
         authentication: Authentication,
-        @Parameter(description = "Medicine kit identifier") @PathVariable medKitId: UUID,
+        @Parameter(description = "Medicine kit identifier") @PathVariable medKitId: Uuid,
         @Parameter(description = "Kit to move the drugs into instead of discarding them")
-        @RequestParam(required = false) targetMedKitId: UUID?
+        @RequestParam(required = false) targetMedKitId: Uuid?
     ) {
         logger.debug("DELETE /v1/med-kits/{} by user {}, target {}", medKitId, authentication.userId, targetMedKitId)
         medKits.delete(medKitId, authentication.userId, targetMedKitId)
@@ -158,7 +158,7 @@ class MedKitMembershipController(
     @ApiResponse(responseCode = "404", description = "Kit does not exist or is not accessible", content = [Content()])
     fun leaveMedKit(
         authentication: Authentication,
-        @Parameter(description = "Medicine kit identifier") @PathVariable medKitId: UUID
+        @Parameter(description = "Medicine kit identifier") @PathVariable medKitId: Uuid
     ) {
         logger.debug("DELETE /v1/med-kit-memberships/{} by user {}", medKitId, authentication.userId)
         medKits.leave(medKitId, authentication.userId)

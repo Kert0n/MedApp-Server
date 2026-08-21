@@ -1,18 +1,18 @@
 package org.kert0n.medappserver.integration
 
-import org.kert0n.medappserver.services.aggregate.ReservationService
-import java.util.*
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.uuid.Uuid
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.db.store.DrugStore
-import org.kert0n.medappserver.db.store.ReservationStore
 import org.kert0n.medappserver.db.store.MedKitStore
+import org.kert0n.medappserver.db.store.ReservationStore
 import org.kert0n.medappserver.db.store.UserStore
 import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.MedKitService
+import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -242,6 +242,6 @@ class StoreIntegrationTest {
         dbHelper.flushAndClear()
 
         assertEquals(alice.hashedKey, users.findById(alice.id)?.hashedKey)
-        assertNull(users.findById(UUID.randomUUID()))
+        assertNull(users.findById(Uuid.random()))
     }
 }

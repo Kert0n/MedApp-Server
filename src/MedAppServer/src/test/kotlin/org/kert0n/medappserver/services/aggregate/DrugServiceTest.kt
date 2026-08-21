@@ -1,15 +1,14 @@
 package org.kert0n.medappserver.services.aggregate
 
-import java.util.*
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.uuid.Uuid
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.api.DrugPatchRequest
 import org.kert0n.medappserver.api.toSnapshot
-import org.kert0n.medappserver.db.repository.DrugRepository
 import org.kert0n.medappserver.domain.DomainRuleViolated
 import org.kert0n.medappserver.domain.InsufficientStock
 import org.kert0n.medappserver.domain.InvalidQuantity
@@ -35,8 +34,6 @@ class DrugServiceTest {
     @Autowired
     private lateinit var reservationService: ReservationService
     @Autowired
-    private lateinit var drugRepository: DrugRepository
-    @Autowired
     private lateinit var dbHelper: DatabaseTestHelper
 
     // ── findById ──
@@ -45,7 +42,7 @@ class DrugServiceTest {
     fun `несуществующий препарат неотличим от недоступного`() {
         val alice = dbHelper.freshUser("alice")
 
-        assertThrows<NotAMember> { drugService.get(UUID.randomUUID(), alice.id) }
+        assertThrows<NotAMember> { drugService.get(Uuid.random(), alice.id) }
     }
 
     // ── findByIdForUser / findByIdForUserForUpdate ──

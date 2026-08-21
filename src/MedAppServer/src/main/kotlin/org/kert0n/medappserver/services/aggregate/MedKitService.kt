@@ -1,7 +1,7 @@
 package org.kert0n.medappserver.services.aggregate
 
 import com.sksamuel.aedile.core.Cache
-import java.util.UUID
+import kotlin.uuid.Uuid
 import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.domain.Invitation
 import org.kert0n.medappserver.domain.MedKit
@@ -29,7 +29,7 @@ class MedKitService(
     private val logger = LoggerFactory.getLogger(MedKitService::class.java)
 
     @Transactional(propagation = MANDATORY)
-    fun create(userId: UUID): MedKit {
+    fun create(userId: Uuid): MedKit {
         logger.debug("Creating new medkit for user: {}", userId)
         val medKit = MedKit(members = setOf(userId))
         medKits.insert(medKit)
@@ -42,24 +42,24 @@ class MedKitService(
      * Единственный способ получить `MedKit`: чтение и есть проверка доступа.
      */
     @Transactional(propagation = MANDATORY, readOnly = true)
-    fun get(medKitId: UUID, userId: UUID): MedKit {
+    fun get(medKitId: Uuid, userId: Uuid): MedKit {
         logger.debug("Finding medkit {} for user {}", medKitId, userId)
         return medKits.find(medKitId, userId) ?: throw NotAMember()
     }
 
     /** Все аптечки участника — целиком и одним запросом. */
     @Transactional(propagation = MANDATORY, readOnly = true)
-    fun allOfUser(userId: UUID): List<MedKit> {
+    fun allOfUser(userId: Uuid): List<MedKit> {
         logger.debug("Finding all medkits for user: {}", userId)
         return medKits.findAllOfUser(userId)
     }
 
     /** По идентификатору — то же самое плюс своё чтение, в котором и проверяется доступ. */
     @Transactional(propagation = MANDATORY)
-    fun invite(medKitId: UUID, userId: UUID): String = invite(get(medKitId, userId), userId)
+    fun invite(medKitId: Uuid, userId: Uuid): String = invite(get(medKitId, userId), userId)
 
     @Transactional(propagation = MANDATORY)
-    fun invite(medKit: MedKit, invitedBy: UUID): String {
+    fun invite(medKit: MedKit, invitedBy: Uuid): String {
         logger.debug("Sharing medkit {} by user: {}", medKit.id, invitedBy)
         // Аптечка приходит прочитанной — читал её тот, кто приглашает, и это и есть его право.
         val invitation = Invitation(medKit, invitedBy)
@@ -79,7 +79,7 @@ class MedKitService(
      * Правило «дважды не вступают» решает сам агрегат: состав у него на руках.
      */
     @Transactional(propagation = MANDATORY)
-    fun joinByInvitation(key: String, userId: UUID): MedKit {
+    fun joinByInvitation(key: String, userId: Uuid): MedKit {
         logger.debug("Adding user {} to medkit by invitation", userId)
         val invitation = medKitTokenCache.getOrNull(securityService.hashToken(key))
             ?: throw NotAMember()
@@ -95,10 +95,10 @@ class MedKitService(
      * Брони выходящего лежат в чужом агрегате: их убирает оркестратор.
      */
     @Transactional(propagation = MANDATORY)
-    fun leave(medKitId: UUID, userId: UUID): MedKit? = leave(get(medKitId, userId), userId)
+    fun leave(medKitId: Uuid, userId: Uuid): MedKit? = leave(get(medKitId, userId), userId)
 
     @Transactional(propagation = MANDATORY)
-    fun leave(medKit: MedKit, userId: UUID): MedKit? {
+    fun leave(medKit: MedKit, userId: Uuid): MedKit? {
         logger.debug("Removing user {} from medkit {}", userId, medKit.id)
         val left = medKit.leave(userId)
 
@@ -117,7 +117,7 @@ class MedKitService(
      * поэтому команде нечего перепроверять — а перепроверка стоила бы второго запроса.
      */
     @Transactional(propagation = MANDATORY)
-    fun delete(medKitId: UUID, userId: UUID) = delete(get(medKitId, userId))
+    fun delete(medKitId: Uuid, userId: Uuid) = delete(get(medKitId, userId))
 
     @Transactional(propagation = MANDATORY)
     fun delete(medKit: MedKit) = medKits.delete(medKit)

@@ -1,99 +1,132 @@
 package org.kert0n.medappserver.db.store
 
-import java.util.UUID
-import org.kert0n.medappserver.db.model.ReservationData
-import org.kert0n.medappserver.db.model.ReservationKey
-import org.kert0n.medappserver.db.repository.ReservationRepository
+import kotlin.uuid.Uuid
+import org.jetbrains.exposed.v1.core.Join
+import org.jetbrains.exposed.v1.core.JoinType
+import org.jetbrains.exposed.v1.core.Op
+import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.inSubQuery
+import org.jetbrains.exposed.v1.core.notInList
+import org.jetbrains.exposed.v1.jdbc.Query
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.select
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.update
+import org.kert0n.medappserver.db.tables.Drugs
+import org.kert0n.medappserver.db.tables.MedKitMemberships
+import org.kert0n.medappserver.db.tables.QuantityUnits
+import org.kert0n.medappserver.db.tables.Reservations
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.Quantity
+import org.kert0n.medappserver.domain.QuantityUnit
 import org.kert0n.medappserver.domain.Reservation
-import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Component
 
 /**
  * Хранилище агрегата брони.
  *
- * Наружу — только доменные типы: сервисы не видят ни строк, ни репозиториев. Единицу величины
- * приносит то же чтение, соединением.
+ * Наружу — только доменные типы. Единицу величины приносит то же чтение, соединением с
+ * упаковкой: бронь в «штуках вообще» смысла не имеет.
  */
 @Component
-class ReservationStore(
-    private val reservations: ReservationRepository
-) {
+class ReservationStore {
 
     // ── Чтение ───────────────────────────────────────────────────────────────────
 
-    fun findAllOfUser(userId: UUID): List<Reservation> = reservations.findAllOfUser(userId).map { it.toDomain() }
+    /**
+     * Свои брони.
+     *
+     * Предиката членства здесь нет намеренно: бронь ссылается на членство составным ключом,
+     * и её существование само по себе доказывает доступ.
+     */
+    fun findAllOfUser(userId: Uuid): List<Reservation> =
+        rows { Reservations.userId eq userId }.orderBy(Drugs.name).map { it.toDomain() }
 
-    fun find(userId: UUID, drugId: UUID): Reservation? = reservations.findOne(userId, drugId)?.toDomain()
+    fun find(userId: Uuid, drugId: Uuid): Reservation? =
+        rows { (Reservations.userId eq userId) and (Reservations.drugId eq drugId) }
+            .singleOrNull()?.toDomain()
 
     /**
      * Брони на перечисленные упаковки — чтобы ответить, сколько на пачку заявлено.
      *
      * Отдаёт чужие брони, поэтому предикат про вызывающего: видеть заявленное можно там, куда
-     * есть доступ. Своё членство доказывать не нужно — его доказывает существование строки.
+     * есть доступ.
      */
-    fun findAllOfDrugs(drugIds: Collection<UUID>, userId: UUID): List<Reservation> =
-        if (drugIds.isEmpty()) emptyList() else reservations.findAllOfDrugs(drugIds, userId).map { it.toDomain() }
+    fun findAllOfDrugs(drugIds: Collection<Uuid>, userId: Uuid): List<Reservation> =
+        if (drugIds.isEmpty()) emptyList()
+        else rows { (Reservations.drugId inList drugIds) and visibleTo(userId) }.map { it.toDomain() }
 
     // ── Команды ──────────────────────────────────────────────────────────────────
 
     /**
-     * Пачка приходит доменным объектом, а не поднимается из чужого репозитория.
+     * Пачка приходит доменным объектом, а не поднимается из чужого хранилища.
      *
      * Нужна от неё одна вещь — аптечка для составного ключа, — и она уже есть у вызывающего:
-     * он эту пачку и прочитал.
+     * он эту пачку и прочитал. Рассогласовать копию с настоящей не даст сам ключ.
      */
     fun insert(reservation: Reservation, drug: Drug) {
-        // save, а не persist: у брони присвоенный составной ключ, поэтому Spring Data идёт
-        // через merge и делает лишний SELECT. Это дешевле, чем строить запись на том, чем
-        // именно persist отличается от merge, — на такой тонкости уже спотыкались.
-        reservations.save(
-            ReservationData(
-                reservationKey = ReservationKey(reservation.userId, reservation.drugId),
-                // Аптечка берётся у самой пачки: рассогласовать копию с настоящей нельзя даже так.
-                medKitId = drug.medKitId,
-                amount = reservation.amount.amount
-            )
-        )
+        Reservations.insert {
+            it[userId] = reservation.userId
+            it[drugId] = reservation.drugId
+            it[medKitId] = drug.medKitId
+            it[amount] = reservation.amount.amount
+        }
     }
 
-    /** Лишнего запроса нет: в той же транзакции строка уже в persistence context. */
     fun save(reservation: Reservation) {
-        val row = managed(reservation.userId, reservation.drugId)
-        row.amount = reservation.amount.amount
-        reservations.save(row)
+        Reservations.update({ key(reservation) }) { it[amount] = reservation.amount.amount }
     }
 
     fun delete(reservation: Reservation) {
-        reservations.findByIdOrNull(ReservationKey(reservation.userId, reservation.drugId))
-            ?.let { reservations.delete(it) }
+        Reservations.deleteWhere { key(reservation) }
     }
 
     /** Все брони на упаковку — когда упаковки не станет. */
     fun deleteOfDrug(drug: Drug) {
-        reservations.deleteOfDrug(drug.id)
+        Reservations.deleteWhere { Reservations.drugId eq drug.id }
     }
 
     /** Брони тех, кто аптечку не видит, — при удалении аптечки с переносом. */
-    fun deleteInMedKitExcept(medKit: MedKit, accessibleUserIds: Set<UUID>) {
-        reservations.deleteInMedKitExcept(medKit.id, accessibleUserIds)
+    fun deleteInMedKitExcept(medKit: MedKit, accessibleUserIds: Set<Uuid>) {
+        Reservations.deleteWhere {
+            (Reservations.medKitId eq medKit.id) and (Reservations.userId notInList accessibleUserIds)
+        }
     }
 
     /** То же для одной переехавшей упаковки. */
-    fun deleteOfDrugExcept(drug: Drug, accessibleUserIds: Set<UUID>) {
-        reservations.deleteOfDrugExcept(drug.id, accessibleUserIds)
+    fun deleteOfDrugExcept(drug: Drug, accessibleUserIds: Set<Uuid>) {
+        Reservations.deleteWhere {
+            (Reservations.drugId eq drug.id) and (Reservations.userId notInList accessibleUserIds)
+        }
     }
 
-    /** Единица величины лежит у упаковки: бронь в «штуках вообще» смысла не имеет. */
-    private fun ReservationData.toDomain(): Reservation = Reservation(
-        userId = reservationKey.userId,
-        drugId = reservationKey.drugId,
-        amount = Quantity(amount, drugData?.quantityUnit?.toDomain() ?: error("Бронь прочитана без пачки"))
-    )
+    private fun key(reservation: Reservation): Op<Boolean> =
+        (Reservations.userId eq reservation.userId) and (Reservations.drugId eq reservation.drugId)
 
-    private fun managed(userId: UUID, drugId: UUID): ReservationData =
-        reservations.findByIdOrNull(ReservationKey(userId, drugId))
-            ?: error("Бронь $userId/$drugId исчезла во время записи")
+    private fun visibleTo(userId: Uuid): Op<Boolean> =
+        Reservations.medKitId inSubQuery MedKitMemberships
+            .select(MedKitMemberships.medKitId)
+            .where { MedKitMemberships.userId eq userId }
+
+    private fun rows(where: () -> Op<Boolean>): Query = withDrug.selectAll().where(where())
+
+    private val withDrug: Join
+        get() = Reservations
+            .join(Drugs, JoinType.INNER, Reservations.drugId, Drugs.id)
+            .join(QuantityUnits, JoinType.INNER, Drugs.quantityUnitId, QuantityUnits.id)
+
+    /** Единица величины лежит у упаковки: бронь в «штуках вообще» смысла не имеет. */
+    private fun ResultRow.toDomain(): Reservation = Reservation(
+        userId = this[Reservations.userId],
+        drugId = this[Reservations.drugId],
+        amount = Quantity(
+            this[Reservations.amount],
+            QuantityUnit(this[QuantityUnits.id], this[QuantityUnits.name])
+        )
+    )
 }

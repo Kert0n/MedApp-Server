@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
+import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBody
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
@@ -11,11 +12,12 @@ import jakarta.validation.Valid
 import jakarta.validation.constraints.Max
 import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.Size
-import org.kert0n.medappserver.api.IntakeRequest
+import kotlin.uuid.Uuid
 import org.kert0n.medappserver.api.DrugCreateRequest
-import org.kert0n.medappserver.api.DrugSnapshotDTO
 import org.kert0n.medappserver.api.DrugPatchRequest
+import org.kert0n.medappserver.api.DrugSnapshotDTO
 import org.kert0n.medappserver.api.DrugTemplateDTO
+import org.kert0n.medappserver.api.IntakeRequest
 import org.kert0n.medappserver.api.VocabularyEntryDTO
 import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.services.OpenApiConfiguration
@@ -27,8 +29,6 @@ import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.server.ResponseStatusException
-import java.util.*
-import io.swagger.v3.oas.annotations.parameters.RequestBody as SwaggerRequestBody
 
 @RestController
 @RequestMapping("/v1")
@@ -47,7 +47,7 @@ class DrugController(private val drugs: DrugApplicationService) {
     @ApiResponse(responseCode = "404", description = "Drug does not exist or is not accessible", content = [Content()])
     fun getDrug(
         authentication: Authentication,
-        @Parameter(description = "Drug identifier") @PathVariable drugId: UUID
+        @Parameter(description = "Drug identifier") @PathVariable drugId: Uuid
     ): DrugSnapshotDTO {
         logger.debug("GET /v1/drugs/{} by user {}", drugId, authentication.userId)
         return drugs.read(drugId, authentication.userId)
@@ -66,7 +66,7 @@ class DrugController(private val drugs: DrugApplicationService) {
     @ApiResponse(responseCode = "404", description = "Medicine kit is not accessible", content = [Content()])
     fun createDrug(
         authentication: Authentication,
-        @Parameter(description = "Medicine kit identifier") @PathVariable medKitId: UUID,
+        @Parameter(description = "Medicine kit identifier") @PathVariable medKitId: Uuid,
         @SwaggerRequestBody(description = "Drug to create")
         @Valid @RequestBody request: DrugCreateRequest
     ): DrugSnapshotDTO {
@@ -88,7 +88,7 @@ class DrugController(private val drugs: DrugApplicationService) {
     @ApiResponse(responseCode = "404", description = "Drug does not exist or is not accessible", content = [Content()])
     fun patchDrug(
         authentication: Authentication,
-        @Parameter(description = "Drug identifier") @PathVariable drugId: UUID,
+        @Parameter(description = "Drug identifier") @PathVariable drugId: Uuid,
         @SwaggerRequestBody(description = "Fields to change")
         @Valid @RequestBody request: DrugPatchRequest
     ): DrugSnapshotDTO {
@@ -107,7 +107,7 @@ class DrugController(private val drugs: DrugApplicationService) {
     @ApiResponse(responseCode = "404", description = "Drug does not exist or is not accessible", content = [Content()])
     fun deleteDrug(
         authentication: Authentication,
-        @Parameter(description = "Drug identifier") @PathVariable drugId: UUID
+        @Parameter(description = "Drug identifier") @PathVariable drugId: Uuid
     ) {
         logger.debug("DELETE /v1/drugs/{} by user {}", drugId, authentication.userId)
         drugs.delete(drugId, authentication.userId)
@@ -135,7 +135,7 @@ class DrugController(private val drugs: DrugApplicationService) {
     @ApiResponse(responseCode = "404", description = "Package does not exist or is not accessible", content = [Content()])
     fun recordIntake(
         authentication: Authentication,
-        @Parameter(description = "Package identifier") @PathVariable drugId: UUID,
+        @Parameter(description = "Package identifier") @PathVariable drugId: Uuid,
         @SwaggerRequestBody(description = "Amount taken")
         @Valid @RequestBody request: IntakeRequest
     ): DrugSnapshotDTO? {
@@ -158,8 +158,8 @@ class DrugController(private val drugs: DrugApplicationService) {
     @ApiResponse(responseCode = "404", description = "Drug or target kit is not accessible", content = [Content()])
     fun moveDrug(
         authentication: Authentication,
-        @Parameter(description = "Target medicine kit identifier") @PathVariable targetMedKitId: UUID,
-        @Parameter(description = "Drug identifier") @PathVariable drugId: UUID
+        @Parameter(description = "Target medicine kit identifier") @PathVariable targetMedKitId: Uuid,
+        @Parameter(description = "Drug identifier") @PathVariable drugId: Uuid
     ): DrugSnapshotDTO {
         logger.debug("PUT /v1/med-kits/{}/drugs/{} by user {}", targetMedKitId, drugId, authentication.userId)
         return drugs.moveToMedKit(drugId, targetMedKitId, authentication.userId)
@@ -209,7 +209,7 @@ class DrugTemplateController(
     @ApiResponse(responseCode = "404", description = "Entry does not exist", content = [Content()])
     fun getDrugTemplate(
         authentication: Authentication,
-        @Parameter(description = "Template identifier") @PathVariable templateId: UUID
+        @Parameter(description = "Template identifier") @PathVariable templateId: Uuid
     ): DrugTemplateDTO {
         logger.debug("GET /v1/drug-templates/{} by user {}", templateId, authentication.userId)
         return catalogue.template(templateId)

@@ -1,24 +1,24 @@
 package org.kert0n.medappserver.testutil
 
-import jakarta.persistence.EntityManager
 import java.math.BigDecimal
-import java.util.*
-import org.kert0n.medappserver.db.model.parsed.QuantityUnitData
-import org.kert0n.medappserver.db.repository.DrugRepository
-import org.kert0n.medappserver.db.repository.MedKitMembershipRepository
-import org.kert0n.medappserver.db.repository.QuantityUnitRepository
-import org.kert0n.medappserver.db.repository.ReservationRepository
+import kotlin.uuid.Uuid
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.kert0n.medappserver.db.store.DrugStore
-import org.kert0n.medappserver.db.store.toDomain
 import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.db.store.ReservationStore
 import org.kert0n.medappserver.db.store.UserStore
+import org.kert0n.medappserver.db.tables.Drugs
+import org.kert0n.medappserver.db.tables.MedKitMemberships
+import org.kert0n.medappserver.db.tables.QuantityUnits
+import org.kert0n.medappserver.db.tables.Reservations
 import org.kert0n.medappserver.domain.Drug
+import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.QuantityUnit
-import org.kert0n.medappserver.domain.User
-import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.Reservation
+import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.services.aggregate.ReservationService
@@ -36,20 +36,15 @@ import org.springframework.transaction.annotation.Transactional
 class DatabaseTestHelper(
     private val users: UserStore,
     private val drugs: DrugStore,
-    private val drugRows: DrugRepository,
     private val reservations: ReservationStore,
-    private val reservationRows: ReservationRepository,
     private val medKits: MedKitStore,
-    private val memberships: MedKitMembershipRepository,
-    private val quantityUnits: QuantityUnitRepository,
     private val medKitService: MedKitService,
     private val drugService: DrugService,
-    private val reservationService: ReservationService,
-    private val entityManager: EntityManager
+    private val reservationService: ReservationService
 ) {
     @Transactional
     fun freshUser(tag: String): User {
-        val user = User(hashedKey = "${tag}_${UUID.randomUUID()}")
+        val user = User(hashedKey = "${tag}_${Uuid.random()}")
         users.insert(user)
         return user
     }
@@ -57,16 +52,19 @@ class DatabaseTestHelper(
     /** Единица измерения из словаря; заводится один раз и переиспользуется. */
     @Transactional
     fun unit(name: String = "mg"): QuantityUnit {
-        val stored = quantityUnits.findAll().find { it.name == name }
-            ?: quantityUnits.save(QuantityUnitData(name = name))
-        return QuantityUnit(stored.id, stored.name)
+        val stored = QuantityUnits.selectAll().where { QuantityUnits.name eq name }.singleOrNull()
+        if (stored != null) return QuantityUnit(stored[QuantityUnits.id], stored[QuantityUnits.name])
+
+        val id = Uuid.random()
+        QuantityUnits.insert { it[QuantityUnits.id] = id; it[QuantityUnits.name] = name }
+        return QuantityUnit(id, name)
     }
 
     @Transactional
-    fun freshDrug(medKitId: UUID, quantity: Double): Drug {
+    fun freshDrug(medKitId: Uuid, quantity: Double): Drug {
         val drug = Drug(
             medKitId = medKitId,
-            name = "Drug_${UUID.randomUUID()}",
+            name = "Drug_${Uuid.random()}",
             quantity = Quantity(qty(quantity), unit()),
             category = "painkiller",
             manufacturer = "Test Pharma",
@@ -86,7 +84,7 @@ class DatabaseTestHelper(
      * через фасад: тем же входом, что и приложение.
      */
     @Transactional
-    fun freshMedKit(ownerId: UUID): MedKit = medKitService.create(ownerId)
+    fun freshMedKit(ownerId: Uuid): MedKit = medKitService.create(ownerId)
 
     /**
      * Вступление под подготовку сценария — тем же путём, что и приложение.
@@ -95,12 +93,12 @@ class DatabaseTestHelper(
      * нет. Ключ выписывается от имени участника, который в ней уже состоит.
      */
     @Transactional
-    fun join(medKitId: UUID, invitedBy: UUID, userId: UUID): MedKit =
+    fun join(medKitId: Uuid, invitedBy: Uuid, userId: Uuid): MedKit =
         medKitService.joinByInvitation(medKitService.invite(medKitService.get(medKitId, invitedBy), invitedBy), userId)
 
     /** Бронь под подготовку сценария. */
     @Transactional
-    fun reserve(userId: UUID, drugId: UUID, amount: BigDecimal): Reservation =
+    fun reserve(userId: Uuid, drugId: Uuid, amount: BigDecimal): Reservation =
         reservationService.create(drugService.get(drugId, userId), userId, amount)
             .also { flushAndClear() }
 
@@ -127,10 +125,14 @@ class DatabaseTestHelper(
         return user
     }
 
-    fun flushAndClear() {
-        entityManager.flush()
-        entityManager.clear()
-    }
+    /**
+     * Пусто и останется пустым.
+     *
+     * При Hibernate тут синхронизировали persistence context: без этого чтение отдавало
+     * загруженную копию вместо строки из базы. В Exposed синхронизировать нечего — запрос идёт
+     * в базу всегда. Метод оставлен, чтобы не переписывать сотню вызовов ради ничего.
+     */
+    fun flushAndClear() = Unit
 
     /**
      * Препарат без проверки доступа.
@@ -139,7 +141,12 @@ class DatabaseTestHelper(
      * убедиться, что строки не стало, безотносительно того, кто спрашивает.
      */
     /** Упаковка без оглядки на доступ — под проверки состояния, как и `medKit`. */
-    fun drug(id: UUID): Drug? = drugRows.findFullById(id)?.toDomain()
+    @Transactional
+    fun drug(id: Uuid): Drug? =
+        Drugs.selectAll().where { Drugs.id eq id }.singleOrNull()?.let { drugs.find(id, it[Drugs.medKitId].let { _ ->
+            MedKitMemberships.selectAll().where { MedKitMemberships.medKitId eq it[Drugs.medKitId] }
+                .first()[MedKitMemberships.userId]
+        }) }
 
     /**
      * Аптечка без оглядки на доступ — под проверки состояния.
@@ -148,15 +155,21 @@ class DatabaseTestHelper(
      * замыслу не покажет ни удалённую аптечку, ни ту, из которой участник вышел, а проверять
      * надо именно это. Подготовка сценария по-прежнему идёт через хранилища.
      */
-    fun medKit(medKitId: UUID): MedKit? {
-        val members = memberships.findMemberIds(medKitId)
+    @Transactional
+    fun medKit(medKitId: Uuid): MedKit? {
+        val members = MedKitMemberships.selectAll()
+            .where { MedKitMemberships.medKitId eq medKitId }
+            .map { it[MedKitMemberships.userId] }
+            .toSet()
         return if (members.isEmpty()) null else MedKit(medKitId, members)
     }
 
-    fun requireDrug(id: UUID): Drug = drug(id) ?: error("Препарат $id не найден")
+    @Transactional
+    fun requireDrug(id: Uuid): Drug = drug(id) ?: error("Препарат $id не найден")
 
     // Проверки, существенные для privacy-by-default: `null` означает, что записи больше нет.
-    fun drugQuantity(id: UUID): BigDecimal? = drug(id)?.quantity?.amount
+    @Transactional
+    fun drugQuantity(id: Uuid): BigDecimal? = drug(id)?.quantity?.amount
 
     /**
      * Заявленное бронями: считается снаружи упаковки и может превышать её остаток.
@@ -164,9 +177,11 @@ class DatabaseTestHelper(
      * Мимо хранилища, как и `medKit`: у проверки состояния нет вызывающего, а скоупленное
      * чтение без него не работает.
      */
-    fun reservedOnDrug(id: UUID): BigDecimal =
-        reservationRows.findAll().filter { it.reservationKey.drugId == id }.sumOf { it.amount }
+    @Transactional
+    fun reservedOnDrug(id: Uuid): BigDecimal =
+        Reservations.selectAll().where { Reservations.drugId eq id }.sumOf { it[Reservations.amount] }
 
-    fun userReservation(userId: UUID, drugId: UUID): BigDecimal? =
+    @Transactional
+    fun userReservation(userId: Uuid, drugId: Uuid): BigDecimal? =
         reservations.find(userId, drugId)?.amount?.amount
 }
