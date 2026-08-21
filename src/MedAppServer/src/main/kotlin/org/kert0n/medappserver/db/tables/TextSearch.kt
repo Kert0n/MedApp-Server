@@ -1,3 +1,11 @@
+// Постгресовый поиск по тексту, выраженный типами Exposed.
+//
+// Ни полнотекста, ни триграмм в переносимом DSL нет — но это не повод писать запрос строкой.
+// Колонки, оператор и функция объявляются по разу здесь, а запрос из них собирается как из
+// обычных выражений: с проверкой типов, со связыванием значений и без счёта вопросительных
+// знаков. Пользуется всем этим `CatalogueStore`, и там же описано, как оно складывается в
+// поиск целиком.
+
 package org.kert0n.medappserver.db.tables
 
 import org.jetbrains.exposed.v1.core.ComparisonOp
@@ -10,28 +18,47 @@ import org.jetbrains.exposed.v1.core.TextColumnType
 import org.jetbrains.exposed.v1.core.stringLiteral
 import org.jetbrains.exposed.v1.core.stringParam
 
+// ── Колонки, которые считает сама база ────────────────────────────────────────────────
+//
+// Обе — выражениями, а не колонками `Table`: они объявлены как `GENERATED ALWAYS AS ... STORED`,
+// а такого Exposed в DDL не выражает. Попади они в `Table`, `SchemaUtils.create` создал бы на их
+// месте обычные колонки, которые никто не заполняет.
+
+/** Разобранный на лексемы документ записи — для поиска по точным словам. */
+val searchDocument: Expression<String> = object : Expression<String>() {
+    override fun toQueryBuilder(queryBuilder: QueryBuilder) {
+        queryBuilder.append("parsed_drugs.search_tsv")
+    }
+}
+
 /**
- * Постгресовый поиск по тексту, выраженный типами Exposed.
+ * Название, латинское написание, действующее вещество и производитель одной строкой.
  *
- * Ни полнотекста, ни триграмм в переносимом DSL нет — но это не повод писать запрос строкой.
- * Оператор и функция объявляются по разу здесь, а запрос из них собирается как из обычных
- * выражений: с проверкой типов, со связыванием значений и без счёта вопросительных знаков.
+ * Отдельно от `search_tsv`, потому что триграммам нужен именно текст: в разобранном документе
+ * опечатку не найти.
  */
+val searchText: Expression<String> = object : Expression<String>() {
+    override fun toQueryBuilder(queryBuilder: QueryBuilder) {
+        queryBuilder.append("parsed_drugs.search_text")
+    }
+}
+
+// ── Как об этих колонках спрашивают ───────────────────────────────────────────────────
 
 /**
  * Оператор `<%` из `pg_trgm`: у слова есть похожий участок внутри текста.
  *
  * Слово слева, текст справа — оператор несимметричен. Порог берётся из настройки
- * `pg_trgm.word_similarity_threshold`, а не из выражения: «достаточно похоже» решает тот, кто
- * настраивает поиск. Зато оператор индексируемый, в отличие от сравнения с вызовом функции.
+ * `pg_trgm.word_similarity_threshold`, а не из выражения: это плата за то, что оператор
+ * индексируемый, в отличие от сравнения с вызовом функции.
  */
 private class WordSimilarOp(
     left: Expression<*>,
     right: Expression<*>
 ) : ComparisonOp(left, right, "<%")
 
-fun hasSimilarWord(token: String, text: Expression<*>): Op<Boolean> =
-    WordSimilarOp(stringParam(token), text)
+fun hasSimilarWord(word: String, text: Expression<*>): Op<Boolean> =
+    WordSimilarOp(stringParam(word), text)
 
 /**
  * `word_similarity(?, текст)` — насколько похож на слово лучший участок текста.
@@ -40,8 +67,8 @@ fun hasSimilarWord(token: String, text: Expression<*>): Op<Boolean> =
  * даёт почти ноль. Здесь ищется лучший участок, поэтому длина записи ответу не мешает — и
  * поэтому же лишнее слово в запросе перестаёт прятать нужную запись.
  */
-fun wordSimilarity(token: String, text: Expression<*>): CustomFunction<Float?> =
-    CustomFunction("word_similarity", FloatColumnType(), stringParam(token), text)
+fun wordSimilarity(word: String, text: Expression<*>): CustomFunction<Float?> =
+    CustomFunction("word_similarity", FloatColumnType(), stringParam(word), text)
 
 /** `@@` — документ отвечает запросу. */
 private class FullTextMatchOp(
@@ -60,30 +87,3 @@ infix fun Expression<*>.matchesText(query: String): Op<Boolean> =
         this,
         CustomFunction("plainto_tsquery", TextColumnType(), stringLiteral("simple"), stringParam(query))
     )
-
-/**
- * Колонка `search_tsv`, посчитанная самой базой.
- *
- * Выражением, а не колонкой таблицы: она объявлена как `GENERATED ALWAYS AS ... STORED`, и
- * такого Exposed в DDL не выражает. Попади она в `Table`, `SchemaUtils.create` создал бы на её
- * месте обычную колонку, которую никто не заполняет.
- */
-val searchDocument: Expression<String> = object : Expression<String>() {
-    override fun toQueryBuilder(queryBuilder: QueryBuilder) {
-        queryBuilder.append("parsed_drugs.search_tsv")
-    }
-}
-
-/**
- * Колонка `search_text` — те же четыре поля одной строкой, посчитанные базой.
- *
- * Выражением по той же причине, что и `search_tsv`: `GENERATED ALWAYS AS` Exposed в DDL не
- * выражает, и попади колонка в `Table`, `SchemaUtils.create` создал бы на её месте обычную
- * пустую.
- */
-val searchText: Expression<String> = object : Expression<String>() {
-    override fun toQueryBuilder(queryBuilder: QueryBuilder) {
-        queryBuilder.append("parsed_drugs.search_text")
-    }
-}
-
