@@ -79,6 +79,11 @@ class ReservationService(
         return reservation
     }
 
+    /** По идентификаторам — то же самое плюс своё чтение. */
+    @Transactional(propagation = MANDATORY)
+    fun changeTo(userId: UUID, drugId: UUID, amount: BigDecimal): Reservation =
+        changeTo(get(userId, drugId), amount)
+
     @Transactional(propagation = MANDATORY)
     fun changeTo(reservation: Reservation, amount: BigDecimal): Reservation {
         logger.debug("Changing reservation of user {} on drug {}", reservation.userId, reservation.drugId)
@@ -110,6 +115,9 @@ class ReservationService(
     }
 
     /** Отмена — это удаление: брони с нулём не бывает. */
+    @Transactional(propagation = MANDATORY)
+    fun cancel(userId: UUID, drugId: UUID) = cancel(get(userId, drugId))
+
     @Transactional(propagation = MANDATORY)
     fun cancel(reservation: Reservation) {
         logger.debug("Cancelling reservation of user {} on drug {}", reservation.userId, reservation.drugId)

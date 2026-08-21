@@ -78,6 +78,11 @@ class DrugService(
         return drug
     }
 
+    /** По идентификатору — то же самое плюс своё чтение, в котором и проверяется доступ. */
+    @Transactional(propagation = MANDATORY)
+    fun update(drugId: UUID, request: DrugEdit, userId: UUID): Drug =
+        update(get(drugId, userId), request)
+
     @Transactional(propagation = MANDATORY)
     fun update(drug: Drug, request: DrugEdit): Drug {
         logger.debug("Updating drug: {}", drug.id)
@@ -102,6 +107,9 @@ class DrugService(
     }
 
     @Transactional(propagation = MANDATORY)
+    fun delete(drugId: UUID, userId: UUID) = delete(get(drugId, userId))
+
+    @Transactional(propagation = MANDATORY)
     fun delete(drug: Drug) {
         logger.debug("Deleting drug: {}", drug.id)
         drugs.delete(drug)
@@ -113,6 +121,10 @@ class DrugService(
      * `null` — «пачка кончилась и уничтожена», а не «не найдена»: недоступная отвергается 404
      * ещё до списания.
      */
+    @Transactional(propagation = MANDATORY)
+    fun consume(drugId: UUID, quantity: BigDecimal, userId: UUID): Drug? =
+        consume(get(drugId, userId), quantity)
+
     @Transactional(propagation = MANDATORY)
     fun consume(drug: Drug, quantity: BigDecimal): Drug? {
         logger.debug("Consuming {} of drug {}", quantity, drug.id)

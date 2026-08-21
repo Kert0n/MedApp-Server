@@ -34,12 +34,22 @@ class CommandsTakeAggregatesTest {
         val offenders = sources.flatMap { file ->
             // Команда — та, что открывает запись: у читающих стоит readOnly = true. Признак
             // взят по аннотации, а не по имени: она и так обязана быть верной.
-            Regex(
+            val commands = Regex(
                 "@Transactional\\(propagation = MANDATORY\\)\\s*\\n\\s*fun (\\w+)\\(([^)]*)\\)",
                 RegexOption.MULTILINE
-            )
-                .findAll(Files.readString(file))
+            ).findAll(Files.readString(file)).toList()
+
+            // Форма с агрегатом — основная; та, что берёт идентификатор, лишь добавляет к ней
+            // честное чтение. Одна такая без пары означает команду, которой доступ никто не
+            // проверял.
+            val withAggregate = commands
+                .filterNot { FORBIDDEN.containsMatchIn(it.groupValues[2]) }
+                .map { it.groupValues[1] }
+                .toSet()
+
+            commands
                 .filter { FORBIDDEN.containsMatchIn(it.groupValues[2]) }
+                .filterNot { it.groupValues[1] in withAggregate }
                 .map { "${file.name}.${it.groupValues[1]}" }
         }
 

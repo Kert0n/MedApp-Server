@@ -27,6 +27,10 @@ class DrugDisposal(
     private val reservationService: ReservationService
 ) {
 
+    /** По идентификатору — то же самое плюс чтение пачки. */
+    @Transactional(propagation = MANDATORY)
+    fun destroy(drugId: UUID, userId: UUID) = destroy(drugService.get(drugId, userId))
+
     /** Пачку выбросили — назначений на неё больше нет. */
     @Transactional(propagation = MANDATORY)
     fun destroy(drug: Drug) {
@@ -41,6 +45,10 @@ class DrugDisposal(
      * списании. Пустой упаковки не бывает — это правило `Drug`, здесь только его последствие
      * для соседнего агрегата.
      */
+    @Transactional(propagation = MANDATORY)
+    fun consume(drugId: UUID, quantity: BigDecimal, userId: UUID): Drug? =
+        consume(drugService.get(drugId, userId), quantity)
+
     @Transactional(propagation = MANDATORY)
     fun consume(drug: Drug, quantity: BigDecimal): Drug? {
         val left = drugService.consume(drug, quantity)

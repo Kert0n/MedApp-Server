@@ -54,6 +54,10 @@ class MedKitService(
         return medKits.findAllOfUser(userId)
     }
 
+    /** По идентификатору — то же самое плюс своё чтение, в котором и проверяется доступ. */
+    @Transactional(propagation = MANDATORY)
+    fun invite(medKitId: UUID, userId: UUID): String = invite(get(medKitId, userId), userId)
+
     @Transactional(propagation = MANDATORY)
     fun invite(medKit: MedKit, invitedBy: UUID): String {
         logger.debug("Sharing medkit {} by user: {}", medKit.id, invitedBy)
@@ -91,6 +95,9 @@ class MedKitService(
      * Брони выходящего лежат в чужом агрегате: их убирает оркестратор.
      */
     @Transactional(propagation = MANDATORY)
+    fun leave(medKitId: UUID, userId: UUID): MedKit? = leave(get(medKitId, userId), userId)
+
+    @Transactional(propagation = MANDATORY)
     fun leave(medKit: MedKit, userId: UUID): MedKit? {
         logger.debug("Removing user {} from medkit {}", userId, medKit.id)
         val left = medKit.leave(userId)
@@ -109,6 +116,9 @@ class MedKitService(
      * Идентификатора здесь нет намеренно: получить `MedKit` можно только скоупленным чтением,
      * поэтому команде нечего перепроверять — а перепроверка стоила бы второго запроса.
      */
+    @Transactional(propagation = MANDATORY)
+    fun delete(medKitId: UUID, userId: UUID) = delete(get(medKitId, userId))
+
     @Transactional(propagation = MANDATORY)
     fun delete(medKit: MedKit) = medKits.delete(medKit)
 }

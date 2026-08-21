@@ -4,8 +4,8 @@ import java.math.BigDecimal
 import java.util.UUID
 import org.kert0n.medappserver.api.ReservationDTO
 import org.kert0n.medappserver.api.toDto
-import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.ReservationService
+import org.kert0n.medappserver.services.orchestrator.ReservationPlacement
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -19,7 +19,7 @@ import org.springframework.transaction.annotation.Transactional
 @Service
 class ReservationApplicationService(
     private val reservationService: ReservationService,
-    private val drugService: DrugService
+    private val placement: ReservationPlacement
 ) {
 
     @Transactional(readOnly = true)
@@ -30,15 +30,13 @@ class ReservationApplicationService(
 
     @Transactional
     fun create(userId: UUID, drugId: UUID, amount: BigDecimal): ReservationDTO =
-        // Упаковка читается здесь: бронировать можно только то, что видно, и прочитанная
-        // пачка — доказательство этого. Она же приносит единицу величины.
-        reservationService.create(drugService.get(drugId, userId), userId, amount).toDto()
+        placement.place(drugId, userId, amount).toDto()
 
     @Transactional
     fun changeTo(userId: UUID, drugId: UUID, amount: BigDecimal): ReservationDTO =
-        reservationService.changeTo(reservationService.get(userId, drugId), amount).toDto()
+        reservationService.changeTo(userId, drugId, amount).toDto()
 
     @Transactional
     fun cancel(userId: UUID, drugId: UUID) =
-        reservationService.cancel(reservationService.get(userId, drugId))
+        reservationService.cancel(userId, drugId)
 }
