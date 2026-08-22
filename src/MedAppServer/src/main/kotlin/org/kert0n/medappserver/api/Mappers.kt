@@ -59,14 +59,14 @@ fun DrugTemplate.toDto(): DrugTemplateDTO = DrugTemplateDTO(
  * пачка. Упаковка про брони не знает — их приносит вызывающий.
  */
 fun Drug.toSnapshot(reservations: ReservationSnapshot): DrugSnapshotDTO =
-    DrugSnapshotDTO(
-        drug = toDto(),
-        reservations = ReservationsDTO(
-            total = reservations.total,
-            mine = reservations.mine,
-            version = reservations.version
-        )
-    )
+    DrugSnapshotDTO(drug = toDto(), reservations = reservations.toDto())
+
+/** Картина броней в своей форме ответа: собирает её она сама, а не тот, кому она понадобилась. */
+fun ReservationSnapshot.toDto(): ReservationsDTO = ReservationsDTO(
+    total = total,
+    mine = mine,
+    version = version
+)
 
 /** Аптечка с содержимым: число участников она знает сама, упаковки приносит вызывающий. */
 fun MedKit.toDto(drugs: Set<DrugSnapshotDTO>): MedKitDTO = MedKitDTO(
