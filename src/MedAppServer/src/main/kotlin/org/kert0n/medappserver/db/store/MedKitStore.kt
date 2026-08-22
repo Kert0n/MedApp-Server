@@ -131,9 +131,11 @@ class MedKitStore {
 
     private fun insertMemberships(medKitId: Uuid, userIds: Set<Uuid>) {
         if (userIds.isEmpty()) return
-        MedKitMemberships.batchInsert(userIds) { member ->
-            this[MedKitMemberships.medKitId] = medKitId
-            this[MedKitMemberships.userId] = member
+        translatingConstraints {
+            MedKitMemberships.batchInsert(userIds) { member ->
+                this[MedKitMemberships.medKitId] = medKitId
+                this[MedKitMemberships.userId] = member
+            }
         }
     }
 }

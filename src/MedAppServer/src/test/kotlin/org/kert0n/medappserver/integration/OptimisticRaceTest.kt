@@ -9,6 +9,7 @@ import kotlin.test.assertTrue
 import kotlin.uuid.Uuid
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
+import org.kert0n.medappserver.domain.DomainRuleViolated
 import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.StaleVersion
 import org.kert0n.medappserver.services.aggregate.DrugEdit
@@ -184,6 +185,64 @@ class OptimisticRaceTest {
         assertTrue(
             stillMember || !hasReservation,
             "бронь без доступа: членства нет, а бронь осталась"
+        )
+    }
+
+    /**
+     * Правило «одна бронь на пару» держит чтение, а на гонке — ключ.
+     *
+     * Оба чтения проходят: брони ещё нет ни для одного. Дальше срабатывает первичный ключ, и
+     * важно, что наружу летит доменный отказ, а не нарушение ограничения: осмысленный запрос
+     * не должен отвечать пятисоткой.
+     */
+    @Test
+    fun `один человек заводит одну бронь дважды одновременно`() {
+        val owner = dbHelper.freshUser("race-dup")
+        val kit = dbHelper.freshMedKit(owner.id)
+        val drug = dbHelper.freshDrug(kit.id, quantity = 30.0)
+
+        val outcome = race(
+            { sync ->
+                val read = drugService.get(drug.id, owner.id)
+                sync()
+                reservationService.create(read, owner.id, BigDecimal("5"))
+            },
+            { sync ->
+                val read = drugService.get(drug.id, owner.id)
+                sync()
+                reservationService.create(read, owner.id, BigDecimal("6"))
+            }
+        )
+
+        assertEquals(1, outcome.failures.size, "ровно одна сторона обязана проиграть: ${outcome.failures}")
+        assertTrue(
+            outcome.failures.single() is DomainRuleViolated,
+            "проигравший получает доменный отказ, а не нарушение ограничения: ${outcome.failures.single()}"
+        )
+    }
+
+    /** То же для вступления: дважды в одну аптечку не вступают. */
+    @Test
+    fun `двое вступают по одному приглашению одновременно`() {
+        val alice = dbHelper.freshUser("race-join-a")
+        val bob = dbHelper.freshUser("race-join-b")
+        val kit = dbHelper.freshMedKit(alice.id)
+
+        val outcome = race(
+            { sync ->
+                sync()
+                dbHelper.join(kit.id, alice.id, bob.id)
+            },
+            { sync ->
+                sync()
+                dbHelper.join(kit.id, alice.id, bob.id)
+            }
+        )
+
+        assertEquals(1, outcome.failures.size, "второе вступление обязано быть отвергнуто: ${outcome.failures}")
+        assertTrue(
+            outcome.failures.single() is DomainRuleViolated,
+            "и отвергнуто доменным отказом: ${outcome.failures.single()}"
         )
     }
 

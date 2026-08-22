@@ -101,11 +101,13 @@ class ReservationStore {
      */
     fun insert(reservation: Reservation, drug: Drug, snapshot: ReservationSnapshot) {
         shiftSnapshot(snapshot, by = reservation.amount.amount)
-        Reservations.insert {
-            it[userId] = reservation.userId
-            it[drugId] = reservation.drugId
-            it[medKitId] = drug.medKitId
-            it[amount] = reservation.amount.amount
+        translatingConstraints {
+            Reservations.insert {
+                it[userId] = reservation.userId
+                it[drugId] = reservation.drugId
+                it[medKitId] = drug.medKitId
+                it[amount] = reservation.amount.amount
+            }
         }
     }
 
