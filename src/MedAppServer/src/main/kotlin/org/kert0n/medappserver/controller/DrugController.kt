@@ -144,7 +144,7 @@ class DrugController(private val drugs: DrugApplicationService) {
     ): DrugSnapshotDTO? {
         logger.debug("POST /v1/drugs/{}/intakes by user {}", drugId, authentication.userId)
         // null означает, что пачка кончилась и уничтожена этим списанием.
-        return drugs.recordIntake(drugId, request.quantity, request.version, authentication.userId)
+        return drugs.recordIntake(drugId, request, authentication.userId)
     }
 
     /**

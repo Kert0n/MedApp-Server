@@ -54,7 +54,7 @@ class OptimisticRaceTest {
             { sync ->
                 val read = drugService.get(drug.id, owner.id)
                 sync()
-                drugService.update(read, DrugEdit(quantity = BigDecimal("50")), read.version)
+                drugService.update(read, DrugEdit(stated = read.version, quantity = BigDecimal("50")))
             }
         )
 

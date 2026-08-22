@@ -8,7 +8,7 @@ import org.kert0n.medappserver.domain.ReservationAlreadyExists
 import org.kert0n.medappserver.domain.StaleVersion
 import org.kert0n.medappserver.services.orchestrator.ConflictingSync
 import org.kert0n.medappserver.services.orchestrator.StaleSyncVersion
-import org.kert0n.medappserver.services.application.PreconditionRequired
+import org.kert0n.medappserver.api.PreconditionRequired
 import org.kert0n.medappserver.domain.TooManyRegistrations
 import org.springframework.http.HttpStatus
 import org.springframework.http.ProblemDetail

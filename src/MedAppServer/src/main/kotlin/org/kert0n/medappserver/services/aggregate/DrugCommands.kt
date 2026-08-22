@@ -25,8 +25,14 @@ data class NewDrug(
     val description: String? = null
 )
 
-/** Частичное изменение: `null` значит «не трогать это поле». */
+/**
+ * Частичное изменение: `null` значит «не трогать это поле».
+ *
+ * Версия здесь не поле формы, а часть команды: правка предъявлена к тому состоянию, которое
+ * клиент видел. Собрать `DrugEdit`, не назвав его, нельзя — параметр обязательный и первый.
+ */
 data class DrugEdit(
+    val stated: Long,
     val name: String? = null,
     val quantity: BigDecimal? = null,
     val quantityUnitId: Uuid? = null,

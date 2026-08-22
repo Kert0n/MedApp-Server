@@ -79,7 +79,7 @@ class DrugService(
     }
 
     @Transactional(propagation = MANDATORY)
-    fun update(drug: Drug, request: DrugEdit, stated: Long): Drug {
+    fun update(drug: Drug, request: DrugEdit): Drug {
         logger.debug("Updating drug: {}", drug.id)
 
         var drug = drug
@@ -97,7 +97,7 @@ class DrugService(
             )
         )
 
-        return drugs.save(drug, stated)
+        return drugs.save(drug, request.stated)
     }
 
     @Transactional(propagation = MANDATORY)

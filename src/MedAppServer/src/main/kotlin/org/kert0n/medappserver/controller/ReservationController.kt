@@ -77,7 +77,7 @@ class ReservationController(private val reservations: ReservationApplicationServ
         @Valid @RequestBody request: ReservationCreateRequest
     ): ReservationDTO {
         logger.debug("POST /v1/reservations by user {} on drug {}", authentication.userId, request.drugId)
-        return reservations.create(authentication.userId, request.drugId, request.amount, request.version)
+        return reservations.create(authentication.userId, request)
     }
 
     @PatchMapping("/{drugId}")
@@ -96,7 +96,7 @@ class ReservationController(private val reservations: ReservationApplicationServ
         @Valid @RequestBody request: ReservationPatchRequest
     ): ReservationDTO {
         logger.debug("PATCH /v1/reservations/{} by user {}", drugId, authentication.userId)
-        return reservations.changeTo(authentication.userId, drugId, request.amount, request.version)
+        return reservations.changeTo(authentication.userId, drugId, request)
     }
 
     @DeleteMapping("/{drugId}")

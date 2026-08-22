@@ -5,7 +5,6 @@ import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.api.DrugCreateRequest
-import org.kert0n.medappserver.api.IntakeRequest
 import org.kert0n.medappserver.api.InvitationDTO
 import org.kert0n.medappserver.api.MedKitCreatedDTO
 import org.kert0n.medappserver.api.MedKitDTO
@@ -143,7 +142,7 @@ class ResourceApiContractTest {
 
     @Test
     fun `приём создаётся подчинённым ресурсом упаковки`() {
-        whenever(drugs.recordIntake(eq(drugId), any(), any(), eq(userId))).thenReturn(snapshot)
+        whenever(drugs.recordIntake(eq(drugId), any(), eq(userId))).thenReturn(snapshot)
 
         mockMvc.perform(
             post(ApiRoutes.intakes(drugId)).with(asUser())
@@ -193,8 +192,8 @@ class ResourceApiContractTest {
     @Test
     fun `план лечения создаётся и меняется`() {
         val reservation = Reservation(userId = userId, drugId = drugId, amount = Quantity(qty(20.0), unit)).toDto()
-        whenever(reservations.create(eq(userId), eq(drugId), any(), any())).thenReturn(reservation)
-        whenever(reservations.changeTo(eq(userId), eq(drugId), any(), any())).thenReturn(reservation)
+        whenever(reservations.create(eq(userId), any())).thenReturn(reservation)
+        whenever(reservations.changeTo(eq(userId), eq(drugId), any())).thenReturn(reservation)
         whenever(reservations.read(userId, drugId)).thenReturn(reservation)
 
         mockMvc.perform(

@@ -1,11 +1,12 @@
 package org.kert0n.medappserver.services.application
 
-import java.math.BigDecimal
 import kotlin.uuid.Uuid
 import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.api.DrugSyncRequest
 import org.kert0n.medappserver.api.DrugPatchRequest
 import org.kert0n.medappserver.api.DrugSnapshotDTO
+import org.kert0n.medappserver.api.IntakeRequest
+import org.kert0n.medappserver.api.statedVersion
 import org.kert0n.medappserver.api.toSnapshot
 import org.kert0n.medappserver.domain.ReservationSnapshot
 import org.kert0n.medappserver.services.aggregate.DrugEdit
@@ -72,7 +73,7 @@ class DrugApplicationService(
     @Transactional
     fun update(drugId: Uuid, request: DrugPatchRequest, userId: Uuid): DrugSnapshotDTO {
         val drug = drugService.get(drugId, userId)
-        val updated = drugService.update(drug, request.toCommand(), statedVersion(request.version))
+        val updated = drugService.update(drug, request.toCommand())
         return updated.toSnapshot(reservationService.onDrugs(listOf(updated), userId).getValue(updated.id))
     }
 
@@ -82,8 +83,8 @@ class DrugApplicationService(
 
     /** `null` — приём опустошил пачку, и она уничтожена: отдавать нечего. */
     @Transactional
-    fun recordIntake(drugId: Uuid, quantity: BigDecimal, version: Long?, userId: Uuid): DrugSnapshotDTO? {
-        val left = disposal.consume(drugService.get(drugId, userId), quantity, statedVersion(version))
+    fun recordIntake(drugId: Uuid, request: IntakeRequest, userId: Uuid): DrugSnapshotDTO? {
+        val left = disposal.consume(drugService.get(drugId, userId), request.quantity, statedVersion(request.version))
             ?: return null
         return left.toSnapshot(reservationService.onDrugs(listOf(left), userId).getValue(left.id))
     }
@@ -138,6 +139,7 @@ class DrugApplicationService(
     )
 
     private fun DrugPatchRequest.toCommand() = DrugEdit(
+        stated = statedVersion(version),
         name = name,
         quantity = quantity,
         quantityUnitId = quantityUnitId,
