@@ -53,6 +53,29 @@ kotlin {
     }
 }
 
+/**
+ * Набор про планы запросов — отдельным source set, а не внутри `test`.
+ *
+ * Фикстур на десятки тысяч строк поднимается около минуты, и платить её на каждом обычном
+ * прогоне незачем. Запускается своей задачей и в CI отдельным шагом.
+ */
+val queryPlanTest: SourceSet by sourceSets.creating {
+    compileClasspath += sourceSets.main.get().output + sourceSets.test.get().output
+    runtimeClasspath += output + compileClasspath
+}
+
+configurations["queryPlanTestImplementation"].extendsFrom(configurations.testImplementation.get())
+configurations["queryPlanTestRuntimeOnly"].extendsFrom(configurations.testRuntimeOnly.get())
+
+val queryPlanTestTask = tasks.register<Test>("queryPlanTest") {
+    description = "Проверяет планы запросов на большом объёме"
+    group = "verification"
+    testClassesDirs = queryPlanTest.output.classesDirs
+    classpath = queryPlanTest.runtimeClasspath
+    // После обычных тестов: если сломано простое, планы смотреть рано.
+    shouldRunAfter(tasks.test)
+}
+
 tasks.withType<Test> {
     useJUnitPlatform()
     jvmArgs("-XX:+EnableDynamicAgentLoading")
