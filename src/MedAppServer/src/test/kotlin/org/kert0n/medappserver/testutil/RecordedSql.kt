@@ -5,6 +5,8 @@ import org.jetbrains.exposed.v1.core.Transaction
 import org.jetbrains.exposed.v1.core.statements.StatementContext
 import org.jetbrains.exposed.v1.core.statements.expandArgs
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
+import org.springframework.transaction.PlatformTransactionManager
+import org.springframework.transaction.support.TransactionTemplate
 
 /**
  * Записывает SQL, который порождает само хранилище.
@@ -38,6 +40,22 @@ class RecordedSql : SqlLogger {
             transaction.addLogger(recorder)
             read()
             return recorder.statements.toList()
+        }
+
+        /**
+         * То же, но со своей транзакцией — для тех, кто меряет не хранилище, а обращение целиком.
+         *
+         * Фасад открывает транзакцию с `REQUIRED` и присоединяется к этой, поэтому в запись
+         * попадает весь его SQL. Совпадает при этом **число операторов**, а не поведение на
+         * коммите: отложенного до коммита у нас нет, а журнал синхронизации пишется мимо базы.
+         *
+         * Обращение, не сделавшее ни одного запроса, — провал замера, а не успех: считать в нём
+         * нечего, и зелёный такой гейт означал бы, что мерили не то.
+         */
+        fun inTransaction(transactionManager: PlatformTransactionManager, work: () -> Unit): List<String> {
+            val statements = TransactionTemplate(transactionManager).execute { of(work) }.orEmpty()
+            check(statements.isNotEmpty()) { "обращение не сделало ни одного запроса — мерить нечего" }
+            return statements
         }
     }
 }
