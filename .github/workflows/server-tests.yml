@@ -23,10 +23,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Та же версия, что объявлена toolchain проекта и стоит в Dockerfile. До этого здесь
+      # стояла 21, и сборка проходила лишь потому, что Gradle находил на раннере другую JDK
+      # сам: зелёный прогон держался на свойстве образа, а не на нашем решении.
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '25'
 
       - uses: gradle/actions/setup-gradle@v6
 
