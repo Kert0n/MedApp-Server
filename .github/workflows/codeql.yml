@@ -1,0 +1,57 @@
+name: CodeQL
+
+# Ищет ошибки, до которых тесты не доходят: инъекции, утечки, небезопасные значения по
+# умолчанию. Прогон по расписанию нужен не меньше прогона на PR — уязвимость находят не в
+# нашем коде, а в чужом, и без наших изменений тоже.
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+  schedule:
+    # По понедельникам утром: находки к началу недели, а не в пятницу вечером.
+    - cron: '17 6 * * 1'
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+
+    permissions:
+      # Читать код и класть находки во вкладку Security — больше ничего.
+      contents: read
+      security-events: write
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # Toolchain проекта — 25, и анализатору нужен тот же: он собирает по-настоящему.
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Инициализация CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: java-kotlin
+          # Сборочный режим, а не `none`. Замерено на закрытом #109: `build-mode: none`
+          # разбирает только Java, а у нас чистый Kotlin — анализ падал с «could not process
+          # any code written in Java/Kotlin», хотя проект в область попадал и зависимости
+          # разрешались.
+          build-mode: manual
+
+      # Ключи подписи не в репозитории; скрипт идемпотентен и создаёт пару там, где её нет.
+      - name: Создать ключи подписи JWT
+        run: sh src/main/resources/certs/gen.sh
+
+      # Компиляции достаточно: анализатору нужен разобранный Kotlin, а не зелёные тесты.
+      - name: Сборка для анализа
+        run: ./gradlew compileKotlin compileTestKotlin --no-daemon
+
+      - name: Анализ
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:java-kotlin
