@@ -1,5 +1,13 @@
 # Multi-stage build for MedAppServer
-FROM gradle:9.3-jdk21 AS build
+#
+# JDK 25, потому что столько требует toolchain проекта (Kotlin 2.4, #97). На jdk21 сборка
+# образа падала на `./gradlew dependencies`: «Cannot find a Java installation matching
+# languageVersion=25», а скачивать toolchain Gradle не настроен. В CI это не всплывало —
+# на раннере GitHub JDK 25 стоит по случайности образа.
+#
+# Образ temurin, а не gradle: свой Gradle базового образа здесь всё равно не используется,
+# сборка идёт обёрткой из репозитория.
+FROM eclipse-temurin:25-jdk AS build
 WORKDIR /app
 
 # Copy gradle files for dependency caching. The wrapper is committed, so the build uses the
@@ -24,7 +32,7 @@ RUN sh src/main/resources/certs/gen.sh
 RUN ./gradlew bootJar --no-daemon
 
 # Runtime stage
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:25-jre-alpine
 WORKDIR /app
 
 # Install wget for healthcheck
