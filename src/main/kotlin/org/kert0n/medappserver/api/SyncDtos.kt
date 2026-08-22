@@ -24,18 +24,18 @@ data class DrugSyncRequest(
     @field:PositiveQuantity
     @Schema(
         description = "Amount consumed while offline; a delta, omitted when nothing was taken",
-        examples = ["5.0"], nullable = true
+        examples = ["5.0"]
     )
     val consumed: BigDecimal? = null,
 
     @Schema(
         description =
             "Version the command acts on; taken from the last read. Absent means 428, mismatched means 412",
-        example = "3", nullable = true
+        example = "3"
     )
     val drugVersion: Long? = null,
 
-    @Schema(description = "New state of the caller's claim; omitted when it did not change", nullable = true)
+    @Schema(description = "New state of the caller's claim; omitted when it did not change")
     val reservation: ReservationSyncRequest? = null
 )
 
@@ -48,11 +48,11 @@ data class DrugSyncRequest(
 data class ReservationSyncRequest(
     @field:PositiveQuantity
     @Schema(
-        description = "Claim after the offline session, absolute", examples = ["20.0"], required = true
+        description = "Claim after the offline session, absolute", examples = ["20.0"]
     )
     val amount: BigDecimal,
 
     /** Отсутствует, когда брони ещё нет: сверяться не с чем, её заводят. */
-    @Schema(description = "Version of the claims picture; absent when there is no claim yet", nullable = true)
+    @Schema(description = "Version of the claims picture; absent when there is no claim yet")
     val version: Long? = null
 )

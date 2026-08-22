@@ -20,6 +20,7 @@ import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.kert0n.medappserver.testutil.asJsonTree
 import org.kert0n.medappserver.testutil.field
+import org.kert0n.medappserver.testutil.items
 import org.kert0n.medappserver.testutil.text
 import org.springframework.web.context.WebApplicationContext
 
@@ -61,8 +62,8 @@ class DecimalSchemaTest {
                 "$schemaName.$propertyName не попало в контракт — схема названа иначе?"
             )
             assertEquals(
-                "string",
-                property.field("type").text(),
+                setOf("string"),
+                declaredTypes(property) - "null",
                 "$schemaName.$propertyName опубликовано не строкой: величина на проводе — строка, " +
                     "добавьте type = \"string\" в @Schema рядом с полем"
             )
@@ -72,6 +73,17 @@ class DecimalSchemaTest {
         // Иначе молчаливо зелёный тест: не нашёл классов — не нашёл и нарушений.
         assertTrue(checked.isNotEmpty(), "не найдено ни одного поля BigDecimal — обход DTO сломан")
     }
+
+    /**
+     * Типы свойства: в контракте версии 3.1 их бывает несколько.
+     *
+     * Второй тип — `null` у обнуляемого поля; его объявляет `OpenApiFieldPresence`, и к тому,
+     * числом или строкой едет величина, он отношения не имеет.
+     */
+    private fun declaredTypes(property: JsonElement?): Set<String> =
+        property.field("type").let { declared ->
+            declared.items().mapNotNull { it.text() }.ifEmpty { listOfNotNull(declared.text()) }
+        }.toSet()
 
     /** Пары «схема — свойство» для всех величин в опубликованных DTO. */
     private fun decimalProperties(): List<Pair<String, String>> {

@@ -35,22 +35,21 @@ data class ReservationDTO(
 @Serializable
 data class ReservationCreateRequest(
     @field:NotNull
-    @Schema(description = "Package identifier", required = true)
+    @Schema(description = "Package identifier")
     val drugId: Uuid,
 
     @field:NotNull
     @field:PositiveQuantity
     @Schema(
         description = "Reserved amount, greater than zero. It may exceed what is left in the package.",
-        examples = ["20.0"],
-        required = true
+        examples = ["20.0"]
     )
     val amount: BigDecimal,
 
     @Schema(
         description =
             "Version the command acts on; taken from the last read. Absent means 428, mismatched means 412",
-        example = "5", nullable = true
+        example = "5"
     )
     val version: Long? = null
 )
@@ -65,14 +64,14 @@ data class ReservationPatchRequest(
     @field:NotNull
     @field:PositiveQuantity
     @Schema(
-        description = "New reserved amount, greater than zero", examples = ["15.0"], required = true
+        description = "New reserved amount, greater than zero", examples = ["15.0"]
     )
     val amount: BigDecimal,
 
     @Schema(
         description =
             "Version the command acts on; taken from the last read. Absent means 428, mismatched means 412",
-        example = "5", nullable = true
+        example = "5"
     )
     val version: Long? = null
 )
@@ -84,14 +83,14 @@ data class IntakeRequest(
     @field:NotNull
     @field:PositiveQuantity
     @Schema(
-        description = "Amount taken, greater than zero", examples = ["2.0"], required = true
+        description = "Amount taken, greater than zero", examples = ["2.0"]
     )
     val quantity: BigDecimal,
 
     @Schema(
         description =
             "Version the command acts on; taken from the last read. Absent means 428, mismatched means 412",
-        example = "3", nullable = true
+        example = "3"
     )
     val version: Long? = null
 )

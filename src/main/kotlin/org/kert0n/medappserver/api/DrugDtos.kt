@@ -60,7 +60,7 @@ data class DrugDTO(
      */
     @Schema(description = "Quantity unit identifier")
     val quantityUnitId: Uuid,
-    @Schema(description = "Dosage form identifier", nullable = true)
+    @Schema(description = "Dosage form identifier")
     val formTypeId: Uuid?,
     @Schema(description = "Category", example = "painkiller")
     val category: String?,
@@ -89,18 +89,18 @@ data class DrugDTO(
 data class DrugCreateRequest(
     @field:NotNull
     @field:Size(min = 1, max = 300)
-    @Schema(description = "Drug name", example = "Aspirin", required = true)
+    @Schema(description = "Drug name", example = "Aspirin")
     val name: String,
 
     @field:NotNull
     @field:PositiveQuantity
     @Schema(
-        description = "Initial stock, greater than zero", examples = ["100.0"], required = true
+        description = "Initial stock, greater than zero", examples = ["100.0"]
     )
     val quantity: BigDecimal,
 
     @field:NotNull
-    @Schema(description = "Quantity unit identifier from the shared vocabulary", required = true)
+    @Schema(description = "Quantity unit identifier from the shared vocabulary")
     val quantityUnitId: Uuid,
 
     @Schema(description = "Dosage form identifier from the shared vocabulary")
@@ -170,7 +170,7 @@ data class DrugPatchRequest(
     @Schema(
         description =
             "Version the command acts on; taken from the last read. Absent means 428, mismatched means 412",
-        example = "3", nullable = true
+        example = "3"
     )
     val version: Long? = null
 )
@@ -187,11 +187,11 @@ data class DrugTemplateDTO(
     val nameLat: String?,
     @Schema(description = "Active substance", example = "Acetylsalicylic acid")
     val activeSubstance: String?,
-    @Schema(description = "Dosage form identifier", nullable = true)
+    @Schema(description = "Dosage form identifier")
     val formTypeId: Uuid?,
     @Schema(description = "Category")
     val category: String?,
-    @Schema(description = "Quantity unit identifier", nullable = true)
+    @Schema(description = "Quantity unit identifier")
     val quantityUnitId: Uuid?,
     @Schema(description = "Manufacturer", example = "Bayer")
     val manufacturer: String?,
@@ -228,7 +228,7 @@ data class ReservationsDTO(
     @Schema(description = "Sum of all reservations; may exceed the stock", examples = ["40.000000"], type = "string", pattern = QUANTITY_PATTERN)
     val total: BigDecimal,
     @Schema(
-        description = "Reserved by the caller; absent when they claimed nothing", nullable = true,
+        description = "Reserved by the caller; absent when they claimed nothing",
         type = "string", pattern = POSITIVE_QUANTITY_PATTERN
     )
     val mine: BigDecimal?,
