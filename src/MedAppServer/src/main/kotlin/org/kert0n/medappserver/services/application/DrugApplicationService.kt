@@ -3,6 +3,7 @@ package org.kert0n.medappserver.services.application
 import java.math.BigDecimal
 import kotlin.uuid.Uuid
 import org.kert0n.medappserver.api.DrugCreateRequest
+import org.kert0n.medappserver.api.DrugSyncRequest
 import org.kert0n.medappserver.api.DrugPatchRequest
 import org.kert0n.medappserver.api.DrugSnapshotDTO
 import org.kert0n.medappserver.api.toSnapshot
@@ -16,6 +17,7 @@ import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.kert0n.medappserver.services.orchestrator.DrugDisposal
 import org.kert0n.medappserver.services.orchestrator.DrugPlacement
 import org.kert0n.medappserver.services.orchestrator.DrugRelocation
+import org.kert0n.medappserver.services.orchestrator.DrugSynchronisation
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -37,7 +39,8 @@ class DrugApplicationService(
     private val medKitService: MedKitService,
     private val relocation: DrugRelocation,
     private val disposal: DrugDisposal,
-    private val placement: DrugPlacement
+    private val placement: DrugPlacement,
+    private val synchronisation: DrugSynchronisation
 ) {
 
     private val logger = LoggerFactory.getLogger(DrugApplicationService::class.java)
@@ -107,6 +110,30 @@ class DrugApplicationService(
         val drug = drugService.get(drugId, userId)
         requireStated(version, drug.version)
         return drug
+    }
+
+    /**
+     * Синхронизация: съеденное и бронь одной транзакцией.
+     *
+     * `null` в ответе — пачка кончилась этим списанием и уничтожена; часть про бронь тогда
+     * пустая, потому что бронь ушла вместе с упаковкой.
+     */
+    @Transactional
+    fun synchronise(drugId: Uuid, syncId: Uuid, request: DrugSyncRequest, userId: Uuid): DrugSnapshotDTO? {
+        logger.debug("Synchronising drug {} by user {}, sync {}", drugId, userId, syncId)
+        // Упаковка читается здесь, скоуплено: дальше она идёт агрегатом, а не идентификатором,
+        // и доказывает доступ сама.
+        val left = synchronisation.apply(
+            syncId, drugService.get(drugId, userId), userId,
+            DrugSynchronisation.SyncRequest(
+                consumed = request.consumed,
+                drugVersion = request.drugVersion,
+                reservation = request.reservation?.let {
+                    DrugSynchronisation.ReservationPart(it.amount, it.version)
+                }
+            )
+        ) ?: return null
+        return left.toSnapshot(reservationService.onDrugs(listOf(left), userId).getValue(left.id))
     }
 
     private fun DrugCreateRequest.toCommand() = NewDrug(

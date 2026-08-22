@@ -66,6 +66,59 @@ paths:
           description: Authentication is required
       security:
       - Bearer Authentication: []
+  /v1/drugs/{drugId}/sync/{syncId}:
+    put:
+      tags:
+      - Drugs
+      summary: Apply offline changes to a package
+      description: Applies the consumed amount and the new claim in one transaction.
+        Repeating the same request under the same identifier changes nothing; the
+        same identifier with different content is a conflict.
+      operationId: synchronise
+      parameters:
+      - name: drugId
+        in: path
+        description: Package identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: syncId
+        in: path
+        description: Client-invented identifier of this synchronisation
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        description: Offline changes
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DrugSyncRequest"
+        required: true
+      responses:
+        "200":
+          description: Changes applied
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DrugSnapshotDTO"
+        "204":
+          description: Package emptied by this request and destroyed
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DrugSnapshotDTO"
+        "404":
+          description: Package does not exist or is not accessible
+        "409":
+          description: "Stated version is not current, or the identifier was used\
+            \ for a different request"
+        "401":
+          description: Authentication is required
+      security:
+      - Bearer Authentication: []
   /v1/reservations:
     get:
       tags:
@@ -841,6 +894,41 @@ components:
           format: int64
           description: Version of the claims on this package; state it back when commanding
           example: 5
+    DrugSyncRequest:
+      type: object
+      description: "Offline changes for one package, applied atomically"
+      properties:
+        consumed:
+          type: string
+          description: "Amount consumed while offline; a delta, omitted when nothing\
+            \ was taken"
+          example: "5.0"
+          pattern: "^(?!0+(\\.0+)?$)\\d{1,13}(\\.\\d{1,6})?$"
+        drugVersion:
+          type: integer
+          format: int64
+          description: "Version the command acts on; taken from the last read. Absent\
+            \ means 428, mismatched means 412"
+          example: 3
+        reservation:
+          $ref: "#/components/schemas/ReservationSyncRequest"
+          description: New state of the caller's claim; omitted when it did not change
+    ReservationSyncRequest:
+      type: object
+      description: The caller's claim after the offline session
+      properties:
+        amount:
+          type: string
+          description: "Claim after the offline session, absolute"
+          example: "20.0"
+          pattern: "^(?!0+(\\.0+)?$)\\d{1,13}(\\.\\d{1,6})?$"
+        version:
+          type: integer
+          format: int64
+          description: Version of the claims picture; absent when there is no claim
+            yet
+      required:
+      - amount
     ReservationCreateRequest:
       type: object
       description: Request to reserve part of a package

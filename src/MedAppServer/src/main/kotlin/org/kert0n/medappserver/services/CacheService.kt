@@ -1,6 +1,8 @@
 package org.kert0n.medappserver.services
 
 import com.github.benmanes.caffeine.cache.Caffeine
+import kotlin.uuid.Uuid
+import org.kert0n.medappserver.domain.Intake
 import org.kert0n.medappserver.domain.Invitation
 import com.sksamuel.aedile.core.Cache
 import com.sksamuel.aedile.core.asCache
@@ -17,6 +19,7 @@ class CacheService(
     @Value($$"${medkit.share.termInMinutes}") private val medKitShareTerm: Long,
     @Value($$"${registration.timeout.InSeconds}") private val registrationTimeOut: Long,
     @Value($$"${authentication.throttle.windowInSeconds:300}") private val loginThrottleWindow: Long,
+    @Value($$"${sync.journal.termInMinutes:1440}") private val syncJournalTerm: Long,
 ) {
     // Medkit share tokens. maximumSize is a hard cap, not a hint: under enough concurrent
     // sharing a key can be evicted before medkit.share.termInMinutes elapses, so the validity
@@ -33,6 +36,20 @@ class CacheService(
     fun successfulRegistrationsCache(): Cache<String, Int> = Caffeine.newBuilder()
         .expireAfterWrite(registrationTimeOut.seconds)
         .maximumSize(10_000)
+        .asCache()
+
+    /**
+     * Журнал синхронизаций: что уже применено, по придуманному клиентом идентификатору.
+     *
+     * Не в базе: приём слишком персонален для таблицы (часть 1.2). Граница названа честно —
+     * журнал живёт в памяти процесса, значит не переживает рестарт и не работает между
+     * экземплярами. Повтор после рестарта спишет второй раз; таблица `drug_sync_receipts`
+     * записана долгом и заводится, когда экземпляров станет больше одного.
+     */
+    @Bean
+    fun syncJournalCache(): Cache<Uuid, Intake> = Caffeine.newBuilder()
+        .expireAfterWrite(syncJournalTerm.minutes)
+        .maximumSize(100_000)
         .asCache()
 
     // Token requests per client address: every one costs a bcrypt verification, so an

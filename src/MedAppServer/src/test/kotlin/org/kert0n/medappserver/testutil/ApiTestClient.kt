@@ -17,6 +17,7 @@ object ApiRoutes {
 
     fun drug(drugId: Any) = "/v1/drugs/$drugId"
     fun intakes(drugId: Any) = "/v1/drugs/$drugId/intakes"
+    fun sync(drugId: Any, syncId: Any) = "/v1/drugs/$drugId/sync/$syncId"
     fun drugsOf(medKitId: Any) = "/v1/med-kits/$medKitId/drugs"
     fun drugIn(medKitId: Any, drugId: Any) = "/v1/med-kits/$medKitId/drugs/$drugId"
     fun drugTemplate(templateId: Any) = "/v1/drug-templates/$templateId"

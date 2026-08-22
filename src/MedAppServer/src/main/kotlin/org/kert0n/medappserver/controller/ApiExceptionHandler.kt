@@ -7,6 +7,7 @@ import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.ReservationAlreadyExists
 import org.kert0n.medappserver.domain.StaleVersion
 import org.kert0n.medappserver.services.application.PreconditionFailed
+import org.kert0n.medappserver.services.orchestrator.ConflictingSync
 import org.kert0n.medappserver.services.application.PreconditionRequired
 import org.kert0n.medappserver.domain.TooManyRegistrations
 import org.springframework.http.HttpStatus
@@ -79,6 +80,10 @@ class ApiExceptionHandler {
      * Предусловия отвечают до попытки записи, поэтому и коды у них свои: не предъявлено — 428,
      * предъявлено и не совпало — 412. Проигранная гонка выясняется уже при записи и остаётся 409.
      */
+    /** Тот же идентификатор с другим содержимым — конфликт, а не повтор. */
+    @ExceptionHandler(ConflictingSync::class)
+    fun handleConflictingSync(exception: ConflictingSync): ProblemDetail = problem(HttpStatus.CONFLICT)
+
     @ExceptionHandler(PreconditionRequired::class)
     fun handlePreconditionRequired(exception: PreconditionRequired): ProblemDetail =
         problem(HttpStatus.PRECONDITION_REQUIRED)
