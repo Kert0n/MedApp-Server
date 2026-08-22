@@ -31,11 +31,11 @@ class ReservationPlacement(
 
     /** Основная форма: пачка уже прочитана, значит доступ к ней доказан. */
     @Transactional(propagation = MANDATORY)
-    fun place(drug: Drug, userId: Uuid, amount: BigDecimal): Reservation =
-        reservationService.create(drug, userId, amount)
+    fun place(drug: Drug, userId: Uuid, amount: BigDecimal, stated: Long): Reservation =
+        reservationService.create(drug, userId, amount, stated)
 
     /** По идентификатору — то же самое плюс чтение пачки, оно же проверка доступа. */
     @Transactional(propagation = MANDATORY)
-    fun place(drugId: Uuid, userId: Uuid, amount: BigDecimal): Reservation =
-        place(drugService.get(drugId, userId), userId, amount)
+    fun place(drugId: Uuid, userId: Uuid, amount: BigDecimal, stated: Long): Reservation =
+        place(drugService.get(drugId, userId), userId, amount, stated)
 }

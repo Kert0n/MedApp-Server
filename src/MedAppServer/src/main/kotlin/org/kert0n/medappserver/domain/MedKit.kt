@@ -10,7 +10,9 @@ import kotlin.uuid.Uuid
  */
 data class MedKit(
     val id: Uuid = Uuid.random(),
-    val members: Set<Uuid>
+    val members: Set<Uuid>,
+    /** Токен предусловия: чем была аптечка, когда её прочитали. */
+    val version: Long = 0
 ) {
 
     init {

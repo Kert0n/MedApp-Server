@@ -78,11 +78,6 @@ class DrugService(
         return drug
     }
 
-    /** По идентификатору — то же самое плюс своё чтение, в котором и проверяется доступ. */
-    @Transactional(propagation = MANDATORY)
-    fun update(drugId: Uuid, request: DrugEdit, userId: Uuid): Drug =
-        update(get(drugId, userId), request)
-
     @Transactional(propagation = MANDATORY)
     fun update(drug: Drug, request: DrugEdit): Drug {
         logger.debug("Updating drug: {}", drug.id)
@@ -102,17 +97,13 @@ class DrugService(
             )
         )
 
-        drugs.save(drug)
-        return drug
+        return drugs.save(drug, request.stated)
     }
 
     @Transactional(propagation = MANDATORY)
-    fun delete(drugId: Uuid, userId: Uuid) = delete(get(drugId, userId))
-
-    @Transactional(propagation = MANDATORY)
-    fun delete(drug: Drug) {
+    fun delete(drug: Drug, stated: Long) {
         logger.debug("Deleting drug: {}", drug.id)
-        drugs.delete(drug)
+        drugs.delete(drug, stated)
     }
 
     /**
@@ -122,18 +113,13 @@ class DrugService(
      * ещё до списания.
      */
     @Transactional(propagation = MANDATORY)
-    fun consume(drugId: Uuid, quantity: BigDecimal, userId: Uuid): Drug? =
-        consume(get(drugId, userId), quantity)
-
-    @Transactional(propagation = MANDATORY)
-    fun consume(drug: Drug, quantity: BigDecimal): Drug? {
+    fun consume(drug: Drug, quantity: BigDecimal, stated: Long): Drug? {
         logger.debug("Consuming {} of drug {}", quantity, drug.id)
 
         // `null` — приём опустошил пачку. Уничтожать её отсюда нельзя: вместе с пачкой
         // исчезают брони, а это чужой агрегат. Решение принимает `DrugDisposal`.
         val left = drug.consume(Quantity(quantity, drug.quantity.unit)) ?: return null
-        drugs.save(left)
-        return left
+        return drugs.save(left, stated)
     }
 
     /**
@@ -145,16 +131,15 @@ class DrugService(
     @Transactional(propagation = MANDATORY)
     fun moveAll(source: MedKit, target: MedKit) {
         logger.debug("Moving all drugs of medkit {} to {}", source.id, target.id)
-        drugs.moveAllToMedKit(source.id, target.id)
+        drugs.moveAllToMedKit(source, target)
     }
 
     /** Брони, потерявшие доступ, убирает межагрегатный сценарий: они в чужом агрегате. */
     @Transactional(propagation = MANDATORY)
-    fun moveTo(drug: Drug, target: MedKit): Drug {
+    fun moveTo(drug: Drug, target: MedKit, stated: Long): Drug {
         logger.debug("Moving drug {} to medkit {}", drug.id, target.id)
 
         val moved = drug.moveTo(target.id)
-        drugs.save(moved)
-        return moved
+        return drugs.save(moved, stated)
     }
 }

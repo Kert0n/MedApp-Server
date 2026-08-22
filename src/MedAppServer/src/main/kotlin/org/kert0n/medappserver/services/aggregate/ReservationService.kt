@@ -6,8 +6,10 @@ import org.kert0n.medappserver.db.store.ReservationStore
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.NoSuchReservation
+import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.Reservation
+import org.kert0n.medappserver.domain.ReservationSnapshot
 import org.kert0n.medappserver.domain.ReservationAlreadyExists
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -48,10 +50,10 @@ class ReservationService(
     fun get(userId: Uuid, drugId: Uuid): Reservation =
         reservations.find(userId, drugId) ?: throw NoSuchReservation()
 
-    /** Брони на перечисленные упаковки — чтобы ответить, сколько на пачку заявлено. */
+    /** Заявленное на упаковки — снимками: сумма, своя доля и версия картины. */
     @Transactional(propagation = MANDATORY, readOnly = true)
-    fun onDrugs(drugIds: Collection<Uuid>, userId: Uuid): List<Reservation> =
-        reservations.findAllOfDrugs(drugIds, userId)
+    fun onDrugs(drugs: List<Drug>, userId: Uuid): Map<Uuid, ReservationSnapshot> =
+        reservations.snapshotsOf(drugs, userId)
 
     // ── Команды ──────────────────────────────────────────────────────────────────
 
@@ -67,7 +69,7 @@ class ReservationService(
      * ключ на членство: он же не даёт вставке разойтись с одновременным выходом.
      */
     @Transactional(propagation = MANDATORY)
-    fun create(drug: Drug, userId: Uuid, amount: BigDecimal): Reservation {
+    fun create(drug: Drug, userId: Uuid, amount: BigDecimal, stated: Long): Reservation {
         logger.debug("Creating reservation of user {} on drug {}", userId, drug.id)
 
         // Правило читается здесь, как и у вступления в аптечку: одна бронь на пару «человек и
@@ -75,21 +77,21 @@ class ReservationService(
         if (reservations.find(userId, drug.id) != null) throw ReservationAlreadyExists()
 
         val reservation = Reservation(userId, drug.id, Quantity(amount, drug.quantity.unit))
-        reservations.insert(reservation, drug)
+        reservations.insert(reservation, drug, stated)
         return reservation
     }
 
     /** По идентификаторам — то же самое плюс своё чтение. */
     @Transactional(propagation = MANDATORY)
-    fun changeTo(userId: Uuid, drugId: Uuid, amount: BigDecimal): Reservation =
-        changeTo(get(userId, drugId), amount)
+    fun changeTo(userId: Uuid, drugId: Uuid, amount: BigDecimal, stated: Long): Reservation =
+        changeTo(get(userId, drugId), amount, stated)
 
     @Transactional(propagation = MANDATORY)
-    fun changeTo(reservation: Reservation, amount: BigDecimal): Reservation {
+    fun changeTo(reservation: Reservation, amount: BigDecimal, stated: Long): Reservation {
         logger.debug("Changing reservation of user {} on drug {}", reservation.userId, reservation.drugId)
 
         val changed = reservation.changeTo(Quantity(amount, reservation.amount.unit))
-        reservations.save(changed)
+        reservations.save(changed, was = reservation, stated = stated)
         return changed
     }
 
@@ -116,11 +118,21 @@ class ReservationService(
 
     /** Отмена — это удаление: брони с нулём не бывает. */
     @Transactional(propagation = MANDATORY)
-    fun cancel(userId: Uuid, drugId: Uuid) = cancel(get(userId, drugId))
+    fun cancel(userId: Uuid, drugId: Uuid, stated: Long) = cancel(get(userId, drugId), stated)
 
     @Transactional(propagation = MANDATORY)
-    fun cancel(reservation: Reservation) {
+    fun cancel(reservation: Reservation, stated: Long) {
         logger.debug("Cancelling reservation of user {} on drug {}", reservation.userId, reservation.drugId)
-        reservations.delete(reservation)
+        reservations.delete(reservation, stated)
     }
+
+    /**
+     * Текущая картина броней упаковки — та, чью версию команда и предъявляет.
+     *
+     * Своей версии у отдельной брони нет: решая, сколько заявить, человек смотрит на общую
+     * сумму, и устаревшей для него бывает именно картина.
+     */
+    @Transactional(propagation = MANDATORY, readOnly = true)
+    fun snapshotOn(drug: Drug, userId: Uuid): ReservationSnapshot =
+        reservations.snapshotOf(drug, userId) ?: throw NotAMember()
 }

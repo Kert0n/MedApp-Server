@@ -7,18 +7,17 @@ import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.core.inSubQuery
 import org.jetbrains.exposed.v1.jdbc.Query
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
 import org.kert0n.medappserver.db.tables.Drugs
 import org.kert0n.medappserver.db.tables.FormTypes
-import org.kert0n.medappserver.db.tables.MedKitMemberships
 import org.kert0n.medappserver.db.tables.QuantityUnits
 import org.kert0n.medappserver.domain.Drug
+import org.kert0n.medappserver.domain.MedKit
+import org.kert0n.medappserver.domain.StaleVersion
 import org.kert0n.medappserver.domain.FormType
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.QuantityUnit
@@ -29,64 +28,92 @@ import org.springframework.stereotype.Component
  *
  * Наружу — только доменные типы. Броней здесь нет: упаковка ими не владеет.
  *
+ * Правила обращения — в `Access.kt`, одним списком на весь пакет. Коротко: чтения называют
+ * вызывающего и скоупятся запросом, команды принимают агрегат, а разделы ниже подписаны потому,
+ * что обещание относится к публичной поверхности, а не к приватным помощникам.
+ *
  * Каждое чтение соединяется со словарями, потому что доменное количество несёт имя единицы.
- * Соединение написано один раз, в `rows`, и видно глазами — в отличие от `EAGER`, о котором
- * приходилось помнить.
+ * Соединение написано один раз, там же, где скоуп, и видно глазами — в отличие от `EAGER`,
+ * о котором приходилось помнить.
  */
 @Component
 class DrugStore {
 
-    // ── Чтение ───────────────────────────────────────────────────────────────────
+    // ── Чтения: принимают вызывающего, скоуп накладывает запрос ──────────────────
 
     fun find(drugId: Uuid, userId: Uuid): Drug? =
-        rows { (Drugs.id eq drugId) and accessibleTo(userId) }.singleOrNull()?.toDomain()
+        drugsAccessibleTo(userId) { Drugs.id eq drugId }.singleOrNull()?.toDomain()
 
     fun findAllInMedKit(medKitId: Uuid, userId: Uuid): List<Drug> =
-        rows { (Drugs.medKitId eq medKitId) and accessibleTo(userId) }
+        drugsAccessibleTo(userId) { Drugs.medKitId eq medKitId }
             .orderBy(Drugs.name)
             .map { it.toDomain() }
 
     fun findAllOfUser(userId: Uuid): List<Drug> =
-        rows { accessibleTo(userId) }.orderBy(Drugs.name).map { it.toDomain() }
+        drugsAccessibleTo(userId).orderBy(Drugs.name).map { it.toDomain() }
 
-    // ── Команды ──────────────────────────────────────────────────────────────────
+    // ── Команды: принимают агрегат — доступ к нему уже доказан ───────────────────
 
     fun insert(drug: Drug) {
         Drugs.insert { it.write(drug) }
     }
 
-    fun save(drug: Drug) {
-        Drugs.update({ Drugs.id eq drug.id }) { it.write(drug) }
+    /**
+     * Запись под предикатом версии.
+     *
+     * `stated` — версия, которую предъявил клиент: то состояние, по которому он принимал
+     * решение. Параметр обязательный, и это главное в нём: записать, не предъявив версию,
+     * не собирается.
+     *
+     * Проверка и изменение — один оператор: между ними не втиснуться. Ноль задетых строк значит,
+     * что строку успели переписать после того, как её прочитали, — предъявленное устарело.
+     */
+    fun save(drug: Drug, stated: Long): Drug {
+        val stored = drug.copy(version = stated + 1)
+        val written = Drugs.update({ (Drugs.id eq drug.id) and (Drugs.version eq stated) }) {
+            it.write(stored)
+        }
+        if (written == 0) throw StaleVersion()
+        return stored
     }
 
     /**
-     * Уничтожение пачки — только пачки.
+     * Уничтожение пачки — только пачки, и тоже под предъявленной версией.
      *
      * Брони снимает `DrugDisposal`: их исчезновение вслед за упаковкой — правило, а не
      * подробность записи, и в запросе ему не место.
      */
-    fun delete(drug: Drug) {
-        Drugs.deleteWhere { Drugs.id eq drug.id }
-    }
-
-    /** Все упаковки аптечки — в другую, одним запросом. Брони убирает вызывающий. */
-    fun moveAllToMedKit(sourceMedKitId: Uuid, targetMedKitId: Uuid) {
-        Drugs.update({ Drugs.medKitId eq sourceMedKitId }) { it[medKitId] = targetMedKitId }
+    fun delete(drug: Drug, stated: Long) {
+        val removed = Drugs.deleteWhere { (Drugs.id eq drug.id) and (Drugs.version eq stated) }
+        if (removed == 0) throw StaleVersion()
     }
 
     /**
-     * Доступ проверяет сам запрос: чужой упаковки для вызывающего не существует.
+     * Всё содержимое аптечки — в другую, одним запросом. Брони убирает вызывающий.
      *
-     * Предикат вынесен, чтобы его нельзя было забыть в новом чтении, — единственное место,
-     * где он написан.
+     * Обе аптечки приходят агрегатами, как и везде в этом разделе: вызывающий их прочитал, и
+     * это его доказательство доступа к обеим.
      */
-    private fun accessibleTo(userId: Uuid): Op<Boolean> =
-        Drugs.medKitId inSubQuery MedKitMemberships
-            .select(MedKitMemberships.medKitId)
-            .where { MedKitMemberships.userId eq userId }
+    fun moveAllToMedKit(source: MedKit, target: MedKit) {
+        Drugs.update({ Drugs.medKitId eq source.id }) { it[medKitId] = target.id }
+    }
 
-    private fun rows(where: () -> Op<Boolean>): Query =
-        withVocabulary.selectAll().where(where())
+
+    // ── Внутреннее: помощники запросов и перенос строк ───────────────────────────
+    //
+    // Обещания разделов выше — про публичную поверхность. Здесь работают уже внутри доказанного
+    // чтения или доказанной команды и берут то, что из агрегата достали: идентификатор, дельту,
+    // набор участников. Это не исключение из правила, а его область действия.
+
+    /**
+     * Упаковки со словарями, доступные вызывающему и отобранные условием.
+     *
+     * Доступ накладывает сам помощник, а не условие: чужой упаковки для вызывающего не
+     * существует, и это не то, о чём каждое чтение решает заново. Условие остаётся про то,
+     * что ищут, — без него берутся все доступные.
+     */
+    private fun drugsAccessibleTo(userId: Uuid, condition: () -> Op<Boolean> = { Op.TRUE }): Query =
+        withVocabulary.selectAll().where { Drugs.medKitId.inMedKitsOf(userId) and condition() }
 
     private val withVocabulary: Join
         get() = Drugs
@@ -102,7 +129,8 @@ class DrugStore {
         category = this[Drugs.category],
         manufacturer = this[Drugs.manufacturer],
         country = this[Drugs.country],
-        description = this[Drugs.description]
+        description = this[Drugs.description],
+        version = this[Drugs.version]
     )
 }
 
@@ -118,4 +146,6 @@ private fun org.jetbrains.exposed.v1.core.statements.UpdateBuilder<*>.write(drug
     this[Drugs.country] = drug.country
     this[Drugs.description] = drug.description
     this[Drugs.medKitId] = drug.medKitId
+    this[Drugs.version] = drug.version
 }
+

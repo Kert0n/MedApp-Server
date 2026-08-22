@@ -4,6 +4,7 @@ import kotlin.uuid.Uuid
 import org.kert0n.medappserver.api.InvitationDTO
 import org.kert0n.medappserver.api.MedKitCreatedDTO
 import org.kert0n.medappserver.api.MedKitDTO
+import org.kert0n.medappserver.api.statedVersion
 import org.kert0n.medappserver.api.MedKitSummaryDTO
 import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.api.toSnapshots
@@ -40,8 +41,8 @@ class MedKitApplicationService(
     fun read(medKitId: Uuid, userId: Uuid): MedKitDTO {
         val medKit = medKitService.get(medKitId, userId)
         val packages = drugService.ofMedKit(medKitId, userId)
-        val reservations = reservationService.onDrugs(packages.map { it.id }, userId)
-        return medKit.toDto(packages.toSnapshots(reservations, userId).toSet())
+        val reservations = reservationService.onDrugs(packages, userId)
+        return medKit.toDto(packages.toSnapshots(reservations).toSet())
     }
 
     /** Список аптечек со счётчиками — два чтения на весь ответ, сколько бы их ни было. */
@@ -72,9 +73,9 @@ class MedKitApplicationService(
      * если он допущен к новому месту. Там ключ правило выразить не может — см. `DrugRelocation`.
      */
     @Transactional
-    fun leave(medKitId: Uuid, userId: Uuid) {
+    fun leave(medKitId: Uuid, version: Long?, userId: Uuid) {
         logger.debug("Removing user {} from medkit {}", userId, medKitId)
-        medKitService.leave(medKitId, userId)
+        medKitService.leave(medKitId, userId, statedVersion(version))
     }
 
     /**
@@ -84,9 +85,9 @@ class MedKitApplicationService(
      * переезде одной пачки, поэтому и живёт оно в одном месте на оба случая.
      */
     @Transactional
-    fun delete(medKitId: Uuid, userId: Uuid, transferToMedKitId: Uuid? = null) {
+    fun delete(medKitId: Uuid, version: Long?, userId: Uuid, transferToMedKitId: Uuid? = null) {
         logger.debug("Deleting medkit {} (transfer to {})", medKitId, transferToMedKitId)
         transferToMedKitId?.let { relocation.moveAll(medKitId, it, userId) }
-        medKitService.delete(medKitId, userId)
+        medKitService.delete(medKitId, userId, statedVersion(version))
     }
 }

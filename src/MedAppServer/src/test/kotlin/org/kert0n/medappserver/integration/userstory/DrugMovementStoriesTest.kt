@@ -70,7 +70,7 @@ class DrugMovementStoriesTest {
         dbHelper.reserve(userData.id, painkiller.id, qty(20.0))
 
         // Move drug to travel kit
-        drugs.moveToMedKit(painkiller.id, travelKit.id, userData.id)
+        drugs.moveToMedKit(painkiller.id, travelKit.id, dbHelper.drugVersion(painkiller.id), userData.id)
 
         // Drug is in travel kit
         val movedDrug = dbHelper.drug(painkiller.id)
@@ -117,12 +117,16 @@ class DrugMovementStoriesTest {
         dbHelper.reserve(anna.id, drugData.id, qty(40.0))
         dbHelper.reserve(bob.id, drugData.id, qty(30.0))
 
-        val updated = reservationService.changeTo(reservationService.get(anna.id, drugData.id), qty(70.0))
+        val updated = reservationService.changeTo(
+            reservationService.get(anna.id, drugData.id), qty(70.0), dbHelper.reservationsVersion(drugData.id, anna.id)
+        )
         assertQty(70.0, updated.amount)
         assertQty(100.0, dbHelper.reservedOnDrug(drugData.id))
 
         // Выше содержимого пачки тоже можно: 200 + 30 на сотню таблеток — законное состояние.
-        reservationService.changeTo(reservationService.get(anna.id, drugData.id), qty(200.0))
+        reservationService.changeTo(
+            reservationService.get(anna.id, drugData.id), qty(200.0), dbHelper.reservationsVersion(drugData.id, anna.id)
+        )
         assertQty(230.0, dbHelper.reservedOnDrug(drugData.id))
 
         println("✅ Story 12 passed: reservations are free to exceed the package")
@@ -151,7 +155,7 @@ class DrugMovementStoriesTest {
         assertNotNull(plan)
 
         // Delete the drug
-        disposal.destroy(drugService.get(drugData.id, userData.id))
+        disposal.destroy(drugService.get(drugData.id, userData.id), dbHelper.drugVersion(drugData.id))
 
         // Drug should be gone
         val deletedDrug = dbHelper.drug(drugData.id)
@@ -198,7 +202,7 @@ class DrugMovementStoriesTest {
 
 
         // Anna deletes the old kit and migrates to the new kit
-        medKits.delete(oldKit.id, anna.id, newKit.id)
+        medKits.delete(oldKit.id, dbHelper.medKitVersion(oldKit.id), anna.id, newKit.id)
 
 
         // Verify: Anna and Bob keep their reservations, Charlie's is deleted.
@@ -243,7 +247,7 @@ class DrugMovementStoriesTest {
 
 
         // Move ONLY one drug
-        drugs.moveToMedKit(drugDataToMove.id, targetKit.id, userData.id)
+        drugs.moveToMedKit(drugDataToMove.id, targetKit.id, dbHelper.drugVersion(drugDataToMove.id), userData.id)
 
 
         // Verify the move did not destroy it

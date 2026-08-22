@@ -16,6 +16,7 @@ import kotlin.uuid.Uuid
 import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.api.DrugPatchRequest
 import org.kert0n.medappserver.api.DrugSnapshotDTO
+import org.kert0n.medappserver.api.DrugSyncRequest
 import org.kert0n.medappserver.api.DrugTemplateDTO
 import org.kert0n.medappserver.api.IntakeRequest
 import org.kert0n.medappserver.api.VocabularyEntryDTO
@@ -107,10 +108,12 @@ class DrugController(private val drugs: DrugApplicationService) {
     @ApiResponse(responseCode = "404", description = "Drug does not exist or is not accessible", content = [Content()])
     fun deleteDrug(
         authentication: Authentication,
-        @Parameter(description = "Drug identifier") @PathVariable drugId: Uuid
+        @Parameter(description = "Drug identifier") @PathVariable drugId: Uuid,
+        @Parameter(description = "Version the command acts on; absent means 428")
+        @RequestParam(required = false) version: Long?
     ) {
         logger.debug("DELETE /v1/drugs/{} by user {}", drugId, authentication.userId)
-        drugs.delete(drugId, authentication.userId)
+        drugs.delete(drugId, version, authentication.userId)
     }
 
     /**
@@ -141,7 +144,37 @@ class DrugController(private val drugs: DrugApplicationService) {
     ): DrugSnapshotDTO? {
         logger.debug("POST /v1/drugs/{}/intakes by user {}", drugId, authentication.userId)
         // null означает, что пачка кончилась и уничтожена этим списанием.
-        return drugs.recordIntake(drugId, request.quantity, authentication.userId)
+        return drugs.recordIntake(drugId, request, authentication.userId)
+    }
+
+    /**
+     * Синхронизация офлайн-изменений одной упаковки.
+     *
+     * PUT с придуманным клиентом идентификатором: повтор того же запроса — то же состояние, а
+     * не второе списание. Версии едут в теле, потому что запрос меняет два состояния сразу и
+     * разложить их по одному месту нельзя.
+     */
+    @PutMapping("/drugs/{drugId}/sync/{syncId}")
+    @Operation(
+        security = [SecurityRequirement(name = OpenApiConfiguration.BEARER_SCHEME)],
+        summary = "Apply offline changes to a package",
+        description = "Applies the consumed amount and the new claim in one transaction. " +
+            "Repeating the same request under the same identifier changes nothing; the same " +
+            "identifier with different content is a conflict."
+    )
+    @ApiResponse(responseCode = "200", description = "Changes applied")
+    @ApiResponse(responseCode = "204", description = "Package emptied by this request and destroyed")
+    @ApiResponse(responseCode = "404", description = "Package does not exist or is not accessible", content = [Content()])
+    @ApiResponse(responseCode = "409", description = "Stated version is not current, or the identifier was used for a different request", content = [Content()])
+    fun synchronise(
+        authentication: Authentication,
+        @Parameter(description = "Package identifier") @PathVariable drugId: Uuid,
+        @Parameter(description = "Client-invented identifier of this synchronisation") @PathVariable syncId: Uuid,
+        @SwaggerRequestBody(description = "Offline changes")
+        @Valid @RequestBody request: DrugSyncRequest
+    ): DrugSnapshotDTO? {
+        logger.debug("PUT /v1/drugs/{}/sync/{} by user {}", drugId, syncId, authentication.userId)
+        return drugs.synchronise(drugId, syncId, request, authentication.userId)
     }
 
     /**
@@ -159,10 +192,12 @@ class DrugController(private val drugs: DrugApplicationService) {
     fun moveDrug(
         authentication: Authentication,
         @Parameter(description = "Target medicine kit identifier") @PathVariable targetMedKitId: Uuid,
-        @Parameter(description = "Drug identifier") @PathVariable drugId: Uuid
+        @Parameter(description = "Drug identifier") @PathVariable drugId: Uuid,
+        @Parameter(description = "Version the command acts on; absent means 428")
+        @RequestParam(required = false) version: Long?
     ): DrugSnapshotDTO {
         logger.debug("PUT /v1/med-kits/{}/drugs/{} by user {}", targetMedKitId, drugId, authentication.userId)
-        return drugs.moveToMedKit(drugId, targetMedKitId, authentication.userId)
+        return drugs.moveToMedKit(drugId, targetMedKitId, version, authentication.userId)
     }
 }
 

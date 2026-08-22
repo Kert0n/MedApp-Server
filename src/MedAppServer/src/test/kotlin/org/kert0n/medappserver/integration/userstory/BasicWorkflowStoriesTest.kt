@@ -96,7 +96,7 @@ class BasicWorkflowStoriesTest {
         dbHelper.insert(ibuprofen)
 
         // Anna takes 2 tablets of Aspirin
-        drugService.consume(drugService.get(aspirin.id, anna.id), qty(2.0))
+        drugService.consume(drugService.get(aspirin.id, anna.id), qty(2.0), dbHelper.drugVersion(aspirin.id))
 
         // Check inventory
         val updatedAspirin = dbHelper.drug(aspirin.id)
@@ -191,7 +191,7 @@ class BasicWorkflowStoriesTest {
         assertEquals(2, loadedMedkit.members.size)
 
         // Bob leaves (drugs stay)
-        medKits.leave(medkit.id, bob.id)
+        medKits.leave(medkit.id, dbHelper.medKitVersion(medkit.id), bob.id)
 
         // Medkit still exists with Anna only
         val updatedMedkit = dbHelper.medKit(medkit.id)
@@ -249,7 +249,7 @@ class BasicWorkflowStoriesTest {
         assertEquals(2, medKitService.allOfUser(userData.id).size)
 
         // Delete old medkit and move drugs
-        medKits.delete(oldMedkit.id, userData.id, newMedkit.id)
+        medKits.delete(oldMedkit.id, dbHelper.medKitVersion(oldMedkit.id), userData.id, newMedkit.id)
 
         // Verify migration
         val drugsInNew = drugService.ofMedKit(newMedkit.id, userData.id)
@@ -288,9 +288,9 @@ class BasicWorkflowStoriesTest {
         dbHelper.insert(drugData)
 
         // Consume all in steps
-        disposal.consume(drugService.get(drugData.id, userData.id), qty(10.0))
-        disposal.consume(drugService.get(drugData.id, userData.id), qty(10.0))
-        disposal.consume(drugService.get(drugData.id, userData.id), qty(10.0))
+        disposal.consume(drugService.get(drugData.id, userData.id), qty(10.0), dbHelper.drugVersion(drugData.id))
+        disposal.consume(drugService.get(drugData.id, userData.id), qty(10.0), dbHelper.drugVersion(drugData.id))
+        disposal.consume(drugService.get(drugData.id, userData.id), qty(10.0), dbHelper.drugVersion(drugData.id))
 
         val updatedDrug = dbHelper.drug(drugData.id)
         // Must be deleted

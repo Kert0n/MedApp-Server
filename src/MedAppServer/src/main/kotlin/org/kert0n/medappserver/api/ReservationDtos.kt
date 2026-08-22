@@ -3,8 +3,6 @@
 package org.kert0n.medappserver.api
 
 import io.swagger.v3.oas.annotations.media.Schema
-import jakarta.validation.constraints.DecimalMin
-import jakarta.validation.constraints.Digits
 import jakarta.validation.constraints.NotNull
 import java.math.BigDecimal
 import kotlin.uuid.Uuid
@@ -41,16 +39,20 @@ data class ReservationCreateRequest(
     val drugId: Uuid,
 
     @field:NotNull
-    @field:DecimalMin(value = "0.0", inclusive = false)
-    @field:Digits(integer = 13, fraction = 6)
+    @field:PositiveQuantity
     @Schema(
         description = "Reserved amount, greater than zero. It may exceed what is left in the package.",
         example = "20.0",
-        required = true,
-        type = "string",
-        pattern = POSITIVE_QUANTITY_PATTERN
+        required = true
     )
-    val amount: BigDecimal
+    val amount: BigDecimal,
+
+    @Schema(
+        description =
+            "Version the command acts on; taken from the last read. Absent means 428, mismatched means 412",
+        example = "5", nullable = true
+    )
+    val version: Long? = null
 )
 
 /**
@@ -61,13 +63,18 @@ data class ReservationCreateRequest(
 @Serializable
 data class ReservationPatchRequest(
     @field:NotNull
-    @field:DecimalMin(value = "0.0", inclusive = false)
-    @field:Digits(integer = 13, fraction = 6)
+    @field:PositiveQuantity
     @Schema(
-        description = "New reserved amount, greater than zero", example = "15.0", required = true,
-        type = "string", pattern = POSITIVE_QUANTITY_PATTERN
+        description = "New reserved amount, greater than zero", example = "15.0", required = true
     )
-    val amount: BigDecimal
+    val amount: BigDecimal,
+
+    @Schema(
+        description =
+            "Version the command acts on; taken from the last read. Absent means 428, mismatched means 412",
+        example = "5", nullable = true
+    )
+    val version: Long? = null
 )
 
 /** Приём: съеденное уменьшает упаковку, а бронь её владелец правит отдельно. */
@@ -75,11 +82,16 @@ data class ReservationPatchRequest(
 @Serializable
 data class IntakeRequest(
     @field:NotNull
-    @field:DecimalMin(value = "0.0", inclusive = false)
-    @field:Digits(integer = 13, fraction = 6)
+    @field:PositiveQuantity
     @Schema(
-        description = "Amount taken, greater than zero", example = "2.0", required = true,
-        type = "string", pattern = POSITIVE_QUANTITY_PATTERN
+        description = "Amount taken, greater than zero", example = "2.0", required = true
     )
-    val quantity: BigDecimal
+    val quantity: BigDecimal,
+
+    @Schema(
+        description =
+            "Version the command acts on; taken from the last read. Absent means 428, mismatched means 412",
+        example = "3", nullable = true
+    )
+    val version: Long? = null
 )

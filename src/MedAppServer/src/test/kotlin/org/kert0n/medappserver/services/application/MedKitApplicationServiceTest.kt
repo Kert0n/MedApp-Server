@@ -89,7 +89,7 @@ class MedKitApplicationServiceTest {
         val drug = dbHelper.freshDrug(kit1.id, 50.0)
         dbHelper.flushAndClear()
 
-        val moved = drugs.moveToMedKit(drug.id, kit2.id, alice.id).drug
+        val moved = drugs.moveToMedKit(drug.id, kit2.id, dbHelper.drugVersion(drug.id), alice.id).drug
         assertEquals(kit2.id, moved.medKitId)
     }
 
@@ -108,7 +108,7 @@ class MedKitApplicationServiceTest {
         dbHelper.reserve(bob.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
-        drugs.moveToMedKit(drug.id, targetKit.id, alice.id)
+        drugs.moveToMedKit(drug.id, targetKit.id, dbHelper.drugVersion(drug.id), alice.id)
         dbHelper.flushAndClear()
 
         assertNull(dbHelper.userReservation(bob.id, drug.id))
@@ -129,7 +129,7 @@ class MedKitApplicationServiceTest {
         dbHelper.flushAndClear()
 
         assertDoesNotThrow {
-            drugs.moveToMedKit(drug.id, kitB.id, bob.id)
+            drugs.moveToMedKit(drug.id, kitB.id, dbHelper.drugVersion(drug.id), bob.id)
         }
 
         assertEquals(kitB.id, dbHelper.requireDrug(drug.id).medKitId)
@@ -143,7 +143,7 @@ class MedKitApplicationServiceTest {
         dbHelper.flushAndClear()
 
         assertThrows<DomainRuleViolated> {
-            drugs.moveToMedKit(drug.id, Uuid.random(), alice.id)
+            drugs.moveToMedKit(drug.id, Uuid.random(), dbHelper.drugVersion(drug.id), alice.id)
         }
     }
 
@@ -161,7 +161,7 @@ class MedKitApplicationServiceTest {
         dbHelper.reserve(bob.id, drug.id, qty(10.0))
         dbHelper.flushAndClear()
 
-        medKits.leave(kit.id, bob.id)
+        medKits.leave(kit.id, dbHelper.medKitVersion(kit.id), bob.id)
         dbHelper.flushAndClear()
 
         assertNotNull(medKitService.get(kit.id, alice.id))
@@ -179,7 +179,7 @@ class MedKitApplicationServiceTest {
         dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
-        medKits.delete(kit.id, alice.id, null)
+        medKits.delete(kit.id, dbHelper.medKitVersion(kit.id), alice.id, null)
         dbHelper.flushAndClear()
 
         assertThrows<DomainRuleViolated> {
@@ -197,7 +197,7 @@ class MedKitApplicationServiceTest {
         )
         dbHelper.flushAndClear()
 
-        medKits.delete(kitA.id, alice.id, kitB.id)
+        medKits.delete(kitA.id, dbHelper.medKitVersion(kitA.id), alice.id, kitB.id)
         dbHelper.flushAndClear()
 
         assertNull(dbHelper.medKit(kitA.id))
@@ -222,7 +222,7 @@ class MedKitApplicationServiceTest {
         dbHelper.reserve(charlie.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()
 
-        medKits.delete(oldKit.id, alice.id, newKit.id)
+        medKits.delete(oldKit.id, dbHelper.medKitVersion(oldKit.id), alice.id, newKit.id)
         dbHelper.flushAndClear()
 
         assertNotNull(dbHelper.userReservation(alice.id, drug.id))
@@ -235,7 +235,7 @@ class MedKitApplicationServiceTest {
         dbHelper.flushAndClear()
 
         assertThrows<DomainRuleViolated> {
-            medKits.delete(Uuid.random(), alice.id, null)
+            medKits.delete(Uuid.random(), 0, alice.id, null)
         }
     }
 

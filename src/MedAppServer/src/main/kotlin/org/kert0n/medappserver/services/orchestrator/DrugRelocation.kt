@@ -34,23 +34,13 @@ class DrugRelocation(
      * Состав целевой аптечки берётся тот, что прочитал вызывающий: правило смотрит на её
      * участников, и решение принимается по ним.
      */
-    /**
-     * По идентификаторам — то же самое плюс два чтения.
-     *
-     * Чужой агрегат читает оркестратор, а не сервис упаковки: тому знать про аптечку не
-     * положено. Оба чтения скоуплены вызывающим, и оба — проверка доступа.
-     */
     @Transactional(propagation = MANDATORY)
-    fun moveOne(drugId: Uuid, targetMedKitId: Uuid, userId: Uuid): Drug =
-        moveOne(drugService.get(drugId, userId), medKitService.get(targetMedKitId, userId))
-
-    @Transactional(propagation = MANDATORY)
-    fun moveOne(drug: Drug, target: MedKit): Drug {
+    fun moveOne(drug: Drug, target: MedKit, stated: Long): Drug {
         // Порядок важен, как и в массовом переезде: сначала снять брони тех, кто цель не
         // видит, и только потом двигать пачку. Иначе `ON UPDATE CASCADE` потащит их
         // `med_kit_id` в целевую аптечку, и ключ членства отвергнет весь переезд.
         reservationService.dropOnDrugExcept(drug, target.members)
-        return drugService.moveTo(drug, target)
+        return drugService.moveTo(drug, target, stated)
     }
 
     /**

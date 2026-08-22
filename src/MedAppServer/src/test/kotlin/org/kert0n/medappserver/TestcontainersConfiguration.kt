@@ -1,12 +1,20 @@
 package org.kert0n.medappserver
 
-import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection
 import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
 import org.testcontainers.postgresql.PostgreSQLContainer
 import org.testcontainers.utility.DockerImageName
 
-@TestConfiguration(proxyBeanMethods = false)
+/**
+ * Контейнер один на весь набор.
+ *
+ * `@Configuration`, а не `@TestConfiguration`: второе не подхватывается сканированием и требует
+ * `@Import` на каждом классе. Кто про импорт забывал, тот уходил на `jdbc:tc:` из
+ * `application.properties` и поднимал **свой** контейнер другой версии — набор шёл на двух
+ * разных Postgres сразу, при том что версия пришпилена как раз затем, чтобы этого не было.
+ */
+@Configuration(proxyBeanMethods = false)
 class TestcontainersConfiguration {
 
     @Bean

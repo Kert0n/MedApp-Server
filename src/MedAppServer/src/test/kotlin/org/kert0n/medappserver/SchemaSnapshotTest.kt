@@ -86,12 +86,61 @@ class SchemaSnapshotTest {
         val statements = buildList {
             addAll(SchemaSupplement.beforeTables)
             APPLICATION_TABLES.forEach { table ->
-                addAll(table.ddl)
-                table.indices.forEach { addAll(it.createStatement()) }
+                addAll(table.ddl.map { it.inColumns() })
+                table.indices.forEach { index -> addAll(index.createStatement()) }
             }
             addAll(SchemaSupplement.afterTables)
         }
         HEADER + statements.joinToString("\n\n") { "$it;" } + "\n"
+    }
+
+    /**
+     * Тело таблицы — по элементу на строку.
+     *
+     * Exposed отдаёт оператор одной строкой: у `user_drugs` это девять сотен символов, в которых
+     * колонку от ограничения глазами не отделить. Файл читают люди — печатаем его так, как
+     * написали бы руками.
+     *
+     * Правится только `CREATE TABLE`: у индексов и `ALTER` тело в одну короткую скобку, и
+     * разворачивать там нечего. Рукописные операторы `SchemaSupplement` сюда не попадают —
+     * они уже отформатированы, и трогать их незачем.
+     */
+    private fun String.inColumns(): String {
+        if (!startsWith("CREATE TABLE") || !endsWith(")")) return this
+
+        val body = substringAfter("(").dropLast(1)
+        return substringBefore("(").trimEnd() + " (\n" +
+            body.splitTopLevel().joinToString(",\n") { "    ${it.trim()}" } + "\n)"
+    }
+
+    /**
+     * Режет по запятым верхнего уровня.
+     *
+     * Вложенные скобки остаются целыми: `DECIMAL(19, 6)`, `PRIMARY KEY (drug_id, user_id)`,
+     * `CHECK (quantity > 0)`. Запятая внутри кавычек — тоже не разделитель: имя колонки или
+     * значение по умолчанию про наш синтаксис ничего не знают.
+     */
+    private fun String.splitTopLevel(): List<String> {
+        val parts = mutableListOf<String>()
+        val current = StringBuilder()
+        var depth = 0
+        var quote: Char? = null
+
+        forEach { symbol ->
+            when {
+                quote != null -> if (symbol == quote) quote = null
+                symbol == '\'' || symbol == '"' -> quote = symbol
+                symbol == '(' -> depth++
+                symbol == ')' -> depth--
+            }
+            if (symbol == ',' && depth == 0 && quote == null) {
+                parts += current.toString()
+                current.clear()
+            } else {
+                current.append(symbol)
+            }
+        }
+        return parts + current.toString()
     }
 
     private companion object {

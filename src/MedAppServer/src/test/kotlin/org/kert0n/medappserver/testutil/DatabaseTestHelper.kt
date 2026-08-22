@@ -4,6 +4,7 @@ import java.math.BigDecimal
 import kotlin.uuid.Uuid
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.core.JoinType
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.kert0n.medappserver.db.store.DrugStore
 import org.kert0n.medappserver.db.store.MedKitStore
@@ -11,6 +12,7 @@ import org.kert0n.medappserver.db.store.ReservationStore
 import org.kert0n.medappserver.db.store.UserStore
 import org.kert0n.medappserver.db.tables.Drugs
 import org.kert0n.medappserver.db.tables.MedKitMemberships
+import org.kert0n.medappserver.db.tables.MedKits
 import org.kert0n.medappserver.db.tables.QuantityUnits
 import org.kert0n.medappserver.db.tables.Reservations
 import org.kert0n.medappserver.domain.Drug
@@ -99,7 +101,7 @@ class DatabaseTestHelper(
     /** Бронь под подготовку сценария. */
     @Transactional
     fun reserve(userId: Uuid, drugId: Uuid, amount: BigDecimal): Reservation =
-        reservationService.create(drugService.get(drugId, userId), userId, amount)
+        reservationService.create(drugService.get(drugId, userId), userId, amount, reservationsVersion(drugId, userId))
             .also { flushAndClear() }
 
     /** Кладёт заранее собранный препарат: тестам нужны свои имена и количества. */
@@ -157,11 +159,20 @@ class DatabaseTestHelper(
      */
     @Transactional
     fun medKit(medKitId: Uuid): MedKit? {
-        val members = MedKitMemberships.selectAll()
-            .where { MedKitMemberships.medKitId eq medKitId }
-            .map { it[MedKitMemberships.userId] }
-            .toSet()
-        return if (members.isEmpty()) null else MedKit(medKitId, members)
+        val rows = MedKits
+            .join(MedKitMemberships, JoinType.INNER, MedKits.id, MedKitMemberships.medKitId)
+            .selectAll()
+            .where { MedKits.id eq medKitId }
+            .toList()
+
+        if (rows.isEmpty()) return null
+        // Версия читается вместе с составом: без неё оснастка отдавала ноль, и команды,
+        // предъявляющие версию, отвергались бы с 412 на ровном месте.
+        return MedKit(
+            id = medKitId,
+            members = rows.map { it[MedKitMemberships.userId] }.toSet(),
+            version = rows.first()[MedKits.version]
+        )
     }
 
     @Transactional
@@ -184,4 +195,22 @@ class DatabaseTestHelper(
     @Transactional
     fun userReservation(userId: Uuid, drugId: Uuid): BigDecimal? =
         reservations.find(userId, drugId)?.amount?.amount
+
+    /**
+     * Текущие версии — для команд, которые обязаны их предъявить.
+     *
+     * В тестах предъявляемое почти всегда «то, что сейчас в базе»: проверяются правила, а не
+     * само предусловие. Несовпадение проверяется отдельно и намеренно.
+     */
+    @Transactional
+    fun drugVersion(drugId: Uuid): Long = requireDrug(drugId).version
+
+    @Transactional
+    fun medKitVersion(medKitId: Uuid): Long =
+        medKit(medKitId)?.version ?: error("Аптечка $medKitId не найдена")
+
+    /** Версия картины броней: команды над бронью предъявляют её, а не версию своей строки. */
+    @Transactional
+    fun reservationsVersion(drugId: Uuid, userId: Uuid): Long =
+        reservationService.snapshotOn(drugService.get(drugId, userId), userId).version
 }

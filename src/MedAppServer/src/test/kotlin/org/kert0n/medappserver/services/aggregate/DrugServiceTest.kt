@@ -129,7 +129,7 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
-        val emptyUpdate = DrugEdit(null, null, null, null, null, null, null, null)
+        val emptyUpdate = DrugEdit(dbHelper.drugVersion(drug.id), null, null, null, null, null, null, null)
         drugService.update(drugService.get(drug.id, alice.id), emptyUpdate)
         dbHelper.flushAndClear()
 
@@ -144,6 +144,7 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         val fullUpdate = DrugEdit(
+            stated = dbHelper.drugVersion(drug.id),
             name = "New Name", quantity = qty(100.0), category = "cat", manufacturer = "man",
             country = "co", description = "desc"
         )
@@ -166,7 +167,7 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
-        drugService.update(drugService.get(drug.id, alice.id), DrugEdit(quantity = qty(20.0)))
+        drugService.update(drugService.get(drug.id, alice.id), DrugEdit(dbHelper.drugVersion(drug.id), quantity = qty(20.0)))
         dbHelper.flushAndClear()
 
         assertQty(20.0, dbHelper.drugQuantity(drug.id))
@@ -187,7 +188,7 @@ class DrugServiceTest {
         dbHelper.reserve(bob.id, drug.id, qty(40.0))
         dbHelper.flushAndClear()
 
-        drugService.update(drugService.get(drug.id, alice.id), DrugEdit(quantity = qty(50.0)))
+        drugService.update(drugService.get(drug.id, alice.id), DrugEdit(dbHelper.drugVersion(drug.id), quantity = qty(50.0)))
         dbHelper.flushAndClear()
 
         assertQty(50.0, dbHelper.drugQuantity(drug.id)!!)
@@ -205,7 +206,7 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         assertThrows<InvalidQuantity> {
-            drugService.update(drugService.get(drug.id, alice.id), DrugEdit(quantity = qty(0.0)))
+            drugService.update(drugService.get(drug.id, alice.id), DrugEdit(dbHelper.drugVersion(drug.id), quantity = qty(0.0)))
         }
     }
 
@@ -218,7 +219,7 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 50.0)
         dbHelper.flushAndClear()
 
-        drugService.delete(drugService.get(drug.id, alice.id))
+        drugService.delete(drugService.get(drug.id, alice.id), dbHelper.drugVersion(drug.id))
         dbHelper.flushAndClear()
 
         assertNull(dbHelper.drug(drug.id))
@@ -233,7 +234,7 @@ class DrugServiceTest {
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
-        val consumed = drugService.consume(drugService.get(drug.id, alice.id), qty(30.0))
+        val consumed = drugService.consume(drugService.get(drug.id, alice.id), qty(30.0), dbHelper.drugVersion(drug.id))
         assertQty(70.0, consumed?.quantity)
     }
 
@@ -245,7 +246,7 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         assertThrows<InsufficientStock> {
-            drugService.consume(drugService.get(drug.id, alice.id), qty(20.0))
+            drugService.consume(drugService.get(drug.id, alice.id), qty(20.0), dbHelper.drugVersion(drug.id))
         }
     }
 
@@ -264,8 +265,8 @@ class DrugServiceTest {
         dbHelper.flushAndClear()
 
         // Заявленное приходит извне упаковки: сама она про брони не знает.
-        val snapshot = drugService.get(drug.id, alice.id)
-            .toSnapshot(reservationService.onDrugs(listOf(drug.id), alice.id), alice.id)
+        val read = drugService.get(drug.id, alice.id)
+        val snapshot = read.toSnapshot(reservationService.onDrugs(listOf(read), alice.id).getValue(read.id))
         assertQty(100.0, snapshot.drug.quantity)
         assertQty(25.0, snapshot.reservations.total)
         assertQty(25.0, snapshot.reservations.mine!!, "своя доля видна отдельно от общей")

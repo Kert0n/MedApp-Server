@@ -1,6 +1,7 @@
 package org.kert0n.medappserver.integration
 
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.uuid.Uuid
@@ -127,6 +128,30 @@ class StoreIntegrationTest {
         assertNull(reservations.find(bob.id, drug.id), "у Боба брони нет")
     }
 
+    /**
+     * Снимок чужой упаковки не отдаётся — и не сообщает, что она есть.
+     *
+     * Снимок несёт версию картины броней. Отдать её постороннему значило бы выдать и сам факт
+     * существования пачки: по идентификатору можно было бы отличить чужую от несуществующей.
+     * Обе отвечают одинаково.
+     */
+    @Test
+    fun `чужой снимок броней не отдаётся и о существовании пачки не сообщает`() {
+        val alice = dbHelper.freshUser("alice")
+        val stranger = dbHelper.freshUser("stranger")
+        val kit = medKitService.create(alice.id)
+        val drug = dbHelper.freshDrug(kit.id, 50.0)
+        dbHelper.reserve(alice.id, drug.id, qty(5.0))
+        dbHelper.flushAndClear()
+
+        assertNotNull(reservations.snapshotOf(drug, alice.id), "своя упаковка читается")
+        assertNull(reservations.snapshotOf(drug, stranger.id), "чужая — нет")
+        assertNull(
+            reservations.snapshotOf(drug.copy(id = Uuid.random()), stranger.id),
+            "несуществующая отвечает так же"
+        )
+    }
+
     @Test
     fun `заявленное на упаковку без броней равно нулю`() {
         val alice = dbHelper.freshUser("alice")
@@ -187,7 +212,7 @@ class StoreIntegrationTest {
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
-        medKits.delete(dbHelper.medKit(kit.id)!!)
+        medKits.delete(dbHelper.medKit(kit.id)!!, dbHelper.medKitVersion(kit.id))
         dbHelper.flushAndClear()
 
         assertNull(dbHelper.medKit(kit.id))
@@ -227,7 +252,7 @@ class StoreIntegrationTest {
         dbHelper.flushAndClear()
 
         reservations.deleteInMedKitExcept(dbHelper.medKit(source.id)!!, setOf(alice.id))
-        drugs.moveAllToMedKit(source.id, target.id)
+        drugs.moveAllToMedKit(dbHelper.medKit(source.id)!!, dbHelper.medKit(target.id)!!)
         dbHelper.flushAndClear()
 
         assertEquals(target.id, dbHelper.requireDrug(first.id).medKitId)
