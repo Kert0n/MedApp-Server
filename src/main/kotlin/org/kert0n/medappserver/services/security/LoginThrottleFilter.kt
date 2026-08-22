@@ -8,12 +8,12 @@ import org.springframework.http.HttpStatus
 import org.springframework.web.filter.OncePerRequestFilter
 
 /**
- * Caps token requests per client address.
+ * Ограничивает число запросов токена с одного адреса клиента.
  *
- * A filter, not a controller check: bcrypt runs inside
- * [org.springframework.security.web.authentication.www.BasicAuthenticationFilter], so by the time
- * a controller method runs the CPU is already spent. Not a `@Component` either — a Filter bean
- * would be registered for every request, and this belongs only to the token-issuing chain.
+ * Фильтром, а не проверкой в контроллере: bcrypt считается внутри
+ * [org.springframework.security.web.authentication.www.BasicAuthenticationFilter], и к моменту,
+ * когда доходит до метода контроллера, процессор уже потрачен. И не `@Component`: бин-фильтр
+ * зарегистрировался бы на каждый запрос, а это дело только цепочки выдачи токена.
  */
 class LoginThrottleFilter(
     private val securityService: SecurityService,
@@ -25,8 +25,8 @@ class LoginThrottleFilter(
         response: HttpServletResponse,
         filterChain: FilterChain
     ) {
-        // remoteAddr, not the raw header: with forward-headers-strategy=native Tomcat's
-        // RemoteIpValve has already resolved the client address, and only for trusted peers.
+        // `remoteAddr`, а не сырой заголовок: при `forward-headers-strategy=native` адрес
+        // клиента уже разобрал `RemoteIpValve` томката — и только для доверенных узлов.
         val clientAddress = request.remoteAddr
 
         if (!securityService.isLoginAllowed(clientAddress)) {
