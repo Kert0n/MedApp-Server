@@ -65,7 +65,6 @@ class ComplexWorkflowStoriesTest {
      * - Reservations survive an intake untouched, even past what is left in the package
      * - Reservations of users who lose access are stripped, on single moves and full migrations
      * - Auto-deletion of MedKits when empty
-     * - JPA L1 Cache integrity across complex interwoven workflows
      */
     @Test
     fun `Story 17 - The Roommate Saga complex interwoven workflow`() {
@@ -196,7 +195,7 @@ class ComplexWorkflowStoriesTest {
             "Cascade should kill the drugs inside the abandoned kit"
         )
 
-        println("✅ Story 17 passed: The Roommate Saga completed without a single JPA integrity violation")
+        println("✅ Story 17 passed: The Roommate Saga completed")
     }
 
     @Test
