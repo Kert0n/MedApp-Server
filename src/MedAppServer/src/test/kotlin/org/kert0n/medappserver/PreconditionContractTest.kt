@@ -1,7 +1,5 @@
 package org.kert0n.medappserver
 
-import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.ObjectMapper
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -15,6 +13,13 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
+import kotlinx.serialization.json.JsonElement
+import org.kert0n.medappserver.testutil.asJsonTree
+import org.kert0n.medappserver.testutil.field
+import org.kert0n.medappserver.testutil.fields
+import org.kert0n.medappserver.testutil.has
+import org.kert0n.medappserver.testutil.items
+import org.kert0n.medappserver.testutil.text
 import org.springframework.web.context.WebApplicationContext
 
 /**
@@ -46,13 +51,13 @@ class PreconditionContractTest {
     @Test
     fun `операция с версией объявляет 428 и 412`() {
         val contract = contract()
-        val schemas = contract.path("components").path("schemas")
+        val schemas = contract.field("components").field("schemas")
 
         val stated = sortedSetOf<String>()
         val declared = sortedSetOf<String>()
         forEachOperation(contract) { name, operation ->
             if (statesVersion(operation, schemas)) stated += name
-            val responses = operation.path("responses")
+            val responses = operation.field("responses")
             if (responses.has("428") && responses.has("412")) declared += name
         }
 
@@ -72,41 +77,40 @@ class PreconditionContractTest {
      */
     @Test
     fun `синхронизация отвечает конфликтом, а не предусловием`() {
-        val sync = contract().path("paths")
-            .path("/v1/drugs/{drugId}/sync/{syncId}").path("put").path("responses")
+        val sync = contract().field("paths")
+            .field("/v1/drugs/{drugId}/sync/{syncId}").field("put").field("responses")
 
         assertTrue(sync.has("409"), "версия из тела синхронизации отвечает 409")
         assertTrue(!sync.has("412"), "предусловием запроса версия синхронизации не была")
         assertTrue(!sync.has("428"), "того же и про 428: версии в теле необязательны")
     }
 
-    private fun contract(): JsonNode {
-        val json = mockMvc.perform(get("/v3/api-docs"))
+    private fun contract(): JsonElement =
+        mockMvc.perform(get("/v3/api-docs"))
             .andExpect(status().isOk)
             .andReturn().response.contentAsByteArray
             .toString(Charsets.UTF_8)
-        return ObjectMapper().readTree(json)
-    }
+            .asJsonTree()
 
-    private fun forEachOperation(contract: JsonNode, visit: (String, JsonNode) -> Unit) {
-        contract.path("paths").fields().forEach { (path, item) ->
+    private fun forEachOperation(contract: JsonElement, visit: (String, JsonElement) -> Unit) {
+        contract.field("paths").fields().forEach { (path, item) ->
             item.fields().forEach { (method, operation) -> visit("$method $path", operation) }
         }
     }
 
     /** То же определение, что и в контракте: параметр `version` или поле `version` в теле. */
-    private fun statesVersion(operation: JsonNode, schemas: JsonNode): Boolean {
-        val inQuery = operation.path("parameters").any {
-            it.path("name").asText() == "version" && it.path("in").asText() == "query"
+    private fun statesVersion(operation: JsonElement, schemas: JsonElement?): Boolean {
+        val inQuery = operation.field("parameters").items().any {
+            it.field("name").text() == "version" && it.field("in").text() == "query"
         }
         return inQuery || "version" in bodyProperties(operation, schemas)
     }
 
-    private fun bodyProperties(operation: JsonNode, schemas: JsonNode): Set<String> {
-        val schema = operation.path("requestBody").path("content").fields().asSequence()
-            .firstOrNull()?.value?.path("schema") ?: return emptySet()
-        val resolved = schema.path("\$ref").asText("").substringAfterLast('/')
-            .takeIf { it.isNotEmpty() }?.let { schemas.path(it) } ?: schema
-        return resolved.path("properties").fieldNames().asSequence().toSet()
+    private fun bodyProperties(operation: JsonElement, schemas: JsonElement?): Set<String> {
+        val declared = operation.field("requestBody").field("content").fields()
+            .values.firstOrNull()?.field("schema") ?: return emptySet()
+        val resolved = declared.field("\$ref").text()?.substringAfterLast('/')
+            ?.let { schemas.field(it) } ?: declared
+        return resolved.field("properties").fields().keys
     }
 }
