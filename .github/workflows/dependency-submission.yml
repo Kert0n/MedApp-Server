@@ -1,0 +1,39 @@
+name: Граф зависимостей
+
+# Граф репозитория наполняется сам только там, где зависимости видны прямо в манифесте. У Gradle
+# они известны лишь после разрешения конфигураций — то есть после сборки, — поэтому дерево надо
+# подавать. Замерено на #110: без подачи в графе было 8 записей, и все восемь — сами actions.
+#
+# Отсюда и цена молчания: `dependency-review` на каждом PR сравнивал пустой список с пустым и
+# честно отвечал «всё хорошо».
+on:
+  push:
+    branches: [ main ]
+  # Чтобы первый граф не пришлось ждать до следующего слияния.
+  workflow_dispatch:
+
+concurrency:
+  group: dependency-submission
+  cancel-in-progress: true
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+
+    permissions:
+      # Единственный workflow, которому нужна запись: подача дерева идёт через Dependency
+      # submission API, а он живёт под правом `contents`. Остальные остаются на чтении.
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      # Разрешает все конфигурации проекта и отправляет получившееся дерево. На PR не
+      # запускается намеренно: граф репозитория — это состояние main, и содержимому чужой ветки
+      # в нём не место.
+      - uses: gradle/actions/dependency-submission@v6
