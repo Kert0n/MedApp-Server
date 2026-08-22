@@ -1,4 +1,4 @@
-package org.kert0n.medappserver.queryplan
+package org.kert0n.medappserver.testutil
 
 import org.jetbrains.exposed.v1.core.SqlLogger
 import org.jetbrains.exposed.v1.core.Transaction
@@ -14,7 +14,11 @@ import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
  * набор и должен ловить.
  *
  * Значения подставляются в текст: `EXPLAIN` нужен готовый оператор, а не подготовленный с
- * параметрами.
+ * параметрами. Тому, кто считает запросы, текст не нужен вовсе — нужно их число, — но одна запись
+ * на оба применения честнее двух похожих.
+ *
+ * Живёт в общей оснастке, потому что нужен обоим наборам: планы запросов смотрят на форму
+ * оператора, гейты N+1 — на их количество.
  */
 class RecordedSql : SqlLogger {
 
