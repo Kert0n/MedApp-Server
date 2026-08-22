@@ -15,13 +15,19 @@ import kotlin.uuid.Uuid
  * версия у картины целиком, и её двигает любая правка брони на этой упаковке.
  *
  * Упаковка обо всём этом не знает: у `Drug` ни суммы, ни доступного остатка нет и не будет.
+ *
+ * Упаковка приходит агрегатом, а не идентификатором: снимок собирает тот, кто её прочитал, и
+ * прочитал скоуплено. Хранится от неё только идентификатор — снимок про упаковку ничего
+ * больше не знает, — но взять его неоткуда, кроме как из самой пачки.
  */
-data class ReservationSnapshot(
-    val drugId: Uuid,
+class ReservationSnapshot(
+    drug: Drug,
     val total: BigDecimal,
     val mine: BigDecimal?,
     val version: Long
 ) {
+    val drugId: Uuid = drug.id
+
     companion object {
         /**
          * Собирается из броней упаковки, а не из хранимой суммы.
@@ -29,16 +35,16 @@ data class ReservationSnapshot(
          * Брони на эту упаковку читающая сторона всё равно получает, поэтому складываются они
          * здесь — в одном месте, а не в мапперe ответа.
          */
-        fun of(drugId: Uuid, reservations: List<Reservation>, userId: Uuid, version: Long) =
+        fun of(drug: Drug, reservations: List<Reservation>, userId: Uuid, version: Long) =
             ReservationSnapshot(
-                drugId = drugId,
+                drug = drug,
                 total = reservations.fold(BigDecimal.ZERO) { sum, it -> sum + it.amount.amount },
                 mine = reservations.firstOrNull { it.userId == userId }?.amount?.amount,
                 version = version
             )
 
         /** Ни одной брони: сумма ноль, своей доли нет. Версия всё равно есть — она у упаковки. */
-        fun empty(drugId: Uuid, version: Long) =
-            ReservationSnapshot(drugId, BigDecimal.ZERO, null, version)
+        fun empty(drug: Drug, version: Long) =
+            ReservationSnapshot(drug, BigDecimal.ZERO, null, version)
     }
 }

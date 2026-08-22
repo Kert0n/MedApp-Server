@@ -133,6 +133,6 @@ class ReservationService(
      * сумму, и устаревшей для него бывает именно картина.
      */
     @Transactional(propagation = MANDATORY, readOnly = true)
-    fun snapshotOn(drugId: Uuid, userId: Uuid): ReservationSnapshot =
-        reservations.snapshotOf(drugId, userId) ?: throw NotAMember()
+    fun snapshotOn(drug: Drug, userId: Uuid): ReservationSnapshot =
+        reservations.snapshotOf(drug, userId) ?: throw NotAMember()
 }

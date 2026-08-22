@@ -144,9 +144,12 @@ class StoreIntegrationTest {
         dbHelper.reserve(alice.id, drug.id, qty(5.0))
         dbHelper.flushAndClear()
 
-        assertNotNull(reservations.snapshotOf(drug.id, alice.id), "своя упаковка читается")
-        assertNull(reservations.snapshotOf(drug.id, stranger.id), "чужая — нет")
-        assertNull(reservations.snapshotOf(Uuid.random(), stranger.id), "несуществующая отвечает так же")
+        assertNotNull(reservations.snapshotOf(drug, alice.id), "своя упаковка читается")
+        assertNull(reservations.snapshotOf(drug, stranger.id), "чужая — нет")
+        assertNull(
+            reservations.snapshotOf(drug.copy(id = Uuid.random()), stranger.id),
+            "несуществующая отвечает так же"
+        )
     }
 
     @Test

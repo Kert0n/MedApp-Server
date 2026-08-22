@@ -86,7 +86,7 @@ class ResourceApiContractTest {
         quantity = Quantity(qty(100.0), unit)
     )
     private val drugDto = drug.toDto()
-    private val snapshot = drug.toSnapshot(ReservationSnapshot.empty(drugId, version = 0))
+    private val snapshot = drug.toSnapshot(ReservationSnapshot.empty(drug, version = 0))
 
     @BeforeEach
     fun setup() {

@@ -135,13 +135,13 @@ class OptimisticRaceTest {
         val outcome = race(
             { sync ->
                 val read = drugService.get(drug.id, alice.id)
-                val claims = reservationService.snapshotOn(drug.id, alice.id)
+                val claims = reservationService.snapshotOn(read, alice.id)
                 sync()
                 reservationService.create(read, alice.id, BigDecimal("5"), claims.version)
             },
             { sync ->
                 val read = drugService.get(drug.id, bob.id)
-                val claims = reservationService.snapshotOn(drug.id, bob.id)
+                val claims = reservationService.snapshotOn(read, bob.id)
                 sync()
                 reservationService.create(read, bob.id, BigDecimal("7"), claims.version)
             }
@@ -172,7 +172,7 @@ class OptimisticRaceTest {
         race(
             { sync ->
                 val read = drugService.get(drug.id, bob.id)
-                val claims = reservationService.snapshotOn(drug.id, bob.id)
+                val claims = reservationService.snapshotOn(read, bob.id)
                 sync()
                 reservationService.create(read, bob.id, BigDecimal("4"), claims.version)
             },
@@ -207,13 +207,13 @@ class OptimisticRaceTest {
         val outcome = race(
             { sync ->
                 val read = drugService.get(drug.id, owner.id)
-                val claims = reservationService.snapshotOn(drug.id, owner.id)
+                val claims = reservationService.snapshotOn(read, owner.id)
                 sync()
                 reservationService.create(read, owner.id, BigDecimal("5"), claims.version)
             },
             { sync ->
                 val read = drugService.get(drug.id, owner.id)
-                val claims = reservationService.snapshotOn(drug.id, owner.id)
+                val claims = reservationService.snapshotOn(read, owner.id)
                 sync()
                 reservationService.create(read, owner.id, BigDecimal("6"), claims.version)
             }

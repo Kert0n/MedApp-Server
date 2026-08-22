@@ -212,5 +212,5 @@ class DatabaseTestHelper(
     /** Версия картины броней: команды над бронью предъявляют её, а не версию своей строки. */
     @Transactional
     fun reservationsVersion(drugId: Uuid, userId: Uuid): Long =
-        reservationService.snapshotOn(drugId, userId).version
+        reservationService.snapshotOn(drugService.get(drugId, userId), userId).version
 }

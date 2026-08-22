@@ -36,7 +36,7 @@ class DrugSynchronisation(
 
     @Transactional(propagation = MANDATORY)
     fun apply(syncId: Uuid, drug: Drug, userId: Uuid, request: SyncRequest): Drug? {
-        val intake = Intake(syncId, userId, drug.id, request.consumed, request.reservation?.amount)
+        val intake = Intake(syncId, userId, drug, request.consumed, request.reservation?.amount)
         if (alreadyApplied(intake)) return drug
 
         // `null` — списание опустошило пачку, и её больше нет вместе с бронями на неё.
@@ -78,7 +78,7 @@ class DrugSynchronisation(
     private fun applyReservation(drug: Drug?, userId: Uuid, wanted: ReservationPart?) {
         if (drug == null || wanted == null) return
 
-        val snapshot = reservationService.snapshotOn(drug.id, userId)
+        val snapshot = reservationService.snapshotOn(drug, userId)
         // Версии нет — брони ещё не было, сверяться не с чем: за неизменность отвечает
         // прочитанное только что, и от одновременной записи предикат защищает всё равно.
         val stated = wanted.version ?: snapshot.version

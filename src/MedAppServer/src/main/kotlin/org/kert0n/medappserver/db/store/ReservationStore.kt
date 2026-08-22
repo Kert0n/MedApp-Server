@@ -84,30 +84,31 @@ class ReservationStore {
     fun snapshotsOf(drugs: List<Drug>, userId: Uuid): Map<Uuid, ReservationSnapshot> {
         if (drugs.isEmpty()) return emptyMap()
 
-        val ids = drugs.map { it.id }
+        val byId = drugs.associateBy { it.id }
+        val ids = byId.keys.toList()
         val versions = Drugs.select(Drugs.id, Drugs.reservationsVersion)
             .where { Drugs.id inList ids }
             .associate { it[Drugs.id] to it[Drugs.reservationsVersion] }
         val byDrug = findAllOfDrugs(ids, userId).groupBy { it.drugId }
 
         return ids.associateWith { id ->
-            ReservationSnapshot.of(id, byDrug[id].orEmpty(), userId, versions.getValue(id))
+            ReservationSnapshot.of(byId.getValue(id), byDrug[id].orEmpty(), userId, versions.getValue(id))
         }
     }
 
     /**
-     * Снимок одной упаковки по её идентификатору — только если она доступна вызывающему.
+     * Снимок одной упаковки — только если она доступна вызывающему.
      *
-     * Предикат здесь обязателен, и обойтись доказательством вызывающего нельзя: приходит
-     * идентификатор, а не прочитанная упаковка. Без предиката утекали бы и чужая версия, и сам
-     * факт, что такая пачка есть, — `null` отвечает одинаково на чужую и на несуществующую.
+     * Предикат здесь стоит, хотя упаковка и приходит агрегатом: чтения скоупятся запросом, и
+     * держать этот раздел на исключениях означало бы читать его с оглядкой. Заодно он ловит
+     * пачку, которую успели удалить, — `null` отвечает одинаково на чужую и на исчезнувшую.
      */
-    fun snapshotOf(drugId: Uuid, userId: Uuid): ReservationSnapshot? {
+    fun snapshotOf(drug: Drug, userId: Uuid): ReservationSnapshot? {
         val version = Drugs.select(Drugs.reservationsVersion)
-            .where { (Drugs.id eq drugId) and Drugs.medKitId.inMedKitsOf(userId) }
+            .where { (Drugs.id eq drug.id) and Drugs.medKitId.inMedKitsOf(userId) }
             .singleOrNull()?.get(Drugs.reservationsVersion)
             ?: return null
-        return ReservationSnapshot.of(drugId, findAllOfDrugs(listOf(drugId), userId), userId, version)
+        return ReservationSnapshot.of(drug, findAllOfDrugs(listOf(drug.id), userId), userId, version)
     }
 
     /** Чужие брони видно там, куда есть доступ: аптечка у брони своя, отдельным полем. */

@@ -67,7 +67,7 @@ class DrugApplicationService(
         logger.debug("Creating drug {} in medkit {}", request.name, medKitId)
         // Свежая упаковка: броней на неё быть не может, читать нечего.
         val created = placement.place(request.toCommand(), medKitId, userId)
-        return created.toSnapshot(ReservationSnapshot.empty(created.id, version = 0))
+        return created.toSnapshot(ReservationSnapshot.empty(created, version = 0))
     }
 
     @Transactional
