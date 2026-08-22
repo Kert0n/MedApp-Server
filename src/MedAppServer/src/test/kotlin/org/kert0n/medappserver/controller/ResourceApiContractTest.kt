@@ -143,12 +143,12 @@ class ResourceApiContractTest {
 
     @Test
     fun `приём создаётся подчинённым ресурсом упаковки`() {
-        whenever(drugs.recordIntake(eq(drugId), any(), eq(userId))).thenReturn(snapshot)
+        whenever(drugs.recordIntake(eq(drugId), any(), any(), eq(userId))).thenReturn(snapshot)
 
         mockMvc.perform(
             post(ApiRoutes.intakes(drugId)).with(asUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"quantity":"2.0"}""")
+                .content("""{"quantity":"2.0","version":0}""")
         )
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.drug.id").value(drugId.toString()))
@@ -157,18 +157,18 @@ class ResourceApiContractTest {
     @Test
     fun `перенос выражен размещением препарата в целевой аптечке`() {
         val target = Uuid.random()
-        whenever(drugs.moveToMedKit(drugId, target, userId)).thenReturn(snapshot)
+        whenever(drugs.moveToMedKit(drugId, target, 0, userId)).thenReturn(snapshot)
 
-        mockMvc.perform(put(ApiRoutes.drugIn(target, drugId)).with(asUser()))
+        mockMvc.perform(put(ApiRoutes.drugIn(target, drugId)).param("version", "0").with(asUser()))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.drug.id").value(drugId.toString()))
     }
 
     @Test
     fun `препарат удаляется`() {
-        doNothing().whenever(drugs).delete(drugId, userId)
+        doNothing().whenever(drugs).delete(drugId, 0, userId)
 
-        mockMvc.perform(delete(ApiRoutes.drug(drugId)).with(asUser()))
+        mockMvc.perform(delete(ApiRoutes.drug(drugId)).param("version", "0").with(asUser()))
             .andExpect(status().isNoContent)
     }
 
@@ -193,14 +193,14 @@ class ResourceApiContractTest {
     @Test
     fun `план лечения создаётся и меняется`() {
         val reservation = Reservation(userId = userId, drugId = drugId, amount = Quantity(qty(20.0), unit)).toDto()
-        whenever(reservations.create(eq(userId), eq(drugId), any())).thenReturn(reservation)
-        whenever(reservations.changeTo(eq(userId), eq(drugId), any())).thenReturn(reservation)
+        whenever(reservations.create(eq(userId), eq(drugId), any(), any())).thenReturn(reservation)
+        whenever(reservations.changeTo(eq(userId), eq(drugId), any(), any())).thenReturn(reservation)
         whenever(reservations.read(userId, drugId)).thenReturn(reservation)
 
         mockMvc.perform(
             post(ApiRoutes.RESERVATIONS).with(asUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(json.encodeToString(ReservationCreateRequest(drugId, qty(20.0))))
+                .content(json.encodeToString(ReservationCreateRequest(drugId, qty(20.0), version = 0)))
         )
             .andExpect(status().isCreated)
             .andExpect(jsonPath("$.drugId").value(drugId.toString()))
@@ -211,16 +211,16 @@ class ResourceApiContractTest {
         mockMvc.perform(
             patch(ApiRoutes.reservation(drugId)).with(asUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(json.encodeToString(ReservationPatchRequest(qty(15.0))))
+                .content(json.encodeToString(ReservationPatchRequest(qty(15.0), version = 0)))
         )
             .andExpect(status().isOk)
     }
 
     @Test
     fun `план лечения удаляется`() {
-        doNothing().whenever(reservations).cancel(userId, drugId)
+        doNothing().whenever(reservations).cancel(userId, drugId, 0)
 
-        mockMvc.perform(delete(ApiRoutes.reservation(drugId)).with(asUser()))
+        mockMvc.perform(delete(ApiRoutes.reservation(drugId)).param("version", "0").with(asUser()))
             .andExpect(status().isNoContent)
     }
 
@@ -256,7 +256,7 @@ class ResourceApiContractTest {
     fun `членство создаётся и удаляется`() {
         whenever(medKits.joinByInvitation("invite-key", userId))
             .thenReturn(MedKitDTO(medKitId, 2, emptySet()))
-        doNothing().whenever(medKits).leave(medKitId, userId)
+        doNothing().whenever(medKits).leave(medKitId, 0, userId)
 
         mockMvc.perform(
             post(ApiRoutes.MEMBERSHIPS).with(asUser())
@@ -272,7 +272,7 @@ class ResourceApiContractTest {
     @Test
     fun `удаление аптечки принимает целевую параметром запроса`() {
         val target = Uuid.random()
-        doNothing().whenever(medKits).delete(medKitId, userId, target)
+        doNothing().whenever(medKits).delete(medKitId, 0, userId, target)
 
         mockMvc.perform(
             delete(ApiRoutes.medKit(medKitId))

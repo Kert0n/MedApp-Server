@@ -134,6 +134,11 @@ class ReservationService(
     private fun snapshotOf(drug: Drug, userId: Uuid): ReservationSnapshot =
         reservations.snapshotsOf(listOf(drug), userId).getValue(drug.id)
 
+    /** Картина броней упаковки — для тех, кто предъявляет её версию. */
+    @Transactional(propagation = MANDATORY, readOnly = true)
+    fun snapshotOn(drugId: Uuid, userId: Uuid): ReservationSnapshot =
+        reservations.snapshotOf(drugId, userId)
+
     private fun snapshotOf(reservation: Reservation): ReservationSnapshot =
         reservations.snapshotOf(reservation.drugId, reservation.userId)
 }

@@ -22,6 +22,15 @@ import kotlinx.serialization.UseSerializers
  * умалчивал бы о правиле, которое сервер применяет. Согласие с `QUANTITY_PRECISION` и
  * `QUANTITY_SCALE` сторожит тест.
  */
+/**
+ * Версия, которую команда предъявляет.
+ *
+ * Обнуляемая намеренно: отсутствие поля — это 428 «предусловие обязательно», а не 400. Не
+ * прислать версию и прислать мусор — разные ошибки, и отвечать на них одинаково нечестно.
+ */
+const val VERSION_STATED: String =
+    "Version the command acts on; taken from the last read. Absent means 428, mismatched means 412"
+
 const val QUANTITY_PATTERN: String = "^\\d{1,13}(\\.\\d{1,6})?$"
 
 /**
@@ -62,7 +71,16 @@ data class DrugDTO(
     @Schema(description = "Description")
     val description: String?,
     @Schema(description = "Medicine kit the drug belongs to")
-    val medKitId: Uuid
+    val medKitId: Uuid,
+    /**
+     * Версия состояния самой пачки — то, что команда упаковки обязана предъявить.
+     *
+     * Полем, а не заголовком: ответ несёт два независимых состояния — саму пачку и заявленное
+     * на неё, — и подгонять модель под один `ETag` незачем. Списочные чтения тега и вовсе не
+     * несут, а клиенту, уходящему в офлайн, версии нужны именно оттуда.
+     */
+    @Schema(description = "Version of the package state; state it back when commanding", example = "3")
+    val version: Long
 )
 
 /** Аптечка задаётся путём, поэтому её идентификатора в теле нет. */
@@ -150,7 +168,10 @@ data class DrugPatchRequest(
 
     @field:Size(max = 4000)
     @Schema(description = "Description")
-    val description: String? = null
+    val description: String? = null,
+
+    @Schema(description = VERSION_STATED, example = "3", nullable = true)
+    val version: Long? = null
 )
 
 @Schema(description = "Catalogue entry used as a template for a new drug")
@@ -209,7 +230,15 @@ data class ReservationsDTO(
         description = "Reserved by the caller; absent when they claimed nothing", nullable = true,
         type = "string", pattern = POSITIVE_QUANTITY_PATTERN
     )
-    val mine: BigDecimal?
+    val mine: BigDecimal?,
+    /**
+     * Версия всей картины броней на этой упаковке.
+     *
+     * Принадлежит картине, а не отдельной брони: изменить свою долю, не увидев, сколько
+     * заявлено всего, нельзя — иначе решение принимается вслепую.
+     */
+    @Schema(description = "Version of the claims on this package; state it back when commanding", example = "5")
+    val version: Long
 )
 
 /**

@@ -135,7 +135,7 @@ class ComplexWorkflowStoriesTest {
         val travelKit = medKitService.create(alice.id)
 
 
-        drugs.moveToMedKit(painkillers.id, travelKit.id, alice.id)
+        drugs.moveToMedKit(painkillers.id, travelKit.id, dbHelper.drugVersion(painkillers.id), alice.id)
 
 
         // Bob and Charlie cannot see the Travel Kit, so their reservations go with the pack
@@ -154,7 +154,7 @@ class ComplexWorkflowStoriesTest {
 
 
         // Perform the complex deletion migration
-        medKits.delete(homeKit.id, alice.id, duoKit.id)
+        medKits.delete(homeKit.id, dbHelper.medKitVersion(homeKit.id), alice.id, duoKit.id)
 
 
         // Verify Home Kit is dead
@@ -179,7 +179,7 @@ class ComplexWorkflowStoriesTest {
         // PHASE 6: Last User Standing Auto-Cleanup
         // ==========================================
         // Bob leaves Duo Kit
-        medKits.leave(duoKit.id, bob.id)
+        medKits.leave(duoKit.id, dbHelper.medKitVersion(duoKit.id), bob.id)
 
 
         val duoKitCheck1 = dbHelper.medKit(duoKit.id)!!
@@ -242,7 +242,7 @@ class ComplexWorkflowStoriesTest {
 
         // ── Phase 3: Move Drug ──
         // Alice moves the drug to targetKit (where Bob has no access).
-        drugs.moveToMedKit(drug.id, targetKit.id, alice.id)
+        drugs.moveToMedKit(drug.id, targetKit.id, dbHelper.drugVersion(drug.id), alice.id)
         dbHelper.flushAndClear()
 
         val movedDrug = dbHelper.requireDrug(drug.id)
@@ -285,7 +285,7 @@ class ComplexWorkflowStoriesTest {
 
         // ACT: Bob moves the drug to his private kit — he needs no reservation of his own
         assertDoesNotThrow {
-            drugs.moveToMedKit(drug.id, kitB.id, bob.id)
+            drugs.moveToMedKit(drug.id, kitB.id, dbHelper.drugVersion(drug.id), bob.id)
         }
 
         // VERIFY: Drug moved
@@ -311,7 +311,7 @@ class ComplexWorkflowStoriesTest {
         // Alice has a private kit (Bob is NOT in this one)
         val kitB = medKitService.create(alice.id)
         // ACT: Move drug to private kit
-        drugs.moveToMedKit(drug.id, kitB.id, alice.id)
+        drugs.moveToMedKit(drug.id, kitB.id, dbHelper.drugVersion(drug.id), alice.id)
         // VERIFY: Bob's reservation is purged, Alice's remains
         val aliceReservation = dbHelper.userReservation(alice.id, drug.id)
         val bobReservation = dbHelper.userReservation(bob.id, drug.id)
@@ -329,7 +329,7 @@ class ComplexWorkflowStoriesTest {
             drugs.createInMedKit(kitA.id, DrugCreateRequest("Migrating Meds", qty(10.0), dbHelper.unit().id), alice.id)
 
         // ACT: Delete Kit A and migrate drugs to Kit B
-        medKits.delete(kitA.id, alice.id, kitB.id)
+        medKits.delete(kitA.id, dbHelper.medKitVersion(kitA.id), alice.id, kitB.id)
         // VERIFY: Kit A is gone, but the drug survives in Kit B
         val survivingDrug = dbHelper.drug(drug.drug.id)
 

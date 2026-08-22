@@ -30,7 +30,8 @@ fun Drug.toDto(): DrugDTO = DrugDTO(
     manufacturer = manufacturer,
     country = country,
     description = description,
-    medKitId = medKitId
+    medKitId = medKitId,
+    version = version
 )
 
 fun Reservation.toDto(): ReservationDTO = ReservationDTO(
@@ -60,7 +61,11 @@ fun DrugTemplate.toDto(): DrugTemplateDTO = DrugTemplateDTO(
 fun Drug.toSnapshot(reservations: ReservationSnapshot): DrugSnapshotDTO =
     DrugSnapshotDTO(
         drug = toDto(),
-        reservations = ReservationsDTO(total = reservations.total, mine = reservations.mine)
+        reservations = ReservationsDTO(
+            total = reservations.total,
+            mine = reservations.mine,
+            version = reservations.version
+        )
     )
 
 /** Аптечка с содержимым: число участников она знает сама, упаковки приносит вызывающий. */

@@ -29,14 +29,30 @@ class ReservationApplicationService(
     fun read(userId: Uuid, drugId: Uuid): ReservationDTO = reservationService.get(userId, drugId).toDto()
 
     @Transactional
-    fun create(userId: Uuid, drugId: Uuid, amount: BigDecimal): ReservationDTO =
-        placement.place(drugId, userId, amount).toDto()
+    fun create(userId: Uuid, drugId: Uuid, amount: BigDecimal, version: Long?): ReservationDTO {
+        statedSnapshot(drugId, userId, version)
+        return placement.place(drugId, userId, amount).toDto()
+    }
 
     @Transactional
-    fun changeTo(userId: Uuid, drugId: Uuid, amount: BigDecimal): ReservationDTO =
-        reservationService.changeTo(userId, drugId, amount).toDto()
+    fun changeTo(userId: Uuid, drugId: Uuid, amount: BigDecimal, version: Long?): ReservationDTO {
+        statedSnapshot(drugId, userId, version)
+        return reservationService.changeTo(userId, drugId, amount).toDto()
+    }
 
     @Transactional
-    fun cancel(userId: Uuid, drugId: Uuid) =
+    fun cancel(userId: Uuid, drugId: Uuid, version: Long?) {
+        statedSnapshot(drugId, userId, version)
         reservationService.cancel(userId, drugId)
+    }
+
+    /**
+     * Сверяет версию картины броней, а не отдельной брони.
+     *
+     * Токен принадлежит картине: решая, сколько заявить, человек смотрит на общую сумму, и
+     * менять свою долю по устаревшей картине — то же самое, что решать вслепую.
+     */
+    private fun statedSnapshot(drugId: Uuid, userId: Uuid, version: Long?) {
+        requireStated(version, reservationService.snapshotOn(drugId, userId).version)
+    }
 }

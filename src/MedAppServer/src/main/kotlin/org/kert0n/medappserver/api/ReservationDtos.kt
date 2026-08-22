@@ -50,7 +50,10 @@ data class ReservationCreateRequest(
         type = "string",
         pattern = POSITIVE_QUANTITY_PATTERN
     )
-    val amount: BigDecimal
+    val amount: BigDecimal,
+
+    @Schema(description = VERSION_STATED, example = "5", nullable = true)
+    val version: Long? = null
 )
 
 /**
@@ -67,7 +70,10 @@ data class ReservationPatchRequest(
         description = "New reserved amount, greater than zero", example = "15.0", required = true,
         type = "string", pattern = POSITIVE_QUANTITY_PATTERN
     )
-    val amount: BigDecimal
+    val amount: BigDecimal,
+
+    @Schema(description = VERSION_STATED, example = "5", nullable = true)
+    val version: Long? = null
 )
 
 /** Приём: съеденное уменьшает упаковку, а бронь её владелец правит отдельно. */
@@ -81,5 +87,8 @@ data class IntakeRequest(
         description = "Amount taken, greater than zero", example = "2.0", required = true,
         type = "string", pattern = POSITIVE_QUANTITY_PATTERN
     )
-    val quantity: BigDecimal
+    val quantity: BigDecimal,
+
+    @Schema(description = VERSION_STATED, example = "3", nullable = true)
+    val version: Long? = null
 )

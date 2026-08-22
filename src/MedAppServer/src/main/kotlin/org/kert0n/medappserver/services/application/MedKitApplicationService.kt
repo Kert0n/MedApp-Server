@@ -72,7 +72,8 @@ class MedKitApplicationService(
      * если он допущен к новому месту. Там ключ правило выразить не может — см. `DrugRelocation`.
      */
     @Transactional
-    fun leave(medKitId: Uuid, userId: Uuid) {
+    fun leave(medKitId: Uuid, version: Long?, userId: Uuid) {
+        requireStated(version, medKitService.get(medKitId, userId).version)
         logger.debug("Removing user {} from medkit {}", userId, medKitId)
         medKitService.leave(medKitId, userId)
     }
@@ -84,7 +85,8 @@ class MedKitApplicationService(
      * переезде одной пачки, поэтому и живёт оно в одном месте на оба случая.
      */
     @Transactional
-    fun delete(medKitId: Uuid, userId: Uuid, transferToMedKitId: Uuid? = null) {
+    fun delete(medKitId: Uuid, version: Long?, userId: Uuid, transferToMedKitId: Uuid? = null) {
+        requireStated(version, medKitService.get(medKitId, userId).version)
         logger.debug("Deleting medkit {} (transfer to {})", medKitId, transferToMedKitId)
         transferToMedKitId?.let { relocation.moveAll(medKitId, it, userId) }
         medKitService.delete(medKitId, userId)

@@ -191,7 +191,7 @@ class BasicWorkflowStoriesTest {
         assertEquals(2, loadedMedkit.members.size)
 
         // Bob leaves (drugs stay)
-        medKits.leave(medkit.id, bob.id)
+        medKits.leave(medkit.id, dbHelper.medKitVersion(medkit.id), bob.id)
 
         // Medkit still exists with Anna only
         val updatedMedkit = dbHelper.medKit(medkit.id)
@@ -249,7 +249,7 @@ class BasicWorkflowStoriesTest {
         assertEquals(2, medKitService.allOfUser(userData.id).size)
 
         // Delete old medkit and move drugs
-        medKits.delete(oldMedkit.id, userData.id, newMedkit.id)
+        medKits.delete(oldMedkit.id, dbHelper.medKitVersion(oldMedkit.id), userData.id, newMedkit.id)
 
         // Verify migration
         val drugsInNew = drugService.ofMedKit(newMedkit.id, userData.id)

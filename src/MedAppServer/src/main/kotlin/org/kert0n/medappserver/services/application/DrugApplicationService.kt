@@ -6,6 +6,7 @@ import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.api.DrugPatchRequest
 import org.kert0n.medappserver.api.DrugSnapshotDTO
 import org.kert0n.medappserver.api.toSnapshot
+import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.ReservationSnapshot
 import org.kert0n.medappserver.services.aggregate.DrugEdit
 import org.kert0n.medappserver.services.aggregate.DrugService
@@ -68,24 +69,26 @@ class DrugApplicationService(
 
     @Transactional
     fun update(drugId: Uuid, request: DrugPatchRequest, userId: Uuid): DrugSnapshotDTO {
-        val updated = drugService.update(drugId, request.toCommand(), userId)
+        val drug = statedAs(drugId, request.version, userId)
+        val updated = drugService.update(drug, request.toCommand())
         return updated.toSnapshot(reservationService.onDrugs(listOf(updated), userId).getValue(updated.id))
     }
 
     @Transactional
-    fun delete(drugId: Uuid, userId: Uuid) = disposal.destroy(drugId, userId)
+    fun delete(drugId: Uuid, version: Long?, userId: Uuid) = disposal.destroy(statedAs(drugId, version, userId))
 
     /** `null` — приём опустошил пачку, и она уничтожена: отдавать нечего. */
     @Transactional
-    fun recordIntake(drugId: Uuid, quantity: BigDecimal, userId: Uuid): DrugSnapshotDTO? {
-        val left = disposal.consume(drugId, quantity, userId) ?: return null
+    fun recordIntake(drugId: Uuid, quantity: BigDecimal, version: Long?, userId: Uuid): DrugSnapshotDTO? {
+        val left = disposal.consume(statedAs(drugId, version, userId), quantity) ?: return null
         return left.toSnapshot(reservationService.onDrugs(listOf(left), userId).getValue(left.id))
     }
 
     @Transactional
-    fun moveToMedKit(drugId: Uuid, targetMedKitId: Uuid, userId: Uuid): DrugSnapshotDTO {
+    fun moveToMedKit(drugId: Uuid, targetMedKitId: Uuid, version: Long?, userId: Uuid): DrugSnapshotDTO {
+        val drug = statedAs(drugId, version, userId)
         logger.debug("Moving drug {} to medkit {}", drugId, targetMedKitId)
-        val moved = relocation.moveOne(drugId, targetMedKitId, userId)
+        val moved = relocation.moveOne(drug, medKitService.get(targetMedKitId, userId))
         return moved.toSnapshot(reservationService.onDrugs(listOf(moved), userId).getValue(moved.id))
     }
 
@@ -94,6 +97,18 @@ class DrugApplicationService(
      *
      * Ниже про контракт не знают вовсе, поэтому его правка не доходит до правил.
      */
+    /**
+     * Читает упаковку и сверяет предъявленную версию — одним чтением на команду.
+     *
+     * Прочитанное отдаётся дальше: второй раз доставать ту же строку незачем, а версия,
+     * прочитанная повторно, могла бы уже отличаться от той, которую сверяли.
+     */
+    private fun statedAs(drugId: Uuid, version: Long?, userId: Uuid): Drug {
+        val drug = drugService.get(drugId, userId)
+        requireStated(version, drug.version)
+        return drug
+    }
+
     private fun DrugCreateRequest.toCommand() = NewDrug(
         name = name,
         quantity = quantity,

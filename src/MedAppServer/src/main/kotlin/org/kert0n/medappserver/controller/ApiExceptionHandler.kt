@@ -6,6 +6,8 @@ import org.kert0n.medappserver.domain.NoSuchReservation
 import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.ReservationAlreadyExists
 import org.kert0n.medappserver.domain.StaleVersion
+import org.kert0n.medappserver.services.application.PreconditionFailed
+import org.kert0n.medappserver.services.application.PreconditionRequired
 import org.kert0n.medappserver.domain.TooManyRegistrations
 import org.springframework.http.HttpStatus
 import org.springframework.http.ProblemDetail
@@ -72,6 +74,18 @@ class ApiExceptionHandler {
                 }
             )
         }
+
+    /**
+     * Предусловия отвечают до попытки записи, поэтому и коды у них свои: не предъявлено — 428,
+     * предъявлено и не совпало — 412. Проигранная гонка выясняется уже при записи и остаётся 409.
+     */
+    @ExceptionHandler(PreconditionRequired::class)
+    fun handlePreconditionRequired(exception: PreconditionRequired): ProblemDetail =
+        problem(HttpStatus.PRECONDITION_REQUIRED)
+
+    @ExceptionHandler(PreconditionFailed::class)
+    fun handlePreconditionFailed(exception: PreconditionFailed): ProblemDetail =
+        problem(HttpStatus.PRECONDITION_FAILED)
 
     private fun problem(status: HttpStatus): ProblemDetail = ProblemDetails.forStatus(status)
 }

@@ -199,7 +199,7 @@ class TreatmentPlanStoriesTest {
         assertEquals(3, medkit.members.size)
 
         // Child leaves the medkit
-        medKits.leave(familyKit.id, child.id)
+        medKits.leave(familyKit.id, dbHelper.medKitVersion(familyKit.id), child.id)
 
         // Medkit still has mom and dad
         val updatedKit = dbHelper.medKit(familyKit.id)

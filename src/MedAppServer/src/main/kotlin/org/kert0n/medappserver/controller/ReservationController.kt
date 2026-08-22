@@ -77,7 +77,7 @@ class ReservationController(private val reservations: ReservationApplicationServ
         @Valid @RequestBody request: ReservationCreateRequest
     ): ReservationDTO {
         logger.debug("POST /v1/reservations by user {} on drug {}", authentication.userId, request.drugId)
-        return reservations.create(authentication.userId, request.drugId, request.amount)
+        return reservations.create(authentication.userId, request.drugId, request.amount, request.version)
     }
 
     @PatchMapping("/{drugId}")
@@ -96,7 +96,7 @@ class ReservationController(private val reservations: ReservationApplicationServ
         @Valid @RequestBody request: ReservationPatchRequest
     ): ReservationDTO {
         logger.debug("PATCH /v1/reservations/{} by user {}", drugId, authentication.userId)
-        return reservations.changeTo(authentication.userId, drugId, request.amount)
+        return reservations.changeTo(authentication.userId, drugId, request.amount, request.version)
     }
 
     @DeleteMapping("/{drugId}")
@@ -110,9 +110,11 @@ class ReservationController(private val reservations: ReservationApplicationServ
     @ApiResponse(responseCode = "404", description = "No reservation on this package", content = [Content()])
     fun deleteReservation(
         authentication: Authentication,
-        @Parameter(description = "Package identifier") @PathVariable drugId: Uuid
+        @Parameter(description = "Package identifier") @PathVariable drugId: Uuid,
+        @Parameter(description = "Version the command acts on; absent means 428")
+        @RequestParam(required = false) version: Long?
     ) {
         logger.debug("DELETE /v1/reservations/{} by user {}", drugId, authentication.userId)
-        reservations.cancel(authentication.userId, drugId)
+        reservations.cancel(authentication.userId, drugId, version)
     }
 }

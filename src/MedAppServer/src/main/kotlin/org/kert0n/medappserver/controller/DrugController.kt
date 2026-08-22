@@ -107,10 +107,12 @@ class DrugController(private val drugs: DrugApplicationService) {
     @ApiResponse(responseCode = "404", description = "Drug does not exist or is not accessible", content = [Content()])
     fun deleteDrug(
         authentication: Authentication,
-        @Parameter(description = "Drug identifier") @PathVariable drugId: Uuid
+        @Parameter(description = "Drug identifier") @PathVariable drugId: Uuid,
+        @Parameter(description = "Version the command acts on; absent means 428")
+        @RequestParam(required = false) version: Long?
     ) {
         logger.debug("DELETE /v1/drugs/{} by user {}", drugId, authentication.userId)
-        drugs.delete(drugId, authentication.userId)
+        drugs.delete(drugId, version, authentication.userId)
     }
 
     /**
@@ -141,7 +143,7 @@ class DrugController(private val drugs: DrugApplicationService) {
     ): DrugSnapshotDTO? {
         logger.debug("POST /v1/drugs/{}/intakes by user {}", drugId, authentication.userId)
         // null означает, что пачка кончилась и уничтожена этим списанием.
-        return drugs.recordIntake(drugId, request.quantity, authentication.userId)
+        return drugs.recordIntake(drugId, request.quantity, request.version, authentication.userId)
     }
 
     /**
@@ -159,10 +161,12 @@ class DrugController(private val drugs: DrugApplicationService) {
     fun moveDrug(
         authentication: Authentication,
         @Parameter(description = "Target medicine kit identifier") @PathVariable targetMedKitId: Uuid,
-        @Parameter(description = "Drug identifier") @PathVariable drugId: Uuid
+        @Parameter(description = "Drug identifier") @PathVariable drugId: Uuid,
+        @Parameter(description = "Version the command acts on; absent means 428")
+        @RequestParam(required = false) version: Long?
     ): DrugSnapshotDTO {
         logger.debug("PUT /v1/med-kits/{}/drugs/{} by user {}", targetMedKitId, drugId, authentication.userId)
-        return drugs.moveToMedKit(drugId, targetMedKitId, authentication.userId)
+        return drugs.moveToMedKit(drugId, targetMedKitId, version, authentication.userId)
     }
 }
 

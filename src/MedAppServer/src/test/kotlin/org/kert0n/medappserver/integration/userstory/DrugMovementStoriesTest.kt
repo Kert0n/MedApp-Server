@@ -70,7 +70,7 @@ class DrugMovementStoriesTest {
         dbHelper.reserve(userData.id, painkiller.id, qty(20.0))
 
         // Move drug to travel kit
-        drugs.moveToMedKit(painkiller.id, travelKit.id, userData.id)
+        drugs.moveToMedKit(painkiller.id, travelKit.id, dbHelper.drugVersion(painkiller.id), userData.id)
 
         // Drug is in travel kit
         val movedDrug = dbHelper.drug(painkiller.id)
@@ -198,7 +198,7 @@ class DrugMovementStoriesTest {
 
 
         // Anna deletes the old kit and migrates to the new kit
-        medKits.delete(oldKit.id, anna.id, newKit.id)
+        medKits.delete(oldKit.id, dbHelper.medKitVersion(oldKit.id), anna.id, newKit.id)
 
 
         // Verify: Anna and Bob keep their reservations, Charlie's is deleted.
@@ -243,7 +243,7 @@ class DrugMovementStoriesTest {
 
 
         // Move ONLY one drug
-        drugs.moveToMedKit(drugDataToMove.id, targetKit.id, userData.id)
+        drugs.moveToMedKit(drugDataToMove.id, targetKit.id, dbHelper.drugVersion(drugDataToMove.id), userData.id)
 
 
         // Verify the move did not destroy it

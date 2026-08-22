@@ -97,7 +97,7 @@ class ErrorResponseShapeTest {
             post(ApiRoutes.intakes(drug.id))
                 .with(jwt().jwt { it.subject(user.id.toString()) })
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"quantity":"500.0"}""")
+                .content("""{"quantity":"500.0","version":0}""")
         )
             .andExpect(status().isBadRequest)
             .andExpect(jsonPath("$.detail").value("Request cannot be processed"))
@@ -116,7 +116,7 @@ class ErrorResponseShapeTest {
     fun `body validation reports fields without echoing values`() {
         val userId = Uuid.random()
         // amount below the @DecimalMin("0.0") constraint.
-        val invalid = """{"drugId":"${Uuid.random()}","amount":"-42.5"}"""
+        val invalid = """{"drugId":"${Uuid.random()}","amount":"-42.5","version":0}"""
 
         val body = mockMvc.perform(
             post(ApiRoutes.RESERVATIONS)
