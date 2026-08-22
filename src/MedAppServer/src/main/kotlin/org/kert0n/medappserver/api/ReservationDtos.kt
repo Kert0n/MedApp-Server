@@ -25,7 +25,7 @@ data class ReservationDTO(
      * решает её владелец.
      */
     @Schema(
-        description = "Reserved amount; may exceed what is left in the package", example = "20.000000",
+        description = "Reserved amount; may exceed what is left in the package", examples = ["20.000000"],
         type = "string", pattern = POSITIVE_QUANTITY_PATTERN
     )
     val amount: BigDecimal
@@ -42,7 +42,7 @@ data class ReservationCreateRequest(
     @field:PositiveQuantity
     @Schema(
         description = "Reserved amount, greater than zero. It may exceed what is left in the package.",
-        example = "20.0",
+        examples = ["20.0"],
         required = true
     )
     val amount: BigDecimal,
@@ -65,7 +65,7 @@ data class ReservationPatchRequest(
     @field:NotNull
     @field:PositiveQuantity
     @Schema(
-        description = "New reserved amount, greater than zero", example = "15.0", required = true
+        description = "New reserved amount, greater than zero", examples = ["15.0"], required = true
     )
     val amount: BigDecimal,
 
@@ -84,7 +84,7 @@ data class IntakeRequest(
     @field:NotNull
     @field:PositiveQuantity
     @Schema(
-        description = "Amount taken, greater than zero", example = "2.0", required = true
+        description = "Amount taken, greater than zero", examples = ["2.0"], required = true
     )
     val quantity: BigDecimal,
 
