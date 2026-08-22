@@ -76,7 +76,7 @@ class ReservationService(
         if (reservations.find(userId, drug.id) != null) throw ReservationAlreadyExists()
 
         val reservation = Reservation(userId, drug.id, Quantity(amount, drug.quantity.unit))
-        reservations.insert(reservation, drug)
+        reservations.insert(reservation, drug, snapshotOf(drug, userId))
         return reservation
     }
 
@@ -90,7 +90,7 @@ class ReservationService(
         logger.debug("Changing reservation of user {} on drug {}", reservation.userId, reservation.drugId)
 
         val changed = reservation.changeTo(Quantity(amount, reservation.amount.unit))
-        reservations.save(changed)
+        reservations.save(changed, was = reservation, snapshot = snapshotOf(reservation))
         return changed
     }
 
@@ -122,6 +122,18 @@ class ReservationService(
     @Transactional(propagation = MANDATORY)
     fun cancel(reservation: Reservation) {
         logger.debug("Cancelling reservation of user {} on drug {}", reservation.userId, reservation.drugId)
-        reservations.delete(reservation)
+        reservations.delete(reservation, snapshotOf(reservation))
     }
+
+    /**
+     * Текущая картина броней упаковки — та, чью версию команда и предъявляет.
+     *
+     * Пока версию не присылает клиент, её читает сервис: предикат от этого не слабеет, он
+     * ловит того, кто вклинился между этим чтением и записью.
+     */
+    private fun snapshotOf(drug: Drug, userId: Uuid): ReservationSnapshot =
+        reservations.snapshotsOf(listOf(drug), userId).getValue(drug.id)
+
+    private fun snapshotOf(reservation: Reservation): ReservationSnapshot =
+        reservations.snapshotOf(reservation.drugId, reservation.userId)
 }

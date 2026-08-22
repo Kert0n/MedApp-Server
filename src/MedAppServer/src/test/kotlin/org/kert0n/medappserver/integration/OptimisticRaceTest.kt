@@ -14,6 +14,7 @@ import org.kert0n.medappserver.domain.StaleVersion
 import org.kert0n.medappserver.services.aggregate.DrugEdit
 import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.MedKitService
+import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.transaction.PlatformTransactionManager
@@ -34,6 +35,7 @@ class OptimisticRaceTest {
     @Autowired private lateinit var dbHelper: DatabaseTestHelper
     @Autowired private lateinit var drugService: DrugService
     @Autowired private lateinit var medKitService: MedKitService
+    @Autowired private lateinit var reservationService: ReservationService
     @Autowired private lateinit var transactionManager: PlatformTransactionManager
 
     @Test
@@ -43,9 +45,14 @@ class OptimisticRaceTest {
         val drug = dbHelper.freshDrug(kit.id, quantity = 100.0)
 
         val outcome = race(
-            { drugService.consume(drugService.get(drug.id, owner.id), BigDecimal("10")) },
-            {
+            { sync ->
                 val read = drugService.get(drug.id, owner.id)
+                sync()
+                drugService.consume(read, BigDecimal("10"))
+            },
+            { sync ->
+                val read = drugService.get(drug.id, owner.id)
+                sync()
                 drugService.update(read, DrugEdit(quantity = BigDecimal("50")))
             }
         )
@@ -66,8 +73,16 @@ class OptimisticRaceTest {
         dbHelper.join(kit.id, alice.id, bob.id)
 
         val outcome = race(
-            { medKitService.leave(medKitService.get(kit.id, alice.id), alice.id) },
-            { medKitService.leave(medKitService.get(kit.id, bob.id), bob.id) }
+            { sync ->
+                val read = medKitService.get(kit.id, alice.id)
+                sync()
+                medKitService.leave(read, alice.id)
+            },
+            { sync ->
+                val read = medKitService.get(kit.id, bob.id)
+                sync()
+                medKitService.leave(read, bob.id)
+            }
         )
 
         outcome.assertOneLost()
@@ -89,8 +104,17 @@ class OptimisticRaceTest {
         val drug = dbHelper.freshDrug(source.id, quantity = 20.0)
 
         val outcome = race(
-            { drugService.moveTo(drugService.get(drug.id, alice.id), medKitService.get(target.id, alice.id)) },
-            { medKitService.leave(medKitService.get(source.id, bob.id), bob.id) }
+            { sync ->
+                val read = drugService.get(drug.id, alice.id)
+                val into = medKitService.get(target.id, alice.id)
+                sync()
+                drugService.moveTo(read, into)
+            },
+            { sync ->
+                val read = medKitService.get(source.id, bob.id)
+                sync()
+                medKitService.leave(read, bob.id)
+            }
         )
 
         // Здесь агрегаты разные, и обе стороны могут выиграть: проверяется, что состояние
@@ -99,24 +123,89 @@ class OptimisticRaceTest {
         assertEquals(target.id, dbHelper.requireDrug(drug.id).medKitId.takeIf { outcome.failures.isEmpty() } ?: target.id)
     }
 
+    @Test
+    fun `двое заводят бронь на одну упаковку одновременно`() {
+        val alice = dbHelper.freshUser("race-book-a")
+        val bob = dbHelper.freshUser("race-book-b")
+        val kit = dbHelper.freshMedKit(alice.id)
+        dbHelper.join(kit.id, alice.id, bob.id)
+        val drug = dbHelper.freshDrug(kit.id, quantity = 30.0)
+
+        val outcome = race(
+            { sync ->
+                val read = drugService.get(drug.id, alice.id)
+                sync()
+                reservationService.create(read, alice.id, BigDecimal("5"))
+            },
+            { sync ->
+                val read = drugService.get(drug.id, bob.id)
+                sync()
+                reservationService.create(read, bob.id, BigDecimal("7"))
+            }
+        )
+
+        outcome.assertOneLost()
+        val claimed = dbHelper.reservedOnDrug(drug.id)
+        assertTrue(
+            claimed.compareTo(BigDecimal("5")) == 0 || claimed.compareTo(BigDecimal("7")) == 0,
+            "заявлено ровно то, что успел победивший: $claimed"
+        )
+    }
+
+    /**
+     * Бронь не может остаться без доступа даже на гонке.
+     *
+     * Проверяется не то, кто выиграл, а связность итога: если бронь есть, то и членство есть.
+     * Разойтись им не даёт составной ключ на членство — правило выражено в коде, ключ страхует.
+     */
+    @Test
+    fun `заведение брони против потери доступа`() {
+        val alice = dbHelper.freshUser("race-access-a")
+        val bob = dbHelper.freshUser("race-access-b")
+        val kit = dbHelper.freshMedKit(alice.id)
+        dbHelper.join(kit.id, alice.id, bob.id)
+        val drug = dbHelper.freshDrug(kit.id, quantity = 30.0)
+
+        race(
+            { sync ->
+                val read = drugService.get(drug.id, bob.id)
+                sync()
+                reservationService.create(read, bob.id, BigDecimal("4"))
+            },
+            { sync ->
+                val read = medKitService.get(kit.id, bob.id)
+                sync()
+                medKitService.leave(read, bob.id)
+            }
+        )
+
+        val stillMember = dbHelper.medKit(kit.id)?.members?.contains(bob.id) == true
+        val hasReservation = dbHelper.userReservation(bob.id, drug.id) != null
+        assertTrue(
+            stillMember || !hasReservation,
+            "бронь без доступа: членства нет, а бронь осталась"
+        )
+    }
+
     // ── Оснастка ──────────────────────────────────────────────────────────────────────
 
     /**
      * Обе стороны читают, дожидаются друг друга и только потом пишут.
      *
-     * Барьер стоит между чтением и записью: без него быстрая сторона успела бы закоммититься
-     * раньше, чем медленная прочитает, и гонки бы не вышло.
+     * Барьер вызывается **изнутри** сценария, между чтением и записью. Поставить его перед всем
+     * действием мало: тогда быстрая сторона успевает прочитать и записать целиком, пока
+     * медленная только читает, — гонки не выходит, и тест зеленеет по случайности. На этом я
+     * уже обжёгся.
      */
-    private fun race(first: () -> Any?, second: () -> Any?): Outcome {
-        val barrier = CyclicBarrier(2)
-        val pool = Executors.newFixedThreadPool(2)
+    private fun race(vararg sides: (sync: () -> Unit) -> Any?): Outcome {
+        val barrier = CyclicBarrier(sides.size)
+        val pool = Executors.newFixedThreadPool(sides.size)
         try {
-            val tasks = listOf(first, second).map { action ->
+            val tasks = sides.map { side ->
                 pool.submit<Throwable?> {
                     runCatching {
                         TransactionTemplate(transactionManager).execute {
-                            barrier.await(10, TimeUnit.SECONDS)
-                            action()
+                            side { barrier.await(10, TimeUnit.SECONDS) }
                         }
                     }.exceptionOrNull()
                 }

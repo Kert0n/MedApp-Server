@@ -1,11 +1,14 @@
 package org.kert0n.medappserver.db.store
 
+import java.math.BigDecimal
 import kotlin.uuid.Uuid
 import org.jetbrains.exposed.v1.core.Join
 import org.jetbrains.exposed.v1.core.JoinType
 import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.plus
+import org.jetbrains.exposed.v1.core.sum
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.inSubQuery
@@ -27,6 +30,7 @@ import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.QuantityUnit
 import org.kert0n.medappserver.domain.Reservation
 import org.kert0n.medappserver.domain.ReservationSnapshot
+import org.kert0n.medappserver.domain.StaleVersion
 import org.springframework.stereotype.Component
 
 /**
@@ -95,7 +99,8 @@ class ReservationStore {
      * Нужна от неё одна вещь — аптечка для составного ключа, — и она уже есть у вызывающего:
      * он эту пачку и прочитал. Рассогласовать копию с настоящей не даст сам ключ.
      */
-    fun insert(reservation: Reservation, drug: Drug) {
+    fun insert(reservation: Reservation, drug: Drug, snapshot: ReservationSnapshot) {
+        shiftSnapshot(snapshot, by = reservation.amount.amount)
         Reservations.insert {
             it[userId] = reservation.userId
             it[drugId] = reservation.drugId
@@ -104,24 +109,37 @@ class ReservationStore {
         }
     }
 
-    fun save(reservation: Reservation) {
+    fun save(reservation: Reservation, was: Reservation, snapshot: ReservationSnapshot) {
+        shiftSnapshot(snapshot, by = reservation.amount.amount - was.amount.amount)
         Reservations.update({ identityOf(reservation) }) { it[amount] = reservation.amount.amount }
     }
 
-    fun delete(reservation: Reservation) {
+    fun delete(reservation: Reservation, snapshot: ReservationSnapshot) {
+        shiftSnapshot(snapshot, by = reservation.amount.amount.negate())
         Reservations.deleteWhere { identityOf(reservation) }
     }
 
-    /** Все брони на упаковку — когда упаковки не станет. */
+    /**
+     * Все брони на упаковку — когда упаковки не станет.
+     *
+     * Снимок не пересчитывается: строка упаковки уходит следом, и пересчитывать нечего.
+     */
     fun deleteOfDrug(drug: Drug) {
         Reservations.deleteWhere { Reservations.drugId eq drug.id }
     }
 
     /** Брони тех, кто аптечку не видит, — при удалении аптечки с переносом. */
     fun deleteInMedKitExcept(medKit: MedKit, accessibleUserIds: Set<Uuid>) {
+        val touched = Reservations
+            .select(Reservations.drugId)
+            .where { (Reservations.medKitId eq medKit.id) and (Reservations.userId notInList accessibleUserIds) }
+            .map { it[Reservations.drugId] }
+            .distinct()
+
         Reservations.deleteWhere {
             (Reservations.medKitId eq medKit.id) and (Reservations.userId notInList accessibleUserIds)
         }
+        recountSnapshots(touched)
     }
 
     /** То же для одной переехавшей упаковки. */
@@ -129,9 +147,64 @@ class ReservationStore {
         Reservations.deleteWhere {
             (Reservations.drugId eq drug.id) and (Reservations.userId notInList accessibleUserIds)
         }
+        recountSnapshots(listOf(drug.id))
     }
 
     /** Тождество брони — пара «человек и упаковка». */
+    /**
+     * Снимок одной упаковки по её идентификатору.
+     *
+     * Доступ уже доказан: бронь, от которой пришли, существует только там, куда он есть.
+     */
+    fun snapshotOf(drugId: Uuid, userId: Uuid): ReservationSnapshot {
+        val version = Drugs.select(Drugs.reservationsVersion)
+            .where { Drugs.id eq drugId }
+            .single()[Drugs.reservationsVersion]
+        return ReservationSnapshot.of(drugId, findAllOfDrugs(listOf(drugId), userId), userId, version)
+    }
+
+    /**
+     * Сдвигает снимок броней упаковки под предикатом его версии.
+     *
+     * Проверка и изменение — один оператор: ноль задетых строк значит, что картину успели
+     * поменять после того, как её прочитали. Стоит перед правкой самой брони, чтобы
+     * проигравший остановился раньше, чем тронет строку.
+     *
+     * Сумма ведётся дельтой, а не пересчётом: тот, кто меняет бронь, своё изменение знает.
+     */
+    private fun shiftSnapshot(snapshot: ReservationSnapshot, by: BigDecimal) {
+        val moved = Drugs.update({
+            (Drugs.id eq snapshot.drugId) and (Drugs.reservationsVersion eq snapshot.version)
+        }) {
+            it[reservationsTotal] = Drugs.reservationsTotal + by
+            it[reservationsVersion] = snapshot.version + 1
+        }
+        if (moved == 0) throw StaleVersion()
+    }
+
+    /**
+     * Пересчёт после массового снятия.
+     *
+     * Клиент тут ничего не предъявляет: снимает не он, а сервер — при выходе участника или
+     * переезде пачки. Предъявлять нечего, поэтому и предиката нет; версия всё равно двигается,
+     * чтобы чужое представление о картине устарело.
+     */
+    private fun recountSnapshots(drugIds: Collection<Uuid>) {
+        if (drugIds.isEmpty()) return
+        val totals = Reservations
+            .select(Reservations.drugId, Reservations.amount.sum())
+            .where { Reservations.drugId inList drugIds }
+            .groupBy(Reservations.drugId)
+            .associate { it[Reservations.drugId] to (it[Reservations.amount.sum()] ?: BigDecimal.ZERO) }
+
+        drugIds.forEach { drugId ->
+            Drugs.update({ Drugs.id eq drugId }) {
+                it[reservationsTotal] = totals[drugId] ?: BigDecimal.ZERO
+                it[reservationsVersion] = Drugs.reservationsVersion + 1
+            }
+        }
+    }
+
     private fun identityOf(reservation: Reservation): Op<Boolean> =
         (Reservations.userId eq reservation.userId) and (Reservations.drugId eq reservation.drugId)
 
