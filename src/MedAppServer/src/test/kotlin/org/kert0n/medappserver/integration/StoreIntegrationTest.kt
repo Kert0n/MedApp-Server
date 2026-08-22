@@ -1,6 +1,7 @@
 package org.kert0n.medappserver.integration
 
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.uuid.Uuid
@@ -125,6 +126,27 @@ class StoreIntegrationTest {
 
         assertQty(5.0, reservations.find(alice.id, drug.id)?.amount)
         assertNull(reservations.find(bob.id, drug.id), "у Боба брони нет")
+    }
+
+    /**
+     * Снимок чужой упаковки не отдаётся — и не сообщает, что она есть.
+     *
+     * Снимок несёт версию картины броней. Отдать её постороннему значило бы выдать и сам факт
+     * существования пачки: по идентификатору можно было бы отличить чужую от несуществующей.
+     * Обе отвечают одинаково.
+     */
+    @Test
+    fun `чужой снимок броней не отдаётся и о существовании пачки не сообщает`() {
+        val alice = dbHelper.freshUser("alice")
+        val stranger = dbHelper.freshUser("stranger")
+        val kit = medKitService.create(alice.id)
+        val drug = dbHelper.freshDrug(kit.id, 50.0)
+        dbHelper.reserve(alice.id, drug.id, qty(5.0))
+        dbHelper.flushAndClear()
+
+        assertNotNull(reservations.snapshotOf(drug.id, alice.id), "своя упаковка читается")
+        assertNull(reservations.snapshotOf(drug.id, stranger.id), "чужая — нет")
+        assertNull(reservations.snapshotOf(Uuid.random(), stranger.id), "несуществующая отвечает так же")
     }
 
     @Test

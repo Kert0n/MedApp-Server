@@ -31,8 +31,11 @@ import org.springframework.stereotype.Component
  * Наружу — только доменные типы. Броней здесь нет: упаковка ими не владеет.
  *
  * Каждое чтение соединяется со словарями, потому что доменное количество несёт имя единицы.
- * Соединение написано один раз, в `rows`, и видно глазами — в отличие от `EAGER`, о котором
- * приходилось помнить.
+ * Соединение написано один раз, в `drugsAccessibleTo`, и видно глазами — в отличие от `EAGER`,
+ * о котором приходилось помнить.
+ *
+ * Там же накладывается доступ: чтение обязано назвать вызывающего, а предикат добавляется сам.
+ * Забыть его нельзя — не потому, что о нём помнят, а потому, что писать его негде.
  */
 @Component
 class DrugStore {
@@ -40,15 +43,15 @@ class DrugStore {
     // ── Чтение ───────────────────────────────────────────────────────────────────
 
     fun find(drugId: Uuid, userId: Uuid): Drug? =
-        drugsWhere { (Drugs.id eq drugId) and accessibleTo(userId) }.singleOrNull()?.toDomain()
+        drugsAccessibleTo(userId) { Drugs.id eq drugId }.singleOrNull()?.toDomain()
 
     fun findAllInMedKit(medKitId: Uuid, userId: Uuid): List<Drug> =
-        drugsWhere { (Drugs.medKitId eq medKitId) and accessibleTo(userId) }
+        drugsAccessibleTo(userId) { Drugs.medKitId eq medKitId }
             .orderBy(Drugs.name)
             .map { it.toDomain() }
 
     fun findAllOfUser(userId: Uuid): List<Drug> =
-        drugsWhere { accessibleTo(userId) }.orderBy(Drugs.name).map { it.toDomain() }
+        drugsAccessibleTo(userId).orderBy(Drugs.name).map { it.toDomain() }
 
     // ── Команды ──────────────────────────────────────────────────────────────────
 
@@ -92,19 +95,14 @@ class DrugStore {
     }
 
     /**
-     * Доступ проверяет сам запрос: чужой упаковки для вызывающего не существует.
+     * Упаковки со словарями, доступные вызывающему и отобранные условием.
      *
-     * Предикат вынесен, чтобы его нельзя было забыть в новом чтении, — единственное место,
-     * где он написан.
+     * Доступ накладывает сам помощник, а не условие: чужой упаковки для вызывающего не
+     * существует, и это не то, о чём каждое чтение решает заново. Условие остаётся про то,
+     * что ищут, — без него берутся все доступные.
      */
-    private fun accessibleTo(userId: Uuid): Op<Boolean> =
-        Drugs.medKitId inSubQuery MedKitMemberships
-            .select(MedKitMemberships.medKitId)
-            .where { MedKitMemberships.userId eq userId }
-
-    /** Упаковки со словарями, отобранные условием. */
-    private fun drugsWhere(condition: () -> Op<Boolean>): Query =
-        withVocabulary.selectAll().where(condition())
+    private fun drugsAccessibleTo(userId: Uuid, condition: () -> Op<Boolean> = { Op.TRUE }): Query =
+        withVocabulary.selectAll().where { Drugs.medKitId.inMedKitsOf(userId) and condition() }
 
     private val withVocabulary: Join
         get() = Drugs

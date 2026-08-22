@@ -152,16 +152,18 @@ class ReservationStore {
         recountSnapshots(listOf(drug.id))
     }
 
-    /** Тождество брони — пара «человек и упаковка». */
     /**
-     * Снимок одной упаковки по её идентификатору.
+     * Снимок одной упаковки по её идентификатору — только если она доступна вызывающему.
      *
-     * Доступ уже доказан: бронь, от которой пришли, существует только там, куда он есть.
+     * Предикат здесь обязателен, и обойтись доказательством вызывающего нельзя: приходит
+     * идентификатор, а не прочитанная упаковка. Без предиката утекали бы и чужая версия, и сам
+     * факт, что такая пачка есть, — `null` отвечает одинаково на чужую и на несуществующую.
      */
-    fun snapshotOf(drugId: Uuid, userId: Uuid): ReservationSnapshot {
+    fun snapshotOf(drugId: Uuid, userId: Uuid): ReservationSnapshot? {
         val version = Drugs.select(Drugs.reservationsVersion)
-            .where { Drugs.id eq drugId }
-            .single()[Drugs.reservationsVersion]
+            .where { (Drugs.id eq drugId) and Drugs.medKitId.inMedKitsOf(userId) }
+            .singleOrNull()?.get(Drugs.reservationsVersion)
+            ?: return null
         return ReservationSnapshot.of(drugId, findAllOfDrugs(listOf(drugId), userId), userId, version)
     }
 
@@ -207,13 +209,12 @@ class ReservationStore {
         }
     }
 
+    /** Тождество брони — пара «человек и упаковка». */
     private fun identityOf(reservation: Reservation): Op<Boolean> =
         (Reservations.userId eq reservation.userId) and (Reservations.drugId eq reservation.drugId)
 
-    private fun visibleTo(userId: Uuid): Op<Boolean> =
-        Reservations.medKitId inSubQuery MedKitMemberships
-            .select(MedKitMemberships.medKitId)
-            .where { MedKitMemberships.userId eq userId }
+    /** Чужие брони видно там, куда есть доступ: аптечка у брони своя, отдельным полем. */
+    private fun visibleTo(userId: Uuid): Op<Boolean> = Reservations.medKitId.inMedKitsOf(userId)
 
     /** Брони вместе с упаковкой и её единицей, отобранные условием. */
     private fun reservationsWhere(condition: () -> Op<Boolean>): Query =

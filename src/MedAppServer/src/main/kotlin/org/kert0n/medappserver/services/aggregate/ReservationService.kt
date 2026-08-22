@@ -6,6 +6,7 @@ import org.kert0n.medappserver.db.store.ReservationStore
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.NoSuchReservation
+import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.Reservation
 import org.kert0n.medappserver.domain.ReservationSnapshot
@@ -133,5 +134,5 @@ class ReservationService(
      */
     @Transactional(propagation = MANDATORY, readOnly = true)
     fun snapshotOn(drugId: Uuid, userId: Uuid): ReservationSnapshot =
-        reservations.snapshotOf(drugId, userId)
+        reservations.snapshotOf(drugId, userId) ?: throw NotAMember()
 }
