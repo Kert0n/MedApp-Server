@@ -3,7 +3,11 @@
 # Без этого CodeQL разобрал бы заодно Android-приложение: это тоже Kotlin, и в область
 # `java-kotlin` оно попадает само. Расширение на клиент — отдельная работа, а пока смотреть
 # находки по нему некому.
+#
+# Путь — корень Gradle-проекта, а не каталог исходников. Замерено на первом прогоне: с
+# `src/MedAppServer/src` анализатор объявил проект вне области («Disregarding out-of-scope
+# project Gradle») и не разобрал ни одного файла — сборка упала с «could not process any code».
 name: MedAppServer
 
 paths:
-  - src/MedAppServer/src
+  - src/MedAppServer
