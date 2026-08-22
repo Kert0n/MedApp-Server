@@ -20,13 +20,22 @@ jobs:
   submit:
     runs-on: ubuntu-latest
 
+    # `workflow_dispatch` можно запустить с любой ветки или тега, а у задачи есть право записи:
+    # без этой проверки в граф репозитория попало бы дерево чужой ветки, и следующий PR сверялся
+    # бы не с main.
+    if: github.ref == 'refs/heads/main'
+
     permissions:
       # Единственный workflow, которому нужна запись: подача дерева идёт через Dependency
       # submission API, а он живёт под правом `contents`. Остальные остаются на чтении.
       contents: write
 
     steps:
+      # Без сохранённого токена в конфигурации git: подача авторизует свой запрос сама, а
+      # оставленный в рабочей копии токен доступен всему, что запустит сборка.
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-java@v5
         with:
