@@ -6,7 +6,9 @@ import org.jetbrains.exposed.v1.core.Join
 import org.jetbrains.exposed.v1.core.JoinType
 import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.Coalesce
 import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.decimalLiteral
 import org.jetbrains.exposed.v1.core.plus
 import org.jetbrains.exposed.v1.core.sum
 import org.jetbrains.exposed.v1.core.eq
@@ -216,17 +218,17 @@ class ReservationStore {
      */
     private fun recountSnapshots(drugIds: Collection<Uuid>) {
         if (drugIds.isEmpty()) return
-        val totals = Reservations
-            .select(Reservations.drugId, Reservations.amount.sum())
-            .where { Reservations.drugId inList drugIds }
-            .groupBy(Reservations.drugId)
-            .associate { it[Reservations.drugId] to (it[Reservations.amount.sum()] ?: BigDecimal.ZERO) }
 
-        drugIds.forEach { drugId ->
-            Drugs.update({ Drugs.id eq drugId }) {
-                it[reservationsTotal] = totals[drugId] ?: BigDecimal.ZERO
-                it[reservationsVersion] = Drugs.reservationsVersion + 1
-            }
+        // Сумму для каждой строки считает сам оператор — коррелированным подзапросом по
+        // упаковке. Раньше здесь стоял цикл, по `UPDATE` на пачку: удаление аптечки со ста
+        // упаковками стоило 109 запросов вместо 10, и заметить это было нечем.
+        Drugs.update({ Drugs.id inList drugIds }) {
+            // Броней может не остаться вовсе. Агрегат и на пустом наборе возвращает строку, но
+            // с `NULL` внутри, а колонка его не терпит — отсюда `COALESCE` внутри подзапроса.
+            it[reservationsTotal] = Reservations
+                .select(Coalesce(Reservations.amount.sum(), decimalLiteral(BigDecimal.ZERO)))
+                .where { Reservations.drugId eq Drugs.id }
+            it[reservationsVersion] = Drugs.reservationsVersion + 1
         }
     }
 
