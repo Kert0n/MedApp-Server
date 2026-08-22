@@ -49,12 +49,12 @@ class OptimisticRaceTest {
             { sync ->
                 val read = drugService.get(drug.id, owner.id)
                 sync()
-                drugService.consume(read, BigDecimal("10"))
+                drugService.consume(read, BigDecimal("10"), read.version)
             },
             { sync ->
                 val read = drugService.get(drug.id, owner.id)
                 sync()
-                drugService.update(read, DrugEdit(quantity = BigDecimal("50")))
+                drugService.update(read, DrugEdit(quantity = BigDecimal("50")), read.version)
             }
         )
 
@@ -77,12 +77,12 @@ class OptimisticRaceTest {
             { sync ->
                 val read = medKitService.get(kit.id, alice.id)
                 sync()
-                medKitService.leave(read, alice.id)
+                medKitService.leave(read, alice.id, read.version)
             },
             { sync ->
                 val read = medKitService.get(kit.id, bob.id)
                 sync()
-                medKitService.leave(read, bob.id)
+                medKitService.leave(read, bob.id, read.version)
             }
         )
 
@@ -109,12 +109,12 @@ class OptimisticRaceTest {
                 val read = drugService.get(drug.id, alice.id)
                 val into = medKitService.get(target.id, alice.id)
                 sync()
-                drugService.moveTo(read, into)
+                drugService.moveTo(read, into, read.version)
             },
             { sync ->
                 val read = medKitService.get(source.id, bob.id)
                 sync()
-                medKitService.leave(read, bob.id)
+                medKitService.leave(read, bob.id, read.version)
             }
         )
 
@@ -135,13 +135,15 @@ class OptimisticRaceTest {
         val outcome = race(
             { sync ->
                 val read = drugService.get(drug.id, alice.id)
+                val claims = reservationService.snapshotOn(drug.id, alice.id)
                 sync()
-                reservationService.create(read, alice.id, BigDecimal("5"))
+                reservationService.create(read, alice.id, BigDecimal("5"), claims.version)
             },
             { sync ->
                 val read = drugService.get(drug.id, bob.id)
+                val claims = reservationService.snapshotOn(drug.id, bob.id)
                 sync()
-                reservationService.create(read, bob.id, BigDecimal("7"))
+                reservationService.create(read, bob.id, BigDecimal("7"), claims.version)
             }
         )
 
@@ -170,13 +172,14 @@ class OptimisticRaceTest {
         race(
             { sync ->
                 val read = drugService.get(drug.id, bob.id)
+                val claims = reservationService.snapshotOn(drug.id, bob.id)
                 sync()
-                reservationService.create(read, bob.id, BigDecimal("4"))
+                reservationService.create(read, bob.id, BigDecimal("4"), claims.version)
             },
             { sync ->
                 val read = medKitService.get(kit.id, bob.id)
                 sync()
-                medKitService.leave(read, bob.id)
+                medKitService.leave(read, bob.id, read.version)
             }
         )
 
@@ -204,13 +207,15 @@ class OptimisticRaceTest {
         val outcome = race(
             { sync ->
                 val read = drugService.get(drug.id, owner.id)
+                val claims = reservationService.snapshotOn(drug.id, owner.id)
                 sync()
-                reservationService.create(read, owner.id, BigDecimal("5"))
+                reservationService.create(read, owner.id, BigDecimal("5"), claims.version)
             },
             { sync ->
                 val read = drugService.get(drug.id, owner.id)
+                val claims = reservationService.snapshotOn(drug.id, owner.id)
                 sync()
-                reservationService.create(read, owner.id, BigDecimal("6"))
+                reservationService.create(read, owner.id, BigDecimal("6"), claims.version)
             }
         )
 

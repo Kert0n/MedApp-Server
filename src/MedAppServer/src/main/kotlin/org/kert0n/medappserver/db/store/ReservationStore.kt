@@ -99,8 +99,8 @@ class ReservationStore {
      * Нужна от неё одна вещь — аптечка для составного ключа, — и она уже есть у вызывающего:
      * он эту пачку и прочитал. Рассогласовать копию с настоящей не даст сам ключ.
      */
-    fun insert(reservation: Reservation, drug: Drug, snapshot: ReservationSnapshot) {
-        shiftSnapshot(snapshot, by = reservation.amount.amount)
+    fun insert(reservation: Reservation, drug: Drug, stated: Long) {
+        shiftSnapshot(drug.id, by = reservation.amount.amount, stated = stated)
         translatingConstraints {
             Reservations.insert {
                 it[userId] = reservation.userId
@@ -111,13 +111,13 @@ class ReservationStore {
         }
     }
 
-    fun save(reservation: Reservation, was: Reservation, snapshot: ReservationSnapshot) {
-        shiftSnapshot(snapshot, by = reservation.amount.amount - was.amount.amount)
+    fun save(reservation: Reservation, was: Reservation, stated: Long) {
+        shiftSnapshot(reservation.drugId, by = reservation.amount.amount - was.amount.amount, stated = stated)
         Reservations.update({ identityOf(reservation) }) { it[amount] = reservation.amount.amount }
     }
 
-    fun delete(reservation: Reservation, snapshot: ReservationSnapshot) {
-        shiftSnapshot(snapshot, by = reservation.amount.amount.negate())
+    fun delete(reservation: Reservation, stated: Long) {
+        shiftSnapshot(reservation.drugId, by = reservation.amount.amount.negate(), stated = stated)
         Reservations.deleteWhere { identityOf(reservation) }
     }
 
@@ -174,12 +174,12 @@ class ReservationStore {
      *
      * Сумма ведётся дельтой, а не пересчётом: тот, кто меняет бронь, своё изменение знает.
      */
-    private fun shiftSnapshot(snapshot: ReservationSnapshot, by: BigDecimal) {
+    private fun shiftSnapshot(drugId: Uuid, by: BigDecimal, stated: Long) {
         val moved = Drugs.update({
-            (Drugs.id eq snapshot.drugId) and (Drugs.reservationsVersion eq snapshot.version)
+            (Drugs.id eq drugId) and (Drugs.reservationsVersion eq stated)
         }) {
             it[reservationsTotal] = Drugs.reservationsTotal + by
-            it[reservationsVersion] = snapshot.version + 1
+            it[reservationsVersion] = stated + 1
         }
         if (moved == 0) throw StaleVersion()
     }

@@ -117,12 +117,16 @@ class DrugMovementStoriesTest {
         dbHelper.reserve(anna.id, drugData.id, qty(40.0))
         dbHelper.reserve(bob.id, drugData.id, qty(30.0))
 
-        val updated = reservationService.changeTo(reservationService.get(anna.id, drugData.id), qty(70.0))
+        val updated = reservationService.changeTo(
+            reservationService.get(anna.id, drugData.id), qty(70.0), dbHelper.reservationsVersion(drugData.id, anna.id)
+        )
         assertQty(70.0, updated.amount)
         assertQty(100.0, dbHelper.reservedOnDrug(drugData.id))
 
         // Выше содержимого пачки тоже можно: 200 + 30 на сотню таблеток — законное состояние.
-        reservationService.changeTo(reservationService.get(anna.id, drugData.id), qty(200.0))
+        reservationService.changeTo(
+            reservationService.get(anna.id, drugData.id), qty(200.0), dbHelper.reservationsVersion(drugData.id, anna.id)
+        )
         assertQty(230.0, dbHelper.reservedOnDrug(drugData.id))
 
         println("✅ Story 12 passed: reservations are free to exceed the package")
@@ -151,7 +155,7 @@ class DrugMovementStoriesTest {
         assertNotNull(plan)
 
         // Delete the drug
-        disposal.destroy(drugService.get(drugData.id, userData.id))
+        disposal.destroy(drugService.get(drugData.id, userData.id), dbHelper.drugVersion(drugData.id))
 
         // Drug should be gone
         val deletedDrug = dbHelper.drug(drugData.id)

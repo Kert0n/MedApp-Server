@@ -96,7 +96,7 @@ class BasicWorkflowStoriesTest {
         dbHelper.insert(ibuprofen)
 
         // Anna takes 2 tablets of Aspirin
-        drugService.consume(drugService.get(aspirin.id, anna.id), qty(2.0))
+        drugService.consume(drugService.get(aspirin.id, anna.id), qty(2.0), dbHelper.drugVersion(aspirin.id))
 
         // Check inventory
         val updatedAspirin = dbHelper.drug(aspirin.id)
@@ -288,9 +288,9 @@ class BasicWorkflowStoriesTest {
         dbHelper.insert(drugData)
 
         // Consume all in steps
-        disposal.consume(drugService.get(drugData.id, userData.id), qty(10.0))
-        disposal.consume(drugService.get(drugData.id, userData.id), qty(10.0))
-        disposal.consume(drugService.get(drugData.id, userData.id), qty(10.0))
+        disposal.consume(drugService.get(drugData.id, userData.id), qty(10.0), dbHelper.drugVersion(drugData.id))
+        disposal.consume(drugService.get(drugData.id, userData.id), qty(10.0), dbHelper.drugVersion(drugData.id))
+        disposal.consume(drugService.get(drugData.id, userData.id), qty(10.0), dbHelper.drugVersion(drugData.id))
 
         val updatedDrug = dbHelper.drug(drugData.id)
         // Must be deleted

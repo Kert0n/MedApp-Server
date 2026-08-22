@@ -101,7 +101,7 @@ class DatabaseTestHelper(
     /** Бронь под подготовку сценария. */
     @Transactional
     fun reserve(userId: Uuid, drugId: Uuid, amount: BigDecimal): Reservation =
-        reservationService.create(drugService.get(drugId, userId), userId, amount)
+        reservationService.create(drugService.get(drugId, userId), userId, amount, reservationsVersion(drugId, userId))
             .also { flushAndClear() }
 
     /** Кладёт заранее собранный препарат: тестам нужны свои имена и количества. */
@@ -208,4 +208,9 @@ class DatabaseTestHelper(
     @Transactional
     fun medKitVersion(medKitId: Uuid): Long =
         medKit(medKitId)?.version ?: error("Аптечка $medKitId не найдена")
+
+    /** Версия картины броней: команды над бронью предъявляют её, а не версию своей строки. */
+    @Transactional
+    fun reservationsVersion(drugId: Uuid, userId: Uuid): Long =
+        reservationService.snapshotOn(drugId, userId).version
 }

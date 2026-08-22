@@ -84,8 +84,8 @@ class MedKitStore {
     }
 
     /** Сводит строки членства к тому, что в состоянии. Сама аптечка полей больше не имеет. */
-    fun save(medKit: MedKit): MedKit {
-        val saved = bumpVersion(medKit)
+    fun save(medKit: MedKit, stated: Long): MedKit {
+        val saved = bumpVersion(medKit, stated)
 
         val stored = MedKitMemberships.selectAll()
             .where { MedKitMemberships.medKitId eq medKit.id }
@@ -109,9 +109,9 @@ class MedKitStore {
      * трогает — значит и версию не сдвинула бы. Стоит первым: проигравший гонку обязан
      * остановиться до того, как тронет членство.
      */
-    private fun bumpVersion(medKit: MedKit): MedKit {
-        val next = medKit.copy(version = medKit.version + 1)
-        val written = MedKits.update({ (MedKits.id eq medKit.id) and (MedKits.version eq medKit.version) }) {
+    private fun bumpVersion(medKit: MedKit, stated: Long): MedKit {
+        val next = medKit.copy(version = stated + 1)
+        val written = MedKits.update({ (MedKits.id eq medKit.id) and (MedKits.version eq stated) }) {
             it[version] = next.version
         }
         if (written == 0) throw StaleVersion()
@@ -124,8 +124,8 @@ class MedKitStore {
      * Упаковки и членство уносит каскад внешнего ключа. Ничего очищать в памяти не нужно:
      * загруженных строк, которые могли бы разъехаться с базой, здесь просто не бывает.
      */
-    fun delete(medKit: MedKit) {
-        val removed = MedKits.deleteWhere { (MedKits.id eq medKit.id) and (MedKits.version eq medKit.version) }
+    fun delete(medKit: MedKit, stated: Long) {
+        val removed = MedKits.deleteWhere { (MedKits.id eq medKit.id) and (MedKits.version eq stated) }
         if (removed == 0) throw StaleVersion()
     }
 

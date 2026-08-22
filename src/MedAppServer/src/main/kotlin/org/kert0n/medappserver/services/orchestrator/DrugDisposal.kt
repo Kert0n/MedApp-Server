@@ -1,7 +1,6 @@
 package org.kert0n.medappserver.services.orchestrator
 
 import java.math.BigDecimal
-import kotlin.uuid.Uuid
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.ReservationService
@@ -27,15 +26,11 @@ class DrugDisposal(
     private val reservationService: ReservationService
 ) {
 
-    /** По идентификатору — то же самое плюс чтение пачки. */
-    @Transactional(propagation = MANDATORY)
-    fun destroy(drugId: Uuid, userId: Uuid) = destroy(drugService.get(drugId, userId))
-
     /** Пачку выбросили — назначений на неё больше нет. */
     @Transactional(propagation = MANDATORY)
-    fun destroy(drug: Drug) {
+    fun destroy(drug: Drug, stated: Long) {
         reservationService.dropOnDrug(drug)
-        drugService.delete(drug)
+        drugService.delete(drug, stated)
     }
 
     /**
@@ -46,13 +41,11 @@ class DrugDisposal(
      * для соседнего агрегата.
      */
     @Transactional(propagation = MANDATORY)
-    fun consume(drugId: Uuid, quantity: BigDecimal, userId: Uuid): Drug? =
-        consume(drugService.get(drugId, userId), quantity)
-
-    @Transactional(propagation = MANDATORY)
-    fun consume(drug: Drug, quantity: BigDecimal): Drug? {
-        val left = drugService.consume(drug, quantity)
-        if (left == null) destroy(drug)
+    fun consume(drug: Drug, quantity: BigDecimal, stated: Long): Drug? {
+        val left = drugService.consume(drug, quantity, stated)
+        // Пачка кончилась — списание её не переписывало, а значит и версию не двигало:
+        // уничтожение предъявляет ту же самую.
+        if (left == null) destroy(drug, stated)
         return left
     }
 }

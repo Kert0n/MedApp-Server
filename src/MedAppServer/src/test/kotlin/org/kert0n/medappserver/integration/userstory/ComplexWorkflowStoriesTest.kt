@@ -118,7 +118,7 @@ class ComplexWorkflowStoriesTest {
         // PHASE 3: Heavy Consumption
         // ==========================================
         // Bob consumes 30 Allergy Meds: 60 in the pack becomes 30, while 60 stays reserved.
-        drugService.consume(drugService.get(allergyMeds.id, bob.id), qty(30.0))
+        drugService.consume(drugService.get(allergyMeds.id, bob.id), qty(30.0), dbHelper.drugVersion(allergyMeds.id))
 
 
         val updatedAllergyMeds = dbHelper.requireDrug(allergyMeds.id)
@@ -187,7 +187,7 @@ class ComplexWorkflowStoriesTest {
 
         // Alice is the last one out, so the kit auto-deletes. medKitService directly: the
         // orchestrator would clean up reservations that are already gone with the kit.
-        medKitService.leave(medKitService.get(duoKitCheck1.id, alice.id), alice.id)
+        medKitService.leave(medKitService.get(duoKitCheck1.id, alice.id), alice.id, duoKitCheck1.version)
 
 
         assertNull(dbHelper.medKit(duoKit.id), "Duo kit must auto-delete when last user leaves")
@@ -223,7 +223,7 @@ class ComplexWorkflowStoriesTest {
 
         // ── Phase 1: Alter a reservation ──
         // Bob raises his from 40 to 60. Nothing checks it against the pack: that is his call.
-        reservationService.changeTo(reservationService.get(bob.id, drug.id), qty(60.0))
+        reservationService.changeTo(reservationService.get(bob.id, drug.id), qty(60.0), dbHelper.reservationsVersion(drug.id, bob.id))
         dbHelper.flushAndClear()
 
         assertQty(60.0, dbHelper.userReservation(bob.id, drug.id)!!, "Bob's reservation is 60")
@@ -232,7 +232,7 @@ class ComplexWorkflowStoriesTest {
         // ── Phase 2: Alter Drug (The Spill) ──
         // Алиса разлила половину. Брони не двигаются: вместе они теперь превышают содержимое
         // пачки, и это законное состояние — отвечают за него их владельцы.
-        disposal.consume(drugService.get(drug.id, alice.id), qty(50.0))
+        disposal.consume(drugService.get(drug.id, alice.id), qty(50.0), dbHelper.drugVersion(drug.id))
         dbHelper.flushAndClear()
 
         assertQty(50.0, dbHelper.drugQuantity(drug.id)!!, "в пачке осталось 50")
@@ -254,7 +254,7 @@ class ComplexWorkflowStoriesTest {
 
         // ── Phase 4: Privacy-by-Default Deletion ──
         // Alice deletes the drug completely.
-        disposal.destroy(drugService.get(drug.id, alice.id))
+        disposal.destroy(drugService.get(drug.id, alice.id), dbHelper.drugVersion(drug.id))
         dbHelper.flushAndClear()
 
         assertNull(dbHelper.drugQuantity(drug.id), "Drug record completely purged")

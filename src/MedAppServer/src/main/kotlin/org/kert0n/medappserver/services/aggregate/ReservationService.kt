@@ -68,7 +68,7 @@ class ReservationService(
      * ключ на членство: он же не даёт вставке разойтись с одновременным выходом.
      */
     @Transactional(propagation = MANDATORY)
-    fun create(drug: Drug, userId: Uuid, amount: BigDecimal): Reservation {
+    fun create(drug: Drug, userId: Uuid, amount: BigDecimal, stated: Long): Reservation {
         logger.debug("Creating reservation of user {} on drug {}", userId, drug.id)
 
         // Правило читается здесь, как и у вступления в аптечку: одна бронь на пару «человек и
@@ -76,21 +76,21 @@ class ReservationService(
         if (reservations.find(userId, drug.id) != null) throw ReservationAlreadyExists()
 
         val reservation = Reservation(userId, drug.id, Quantity(amount, drug.quantity.unit))
-        reservations.insert(reservation, drug, snapshotOf(drug, userId))
+        reservations.insert(reservation, drug, stated)
         return reservation
     }
 
     /** По идентификаторам — то же самое плюс своё чтение. */
     @Transactional(propagation = MANDATORY)
-    fun changeTo(userId: Uuid, drugId: Uuid, amount: BigDecimal): Reservation =
-        changeTo(get(userId, drugId), amount)
+    fun changeTo(userId: Uuid, drugId: Uuid, amount: BigDecimal, stated: Long): Reservation =
+        changeTo(get(userId, drugId), amount, stated)
 
     @Transactional(propagation = MANDATORY)
-    fun changeTo(reservation: Reservation, amount: BigDecimal): Reservation {
+    fun changeTo(reservation: Reservation, amount: BigDecimal, stated: Long): Reservation {
         logger.debug("Changing reservation of user {} on drug {}", reservation.userId, reservation.drugId)
 
         val changed = reservation.changeTo(Quantity(amount, reservation.amount.unit))
-        reservations.save(changed, was = reservation, snapshot = snapshotOf(reservation))
+        reservations.save(changed, was = reservation, stated = stated)
         return changed
     }
 
@@ -117,28 +117,21 @@ class ReservationService(
 
     /** Отмена — это удаление: брони с нулём не бывает. */
     @Transactional(propagation = MANDATORY)
-    fun cancel(userId: Uuid, drugId: Uuid) = cancel(get(userId, drugId))
+    fun cancel(userId: Uuid, drugId: Uuid, stated: Long) = cancel(get(userId, drugId), stated)
 
     @Transactional(propagation = MANDATORY)
-    fun cancel(reservation: Reservation) {
+    fun cancel(reservation: Reservation, stated: Long) {
         logger.debug("Cancelling reservation of user {} on drug {}", reservation.userId, reservation.drugId)
-        reservations.delete(reservation, snapshotOf(reservation))
+        reservations.delete(reservation, stated)
     }
 
     /**
      * Текущая картина броней упаковки — та, чью версию команда и предъявляет.
      *
-     * Пока версию не присылает клиент, её читает сервис: предикат от этого не слабеет, он
-     * ловит того, кто вклинился между этим чтением и записью.
+     * Своей версии у отдельной брони нет: решая, сколько заявить, человек смотрит на общую
+     * сумму, и устаревшей для него бывает именно картина.
      */
-    private fun snapshotOf(drug: Drug, userId: Uuid): ReservationSnapshot =
-        reservations.snapshotsOf(listOf(drug), userId).getValue(drug.id)
-
-    /** Картина броней упаковки — для тех, кто предъявляет её версию. */
     @Transactional(propagation = MANDATORY, readOnly = true)
     fun snapshotOn(drugId: Uuid, userId: Uuid): ReservationSnapshot =
         reservations.snapshotOf(drugId, userId)
-
-    private fun snapshotOf(reservation: Reservation): ReservationSnapshot =
-        reservations.snapshotOf(reservation.drugId, reservation.userId)
 }

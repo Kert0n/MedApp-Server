@@ -73,9 +73,8 @@ class MedKitApplicationService(
      */
     @Transactional
     fun leave(medKitId: Uuid, version: Long?, userId: Uuid) {
-        requireStated(version, medKitService.get(medKitId, userId).version)
         logger.debug("Removing user {} from medkit {}", userId, medKitId)
-        medKitService.leave(medKitId, userId)
+        medKitService.leave(medKitId, userId, statedVersion(version))
     }
 
     /**
@@ -86,9 +85,8 @@ class MedKitApplicationService(
      */
     @Transactional
     fun delete(medKitId: Uuid, version: Long?, userId: Uuid, transferToMedKitId: Uuid? = null) {
-        requireStated(version, medKitService.get(medKitId, userId).version)
         logger.debug("Deleting medkit {} (transfer to {})", medKitId, transferToMedKitId)
         transferToMedKitId?.let { relocation.moveAll(medKitId, it, userId) }
-        medKitService.delete(medKitId, userId)
+        medKitService.delete(medKitId, userId, statedVersion(version))
     }
 }

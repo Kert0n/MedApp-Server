@@ -82,8 +82,8 @@ class TreatmentPlanStoriesTest {
         assertQty(30.0, createdPlan, "Planned amount should be 30")
 
         // Record some intakes
-        drugService.consume(drugService.get(drugData.id, userData.id), qty(5.0))
-        drugService.consume(drugService.get(drugData.id, userData.id), qty(5.0))
+        drugService.consume(drugService.get(drugData.id, userData.id), qty(5.0), dbHelper.drugVersion(drugData.id))
+        drugService.consume(drugService.get(drugData.id, userData.id), qty(5.0), dbHelper.drugVersion(drugData.id))
 
         // Verify drug quantity decreased
         val updatedDrug = dbHelper.drug(drugData.id)
@@ -184,9 +184,9 @@ class TreatmentPlanStoriesTest {
         assertQty(90.0, dbHelper.reservedOnDrug(vitamins.id))
 
         // Everyone takes their daily vitamin
-        drugService.consume(drugService.get(vitamins.id, mom.id), qty(1.0))
-        drugService.consume(drugService.get(vitamins.id, dad.id), qty(1.0))
-        drugService.consume(drugService.get(vitamins.id, child.id), qty(1.0))
+        drugService.consume(drugService.get(vitamins.id, mom.id), qty(1.0), dbHelper.drugVersion(vitamins.id))
+        drugService.consume(drugService.get(vitamins.id, dad.id), qty(1.0), dbHelper.drugVersion(vitamins.id))
+        drugService.consume(drugService.get(vitamins.id, child.id), qty(1.0), dbHelper.drugVersion(vitamins.id))
 
         // Check vitamins after 1 day
         val updatedVitamins = dbHelper.drug(vitamins.id)

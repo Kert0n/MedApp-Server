@@ -6,8 +6,8 @@ import org.kert0n.medappserver.domain.NoSuchReservation
 import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.ReservationAlreadyExists
 import org.kert0n.medappserver.domain.StaleVersion
-import org.kert0n.medappserver.services.application.PreconditionFailed
 import org.kert0n.medappserver.services.orchestrator.ConflictingSync
+import org.kert0n.medappserver.services.orchestrator.StaleSyncVersion
 import org.kert0n.medappserver.services.application.PreconditionRequired
 import org.kert0n.medappserver.domain.TooManyRegistrations
 import org.springframework.http.HttpStatus
@@ -46,9 +46,11 @@ class ApiExceptionHandler {
             // выдавал бы существование чужой.
             is NotAMember -> HttpStatus.NOT_FOUND
             is ReservationAlreadyExists -> HttpStatus.CONFLICT
-            // Гонку проиграли при записи: предъявленное было верным на чтении и
-            // устарело, пока команда шла. Повторять за клиента сервер не берётся.
-            is StaleVersion -> HttpStatus.CONFLICT
+            // Предъявленная версия не совпала с той, что в базе. Различать «прислал
+            // устаревшую» и «проиграл гонку» база не даёт — она отвечает одинаково, нулём
+            // задетых строк, — да и клиенту разницы нет: и там и там решение принято по
+            // картине, которой больше нет. Повторять за него сервер не берётся.
+            is StaleVersion -> HttpStatus.PRECONDITION_FAILED
             // Секрет регистрации не совпал: отвечаем как на запрет, а не как на ошибку формы.
             is InvalidRegistrationSecret -> HttpStatus.FORBIDDEN
             is TooManyRegistrations -> HttpStatus.TOO_MANY_REQUESTS
@@ -77,20 +79,22 @@ class ApiExceptionHandler {
         }
 
     /**
-     * Предусловия отвечают до попытки записи, поэтому и коды у них свои: не предъявлено — 428,
-     * предъявлено и не совпало — 412. Проигранная гонка выясняется уже при записи и остаётся 409.
+     * Предусловие: не предъявлено — 428, предъявлено и не совпало — 412.
+     *
+     * 409 остаётся тому, что предусловием запроса не было: дублю брони, повторному вступлению
+     * и версиям из тела синхронизации.
      */
     /** Тот же идентификатор с другим содержимым — конфликт, а не повтор. */
     @ExceptionHandler(ConflictingSync::class)
     fun handleConflictingSync(exception: ConflictingSync): ProblemDetail = problem(HttpStatus.CONFLICT)
 
+    /** Версия из тела синхронизации: конфликт записи, а не предусловие запроса. */
+    @ExceptionHandler(StaleSyncVersion::class)
+    fun handleStaleSyncVersion(exception: StaleSyncVersion): ProblemDetail = problem(HttpStatus.CONFLICT)
+
     @ExceptionHandler(PreconditionRequired::class)
     fun handlePreconditionRequired(exception: PreconditionRequired): ProblemDetail =
         problem(HttpStatus.PRECONDITION_REQUIRED)
-
-    @ExceptionHandler(PreconditionFailed::class)
-    fun handlePreconditionFailed(exception: PreconditionFailed): ProblemDetail =
-        problem(HttpStatus.PRECONDITION_FAILED)
 
     private fun problem(status: HttpStatus): ProblemDetail = ProblemDetails.forStatus(status)
 }

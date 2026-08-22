@@ -187,7 +187,7 @@ class StoreIntegrationTest {
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
-        medKits.delete(dbHelper.medKit(kit.id)!!)
+        medKits.delete(dbHelper.medKit(kit.id)!!, dbHelper.medKitVersion(kit.id))
         dbHelper.flushAndClear()
 
         assertNull(dbHelper.medKit(kit.id))

@@ -59,12 +59,16 @@ class DrugStore {
     /**
      * Запись под предикатом версии.
      *
+     * `stated` — версия, которую предъявил клиент: то состояние, по которому он принимал
+     * решение. Параметр обязательный, и это главное в нём: записать, не предъявив версию,
+     * не собирается.
+     *
      * Проверка и изменение — один оператор: между ними не втиснуться. Ноль задетых строк значит,
-     * что строку успели переписать после того, как её прочитали, — гонку проиграли.
+     * что строку успели переписать после того, как её прочитали, — предъявленное устарело.
      */
-    fun save(drug: Drug): Drug {
-        val stored = drug.afterWrite()
-        val written = Drugs.update({ (Drugs.id eq drug.id) and (Drugs.version eq drug.version) }) {
+    fun save(drug: Drug, stated: Long): Drug {
+        val stored = drug.copy(version = stated + 1)
+        val written = Drugs.update({ (Drugs.id eq drug.id) and (Drugs.version eq stated) }) {
             it.write(stored)
         }
         if (written == 0) throw StaleVersion()
@@ -72,14 +76,13 @@ class DrugStore {
     }
 
     /**
-     * Уничтожение пачки — только пачки.
+     * Уничтожение пачки — только пачки, и тоже под предъявленной версией.
      *
      * Брони снимает `DrugDisposal`: их исчезновение вслед за упаковкой — правило, а не
      * подробность записи, и в запросе ему не место.
      */
-    /** Удаление тоже предъявляет версию: уничтожать пачку по устаревшему представлению нельзя. */
-    fun delete(drug: Drug) {
-        val removed = Drugs.deleteWhere { (Drugs.id eq drug.id) and (Drugs.version eq drug.version) }
+    fun delete(drug: Drug, stated: Long) {
+        val removed = Drugs.deleteWhere { (Drugs.id eq drug.id) and (Drugs.version eq stated) }
         if (removed == 0) throw StaleVersion()
     }
 
@@ -137,5 +140,3 @@ private fun org.jetbrains.exposed.v1.core.statements.UpdateBuilder<*>.write(drug
     this[Drugs.version] = drug.version
 }
 
-/** Записанное состояние — на версию новее прочитанного. */
-private fun Drug.afterWrite(): Drug = copy(version = version + 1)

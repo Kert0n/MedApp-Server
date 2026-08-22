@@ -155,7 +155,7 @@ class MedKitServiceTest {
         dbHelper.join(kit.id, alice.id, bob.id)
         dbHelper.flushAndClear()
 
-        medKitService.leave(medKitService.get(kit.id, bob.id), bob.id)
+        medKitService.leave(medKitService.get(kit.id, bob.id), bob.id, dbHelper.medKitVersion(kit.id))
         dbHelper.flushAndClear()
 
         assertNotNull(medKitService.get(kit.id, alice.id))
@@ -170,7 +170,7 @@ class MedKitServiceTest {
         val kit = medKitService.create(alice.id)
         dbHelper.flushAndClear()
 
-        medKitService.leave(medKitService.get(kit.id, alice.id), alice.id)
+        medKitService.leave(medKitService.get(kit.id, alice.id), alice.id, dbHelper.medKitVersion(kit.id))
         dbHelper.flushAndClear()
 
         assertNull(dbHelper.medKit(kit.id))

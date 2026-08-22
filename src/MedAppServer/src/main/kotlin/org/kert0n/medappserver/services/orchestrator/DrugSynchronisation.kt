@@ -39,10 +39,15 @@ class DrugSynchronisation(
         val intake = Intake(syncId, userId, drug.id, request.consumed, request.reservation?.amount)
         if (alreadyApplied(intake)) return drug
 
-        if (request.drugVersion != drug.version) throw StaleVersion()
-
         // `null` — списание опустошило пачку, и её больше нет вместе с бронями на неё.
-        val left = if (request.consumed != null) disposal.consume(drug, request.consumed) else drug
+        val left = if (request.consumed != null) {
+            // Списание есть — значит упаковку пишут, и версию к ней предъявить обязаны.
+            // Списания нет — писать нечего, и предъявлять не к чему: часть про бронь несёт
+            // свою версию сама.
+            asSyncConflict { disposal.consume(drug, request.consumed, request.drugVersion ?: throw StaleSyncVersion()) }
+        } else {
+            drug
+        }
         applyReservation(left, userId, request.reservation)
 
         rememberAfterCommit(intake)
@@ -74,14 +79,32 @@ class DrugSynchronisation(
         if (drug == null || wanted == null) return
 
         val snapshot = reservationService.snapshotOn(drug.id, userId)
-        if (wanted.version != null && wanted.version != snapshot.version) throw StaleVersion()
+        // Версии нет — брони ещё не было, сверяться не с чем: за неизменность отвечает
+        // прочитанное только что, и от одновременной записи предикат защищает всё равно.
+        val stated = wanted.version ?: snapshot.version
 
-        if (snapshot.mine == null) {
-            reservationService.create(drug, userId, wanted.amount)
-        } else {
-            reservationService.changeTo(userId, drug.id, wanted.amount)
+        asSyncConflict {
+            if (snapshot.mine == null) {
+                reservationService.create(drug, userId, wanted.amount, stated)
+            } else {
+                reservationService.changeTo(userId, drug.id, wanted.amount, stated)
+            }
         }
     }
+
+    /**
+     * Отказ по версии здесь — 409, а не 412.
+     *
+     * Версии едут телом только в синхронизации: запрос меняет два состояния сразу, и разложить
+     * их по одному предусловию запроса нельзя. Раз предусловием запроса версия не была, то и
+     * «предусловие не выполнено» ответить не о чем.
+     */
+    private fun <T> asSyncConflict(work: () -> T): T =
+        try {
+            work()
+        } catch (stale: StaleVersion) {
+            throw StaleSyncVersion(stale)
+        }
 
     /**
      * Журнал пишется после коммита.
@@ -110,3 +133,7 @@ class DrugSynchronisation(
 
 /** Тот же идентификатор с другим содержимым: это не повтор, а другая команда. */
 class ConflictingSync : RuntimeException("A different request was already applied under this identifier")
+
+/** Версия из тела не сошлась: конфликт при записи, а не невыполненное предусловие запроса. */
+class StaleSyncVersion(cause: Throwable? = null) :
+    RuntimeException("The state has changed since the version stated in the body", cause)

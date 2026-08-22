@@ -85,7 +85,9 @@ class MedKitService(
             ?: throw NotAMember()
 
         val joined = get(invitation.medKitId, invitation.invitedBy).join(userId)
-        return medKits.save(joined)
+        // Клиент аптечку не читал и версии не предъявлял: сверять нечего. Предикат берёт
+        // версию только что прочитанной — от одновременной записи он защищает всё равно.
+        return medKits.save(joined, stated = joined.version)
     }
 
     /**
@@ -94,18 +96,18 @@ class MedKitService(
      * Брони выходящего лежат в чужом агрегате: их убирает оркестратор.
      */
     @Transactional(propagation = MANDATORY)
-    fun leave(medKitId: Uuid, userId: Uuid): MedKit? = leave(get(medKitId, userId), userId)
+    fun leave(medKitId: Uuid, userId: Uuid, stated: Long): MedKit? = leave(get(medKitId, userId), userId, stated)
 
     @Transactional(propagation = MANDATORY)
-    fun leave(medKit: MedKit, userId: Uuid): MedKit? {
+    fun leave(medKit: MedKit, userId: Uuid, stated: Long): MedKit? {
         logger.debug("Removing user {} from medkit {}", userId, medKit.id)
         val left = medKit.leave(userId)
 
         if (left == null) {
-            medKits.delete(medKit)
+            medKits.delete(medKit, stated)
             return null
         }
-        return medKits.save(left)
+        return medKits.save(left, stated)
     }
 
     /**
@@ -115,8 +117,8 @@ class MedKitService(
      * поэтому команде нечего перепроверять — а перепроверка стоила бы второго запроса.
      */
     @Transactional(propagation = MANDATORY)
-    fun delete(medKitId: Uuid, userId: Uuid) = delete(get(medKitId, userId))
+    fun delete(medKitId: Uuid, userId: Uuid, stated: Long) = delete(get(medKitId, userId), stated)
 
     @Transactional(propagation = MANDATORY)
-    fun delete(medKit: MedKit) = medKits.delete(medKit)
+    fun delete(medKit: MedKit, stated: Long) = medKits.delete(medKit, stated)
 }
