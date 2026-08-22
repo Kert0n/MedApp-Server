@@ -28,7 +28,11 @@ data class DrugSyncRequest(
     )
     val consumed: BigDecimal? = null,
 
-    @Schema(description = VERSION_STATED, example = "3", nullable = true)
+    @Schema(
+        description =
+            "Version the command acts on; taken from the last read. Absent means 428, mismatched means 412",
+        example = "3", nullable = true
+    )
     val drugVersion: Long? = null,
 
     @Schema(description = "New state of the caller's claim; omitted when it did not change", nullable = true)

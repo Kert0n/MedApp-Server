@@ -47,7 +47,11 @@ data class ReservationCreateRequest(
     )
     val amount: BigDecimal,
 
-    @Schema(description = VERSION_STATED, example = "5", nullable = true)
+    @Schema(
+        description =
+            "Version the command acts on; taken from the last read. Absent means 428, mismatched means 412",
+        example = "5", nullable = true
+    )
     val version: Long? = null
 )
 
@@ -65,7 +69,11 @@ data class ReservationPatchRequest(
     )
     val amount: BigDecimal,
 
-    @Schema(description = VERSION_STATED, example = "5", nullable = true)
+    @Schema(
+        description =
+            "Version the command acts on; taken from the last read. Absent means 428, mismatched means 412",
+        example = "5", nullable = true
+    )
     val version: Long? = null
 )
 
@@ -80,6 +88,10 @@ data class IntakeRequest(
     )
     val quantity: BigDecimal,
 
-    @Schema(description = VERSION_STATED, example = "3", nullable = true)
+    @Schema(
+        description =
+            "Version the command acts on; taken from the last read. Absent means 428, mismatched means 412",
+        example = "3", nullable = true
+    )
     val version: Long? = null
 )

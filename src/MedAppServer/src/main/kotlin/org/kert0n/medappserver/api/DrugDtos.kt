@@ -11,15 +11,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
 
 /**
- * Версия, которую команда предъявляет.
- *
- * Обнуляемая намеренно: отсутствие поля — это 428 «предусловие обязательно», а не 400. Не
- * прислать версию и прислать мусор — разные ошибки, и отвечать на них одинаково нечестно.
- */
-const val VERSION_STATED: String =
-    "Version the command acts on; taken from the last read. Absent means 428, mismatched means 412"
-
-/**
  * Как выглядит величина на проводе: до 13 цифр до точки и до 6 после — та же разрядность, что у
  * колонок `numeric(19, 6)`.
  *
@@ -164,7 +155,11 @@ data class DrugPatchRequest(
     @Schema(description = "Description")
     val description: String? = null,
 
-    @Schema(description = VERSION_STATED, example = "3", nullable = true)
+    @Schema(
+        description =
+            "Version the command acts on; taken from the last read. Absent means 428, mismatched means 412",
+        example = "3", nullable = true
+    )
     val version: Long? = null
 )
 
