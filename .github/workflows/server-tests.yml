@@ -45,6 +45,12 @@ jobs:
       - name: Тесты
         run: ./gradlew test --no-daemon
 
+      # Отдельным шагом: фикстур на сорок тысяч строк поднимается около минуты, и в обычный
+      # прогон это класть незачем. Падение здесь — повод посмотреть план, а не признак
+      # сломанного кода: планировщик зависит от статистики.
+      - name: Планы запросов
+        run: ./gradlew queryPlanTest --no-daemon
+
       - name: Отчёты тестов
         if: always()
         uses: actions/upload-artifact@v7
@@ -53,4 +59,7 @@ jobs:
           path: |
             src/MedAppServer/build/reports/tests/test
             src/MedAppServer/build/test-results/test
+            src/MedAppServer/build/reports/tests/queryPlanTest
+            src/MedAppServer/build/test-results/queryPlanTest
+            src/MedAppServer/build/reports/queryPlans
           retention-days: 7
