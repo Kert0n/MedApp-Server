@@ -131,7 +131,7 @@ class DrugService(
     @Transactional(propagation = MANDATORY)
     fun moveAll(source: MedKit, target: MedKit) {
         logger.debug("Moving all drugs of medkit {} to {}", source.id, target.id)
-        drugs.moveAllToMedKit(source.id, target.id)
+        drugs.moveAllToMedKit(source, target)
     }
 
     /** Брони, потерявшие доступ, убирает межагрегатный сценарий: они в чужом агрегате. */

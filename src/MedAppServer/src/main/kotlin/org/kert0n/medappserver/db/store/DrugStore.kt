@@ -7,18 +7,16 @@ import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.core.inSubQuery
 import org.jetbrains.exposed.v1.jdbc.Query
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
 import org.kert0n.medappserver.db.tables.Drugs
 import org.kert0n.medappserver.db.tables.FormTypes
-import org.kert0n.medappserver.db.tables.MedKitMemberships
 import org.kert0n.medappserver.db.tables.QuantityUnits
 import org.kert0n.medappserver.domain.Drug
+import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.StaleVersion
 import org.kert0n.medappserver.domain.FormType
 import org.kert0n.medappserver.domain.Quantity
@@ -30,17 +28,20 @@ import org.springframework.stereotype.Component
  *
  * Наружу — только доменные типы. Броней здесь нет: упаковка ими не владеет.
  *
- * Каждое чтение соединяется со словарями, потому что доменное количество несёт имя единицы.
- * Соединение написано один раз, в `drugsAccessibleTo`, и видно глазами — в отличие от `EAGER`,
- * о котором приходилось помнить.
+ * Файл разделён по тому, чем защищено обращение к строке. **Чтения** скоуплены запросом: они
+ * принимают вызывающего, и предикат членства накладывается сам. **Записи** предиката доступа
+ * не имеют, и это не пропуск: они принимают агрегат, а взять его можно только из скоупленного
+ * чтения. Второй предикат был бы второй копией того же правила и стоил бы лишнего соединения
+ * на каждой записи.
  *
- * Там же накладывается доступ: чтение обязано назвать вызывающего, а предикат добавляется сам.
- * Забыть его нельзя — не потому, что о нём помнят, а потому, что писать его негде.
+ * Каждое чтение соединяется со словарями, потому что доменное количество несёт имя единицы.
+ * Соединение написано один раз, там же, где скоуп, и видно глазами — в отличие от `EAGER`,
+ * о котором приходилось помнить.
  */
 @Component
 class DrugStore {
 
-    // ── Чтение ───────────────────────────────────────────────────────────────────
+    // ── Чтения: скоуп накладывает запрос ─────────────────────────────────────────
 
     fun find(drugId: Uuid, userId: Uuid): Drug? =
         drugsAccessibleTo(userId) { Drugs.id eq drugId }.singleOrNull()?.toDomain()
@@ -53,7 +54,22 @@ class DrugStore {
     fun findAllOfUser(userId: Uuid): List<Drug> =
         drugsAccessibleTo(userId).orderBy(Drugs.name).map { it.toDomain() }
 
-    // ── Команды ──────────────────────────────────────────────────────────────────
+    /**
+     * Упаковки со словарями, доступные вызывающему и отобранные условием.
+     *
+     * Доступ накладывает сам помощник, а не условие: чужой упаковки для вызывающего не
+     * существует, и это не то, о чём каждое чтение решает заново. Условие остаётся про то,
+     * что ищут, — без него берутся все доступные.
+     */
+    private fun drugsAccessibleTo(userId: Uuid, condition: () -> Op<Boolean> = { Op.TRUE }): Query =
+        withVocabulary.selectAll().where { Drugs.medKitId.inMedKitsOf(userId) and condition() }
+
+    private val withVocabulary: Join
+        get() = Drugs
+            .join(QuantityUnits, JoinType.INNER, Drugs.quantityUnitId, QuantityUnits.id)
+            .join(FormTypes, JoinType.LEFT, Drugs.formTypeId, FormTypes.id)
+
+    // ── Команды: доступ доказан принятым агрегатом ───────────────────────────────
 
     fun insert(drug: Drug) {
         Drugs.insert { it.write(drug) }
@@ -89,25 +105,18 @@ class DrugStore {
         if (removed == 0) throw StaleVersion()
     }
 
-    /** Все упаковки аптечки — в другую, одним запросом. Брони убирает вызывающий. */
-    fun moveAllToMedKit(sourceMedKitId: Uuid, targetMedKitId: Uuid) {
-        Drugs.update({ Drugs.medKitId eq sourceMedKitId }) { it[medKitId] = targetMedKitId }
+    /**
+     * Всё содержимое аптечки — в другую, одним запросом. Брони убирает вызывающий.
+     *
+     * Обе аптечки приходят агрегатами, как и везде в этом разделе: вызывающий их прочитал, и
+     * это его доказательство доступа к обеим.
+     */
+    fun moveAllToMedKit(source: MedKit, target: MedKit) {
+        Drugs.update({ Drugs.medKitId eq source.id }) { it[medKitId] = target.id }
     }
 
-    /**
-     * Упаковки со словарями, доступные вызывающему и отобранные условием.
-     *
-     * Доступ накладывает сам помощник, а не условие: чужой упаковки для вызывающего не
-     * существует, и это не то, о чём каждое чтение решает заново. Условие остаётся про то,
-     * что ищут, — без него берутся все доступные.
-     */
-    private fun drugsAccessibleTo(userId: Uuid, condition: () -> Op<Boolean> = { Op.TRUE }): Query =
-        withVocabulary.selectAll().where { Drugs.medKitId.inMedKitsOf(userId) and condition() }
 
-    private val withVocabulary: Join
-        get() = Drugs
-            .join(QuantityUnits, JoinType.INNER, Drugs.quantityUnitId, QuantityUnits.id)
-            .join(FormTypes, JoinType.LEFT, Drugs.formTypeId, FormTypes.id)
+    // ── Перенос строк ────────────────────────────────────────────────────────────
 
     private fun ResultRow.toDomain(): Drug = Drug(
         id = this[Drugs.id],
