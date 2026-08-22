@@ -3,8 +3,6 @@
 package org.kert0n.medappserver.api
 
 import io.swagger.v3.oas.annotations.media.Schema
-import jakarta.validation.constraints.DecimalMin
-import jakarta.validation.constraints.Digits
 import java.math.BigDecimal
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
@@ -23,11 +21,10 @@ import kotlinx.serialization.UseSerializers
 @Serializable
 data class DrugSyncRequest(
     /** Дельта: коммутативна, поэтому предусловия сама по себе не требует. */
-    @field:DecimalMin(value = "0.0", inclusive = false)
-    @field:Digits(integer = 13, fraction = 6)
+    @field:PositiveQuantity
     @Schema(
         description = "Amount consumed while offline; a delta, omitted when nothing was taken",
-        example = "5.0", nullable = true, type = "string", pattern = POSITIVE_QUANTITY_PATTERN
+        example = "5.0", nullable = true
     )
     val consumed: BigDecimal? = null,
 
@@ -45,11 +42,9 @@ data class DrugSyncRequest(
 @Schema(description = "The caller's claim after the offline session")
 @Serializable
 data class ReservationSyncRequest(
-    @field:DecimalMin(value = "0.0", inclusive = false)
-    @field:Digits(integer = 13, fraction = 6)
+    @field:PositiveQuantity
     @Schema(
-        description = "Claim after the offline session, absolute", example = "20.0", required = true,
-        type = "string", pattern = POSITIVE_QUANTITY_PATTERN
+        description = "Claim after the offline session, absolute", example = "20.0", required = true
     )
     val amount: BigDecimal,
 

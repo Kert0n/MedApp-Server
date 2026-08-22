@@ -4,6 +4,9 @@ import io.swagger.v3.oas.models.Components
 import io.swagger.v3.oas.models.OpenAPI
 import io.swagger.v3.oas.models.info.Info
 import io.swagger.v3.oas.models.security.SecurityScheme
+import org.kert0n.medappserver.api.POSITIVE_QUANTITY_PATTERN
+import org.kert0n.medappserver.api.PositiveQuantity
+import org.springdoc.core.customizers.PropertyCustomizer
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 
@@ -21,6 +24,27 @@ class OpenApiConfiguration {
     companion object {
         const val BEARER_SCHEME = "Bearer Authentication"
         const val BASIC_SCHEME = "Basic Authentication"
+    }
+
+    /**
+     * Образец величины публикуется из той же метки, которая её и проверяет.
+     *
+     * `@Schema`, повешенный мета-аннотацией на своё ограничение, springdoc не читает —
+     * измерено: тип поля становится `number`, а образец пропадает совсем. Поэтому схему полю
+     * ставит эта настройка, по той же `@PositiveQuantity`: условие остаётся написанным один
+     * раз, а не проверяется в одном месте и описывается в другом.
+     */
+    @Bean
+    fun positiveQuantities(): PropertyCustomizer = PropertyCustomizer { property, type ->
+        if (type?.ctxAnnotations?.any { it is PositiveQuantity } == true) {
+            // `types`, а не `type`: контракт версии 3.1, и печатается из множества. Образец
+            // разобран как число, пока тип не назван, — переписывается строкой следом.
+            property.types = setOf("string")
+            property.type = "string"
+            property.pattern = POSITIVE_QUANTITY_PATTERN
+            property.example = property.example?.toString()
+        }
+        property
     }
 
     @Bean

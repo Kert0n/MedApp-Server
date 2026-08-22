@@ -3,8 +3,6 @@
 package org.kert0n.medappserver.api
 
 import io.swagger.v3.oas.annotations.media.Schema
-import jakarta.validation.constraints.DecimalMin
-import jakarta.validation.constraints.Digits
 import jakarta.validation.constraints.NotNull
 import java.math.BigDecimal
 import kotlin.uuid.Uuid
@@ -41,14 +39,11 @@ data class ReservationCreateRequest(
     val drugId: Uuid,
 
     @field:NotNull
-    @field:DecimalMin(value = "0.0", inclusive = false)
-    @field:Digits(integer = 13, fraction = 6)
+    @field:PositiveQuantity
     @Schema(
         description = "Reserved amount, greater than zero. It may exceed what is left in the package.",
         example = "20.0",
-        required = true,
-        type = "string",
-        pattern = POSITIVE_QUANTITY_PATTERN
+        required = true
     )
     val amount: BigDecimal,
 
@@ -64,11 +59,9 @@ data class ReservationCreateRequest(
 @Serializable
 data class ReservationPatchRequest(
     @field:NotNull
-    @field:DecimalMin(value = "0.0", inclusive = false)
-    @field:Digits(integer = 13, fraction = 6)
+    @field:PositiveQuantity
     @Schema(
-        description = "New reserved amount, greater than zero", example = "15.0", required = true,
-        type = "string", pattern = POSITIVE_QUANTITY_PATTERN
+        description = "New reserved amount, greater than zero", example = "15.0", required = true
     )
     val amount: BigDecimal,
 
@@ -81,11 +74,9 @@ data class ReservationPatchRequest(
 @Serializable
 data class IntakeRequest(
     @field:NotNull
-    @field:DecimalMin(value = "0.0", inclusive = false)
-    @field:Digits(integer = 13, fraction = 6)
+    @field:PositiveQuantity
     @Schema(
-        description = "Amount taken, greater than zero", example = "2.0", required = true,
-        type = "string", pattern = POSITIVE_QUANTITY_PATTERN
+        description = "Amount taken, greater than zero", example = "2.0", required = true
     )
     val quantity: BigDecimal,
 

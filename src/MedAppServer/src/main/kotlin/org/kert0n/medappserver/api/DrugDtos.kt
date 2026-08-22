@@ -3,8 +3,6 @@
 package org.kert0n.medappserver.api
 
 import io.swagger.v3.oas.annotations.media.Schema
-import jakarta.validation.constraints.DecimalMin
-import jakarta.validation.constraints.Digits
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
 import java.math.BigDecimal
@@ -12,16 +10,6 @@ import kotlin.uuid.Uuid
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
 
-/**
- * Как выглядит величина на проводе: до 13 цифр до точки и до 6 после — та же разрядность, что у
- * колонок `numeric(19, 6)`.
- *
- * Образцом, а не `maximum` с `multipleOf`: величина едет строкой, а на строке числовые границы
- * ничего не значат. Указан отдельно от `@Digits` намеренно — проверяет разрядность валидация,
- * но springdoc не переносит `@Digits` в опубликованную схему, и без этого атрибута контракт
- * умалчивал бы о правиле, которое сервер применяет. Согласие с `QUANTITY_PRECISION` и
- * `QUANTITY_SCALE` сторожит тест.
- */
 /**
  * Версия, которую команда предъявляет.
  *
@@ -31,6 +19,15 @@ import kotlinx.serialization.UseSerializers
 const val VERSION_STATED: String =
     "Version the command acts on; taken from the last read. Absent means 428, mismatched means 412"
 
+/**
+ * Как выглядит величина на проводе: до 13 цифр до точки и до 6 после — та же разрядность, что у
+ * колонок `numeric(19, 6)`.
+ *
+ * Образцом, а не `maximum` с `multipleOf`: величина едет строкой, а на строке числовые границы
+ * ничего не значат. Разрядность проверяет валидация, но springdoc не переносит `@Digits` в
+ * опубликованную схему — без образца контракт умалчивал бы о правиле, которое сервер применяет.
+ * Согласие с `QUANTITY_PRECISION` и `QUANTITY_SCALE` сторожит тест.
+ */
 const val QUANTITY_PATTERN: String = "^\\d{1,13}(\\.\\d{1,6})?$"
 
 /**
@@ -39,7 +36,7 @@ const val QUANTITY_PATTERN: String = "^\\d{1,13}(\\.\\d{1,6})?$"
  * Отдельным образцом, потому что ноль в ответе законен — пачку допили, броней нет, — а в
  * запросе нет: «принял ноль таблеток» и «забронировал ноль» не события. Раньше это говорил
  * `minimum` в схеме; на строке числовых границ не бывает, и без второго образца контракт
- * умолчал бы о правиле, которое сервер применяет через `@DecimalMin`.
+ * умолчал бы о правиле, которое сервер применяет через `@PositiveQuantity`.
  */
 const val POSITIVE_QUANTITY_PATTERN: String = "^(?!0+(\\.0+)?$)\\d{1,13}(\\.\\d{1,6})?$"
 
@@ -93,11 +90,9 @@ data class DrugCreateRequest(
     val name: String,
 
     @field:NotNull
-    @field:DecimalMin(value = "0.0", inclusive = false)
-    @field:Digits(integer = 13, fraction = 6)
+    @field:PositiveQuantity
     @Schema(
-        description = "Initial stock, greater than zero", example = "100.0", required = true,
-        type = "string", pattern = POSITIVE_QUANTITY_PATTERN
+        description = "Initial stock, greater than zero", example = "100.0", required = true
     )
     val quantity: BigDecimal,
 
@@ -138,13 +133,12 @@ data class DrugPatchRequest(
     @Schema(description = "Drug name", example = "Aspirin")
     val name: String? = null,
 
-    @field:DecimalMin(value = "0.0", inclusive = false)
-    @field:Digits(integer = 13, fraction = 6)
+    @field:PositiveQuantity
     @Schema(
         description = "Corrected stock: you recounted the package and saw a different number. " +
             "This is a correction, not a refill — a new pack is a new package. Reservations are " +
             "left alone.",
-        example = "120.0", type = "string", pattern = POSITIVE_QUANTITY_PATTERN
+        example = "120.0"
     )
     val quantity: BigDecimal? = null,
 
