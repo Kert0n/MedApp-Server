@@ -28,11 +28,9 @@ import org.springframework.stereotype.Component
  *
  * Наружу — только доменные типы. Броней здесь нет: упаковка ими не владеет.
  *
- * Файл разделён по тому, чем защищено обращение к строке. **Чтения** скоуплены запросом: они
- * принимают вызывающего, и предикат членства накладывается сам. **Записи** предиката доступа
- * не имеют, и это не пропуск: они принимают агрегат, а взять его можно только из скоупленного
- * чтения. Второй предикат был бы второй копией того же правила и стоил бы лишнего соединения
- * на каждой записи.
+ * Правила обращения — в `Access.kt`, одним списком на весь пакет. Коротко: чтения называют
+ * вызывающего и скоупятся запросом, команды принимают агрегат, а разделы ниже подписаны потому,
+ * что обещание относится к публичной поверхности, а не к приватным помощникам.
  *
  * Каждое чтение соединяется со словарями, потому что доменное количество несёт имя единицы.
  * Соединение написано один раз, там же, где скоуп, и видно глазами — в отличие от `EAGER`,
@@ -41,7 +39,7 @@ import org.springframework.stereotype.Component
 @Component
 class DrugStore {
 
-    // ── Чтения: скоуп накладывает запрос ─────────────────────────────────────────
+    // ── Чтения: принимают вызывающего, скоуп накладывает запрос ──────────────────
 
     fun find(drugId: Uuid, userId: Uuid): Drug? =
         drugsAccessibleTo(userId) { Drugs.id eq drugId }.singleOrNull()?.toDomain()
@@ -54,22 +52,7 @@ class DrugStore {
     fun findAllOfUser(userId: Uuid): List<Drug> =
         drugsAccessibleTo(userId).orderBy(Drugs.name).map { it.toDomain() }
 
-    /**
-     * Упаковки со словарями, доступные вызывающему и отобранные условием.
-     *
-     * Доступ накладывает сам помощник, а не условие: чужой упаковки для вызывающего не
-     * существует, и это не то, о чём каждое чтение решает заново. Условие остаётся про то,
-     * что ищут, — без него берутся все доступные.
-     */
-    private fun drugsAccessibleTo(userId: Uuid, condition: () -> Op<Boolean> = { Op.TRUE }): Query =
-        withVocabulary.selectAll().where { Drugs.medKitId.inMedKitsOf(userId) and condition() }
-
-    private val withVocabulary: Join
-        get() = Drugs
-            .join(QuantityUnits, JoinType.INNER, Drugs.quantityUnitId, QuantityUnits.id)
-            .join(FormTypes, JoinType.LEFT, Drugs.formTypeId, FormTypes.id)
-
-    // ── Команды: доступ доказан принятым агрегатом ───────────────────────────────
+    // ── Команды: принимают агрегат — доступ к нему уже доказан ───────────────────
 
     fun insert(drug: Drug) {
         Drugs.insert { it.write(drug) }
@@ -116,7 +99,26 @@ class DrugStore {
     }
 
 
-    // ── Перенос строк ────────────────────────────────────────────────────────────
+    // ── Внутреннее: помощники запросов и перенос строк ───────────────────────────
+    //
+    // Обещания разделов выше — про публичную поверхность. Здесь работают уже внутри доказанного
+    // чтения или доказанной команды и берут то, что из агрегата достали: идентификатор, дельту,
+    // набор участников. Это не исключение из правила, а его область действия.
+
+    /**
+     * Упаковки со словарями, доступные вызывающему и отобранные условием.
+     *
+     * Доступ накладывает сам помощник, а не условие: чужой упаковки для вызывающего не
+     * существует, и это не то, о чём каждое чтение решает заново. Условие остаётся про то,
+     * что ищут, — без него берутся все доступные.
+     */
+    private fun drugsAccessibleTo(userId: Uuid, condition: () -> Op<Boolean> = { Op.TRUE }): Query =
+        withVocabulary.selectAll().where { Drugs.medKitId.inMedKitsOf(userId) and condition() }
+
+    private val withVocabulary: Join
+        get() = Drugs
+            .join(QuantityUnits, JoinType.INNER, Drugs.quantityUnitId, QuantityUnits.id)
+            .join(FormTypes, JoinType.LEFT, Drugs.formTypeId, FormTypes.id)
 
     private fun ResultRow.toDomain(): Drug = Drug(
         id = this[Drugs.id],

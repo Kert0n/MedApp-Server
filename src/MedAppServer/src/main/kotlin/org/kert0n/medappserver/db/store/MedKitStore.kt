@@ -25,16 +25,14 @@ import org.springframework.stereotype.Component
  * Состояние аптечки — это её идентификатор и множество участников, поэтому запись сводится
  * к сведению строк членства: появившиеся вставляются, исчезнувшие удаляются одним запросом.
  *
- * Файл разделён по тому, чем защищено обращение к строке. **Чтения** скоуплены запросом:
- * они принимают вызывающего, и соединение с его собственным членством и есть проверка доступа.
- * **Записи** предиката доступа не имеют, и это не пропуск: они принимают агрегат, а взять его
- * можно только из скоупленного чтения. Второй предикат был бы второй копией того же правила и
- * стоил бы лишнего соединения на каждой записи.
+ * Правила обращения — в `Access.kt`, одним списком на весь пакет. Коротко: чтения называют
+ * вызывающего и скоупятся запросом, команды принимают агрегат, а разделы ниже подписаны потому,
+ * что обещание относится к публичной поверхности, а не к приватным помощникам.
  */
 @Component
 class MedKitStore {
 
-    // ── Чтения: скоуп накладывает запрос ─────────────────────────────────────────
+    // ── Чтения: принимают вызывающего, скоуп накладывает запрос ──────────────────
 
     /**
      * Аптечка, доступная вызывающему, — одним запросом.
@@ -68,29 +66,14 @@ class MedKitStore {
             .map { (key, members) -> MedKit(key.first, members.toSet(), key.second) }
             .sortedBy { it.id }
 
-    /**
-     * Строки членства тех аптечек, где состоит вызывающий.
-     *
-     * Соединением таблицы с собой, а не подзапросом: вопрос «аптечки, где есть моя строка»
-     * соединением и записывается, а как его выполнять — дело планировщика.
-     */
-    private fun withCaller(userId: Uuid): Query {
-        val mine = MedKitMemberships.alias("mine")
-        return MedKitMemberships
-            .join(mine, JoinType.INNER, MedKitMemberships.medKitId, mine[MedKitMemberships.medKitId])
-            .join(MedKits, JoinType.INNER, MedKitMemberships.medKitId, MedKits.id)
-            .selectAll()
-            .where { mine[MedKitMemberships.userId] eq userId }
-    }
-
-    // ── Команды: доступ доказан принятым агрегатом ───────────────────────────────
+    // ── Команды: принимают агрегат — доступ к нему уже доказан ───────────────────
 
     fun insert(medKit: MedKit) {
         MedKits.insert {
             it[id] = medKit.id
             it[version] = medKit.version
         }
-        insertMemberships(medKit.id, medKit.members)
+        insertMemberships(medKit, medKit.members)
     }
 
     /** Сводит строки членства к тому, что в состоянии. Сама аптечка полей больше не имеет. */
@@ -108,8 +91,40 @@ class MedKitStore {
                 (MedKitMemberships.medKitId eq medKit.id) and (MedKitMemberships.userId inList gone)
             }
         }
-        insertMemberships(medKit.id, medKit.members - stored)
+        insertMemberships(medKit, medKit.members - stored)
         return saved
+    }
+
+    /**
+     * Удаление аптечки.
+     *
+     * Упаковки и членство уносит каскад внешнего ключа. Ничего очищать в памяти не нужно:
+     * загруженных строк, которые могли бы разъехаться с базой, здесь просто не бывает.
+     */
+    fun delete(medKit: MedKit, stated: Long) {
+        val removed = MedKits.deleteWhere { (MedKits.id eq medKit.id) and (MedKits.version eq stated) }
+        if (removed == 0) throw StaleVersion()
+    }
+
+    // ── Внутреннее: помощники запросов и перенос строк ───────────────────────────
+    //
+    // Обещания разделов выше — про публичную поверхность. Здесь работают уже внутри доказанного
+    // чтения или доказанной команды и берут то, что из агрегата достали: идентификатор, дельту,
+    // набор участников. Это не исключение из правила, а его область действия.
+
+    /**
+     * Строки членства тех аптечек, где состоит вызывающий.
+     *
+     * Соединением таблицы с собой, а не подзапросом: вопрос «аптечки, где есть моя строка»
+     * соединением и записывается, а как его выполнять — дело планировщика.
+     */
+    private fun withCaller(userId: Uuid): Query {
+        val mine = MedKitMemberships.alias("mine")
+        return MedKitMemberships
+            .join(mine, JoinType.INNER, MedKitMemberships.medKitId, mine[MedKitMemberships.medKitId])
+            .join(MedKits, JoinType.INNER, MedKitMemberships.medKitId, MedKits.id)
+            .selectAll()
+            .where { mine[MedKitMemberships.userId] eq userId }
     }
 
     /**
@@ -129,21 +144,16 @@ class MedKitStore {
     }
 
     /**
-     * Удаление аптечки.
+     * Строки членства для перечисленных участников.
      *
-     * Упаковки и членство уносит каскад внешнего ключа. Ничего очищать в памяти не нужно:
-     * загруженных строк, которые могли бы разъехаться с базой, здесь просто не бывает.
+     * Аптечка приходит агрегатом, участники — списком: это не «кого проверить», а то, что пишут.
+     * При сведении состава список — часть состава, а не весь он, поэтому отдельным параметром.
      */
-    fun delete(medKit: MedKit, stated: Long) {
-        val removed = MedKits.deleteWhere { (MedKits.id eq medKit.id) and (MedKits.version eq stated) }
-        if (removed == 0) throw StaleVersion()
-    }
-
-    private fun insertMemberships(medKitId: Uuid, userIds: Set<Uuid>) {
-        if (userIds.isEmpty()) return
+    private fun insertMemberships(medKit: MedKit, joining: Set<Uuid>) {
+        if (joining.isEmpty()) return
         translatingConstraints {
-            MedKitMemberships.batchInsert(userIds) { member ->
-                this[MedKitMemberships.medKitId] = medKitId
+            MedKitMemberships.batchInsert(joining) { member ->
+                this[MedKitMemberships.medKitId] = medKit.id
                 this[MedKitMemberships.userId] = member
             }
         }

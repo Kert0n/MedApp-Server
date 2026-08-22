@@ -37,16 +37,14 @@ import org.springframework.stereotype.Component
  * Наружу — только доменные типы. Единицу величины приносит то же чтение, соединением с
  * упаковкой: бронь в «штуках вообще» смысла не имеет.
  *
- * Файл разделён по тому, чем защищено обращение к строке. **Чтения** скоуплены запросом: они
- * принимают вызывающего, и предикат доступа накладывается сам. **Записи** предиката не имеют,
- * и это не пропуск: они принимают агрегат, а взять его можно только из скоупленного чтения.
- * Второй предикат был бы второй копией того же правила и стоил бы лишнего соединения на
- * каждой записи.
+ * Правила обращения — в `Access.kt`, одним списком на весь пакет. Коротко: чтения называют
+ * вызывающего и скоупятся запросом, команды принимают агрегат, а разделы ниже подписаны потому,
+ * что обещание относится к публичной поверхности, а не к приватным помощникам.
  */
 @Component
 class ReservationStore {
 
-    // ── Чтения: скоуп накладывает запрос ─────────────────────────────────────────
+    // ── Чтения: принимают вызывающего, скоуп накладывает запрос ──────────────────
 
     /**
      * Свои брони.
@@ -111,19 +109,7 @@ class ReservationStore {
         return ReservationSnapshot.of(drug, findAllOfDrugs(listOf(drug.id), userId), userId, version)
     }
 
-    /** Чужие брони видно там, куда есть доступ: аптечка у брони своя, отдельным полем. */
-    private fun visibleTo(userId: Uuid): Op<Boolean> = Reservations.medKitId.inMedKitsOf(userId)
-
-    /** Брони вместе с упаковкой и её единицей, отобранные условием. */
-    private fun reservationsWhere(condition: () -> Op<Boolean>): Query =
-        withDrug.selectAll().where(condition())
-
-    private val withDrug: Join
-        get() = Reservations
-            .join(Drugs, JoinType.INNER, Reservations.drugId, Drugs.id)
-            .join(QuantityUnits, JoinType.INNER, Drugs.quantityUnitId, QuantityUnits.id)
-
-    // ── Команды: доступ доказан принятым агрегатом ───────────────────────────────
+    // ── Команды: принимают агрегат — доступ к нему уже доказан ───────────────────
 
     /**
      * Пачка приходит доменным объектом, а не поднимается из чужого хранилища.
@@ -184,6 +170,24 @@ class ReservationStore {
         recountSnapshots(listOf(drug.id))
     }
 
+    // ── Внутреннее: помощники запросов и перенос строк ───────────────────────────
+    //
+    // Обещания разделов выше — про публичную поверхность. Здесь работают уже внутри доказанного
+    // чтения или доказанной команды и берут то, что из агрегата достали: идентификатор, дельту,
+    // набор участников. Это не исключение из правила, а его область действия.
+
+    /** Чужие брони видно там, куда есть доступ: аптечка у брони своя, отдельным полем. */
+    private fun visibleTo(userId: Uuid): Op<Boolean> = Reservations.medKitId.inMedKitsOf(userId)
+
+    /** Брони вместе с упаковкой и её единицей, отобранные условием. */
+    private fun reservationsWhere(condition: () -> Op<Boolean>): Query =
+        withDrug.selectAll().where(condition())
+
+    private val withDrug: Join
+        get() = Reservations
+            .join(Drugs, JoinType.INNER, Reservations.drugId, Drugs.id)
+            .join(QuantityUnits, JoinType.INNER, Drugs.quantityUnitId, QuantityUnits.id)
+
     /**
      * Сдвигает снимок броней упаковки под предикатом его версии.
      *
@@ -230,8 +234,6 @@ class ReservationStore {
     private fun identityOf(reservation: Reservation): Op<Boolean> =
         (Reservations.userId eq reservation.userId) and (Reservations.drugId eq reservation.drugId)
 
-
-    // ── Перенос строк ────────────────────────────────────────────────────────────
 
     /** Единица величины лежит у упаковки: бронь в «штуках вообще» смысла не имеет. */
     private fun ResultRow.toDomain(): Reservation = Reservation(
