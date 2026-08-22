@@ -104,7 +104,6 @@ class DatabaseTestHelper(
         reservationService.create(drugService.get(drugId, userId), userId, amount, reservationsVersion(drugId, userId))
             .also { flushAndClear() }
 
-    /** Кладёт заранее собранный препарат: тестам нужны свои имена и количества. */
     /**
      * Кладёт заранее собранный препарат: тестам нужны свои имена и количества.
      *

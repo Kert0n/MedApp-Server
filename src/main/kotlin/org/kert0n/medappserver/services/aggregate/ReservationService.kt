@@ -44,7 +44,6 @@ class ReservationService(
         return reservations.findAllOfUser(userId)
     }
 
-    /** Бронь или `null`, если её нет. */
     /** Бронь вызывающего. Единственный способ её получить. */
     @Transactional(propagation = MANDATORY, readOnly = true)
     fun get(userId: Uuid, drugId: Uuid): Reservation =
@@ -102,7 +101,6 @@ class ReservationService(
         reservations.deleteInMedKitExcept(medKit, accessibleUserIds)
     }
 
-    /** То же для одной переехавшей упаковки. */
     /** Все брони на упаковку: зовётся, когда упаковка уничтожается. */
     @Transactional(propagation = MANDATORY)
     fun dropOnDrug(drug: Drug) {
@@ -110,6 +108,7 @@ class ReservationService(
         reservations.deleteOfDrug(drug)
     }
 
+    /** То же для одной переехавшей упаковки: остаются брони тех, кто видит новое место. */
     @Transactional(propagation = MANDATORY)
     fun dropOnDrugExcept(drug: Drug, accessibleUserIds: Set<Uuid>) {
         logger.debug("Dropping reservations on drug {} outside {} users", drug.id, accessibleUserIds.size)
