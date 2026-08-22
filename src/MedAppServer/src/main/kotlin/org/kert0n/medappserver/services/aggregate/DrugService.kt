@@ -102,8 +102,7 @@ class DrugService(
             )
         )
 
-        drugs.save(drug)
-        return drug
+        return drugs.save(drug)
     }
 
     @Transactional(propagation = MANDATORY)
@@ -132,8 +131,7 @@ class DrugService(
         // `null` — приём опустошил пачку. Уничтожать её отсюда нельзя: вместе с пачкой
         // исчезают брони, а это чужой агрегат. Решение принимает `DrugDisposal`.
         val left = drug.consume(Quantity(quantity, drug.quantity.unit)) ?: return null
-        drugs.save(left)
-        return left
+        return drugs.save(left)
     }
 
     /**
@@ -154,7 +152,6 @@ class DrugService(
         logger.debug("Moving drug {} to medkit {}", drug.id, target.id)
 
         val moved = drug.moveTo(target.id)
-        drugs.save(moved)
-        return moved
+        return drugs.save(moved)
     }
 }

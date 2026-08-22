@@ -49,3 +49,12 @@ class UnknownQuantityUnit : DomainRuleViolated("Unknown quantity unit")
 
 /** Формы выпуска с таким идентификатором в справочнике нет. */
 class UnknownFormType : DomainRuleViolated("Unknown dosage form")
+
+/**
+ * Записываемое состояние успело измениться под руками.
+ *
+ * Не «не нашли» и не «нельзя»: предъявленная версия была верной, когда её читали, и устарела,
+ * пока команда шла. Повторять за клиента сервер не берётся — он не знает, останется ли команда
+ * осмысленной по новому состоянию.
+ */
+class StaleVersion : DomainRuleViolated("The entity has changed since it was read")

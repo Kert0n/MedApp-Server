@@ -85,8 +85,7 @@ class MedKitService(
             ?: throw NotAMember()
 
         val joined = get(invitation.medKitId, invitation.invitedBy).join(userId)
-        medKits.save(joined)
-        return joined
+        return medKits.save(joined)
     }
 
     /**
@@ -106,8 +105,7 @@ class MedKitService(
             medKits.delete(medKit)
             return null
         }
-        medKits.save(left)
-        return left
+        return medKits.save(left)
     }
 
     /**

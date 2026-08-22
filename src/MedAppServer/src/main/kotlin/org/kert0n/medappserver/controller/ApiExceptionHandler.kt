@@ -5,6 +5,7 @@ import org.kert0n.medappserver.domain.InvalidRegistrationSecret
 import org.kert0n.medappserver.domain.NoSuchReservation
 import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.ReservationAlreadyExists
+import org.kert0n.medappserver.domain.StaleVersion
 import org.kert0n.medappserver.domain.TooManyRegistrations
 import org.springframework.http.HttpStatus
 import org.springframework.http.ProblemDetail
@@ -42,6 +43,9 @@ class ApiExceptionHandler {
             // выдавал бы существование чужой.
             is NotAMember -> HttpStatus.NOT_FOUND
             is ReservationAlreadyExists -> HttpStatus.CONFLICT
+            // Гонку проиграли при записи: предъявленное было верным на чтении и
+            // устарело, пока команда шла. Повторять за клиента сервер не берётся.
+            is StaleVersion -> HttpStatus.CONFLICT
             // Секрет регистрации не совпал: отвечаем как на запрет, а не как на ошибку формы.
             is InvalidRegistrationSecret -> HttpStatus.FORBIDDEN
             is TooManyRegistrations -> HttpStatus.TOO_MANY_REQUESTS

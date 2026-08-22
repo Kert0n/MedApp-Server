@@ -19,6 +19,7 @@ import org.kert0n.medappserver.db.tables.FormTypes
 import org.kert0n.medappserver.db.tables.MedKitMemberships
 import org.kert0n.medappserver.db.tables.QuantityUnits
 import org.kert0n.medappserver.domain.Drug
+import org.kert0n.medappserver.domain.StaleVersion
 import org.kert0n.medappserver.domain.FormType
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.QuantityUnit
@@ -55,8 +56,19 @@ class DrugStore {
         Drugs.insert { it.write(drug) }
     }
 
-    fun save(drug: Drug) {
-        Drugs.update({ Drugs.id eq drug.id }) { it.write(drug) }
+    /**
+     * Запись под предикатом версии.
+     *
+     * Проверка и изменение — один оператор: между ними не втиснуться. Ноль задетых строк значит,
+     * что строку успели переписать после того, как её прочитали, — гонку проиграли.
+     */
+    fun save(drug: Drug): Drug {
+        val stored = drug.afterWrite()
+        val written = Drugs.update({ (Drugs.id eq drug.id) and (Drugs.version eq drug.version) }) {
+            it.write(stored)
+        }
+        if (written == 0) throw StaleVersion()
+        return stored
     }
 
     /**
@@ -65,8 +77,10 @@ class DrugStore {
      * Брони снимает `DrugDisposal`: их исчезновение вслед за упаковкой — правило, а не
      * подробность записи, и в запросе ему не место.
      */
+    /** Удаление тоже предъявляет версию: уничтожать пачку по устаревшему представлению нельзя. */
     fun delete(drug: Drug) {
-        Drugs.deleteWhere { Drugs.id eq drug.id }
+        val removed = Drugs.deleteWhere { (Drugs.id eq drug.id) and (Drugs.version eq drug.version) }
+        if (removed == 0) throw StaleVersion()
     }
 
     /** Все упаковки аптечки — в другую, одним запросом. Брони убирает вызывающий. */
@@ -122,3 +136,6 @@ private fun org.jetbrains.exposed.v1.core.statements.UpdateBuilder<*>.write(drug
     this[Drugs.medKitId] = drug.medKitId
     this[Drugs.version] = drug.version
 }
+
+/** Записанное состояние — на версию новее прочитанного. */
+private fun Drug.afterWrite(): Drug = copy(version = version + 1)

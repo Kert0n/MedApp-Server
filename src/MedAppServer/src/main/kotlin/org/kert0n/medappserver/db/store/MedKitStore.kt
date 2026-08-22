@@ -12,9 +12,11 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.Query
 import org.jetbrains.exposed.v1.jdbc.andWhere
 import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.update
 import org.kert0n.medappserver.db.tables.MedKitMemberships
 import org.kert0n.medappserver.db.tables.MedKits
 import org.kert0n.medappserver.domain.MedKit
+import org.kert0n.medappserver.domain.StaleVersion
 import org.springframework.stereotype.Component
 
 /**
@@ -82,7 +84,9 @@ class MedKitStore {
     }
 
     /** Сводит строки членства к тому, что в состоянии. Сама аптечка полей больше не имеет. */
-    fun save(medKit: MedKit) {
+    fun save(medKit: MedKit): MedKit {
+        val saved = bumpVersion(medKit)
+
         val stored = MedKitMemberships.selectAll()
             .where { MedKitMemberships.medKitId eq medKit.id }
             .map { it[MedKitMemberships.userId] }
@@ -95,6 +99,23 @@ class MedKitStore {
             }
         }
         insertMemberships(medKit.id, medKit.members - stored)
+        return saved
+    }
+
+    /**
+     * Версию аптечки двигает отдельный оператор.
+     *
+     * Состав лежит в `user_med_kits`, и правка членства сама по себе строки `med_kits` не
+     * трогает — значит и версию не сдвинула бы. Стоит первым: проигравший гонку обязан
+     * остановиться до того, как тронет членство.
+     */
+    private fun bumpVersion(medKit: MedKit): MedKit {
+        val next = medKit.copy(version = medKit.version + 1)
+        val written = MedKits.update({ (MedKits.id eq medKit.id) and (MedKits.version eq medKit.version) }) {
+            it[version] = next.version
+        }
+        if (written == 0) throw StaleVersion()
+        return next
     }
 
     /**
@@ -104,7 +125,8 @@ class MedKitStore {
      * загруженных строк, которые могли бы разъехаться с базой, здесь просто не бывает.
      */
     fun delete(medKit: MedKit) {
-        MedKits.deleteWhere { MedKits.id eq medKit.id }
+        val removed = MedKits.deleteWhere { (MedKits.id eq medKit.id) and (MedKits.version eq medKit.version) }
+        if (removed == 0) throw StaleVersion()
     }
 
     private fun insertMemberships(medKitId: Uuid, userIds: Set<Uuid>) {
