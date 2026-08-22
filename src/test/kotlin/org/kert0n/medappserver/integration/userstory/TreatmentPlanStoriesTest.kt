@@ -152,7 +152,6 @@ class TreatmentPlanStoriesTest {
         val childKey = medKitService.invite(medKitService.get(familyKit.id, mom.id), mom.id)
         medKitService.joinByInvitation(childKey, child.id)
 
-        // Add family medications
         val aspirin = Drug(
             id = Uuid.random(), name = "Children's Aspirin",
             quantity = Quantity(qty(200.0), dbHelper.unit()),
@@ -182,15 +181,12 @@ class TreatmentPlanStoriesTest {
         assertNotNull(updatedVitamins)
         assertQty(87.0, updatedVitamins.quantity, "Should be 90 - 3 = 87")
 
-        // 3 users in the medkit
         val medkit = dbHelper.medKit(familyKit.id)
         assertNotNull(medkit)
         assertEquals(3, medkit.members.size)
 
-        // Child leaves the medkit
         medKits.leave(familyKit.id, dbHelper.medKitVersion(familyKit.id), child.id)
 
-        // Medkit still has mom and dad
         val updatedKit = dbHelper.medKit(familyKit.id)
         assertNotNull(updatedKit)
         assertEquals(2, updatedKit.members.size)

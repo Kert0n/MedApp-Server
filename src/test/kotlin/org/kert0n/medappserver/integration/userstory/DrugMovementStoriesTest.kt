@@ -66,26 +66,20 @@ class DrugMovementStoriesTest {
         )
         dbHelper.insert(painkiller)
 
-        // Reserve a share
         dbHelper.reserve(userData.id, painkiller.id, qty(20.0))
 
-        // Move drug to travel kit
         drugs.moveToMedKit(painkiller.id, travelKit.id, dbHelper.drugVersion(painkiller.id), userData.id)
 
-        // Drug is in travel kit
         val movedDrug = dbHelper.drug(painkiller.id)
         assertNotNull(movedDrug)
         assertEquals(travelKit.id, movedDrug.medKitId)
 
-        // Home kit is empty
         val homeKitDrugs = drugService.ofMedKit(homeKit.id, userData.id)
         assertTrue(homeKitDrugs.isEmpty())
 
-        // Travel kit has the drug
         val travelKitDrugs = drugService.ofMedKit(travelKit.id, userData.id)
         assertEquals(1, travelKitDrugs.size)
 
-        // The reservation survives
         val plan = dbHelper.userReservation(userData.id, painkiller.id)
         assertNotNull(plan, "Treatment plan should survive drug move")
         assertQty(20.0, plan)
@@ -147,16 +141,13 @@ class DrugMovementStoriesTest {
         )
         dbHelper.insert(drugData)
 
-        // Reserve a share
         dbHelper.reserve(userData.id, drugData.id, qty(25.0))
 
         val plan = dbHelper.userReservation(userData.id, drugData.id)
         assertNotNull(plan)
 
-        // Delete the drug
         disposal.destroy(drugService.get(drugData.id, userData.id), dbHelper.drugVersion(drugData.id))
 
-        // Drug should be gone
         val deletedDrug = dbHelper.drug(drugData.id)
         assertNull(deletedDrug)
 
@@ -182,7 +173,6 @@ class DrugMovementStoriesTest {
         val newKit = medKitService.create(anna.id)
         medKitService.joinByInvitation(medKitService.invite(medKitService.get(newKit.id, anna.id), anna.id), bob.id)
 
-        // Add drug to old kit
         val drugData = dbHelper.insert(
             Drug(
                 id = Uuid.random(), name = "Special Meds", quantity = Quantity(qty(90.0), dbHelper.unit()), medKitId = oldKit.id, formType = null,
@@ -198,7 +188,6 @@ class DrugMovementStoriesTest {
         dbHelper.reserve(charlie.id, drugData.id, qty(30.0))
 
 
-        // Anna deletes the old kit and migrates to the new kit
         medKits.delete(oldKit.id, dbHelper.medKitVersion(oldKit.id), anna.id, newKit.id)
 
 
