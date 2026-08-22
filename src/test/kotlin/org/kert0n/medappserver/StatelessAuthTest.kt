@@ -1,47 +1,41 @@
 package org.kert0n.medappserver
 
-import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.name
 import kotlin.io.path.readText
-import kotlin.streams.asSequence
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
+import org.kert0n.medappserver.testutil.allSources
 
 /**
- * Аутентификация не ходит через куки — и поэтому защита от CSRF выключена законно.
+ * Аутентификация не ходит через куки, и поэтому защита от CSRF выключена законно.
  *
  * CSRF — атака на **неявную** аутентификацию: браузер сам прикладывает куку к запросу, который
  * отправила чужая страница. Там, где токен прикладывает клиент заголовком `Authorization`,
  * подделывать нечего, и `csrf().disable()` не отключает ничего работающего.
  *
  * CodeQL этого различия не делает и даёт `java/spring-disabled-csrf-protection` на обе цепочки.
- * Находки закрыты как принятый риск — но «сейчас кук нет» это состояние, а не правило, и живёт
- * оно ровно до первого рефакторинга. Этот тест превращает состояние в правило: пока он зелёный,
- * обоснование закрытых находок остаётся верным.
- *
- * Если правило когда-нибудь снимут, вернуть надо и находки: отключённая защита при куковой
- * аутентификации — уже настоящая дыра, а не ложное срабатывание.
+ * Основание закрыть эти находки — не «сейчас кук нет»: это состояние, и живёт оно до первого
+ * рефакторинга. Основание — вот это правило. Пока тест зелёный, обоснование верно; если правило
+ * снимут, находки надо открывать заново, потому что отключённая защита при неявной
+ * аутентификации — уже настоящая дыра.
  */
 class StatelessAuthTest {
 
-    private val production: List<Path> =
-        Files.walk(Path.of("src/main/kotlin")).asSequence()
-            .filter { it.name.endsWith(".kt") }
-            .toList()
+    private val production: List<Source> = allSources().map { Source(it, it.readText()) }
 
     @Test
-    fun `в проде нет куковой аутентификации`() {
+    fun `в проде нет куковой и сессионной аутентификации`() {
         assertTrue(production.isNotEmpty(), "рабочих файлов не найдено — тест смотрит не туда")
 
-        // По тексту, а не по типам: `CookieCsrfTokenRepository` и `ResponseCookie` попадают тем
-        // же поиском, что и `Cookie`, а закомментированная кука — такое же начало пути.
-        listOf("Cookie", "JSESSIONID").forEach { forbidden ->
-            val offenders = production.flatMap { file ->
-                file.readText().lines().withIndex()
-                    .filter { (_, line) -> line.contains(forbidden) }
-                    .map { (number, _) -> "${file.name}:${number + 1}" }
-            }
+        // По тексту, а не по типам: слово в комментарии считается нарушением — «здесь могла бы
+        // быть кука», оставленное в коде, ровно тот способ, которым запрет размывается.
+        //
+        // `HttpSession` ловит и `HttpSessionSecurityContextRepository`: он восстанавливает
+        // аутентификацию из сессии, не упоминая ни куки, ни `JSESSIONID`, — а сессия и есть та
+        // неявная аутентификация, ради отсутствия которой всё это правило.
+        listOf("Cookie", "JSESSIONID", "HttpSession", "getSession").forEach { forbidden ->
+            val offenders = production.flatMap { it.linesWith(forbidden) }
 
             assertTrue(
                 offenders.isEmpty(),
@@ -51,31 +45,71 @@ class StatelessAuthTest {
         }
     }
 
+    /**
+     * Каждая цепочка объявляет `STATELESS` **сама**.
+     *
+     * Счёта по файлу не хватает: две отметки в одной цепочке покрыли бы её отсутствие в другой,
+     * а Spring завёл бы сессию именно там, где отметки нет. Поэтому файл режется по цепочкам, и
+     * каждая проверяется отдельно.
+     *
+     * Комментарии из тела вырезаются: упоминание политики рядом с цепочкой — не объявление.
+     */
     @Test
     fun `каждая цепочка фильтров объявляет себя без состояния`() {
-        val sources = production.map { it.readText() }
-        val chains = sources.sumOf { COUNT_CHAINS.findAll(it).count() }
-        val stateless = sources.sumOf { COUNT_STATELESS.findAll(it).count() }
+        val chains = production.flatMap { it.chains() }
 
-        assertTrue(chains > 0, "цепочек фильтров не найдено — тест смотрит не туда")
+        assertTrue(chains.isNotEmpty(), "цепочек фильтров не найдено — тест смотрит не туда")
+
+        val silent = chains.filterNot { it.body.contains("SessionCreationPolicy.STATELESS") }
         assertTrue(
-            stateless >= chains,
-            "цепочек $chains, а `STATELESS` объявлен $stateless раз: у той, что осталась без " +
-                "объявления, Spring заведёт сессию — а вместе с сессией вернётся и кука"
+            silent.isEmpty(),
+            "цепочка не объявила `STATELESS`: Spring заведёт для неё сессию, а вместе с сессией " +
+                "вернётся кука\n${silent.joinToString("\n") { it.where }}"
         )
 
-        val other = sources.flatMap { POLICY.findAll(it).map { match -> match.groupValues[1] } }
-            .filter { it != "STATELESS" }
-
-        assertTrue(
-            other.isEmpty(),
-            "политика сессии, отличная от `STATELESS`: ${other.joinToString()}"
-        )
+        val other = chains.flatMap { chain ->
+            POLICY.findAll(chain.body)
+                .map { it.groupValues[1] }
+                .filter { it != "STATELESS" }
+                .map { "${chain.where}: $it" }
+        }
+        assertTrue(other.isEmpty(), "политика сессии, отличная от `STATELESS`:\n${other.joinToString("\n")}")
     }
 
+    /** Рабочий файл вместе с текстом: читается один раз, дальше только разбирается. */
+    private class Source(val path: Path, val text: String) {
+
+        fun linesWith(forbidden: String): List<String> =
+            text.lines().withIndex()
+                .filter { (_, line) -> line.contains(forbidden) }
+                .map { (number, _) -> "${path.name}:${number + 1}" }
+
+        /**
+         * Тела цепочек: от объявления возвращаемого типа до следующего такого объявления.
+         *
+         * Разбор текстовый, как и все правила части 2: они про то, что **написано**. Цена —
+         * цепочка, собранная не в функции, останется незамеченной; на этот случай есть первый
+         * тест, который запрещает сессионное API вообще.
+         */
+        fun chains(): List<Chain> {
+            val marks = CHAIN.findAll(text).map { it.range.first }.toList()
+            return marks.mapIndexed { index, start ->
+                val end = marks.getOrNull(index + 1) ?: text.length
+                val line = text.take(start).count { it == '\n' } + 1
+                Chain("${path.name}:$line", text.substring(start, end).withoutComments())
+            }
+        }
+
+        private fun String.withoutComments(): String =
+            replace(BLOCK_COMMENT, "").replace(LINE_COMMENT, "")
+    }
+
+    private class Chain(val where: String, val body: String)
+
     private companion object {
-        val COUNT_CHAINS = Regex("""\): SecurityFilterChain""")
-        val COUNT_STATELESS = Regex("""SessionCreationPolicy\.STATELESS""")
+        val CHAIN = Regex("""\): SecurityFilterChain""")
         val POLICY = Regex("""SessionCreationPolicy\.(\w+)""")
+        val BLOCK_COMMENT = Regex("""/\*[\s\S]*?\*/""")
+        val LINE_COMMENT = Regex("""//[^\n]*""")
     }
 }

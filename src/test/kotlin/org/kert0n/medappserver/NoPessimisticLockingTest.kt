@@ -1,12 +1,11 @@
 package org.kert0n.medappserver
 
-import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.name
 import kotlin.io.path.readText
-import kotlin.streams.asSequence
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
+import org.kert0n.medappserver.testutil.allSources
 
 /**
  * Конкурентность держится на версиях, и ничем другим.
@@ -21,9 +20,7 @@ import org.junit.jupiter.api.Test
 class NoPessimisticLockingTest {
 
     private val production: List<Path> =
-        Files.walk(Path.of("src/main/kotlin")).asSequence()
-            .filter { it.name.endsWith(".kt") }
-            .toList()
+        allSources()
 
     @Test
     fun `в проде нет прямого обращения к драйверу`() {

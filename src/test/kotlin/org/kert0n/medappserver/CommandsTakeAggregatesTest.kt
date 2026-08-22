@@ -3,10 +3,10 @@ package org.kert0n.medappserver
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.name
-import kotlin.streams.asSequence
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
+import org.kert0n.medappserver.testutil.sourcesIn
 
 /**
  * Объект — доказательство доступа, идентификатор — то, что ещё надо проверить.
@@ -27,11 +27,7 @@ import org.junit.jupiter.api.Test
 class CommandsTakeAggregatesTest {
 
     private val sources: List<Path> =
-        listOf("services/aggregate", "services/orchestrator").flatMap { layer ->
-            Files.walk(Path.of("src/main/kotlin/org/kert0n/medappserver/$layer")).asSequence()
-                .filter { it.name.endsWith(".kt") }
-                .toList()
-        }
+        listOf("services/aggregate", "services/orchestrator").flatMap { sourcesIn(it) }
 
     @Test
     fun `команда принимает агрегат, а не его идентификатор`() {
