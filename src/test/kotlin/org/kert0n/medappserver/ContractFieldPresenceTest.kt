@@ -79,13 +79,9 @@ class ContractFieldPresenceTest {
         wireTypes().forEach { (name, fields) ->
             val properties = schemas.field(name).field("properties")
             fields.forEach { field ->
-                val types = properties.field(field.name).field("type")
-                    .let { it.items().mapNotNull { item -> item.text() }.ifEmpty { listOfNotNull(it.text()) } }
-                // Поле, уехавшее в `$ref`, своего типа не имеет: обнуляемых ссылок в контракте нет.
-                if (types.isEmpty()) return@forEach
                 assertEquals(
                     field.nullable,
-                    "null" in types,
+                    allowsEmpty(properties.field(field.name)),
                     "поле $name.${field.name} объявлено в контракте не так, как объявлен его тип"
                 )
             }
@@ -97,6 +93,21 @@ class ContractFieldPresenceTest {
             .andExpect(status().isOk)
             .andReturn().response.contentAsByteArray.toString(Charsets.UTF_8)
             .asJsonTree().field("components").field("schemas")
+
+    /**
+     * Объявлена ли у свойства пустота.
+     *
+     * Двумя формами: у обычного поля «null» стоит вторым типом, у ссылки — отдельной ветвью
+     * `anyOf`, потому что рядом с `$ref` тип написать негде.
+     */
+    private fun allowsEmpty(property: JsonElement?): Boolean =
+        NULL_TYPE in declaredTypes(property) ||
+            property.field("anyOf").items().any { NULL_TYPE in declaredTypes(it) }
+
+    private fun declaredTypes(schema: JsonElement?): Set<String> =
+        schema.field("type").let { declared ->
+            declared.items().mapNotNull { it.text() }.ifEmpty { listOfNotNull(declared.text()) }
+        }.toSet()
 
     /** Поле провода так, как оно написано в исходнике. */
     private data class Field(val name: String, val nullable: Boolean, val hasDefault: Boolean)
@@ -158,6 +169,8 @@ class ContractFieldPresenceTest {
     }
 
     private companion object {
+        const val NULL_TYPE = "null"
+
         val DATA_CLASS = Regex("""@Serializable\s+data class (\w+)""")
 
         // Дженерик в типе `Set<MedKitDTO>` кавычек не несёт, а вопрос принадлежит типу целиком.

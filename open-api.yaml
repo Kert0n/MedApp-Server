@@ -986,7 +986,9 @@ components:
             \ means 428, mismatched means 412"
           example: 3
         reservation:
-          $ref: "#/components/schemas/ReservationSyncRequest"
+          anyOf:
+          - $ref: "#/components/schemas/ReservationSyncRequest"
+          - type: "null"
           description: New state of the caller's claim; omitted when it did not change
     ReservationSyncRequest:
       type: object
