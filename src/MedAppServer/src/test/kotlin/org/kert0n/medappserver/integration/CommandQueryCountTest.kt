@@ -7,7 +7,7 @@ import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.services.application.DrugApplicationService
 import org.kert0n.medappserver.services.application.MedKitApplicationService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
-import org.kert0n.medappserver.testutil.RecordedSql
+import org.kert0n.medappserver.testutil.QueryCount
 import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.transaction.PlatformTransactionManager
@@ -163,10 +163,7 @@ class CommandQueryCountTest {
         }
     }
 
-    /** Число операторов одной команды. Пустой замер — провал: проверку делает сам помощник. */
-    private fun count(what: String, command: () -> Unit): Int {
-        val statements = RecordedSql.inTransaction(transactionManager, command)
-        println("запросов — $what: ${statements.size}")
-        return statements.size
-    }
+    /** Число операторов одной команды; оно же уходит в отчёт. Пустой замер — провал. */
+    private fun count(what: String, command: () -> Unit): Int =
+        QueryCount.of(transactionManager, what, command)
 }

@@ -9,7 +9,7 @@ import org.kert0n.medappserver.services.application.MedKitApplicationService
 import org.kert0n.medappserver.services.application.ReservationApplicationService
 import org.kert0n.medappserver.services.application.UserApplicationService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
-import org.kert0n.medappserver.testutil.RecordedSql
+import org.kert0n.medappserver.testutil.QueryCount
 import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.transaction.PlatformTransactionManager
@@ -121,16 +121,13 @@ class ReadQueryCountTest {
     // ── Замер и фикстуры ─────────────────────────────────────────────────────────
 
     /**
-     * Число операторов одного обращения.
+     * Число операторов одного обращения; оно же уходит в отчёт.
      *
      * Пустой замер — провал: обращение, не сходившее в базу, ничего не доказывает, а зелёный
      * такой гейт означал бы, что мерили не то. Проверку делает сам помощник.
      */
-    private fun count(what: String, read: () -> Unit): Int {
-        val statements = RecordedSql.inTransaction(transactionManager, read)
-        println("запросов — $what: ${statements.size}")
-        return statements.size
-    }
+    private fun count(what: String, read: () -> Unit): Int =
+        QueryCount.of(transactionManager, what, read)
 
     private fun userWithKits(name: String, kits: Int, drugsEach: Int): Uuid {
         val user = dbHelper.freshUser(name)
