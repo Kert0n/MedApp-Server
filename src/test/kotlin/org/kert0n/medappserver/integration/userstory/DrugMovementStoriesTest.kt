@@ -150,7 +150,6 @@ class DrugMovementStoriesTest {
         // Reserve a share
         dbHelper.reserve(userData.id, drugData.id, qty(25.0))
 
-        // Verify the reservation exists
         val plan = dbHelper.userReservation(userData.id, drugData.id)
         assertNotNull(plan)
 
@@ -161,7 +160,6 @@ class DrugMovementStoriesTest {
         val deletedDrug = dbHelper.drug(drugData.id)
         assertNull(deletedDrug)
 
-        // The reservation is gone with it
         val deletedPlan = dbHelper.userReservation(userData.id, drugData.id)
         assertNull(deletedPlan)
 
@@ -195,7 +193,6 @@ class DrugMovementStoriesTest {
             )
         )
 
-        // Everyone reserves 30 pills
         dbHelper.reserve(anna.id, drugData.id, qty(30.0))
         dbHelper.reserve(bob.id, drugData.id, qty(30.0))
         dbHelper.reserve(charlie.id, drugData.id, qty(30.0))
@@ -250,7 +247,6 @@ class DrugMovementStoriesTest {
         drugs.moveToMedKit(drugDataToMove.id, targetKit.id, dbHelper.drugVersion(drugDataToMove.id), userData.id)
 
 
-        // Verify the move did not destroy it
         val movedDrug = dbHelper.drug(drugDataToMove.id)
         assertNotNull(movedDrug, "Moved drug must not be deleted")
         assertEquals(targetKit.id, movedDrug.medKitId, "Drug should point to new kit")

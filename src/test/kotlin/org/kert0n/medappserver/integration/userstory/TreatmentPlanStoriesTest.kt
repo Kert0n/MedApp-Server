@@ -72,20 +72,16 @@ class TreatmentPlanStoriesTest {
         )
         dbHelper.insert(drugData)
 
-        // Reserve 30 tablets
         val plan = dbHelper.reserve(userData.id, drugData.id, qty(30.0))
         assertNotNull(plan)
 
-        // Verify the reservation was created
         val createdPlan = dbHelper.userReservation(userData.id, drugData.id)
         assertNotNull(createdPlan, "Plan should be created")
         assertQty(30.0, createdPlan, "Planned amount should be 30")
 
-        // Record some intakes
         drugService.consume(drugService.get(drugData.id, userData.id), qty(5.0), dbHelper.drugVersion(drugData.id))
         drugService.consume(drugService.get(drugData.id, userData.id), qty(5.0), dbHelper.drugVersion(drugData.id))
 
-        // Verify drug quantity decreased
         val updatedDrug = dbHelper.drug(drugData.id)
         assertNotNull(updatedDrug)
         assertQty(90.0, updatedDrug.quantity, "Drug quantity should be 90 after 10 consumed")
@@ -118,15 +114,12 @@ class TreatmentPlanStoriesTest {
         )
         dbHelper.insert(vitaminC)
 
-        // Anna reserves 40 tablets
         dbHelper.reserve(anna.id, vitaminC.id, qty(40.0))
 
-        // Bob reserves 50 more
         dbHelper.reserve(bob.id, vitaminC.id, qty(50.0))
         // 90 reserved on the pack in total
         assertQty(90.0, dbHelper.reservedOnDrug(vitaminC.id), "Total planned should be 90")
 
-        // Each has their own reservation
         val annaPlan = dbHelper.userReservation(anna.id, vitaminC.id)
         val bobPlan = dbHelper.userReservation(bob.id, vitaminC.id)
         assertNotNull(annaPlan)
@@ -146,7 +139,6 @@ class TreatmentPlanStoriesTest {
      */
     @Test
     fun `Story 10 - Complete family medkit lifecycle`() {
-        // Mom creates a family medkit
         val mom = User(id = Uuid.random(), hashedKey = "mom_${Uuid.random()}")
         val dad = User(id = Uuid.random(), hashedKey = "dad_${Uuid.random()}")
         val child = User(id = Uuid.random(), hashedKey = "child_${Uuid.random()}")
@@ -176,19 +168,16 @@ class TreatmentPlanStoriesTest {
         dbHelper.insert(aspirin)
         dbHelper.insert(vitamins)
 
-        // Everyone reserves 30 vitamins
         dbHelper.reserve(mom.id, vitamins.id, qty(30.0))
         dbHelper.reserve(dad.id, vitamins.id, qty(30.0))
         dbHelper.reserve(child.id, vitamins.id, qty(30.0))
         // 90 reserved — the whole pack
         assertQty(90.0, dbHelper.reservedOnDrug(vitamins.id))
 
-        // Everyone takes their daily vitamin
         drugService.consume(drugService.get(vitamins.id, mom.id), qty(1.0), dbHelper.drugVersion(vitamins.id))
         drugService.consume(drugService.get(vitamins.id, dad.id), qty(1.0), dbHelper.drugVersion(vitamins.id))
         drugService.consume(drugService.get(vitamins.id, child.id), qty(1.0), dbHelper.drugVersion(vitamins.id))
 
-        // Check vitamins after 1 day
         val updatedVitamins = dbHelper.drug(vitamins.id)
         assertNotNull(updatedVitamins)
         assertQty(87.0, updatedVitamins.quantity, "Should be 90 - 3 = 87")
