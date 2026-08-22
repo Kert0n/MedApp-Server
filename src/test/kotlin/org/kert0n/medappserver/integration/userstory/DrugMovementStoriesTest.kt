@@ -81,15 +81,15 @@ class DrugMovementStoriesTest {
         assertEquals(1, travelKitDrugs.size)
 
         val plan = dbHelper.userReservation(userData.id, painkiller.id)
-        assertNotNull(plan, "Treatment plan should survive drug move")
+        assertNotNull(plan, "the reservation must survive the move")
         assertQty(20.0, plan)
 
-        println("✅ Story 11 passed: Drug moved between medkits with treatment plan intact")
+        println("✅ История 11: пачка переехала, бронь цела")
     }
 
     /** История 12: бронь поднимается свободно — с остатком пачки её никто не сверяет. */
     @Test
-    fun `Story 12 - Updating treatment plan correctly checks available quantity`() {
+    fun `Story 12 - Raising a reservation is not weighed against the package`() {
         val anna = User(id = Uuid.random(), hashedKey = "anna_${Uuid.random()}")
         val bob = User(id = Uuid.random(), hashedKey = "bob_${Uuid.random()}")
         dbHelper.insert(anna)
@@ -128,7 +128,7 @@ class DrugMovementStoriesTest {
 
     /** История 13: уничтоженная пачка уносит брони с собой. */
     @Test
-    fun `Story 13 - Deleting drug removes its treatment plans`() {
+    fun `Story 13 - Destroying a package removes the reservations on it`() {
         val userData = User(id = Uuid.random(), hashedKey = "user_${Uuid.random()}")
         dbHelper.insert(userData)
 
@@ -154,12 +154,12 @@ class DrugMovementStoriesTest {
         val deletedPlan = dbHelper.userReservation(userData.id, drugData.id)
         assertNull(deletedPlan)
 
-        println("✅ Story 13 passed: Deleting drug removed its treatment plans")
+        println("✅ История 13: пачка уничтожена, брони на неё ушли")
     }
 
     /** История 14: перенос в более узкую аптечку снимает брони тех, кто в неё не входит. */
     @Test
-    fun `Story 14 - Moving shared drug to private medkit removes other users treatment plans`() {
+    fun `Story 14 - Migrating into a narrower kit strips the reservations of those left out`() {
         val anna = dbHelper.insert(User(id = Uuid.random(), hashedKey = "anna_${Uuid.random()}"))
         val bob = dbHelper.insert(User(id = Uuid.random(), hashedKey = "bob_${Uuid.random()}"))
         val charlie = dbHelper.insert(User(id = Uuid.random(), hashedKey = "charlie_${Uuid.random()}"))
@@ -197,7 +197,7 @@ class DrugMovementStoriesTest {
             "Charlie's plan MUST be deleted for security"
         )
 
-        println("✅ Story 14 passed: Migration security successfully audited treatment plans")
+        println("✅ История 14: перенос снял брони тех, кто в новую аптечку не входит")
     }
 
 

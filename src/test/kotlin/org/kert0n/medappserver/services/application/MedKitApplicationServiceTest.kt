@@ -116,7 +116,7 @@ class MedKitApplicationServiceTest {
     }
 
     @Test
-    fun `moveDrug without personal treatment plan works`() {
+    fun `moveToMedKit works without a reservation of one's own`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
         val kitA = medKitService.create(alice.id)
@@ -207,7 +207,7 @@ class MedKitApplicationServiceTest {
     }
 
     @Test
-    fun `delete with transfer strips unauthorized treatment plans`() {
+    fun `delete with transfer strips reservations of those left out`() {
         val alice = dbHelper.freshUser("alice")
         val charlie = dbHelper.freshUser("charlie")
         val oldKit = medKitService.create(alice.id)

@@ -242,7 +242,7 @@ class ComplexWorkflowStoriesTest {
         dbHelper.insert(User(id = Uuid.random(), hashedKey = name))
 
     @Test
-    fun `Story 19 - Roommate can move drug even without personal treatment plan`() {
+    fun `Story 19 - Roommate can move drug even without a reservation of their own`() {
         val alice = createTestUser("alice")
         val bob = createTestUser("bob")
 
@@ -265,7 +265,7 @@ class ComplexWorkflowStoriesTest {
     }
 
     @Test
-    fun `Verify movement strips unauthorized treatment plans`() {
+    fun `Verify movement strips the reservations of those who lost access`() {
         val alice = createTestUser("alice")
         val bob = createTestUser("bob")
         val kitA = medKitService.create(alice.id)

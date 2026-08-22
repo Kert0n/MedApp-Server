@@ -24,7 +24,7 @@ import org.springframework.transaction.annotation.Transactional
 
 @PostgresIntegrationTest
 @Transactional
-class TreatmentPlanStoriesTest {
+class ReservationStoriesTest {
 
     @Autowired
 
@@ -55,7 +55,7 @@ class TreatmentPlanStoriesTest {
 
     /** История 6: сначала заявить свою долю, потом взять из пачки. */
     @Test
-    fun `Story 6 - User creates treatment plan and records intakes`() {
+    fun `Story 6 - A person reserves a share and then takes from the package`() {
         val userData = User(id = Uuid.random(), hashedKey = "user_${Uuid.random()}")
         dbHelper.insert(userData)
 
@@ -75,9 +75,9 @@ class TreatmentPlanStoriesTest {
         val plan = dbHelper.reserve(userData.id, drugData.id, qty(30.0))
         assertNotNull(plan)
 
-        val createdPlan = dbHelper.userReservation(userData.id, drugData.id)
-        assertNotNull(createdPlan, "Plan should be created")
-        assertQty(30.0, createdPlan, "Planned amount should be 30")
+        val reserved = dbHelper.userReservation(userData.id, drugData.id)
+        assertNotNull(reserved, "бронь должна была появиться")
+        assertQty(30.0, reserved, "заявлено должно быть 30")
 
         drugService.consume(drugService.get(drugData.id, userData.id), qty(5.0), dbHelper.drugVersion(drugData.id))
         drugService.consume(drugService.get(drugData.id, userData.id), qty(5.0), dbHelper.drugVersion(drugData.id))
@@ -86,12 +86,12 @@ class TreatmentPlanStoriesTest {
         assertNotNull(updatedDrug)
         assertQty(90.0, updatedDrug.quantity, "Drug quantity should be 90 after 10 consumed")
 
-        println("✅ Story 6 passed: Treatment plan and intakes work correctly")
+        println("✅ История 6: бронь заведена, приём списан")
     }
 
     /** История 7: на одну пачку претендуют несколько человек, у каждого своя доля. */
     @Test
-    fun `Story 7 - Multiple users create treatment plans on shared drug`() {
+    fun `Story 7 - Several people reserve shares of the same package`() {
         val anna = User(id = Uuid.random(), hashedKey = "anna_${Uuid.random()}")
         val bob = User(id = Uuid.random(), hashedKey = "bob_${Uuid.random()}")
         dbHelper.insert(anna)
@@ -117,7 +117,7 @@ class TreatmentPlanStoriesTest {
 
         dbHelper.reserve(bob.id, vitaminC.id, qty(50.0))
         // Заявлено на пачку 90 всего.
-        assertQty(90.0, dbHelper.reservedOnDrug(vitaminC.id), "Total planned should be 90")
+        assertQty(90.0, dbHelper.reservedOnDrug(vitaminC.id), "заявлено на пачку всего 90")
 
         val annaPlan = dbHelper.userReservation(anna.id, vitaminC.id)
         val bobPlan = dbHelper.userReservation(bob.id, vitaminC.id)
@@ -126,7 +126,7 @@ class TreatmentPlanStoriesTest {
         assertQty(40.0, annaPlan)
         assertQty(50.0, bobPlan)
 
-        println("✅ Story 7 passed: Multiple users created treatment plans on shared drug")
+        println("✅ История 7: на одной пачке уживаются несколько броней")
     }
 
 
