@@ -84,9 +84,12 @@ tasks.withType<Test> {
     //     ./gradlew test -DupdateSchema=true
     systemProperty("updateOpenApi", System.getProperty("updateOpenApi") ?: "false")
     systemProperty("updateSchema", System.getProperty("updateSchema") ?: "false")
-    // Tests read these two files, so a change to either must invalidate the results.
+    // Tests read these files, so a change to any of them must invalidate the results.
     // Without this a broken db/schema.sql leaves the previous green run in place: the task
-    // is up to date because neither file is on the classpath.
+    // is up to date because none of them is on the classpath. README.md is here for the same
+    // reason — its route list is checked against the contract, and an edit that breaks the
+    // check would otherwise be reported as an up-to-date green run.
     inputs.file("db/schema.sql").withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.file("open-api.yaml").withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file("README.md").withPathSensitivity(PathSensitivity.RELATIVE)
 }

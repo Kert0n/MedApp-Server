@@ -2,8 +2,11 @@ package org.kert0n.medappserver.queryplan
 
 import kotlin.test.assertTrue
 import org.springframework.jdbc.core.JdbcTemplate
-import tools.jackson.databind.JsonNode
-import tools.jackson.databind.ObjectMapper
+import kotlinx.serialization.json.JsonElement
+import org.kert0n.medappserver.testutil.asJsonTree
+import org.kert0n.medappserver.testutil.field
+import org.kert0n.medappserver.testutil.items
+import org.kert0n.medappserver.testutil.text
 
 /**
  * План запроса — и утверждения о нём.
@@ -12,12 +15,12 @@ import tools.jackson.databind.ObjectMapper
  * такие тесты мы не заводим. Вопрос здесь один — доходит ли запрос до индекса на настоящем
  * объёме.
  */
-class QueryPlan(private val nodes: List<JsonNode>, val sql: String) {
+class QueryPlan(private val nodes: List<JsonElement>, val sql: String) {
 
     /** Индекс назван в плане: запрос до него дошёл. */
     fun usesIndex(name: String) {
         assertTrue(
-            nodes.any { it.path("Index Name").asString(null) == name },
+            nodes.any { it.field("Index Name").text() == name },
             "запрос не дошёл до индекса $name:\n${describe()}\n\n$sql"
         )
     }
@@ -29,16 +32,16 @@ class QueryPlan(private val nodes: List<JsonNode>, val sql: String) {
      */
     fun scansNothingIn(table: String) {
         val scans = nodes.filter {
-            it.path("Node Type").asString("") == "Seq Scan" && it.path("Relation Name").asString("") == table
+            it.field("Node Type").text() == "Seq Scan" && it.field("Relation Name").text() == table
         }
         assertTrue(scans.isEmpty(), "полный проход по $table:\n${describe()}\n\n$sql")
     }
 
     fun describe(): String =
         nodes.joinToString("\n") { node ->
-            val type = node.path("Node Type").asString("?")
-            val relation = node.path("Relation Name").asString("")
-            val index = node.path("Index Name").asString("")
+            val type = node.field("Node Type").text() ?: "?"
+            val relation = node.field("Relation Name").text().orEmpty()
+            val index = node.field("Index Name").text().orEmpty()
             "  $type ${relation.ifEmpty { "" }} ${index.ifEmpty { "" }}".trimEnd()
         }
 
@@ -59,7 +62,7 @@ class QueryPlan(private val nodes: List<JsonNode>, val sql: String) {
         fun of(jdbc: JdbcTemplate, sql: String): QueryPlan {
             val json = jdbc.queryForObject("EXPLAIN (FORMAT JSON) $sql", String::class.java)
                 ?: error("EXPLAIN ничего не вернул")
-            val root = ObjectMapper().readTree(json).first().path("Plan")
+            val root = json.asJsonTree().items().first().field("Plan")
             val plan = QueryPlan(flatten(root), sql)
             report.appendText("── $sql\n${plan.describe()}\n\n")
             return plan
@@ -81,7 +84,7 @@ class QueryPlan(private val nodes: List<JsonNode>, val sql: String) {
             }
         }
 
-        private fun flatten(node: JsonNode): List<JsonNode> =
-            listOf(node) + node.path("Plans").flatMap { flatten(it) }
+        private fun flatten(node: JsonElement?): List<JsonElement> =
+            listOfNotNull(node) + node.field("Plans").items().flatMap { flatten(it) }
     }
 }

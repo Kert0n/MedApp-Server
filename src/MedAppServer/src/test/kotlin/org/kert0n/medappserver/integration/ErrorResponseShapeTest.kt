@@ -26,7 +26,6 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
-import tools.jackson.databind.ObjectMapper
 
 /**
  * Error bodies must not describe what failed in terms of the caller's data: the default body
@@ -50,8 +49,6 @@ class ErrorResponseShapeTest {
     private lateinit var context: WebApplicationContext
 
 
-    @Autowired
-    private lateinit var objectMapper: ObjectMapper
 
     private lateinit var mockMvc: MockMvc
 

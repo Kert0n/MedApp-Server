@@ -1,6 +1,7 @@
 package org.kert0n.medappserver.api
 
 import java.math.BigDecimal
+import kotlinx.serialization.json.JsonElement
 import kotlin.reflect.full.memberProperties
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -17,9 +18,11 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
+import org.kert0n.medappserver.testutil.asJsonTree
+import org.kert0n.medappserver.testutil.field
+import org.kert0n.medappserver.testutil.text
 import org.springframework.web.context.WebApplicationContext
-import tools.jackson.databind.JsonNode
-import tools.jackson.databind.ObjectMapper
+
 
 /**
  * Ни одна величина не опубликована числом.
@@ -36,7 +39,6 @@ import tools.jackson.databind.ObjectMapper
 class DecimalSchemaTest {
 
     @Autowired private lateinit var context: WebApplicationContext
-    @Autowired private lateinit var objectMapper: ObjectMapper
 
     private lateinit var mockMvc: MockMvc
 
@@ -53,14 +55,14 @@ class DecimalSchemaTest {
         val checked = mutableListOf<String>()
 
         decimalProperties().forEach { (schemaName, propertyName) ->
-            val property = schemas.path(schemaName).path("properties").path(propertyName)
+            val property = schemas.field(schemaName).field("properties").field(propertyName)
             assertTrue(
-                !property.isMissingNode,
+                property != null,
                 "$schemaName.$propertyName не попало в контракт — схема названа иначе?"
             )
             assertEquals(
                 "string",
-                property.path("type").asString(),
+                property.field("type").text(),
                 "$schemaName.$propertyName опубликовано не строкой: величина на проводе — строка, " +
                     "добавьте type = \"string\" в @Schema рядом с полем"
             )
@@ -85,13 +87,13 @@ class DecimalSchemaTest {
             }
     }
 
-    private fun publishedSchemas(): JsonNode {
-        val docs = mockMvc.perform(get("/v3/api-docs"))
+    private fun publishedSchemas(): JsonElement? =
+        mockMvc.perform(get("/v3/api-docs"))
             .andExpect(status().isOk)
             .andReturn().response.contentAsByteArray
             .toString(Charsets.UTF_8)
-        return objectMapper.readTree(docs).path("components").path("schemas")
-    }
+            .asJsonTree()
+            .field("components").field("schemas")
 
     private companion object {
         const val API_PACKAGE = "org.kert0n.medappserver.api"

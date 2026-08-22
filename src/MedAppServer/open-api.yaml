@@ -64,6 +64,10 @@ paths:
           description: Drug or target kit is not accessible
         "401":
           description: Authentication is required
+        "428":
+          description: The command did not state the version it acts on
+        "412":
+          description: The stated version is not the current one
       security:
       - Bearer Authentication: []
   /v1/drugs/{drugId}/sync/{syncId}:
@@ -169,6 +173,10 @@ paths:
           description: Reservation on this package already exists
         "401":
           description: Authentication is required
+        "428":
+          description: The command did not state the version it acts on
+        "412":
+          description: The stated version is not the current one
       security:
       - Bearer Authentication: []
   /v1/med-kits:
@@ -344,6 +352,10 @@ paths:
           description: Package does not exist or is not accessible
         "401":
           description: Authentication is required
+        "428":
+          description: The command did not state the version it acts on
+        "412":
+          description: The stated version is not the current one
       security:
       - Bearer Authentication: []
   /v1/auth/token:
@@ -451,6 +463,10 @@ paths:
           description: No reservation on this package
         "401":
           description: Authentication is required
+        "428":
+          description: The command did not state the version it acts on
+        "412":
+          description: The stated version is not the current one
       security:
       - Bearer Authentication: []
     patch:
@@ -487,6 +503,10 @@ paths:
           description: No reservation on this package
         "401":
           description: Authentication is required
+        "428":
+          description: The command did not state the version it acts on
+        "412":
+          description: The stated version is not the current one
       security:
       - Bearer Authentication: []
   /v1/drugs/{drugId}:
@@ -545,6 +565,10 @@ paths:
           description: Drug does not exist or is not accessible
         "401":
           description: Authentication is required
+        "428":
+          description: The command did not state the version it acts on
+        "412":
+          description: The stated version is not the current one
       security:
       - Bearer Authentication: []
     patch:
@@ -583,6 +607,10 @@ paths:
           description: Drug does not exist or is not accessible
         "401":
           description: Authentication is required
+        "428":
+          description: The command did not state the version it acts on
+        "412":
+          description: The stated version is not the current one
       security:
       - Bearer Authentication: []
   /v1/users/me:
@@ -692,6 +720,10 @@ paths:
           description: Kit does not exist or is not accessible
         "401":
           description: Authentication is required
+        "428":
+          description: The command did not state the version it acts on
+        "412":
+          description: The stated version is not the current one
       security:
       - Bearer Authentication: []
   /v1/form-types:
@@ -813,6 +845,10 @@ paths:
           description: Kit does not exist or is not accessible
         "401":
           description: Authentication is required
+        "428":
+          description: The command did not state the version it acts on
+        "412":
+          description: The stated version is not the current one
       security:
       - Bearer Authentication: []
 components:
@@ -832,7 +868,8 @@ components:
         quantity:
           type: string
           description: Current stock
-          example: "100.0"
+          examples:
+          - "100.000000"
           pattern: "^\\d{1,13}(\\.\\d{1,6})?$"
         quantityUnitId:
           type: string
@@ -883,7 +920,8 @@ components:
         total:
           type: string
           description: Sum of all reservations; may exceed the stock
-          example: "40.0"
+          examples:
+          - "40.000000"
           pattern: "^\\d{1,13}(\\.\\d{1,6})?$"
         mine:
           type: string
@@ -902,8 +940,10 @@ components:
           type: string
           description: "Amount consumed while offline; a delta, omitted when nothing\
             \ was taken"
-          example: "5.0"
+          examples:
+          - "5.0"
           pattern: "^(?!0+(\\.0+)?$)\\d{1,13}(\\.\\d{1,6})?$"
+          example: null
         drugVersion:
           type: integer
           format: int64
@@ -920,8 +960,10 @@ components:
         amount:
           type: string
           description: "Claim after the offline session, absolute"
-          example: "20.0"
+          examples:
+          - "20.0"
           pattern: "^(?!0+(\\.0+)?$)\\d{1,13}(\\.\\d{1,6})?$"
+          example: null
         version:
           type: integer
           format: int64
@@ -941,8 +983,10 @@ components:
           type: string
           description: "Reserved amount, greater than zero. It may exceed what is\
             \ left in the package."
-          example: "20.0"
+          examples:
+          - "20.0"
           pattern: "^(?!0+(\\.0+)?$)\\d{1,13}(\\.\\d{1,6})?$"
+          example: null
         version:
           type: integer
           format: int64
@@ -963,7 +1007,8 @@ components:
         amount:
           type: string
           description: Reserved amount; may exceed what is left in the package
-          example: "20.0"
+          examples:
+          - "20.000000"
           pattern: "^(?!0+(\\.0+)?$)\\d{1,13}(\\.\\d{1,6})?$"
     MedKitCreatedDTO:
       type: object
@@ -994,8 +1039,10 @@ components:
         quantity:
           type: string
           description: "Initial stock, greater than zero"
-          example: "100.0"
+          examples:
+          - "100.0"
           pattern: "^(?!0+(\\.0+)?$)\\d{1,13}(\\.\\d{1,6})?$"
+          example: null
         quantityUnitId:
           type: string
           format: uuid
@@ -1067,8 +1114,10 @@ components:
         quantity:
           type: string
           description: "Amount taken, greater than zero"
-          example: "2.0"
+          examples:
+          - "2.0"
           pattern: "^(?!0+(\\.0+)?$)\\d{1,13}(\\.\\d{1,6})?$"
+          example: null
         version:
           type: integer
           format: int64
@@ -1102,8 +1151,10 @@ components:
         amount:
           type: string
           description: "New reserved amount, greater than zero"
-          example: "15.0"
+          examples:
+          - "15.0"
           pattern: "^(?!0+(\\.0+)?$)\\d{1,13}(\\.\\d{1,6})?$"
+          example: null
         version:
           type: integer
           format: int64
@@ -1127,8 +1178,10 @@ components:
           description: "Corrected stock: you recounted the package and saw a different\
             \ number. This is a correction, not a refill — a new pack is a new package.\
             \ Reservations are left alone."
-          example: "120.0"
+          examples:
+          - "120.0"
           pattern: "^(?!0+(\\.0+)?$)\\d{1,13}(\\.\\d{1,6})?$"
+          example: null
         quantityUnitId:
           type: string
           format: uuid

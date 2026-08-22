@@ -24,7 +24,7 @@ data class DrugSyncRequest(
     @field:PositiveQuantity
     @Schema(
         description = "Amount consumed while offline; a delta, omitted when nothing was taken",
-        example = "5.0", nullable = true
+        examples = ["5.0"], nullable = true
     )
     val consumed: BigDecimal? = null,
 
@@ -48,7 +48,7 @@ data class DrugSyncRequest(
 data class ReservationSyncRequest(
     @field:PositiveQuantity
     @Schema(
-        description = "Claim after the offline session, absolute", example = "20.0", required = true
+        description = "Claim after the offline session, absolute", examples = ["20.0"], required = true
     )
     val amount: BigDecimal,
 

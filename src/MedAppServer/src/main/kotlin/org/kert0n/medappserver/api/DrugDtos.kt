@@ -21,6 +21,18 @@ import kotlinx.serialization.UseSerializers
  */
 const val QUANTITY_PATTERN: String = "^\\d{1,13}(\\.\\d{1,6})?$"
 
+/*
+ * Примеры величин пишутся через `examples`, а не `example`, и это не вкусовщина.
+ *
+ * Вид примера springdoc выводит не из объявленного `type`, а из типа свойства: у `BigDecimal` он
+ * разбирает `example = "100.000000"` в число и печатает `100.0` — хвостовые нули пропадают, и
+ * контракт показывает не то, что отдаёт сервер. `examples` он оставляет текстом как есть; это
+ * замерено, а не предположено.
+ *
+ * В ответах пример написан так, как значение придёт: с шестью знаками. В запросах — так, как его
+ * шлют: клиент вправе прислать «5.0», и образец это допускает.
+ */
+
 /**
  * То же, но строго больше нуля: столько можно попросить, а не столько может лежать.
  *
@@ -38,7 +50,7 @@ data class DrugDTO(
     val id: Uuid,
     @Schema(description = "Drug name", example = "Aspirin")
     val name: String,
-    @Schema(description = "Current stock", example = "100.000000", type = "string", pattern = QUANTITY_PATTERN)
+    @Schema(description = "Current stock", examples = ["100.000000"], type = "string", pattern = QUANTITY_PATTERN)
     val quantity: BigDecimal,
     /**
      * Только идентификаторы: имя единицы и формы клиент разворачивает сам.
@@ -83,7 +95,7 @@ data class DrugCreateRequest(
     @field:NotNull
     @field:PositiveQuantity
     @Schema(
-        description = "Initial stock, greater than zero", example = "100.0", required = true
+        description = "Initial stock, greater than zero", examples = ["100.0"], required = true
     )
     val quantity: BigDecimal,
 
@@ -129,7 +141,7 @@ data class DrugPatchRequest(
         description = "Corrected stock: you recounted the package and saw a different number. " +
             "This is a correction, not a refill — a new pack is a new package. Reservations are " +
             "left alone.",
-        example = "120.0"
+        examples = ["120.0"]
     )
     val quantity: BigDecimal? = null,
 
@@ -213,7 +225,7 @@ data class VocabularyEntryDTO(
 @Schema(description = "What is claimed on the package")
 @Serializable
 data class ReservationsDTO(
-    @Schema(description = "Sum of all reservations; may exceed the stock", example = "40.000000", type = "string", pattern = QUANTITY_PATTERN)
+    @Schema(description = "Sum of all reservations; may exceed the stock", examples = ["40.000000"], type = "string", pattern = QUANTITY_PATTERN)
     val total: BigDecimal,
     @Schema(
         description = "Reserved by the caller; absent when they claimed nothing", nullable = true,
