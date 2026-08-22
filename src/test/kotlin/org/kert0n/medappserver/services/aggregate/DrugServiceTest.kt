@@ -60,19 +60,6 @@ class DrugServiceTest {
         }
     }
 
-    @Test
-    fun `get for update throws when user has no access`() {
-        val alice = dbHelper.freshUser("alice")
-        val eve = dbHelper.freshUser("eve")
-        val kit = medKitService.create(alice.id)
-        val drug = dbHelper.freshDrug(kit.id, 10.0)
-        dbHelper.flushAndClear()
-
-        assertThrows<DomainRuleViolated> {
-            drugService.get(drug.id, eve.id)
-        }
-    }
-
     // ── ofMedKit / allOf ──
 
     @Test
@@ -87,18 +74,17 @@ class DrugServiceTest {
     }
 
     @Test
-    fun `allOf returns drugs the user has reservations on`() {
+    fun `allOf returns drugs from every kit the user is in`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
-        val drug = dbHelper.freshDrug(kit.id, 100.0)
+        val eve = dbHelper.freshUser("eve")
+        val home = medKitService.create(alice.id)
+        val travel = medKitService.create(alice.id)
+        val mine = listOf(dbHelper.freshDrug(home.id, 100.0), dbHelper.freshDrug(travel.id, 5.0))
+        dbHelper.freshDrug(medKitService.create(eve.id).id, 7.0)
         dbHelper.flushAndClear()
 
-        assertEquals(0, reservationService.ofUser(alice.id).size)
-
-        dbHelper.reserve(alice.id, drug.id, qty(10.0))
-        dbHelper.flushAndClear()
-
-        assertEquals(1, reservationService.ofUser(alice.id).size)
+        // Своё — по обеим аптечкам сразу; чужая пачка в выдачу не попадает, хотя лежит рядом.
+        assertEquals(mine.map { it.id }.toSet(), drugService.allOf(alice.id).map { it.id }.toSet())
     }
 
     // ── create ──

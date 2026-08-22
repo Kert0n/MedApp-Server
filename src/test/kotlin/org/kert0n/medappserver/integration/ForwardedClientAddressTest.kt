@@ -53,8 +53,8 @@ class ForwardedClientAddressTest {
         assertEquals(200, register(first), "second registration from $first")
         assertEquals(429, register(first), "third registration from $first must exhaust that address' quota")
 
-        // Решающая проверка: у другого проброшенного адреса своя квота. Игнорируйся
-        // заголовок — этот запрос делил бы уже исчерпанный счётчик.
+        // Решающая проверка: у другого проброшенного адреса своя квота. Если бы заголовок
+        // игнорировался, этот запрос делил бы уже исчерпанный счётчик.
         assertEquals(200, register(second), "$second must have an independent quota")
     }
 }

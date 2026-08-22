@@ -7,11 +7,16 @@ import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import java.security.MessageDigest
+import kotlin.io.encoding.Base64
 import org.springframework.test.context.ActiveProfiles
 
 /**
  * ARCHITECTURE.md и README обещают, что адрес клиента лежит в кэше только в виде хеша. Здесь это
- * обещание закреплено.
+ * обещание закреплено — именно как хеш, а не как «что-нибудь непохожее на адрес».
+ *
+ * Ожидание считается тем же способом, что и ключ, и это намеренный сторож: смена выведения
+ * обязана быть отдельным решением, а не побочным следствием правки в сервисе.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -38,6 +43,10 @@ class SecurityServiceAddressKeyTest {
         assertFalse(
             keys.any { it.contains("203.0.113") },
             "cache key still contains a recognisable fragment of the address: $keys"
+        )
+        assertTrue(
+            keys.contains(Base64.encode(MessageDigest.getInstance("SHA-256").digest(address.toByteArray()))),
+            "ключ выведен не SHA-256 от адреса: $keys"
         )
     }
 

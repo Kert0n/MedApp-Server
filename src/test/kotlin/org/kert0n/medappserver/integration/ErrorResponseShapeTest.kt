@@ -71,9 +71,10 @@ class ErrorResponseShapeTest {
             .andExpect(jsonPath("$.detail").value("Requested resource does not exist"))
             .andReturn().response.contentAsString
 
-        // `instance` несёт URI запроса и потому повторяет идентификатор, который вызывающий
-        // только что прислал сам, — так устроен RFC 9457. Не должно появиться сообщение
-        // исключения или имя его типа.
+        // `instance` у нас — URI запроса, и потому повторяет идентификатор, который вызывающий
+        // только что прислал сам. RFC 9457 такого не требует: он просит лишь ссылку на случай, а
+        // чем её заполнить — решение приложения. Не должно появиться сообщение исключения или
+        // имя его типа.
         assertFalse(body.contains("access denied"), "internal message leaked: $body")
         assertFalse(body.contains("Drug not found"), "internal message leaked: $body")
         assertFalse(body.contains("Exception"), "error body leaked an exception class: $body")

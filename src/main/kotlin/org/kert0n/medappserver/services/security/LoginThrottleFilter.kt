@@ -10,10 +10,11 @@ import org.springframework.web.filter.OncePerRequestFilter
 /**
  * Ограничивает число запросов токена с одного адреса клиента.
  *
- * Фильтром, а не проверкой в контроллере: bcrypt считается внутри
- * [org.springframework.security.web.authentication.www.BasicAuthenticationFilter], и к моменту,
- * когда доходит до метода контроллера, процессор уже потрачен. И не `@Component`: бин-фильтр
- * зарегистрировался бы на каждый запрос, а это дело только цепочки выдачи токена.
+ * Фильтром, а не проверкой в контроллере: аутентификацию запускает
+ * [org.springframework.security.web.authentication.www.BasicAuthenticationFilter], и bcrypt
+ * считается уже в ней — провайдером через `PasswordEncoder`. К моменту, когда доходит до метода
+ * контроллера, процессор потрачен. И не `@Component`: бин-фильтр зарегистрировался бы на каждый
+ * запрос, а это дело только цепочки выдачи токена.
  */
 class LoginThrottleFilter(
     private val securityService: SecurityService,
