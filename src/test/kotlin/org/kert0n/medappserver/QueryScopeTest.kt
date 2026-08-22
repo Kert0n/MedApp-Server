@@ -3,10 +3,10 @@ package org.kert0n.medappserver
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.name
-import kotlin.streams.asSequence
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
+import org.kert0n.medappserver.testutil.sourcesIn
 
 /**
  * Доступ проверяет запрос, а не соглашение в коде.
@@ -20,9 +20,7 @@ import org.junit.jupiter.api.Test
 class QueryScopeTest {
 
     private val stores: List<Path> =
-        Files.walk(Path.of("src/main/kotlin/org/kert0n/medappserver/db/store")).asSequence()
-            .filter { it.name.endsWith("Store.kt") }
-            .toList()
+        sourcesIn("db/store", suffix = "Store.kt")
 
     /**
      * Чтения, отдающие данные владельца, обязаны принимать вызывающего.
@@ -50,9 +48,7 @@ class QueryScopeTest {
     /** Кто читает по членству — читает его в запросе, а не сверяет потом в памяти. */
     @Test
     fun `скоуп выражен предикатом, а не проверкой после чтения`() {
-        val services = Files.walk(Path.of("src/main/kotlin/org/kert0n/medappserver/services")).asSequence()
-            .filter { it.name.endsWith(".kt") }
-            .toList()
+        val services = sourcesIn("services")
 
         services.forEach { file ->
             val text = Files.readString(file)

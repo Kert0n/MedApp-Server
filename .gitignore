@@ -180,11 +180,12 @@ fabric.properties
 hs_err_pid*
 replay_pid*
 
-src/MedAppServer/src/main/resources/certs
-/init-scripts/cleaned-init.sql
-/src/main/resources/certs/private.pem
-/src/main/resources/certs/public.pem
-/init-scripts/dump.sql
+# Своё и большое: ключи подписи, дамп справочника, локальные настройки прода.
+# init-scripts целиком, а не двумя именами: рядом с дампом лежит его исходник, и каталог всё
+# равно оставался в `git status` — а грязный `git status` там, где запрещён `git add -A`, это
+# способ однажды закоммитить 57 МБ.
+/init-scripts/
+/src/main/resources/certs/*.pem
 /src/main/resources/application-prod.properties
 
 # Приехало из корневого файла при разделении репозиториев: этот репозиторий стал сервером,
