@@ -1,0 +1,50 @@
+name: CodeQL
+
+# Ищет ошибки, до которых тесты не доходят: инъекции, утечки, небезопасные значения по
+# умолчанию. Прогон по расписанию нужен не меньше прогона на PR — уязвимость находят не в
+# нашем коде, а в чужом, и без наших изменений тоже.
+on:
+  pull_request:
+    paths:
+      - 'src/MedAppServer/**'
+      - '.github/workflows/codeql.yml'
+      - '.github/codeql/**'
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/MedAppServer/**'
+      - '.github/workflows/codeql.yml'
+      - '.github/codeql/**'
+  schedule:
+    # По понедельникам утром: находки к началу недели, а не в пятницу вечером.
+    - cron: '17 6 * * 1'
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+
+    permissions:
+      # Читать код и класть находки во вкладку Security — больше ничего.
+      contents: read
+      security-events: write
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Инициализация CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: java-kotlin
+          # Разбор исходников без сборки: анализатору не нужен ни JDK 25, ни Android SDK,
+          # и находки не зависят от того, соберётся ли проект в этот раз.
+          build-mode: none
+          config-file: .github/codeql/codeql-config.yml
+
+      - name: Анализ
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:java-kotlin
