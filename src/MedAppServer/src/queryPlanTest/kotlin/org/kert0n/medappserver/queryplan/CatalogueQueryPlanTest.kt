@@ -4,6 +4,7 @@ import kotlin.test.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
+import org.kert0n.medappserver.testutil.RecordedSql
 import org.kert0n.medappserver.db.store.CatalogueStore
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.jdbc.core.JdbcTemplate

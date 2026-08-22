@@ -6,6 +6,7 @@ import kotlin.uuid.toKotlinUuid
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
+import org.kert0n.medappserver.testutil.RecordedSql
 import org.kert0n.medappserver.db.store.DrugStore
 import org.kert0n.medappserver.db.store.ReservationStore
 import org.springframework.beans.factory.annotation.Autowired

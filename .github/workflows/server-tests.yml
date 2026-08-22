@@ -62,4 +62,5 @@ jobs:
             src/MedAppServer/build/reports/tests/queryPlanTest
             src/MedAppServer/build/test-results/queryPlanTest
             src/MedAppServer/build/reports/queryPlans
+            src/MedAppServer/build/reports/queryCounts
           retention-days: 7
