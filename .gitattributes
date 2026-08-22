@@ -1,2 +1,3 @@
-src/scrapper/dump/** linguist-vendored=true
-src/scrapper/PythonVidalScrap/dump/** linguist-vendored=true
+/gradlew text eol=lf
+*.bat text eol=crlf
+*.jar binary
