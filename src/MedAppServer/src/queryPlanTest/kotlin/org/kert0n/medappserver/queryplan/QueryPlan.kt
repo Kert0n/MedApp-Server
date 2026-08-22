@@ -43,12 +43,26 @@ class QueryPlan(private val nodes: List<JsonNode>, val sql: String) {
         }
 
     companion object {
+        /**
+         * Отчёт складывается в `build/reports/queryPlans`, а не в репозиторий.
+         *
+         * План зависит от версии Postgres и собранной статистики: снимок его в git шумел бы
+         * при каждом обновлении и ничего бы не доказывал. В CI это артефакт — посмотреть,
+         * когда измерение упало.
+         */
+        private val report = java.io.File("build/reports/queryPlans/plans.txt").apply {
+            parentFile.mkdirs()
+            writeText("")
+        }
+
         /** План выполнения запроса — со всеми вложенными узлами, разложенными в список. */
         fun of(jdbc: JdbcTemplate, sql: String): QueryPlan {
             val json = jdbc.queryForObject("EXPLAIN (FORMAT JSON) $sql", String::class.java)
                 ?: error("EXPLAIN ничего не вернул")
             val root = ObjectMapper().readTree(json).first().path("Plan")
-            return QueryPlan(flatten(root), sql)
+            val plan = QueryPlan(flatten(root), sql)
+            report.appendText("── $sql\n${plan.describe()}\n\n")
+            return plan
         }
 
         /**
