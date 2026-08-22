@@ -1,0 +1,28 @@
+name: Проверка зависимостей
+
+# PR, добавляющий зависимость с известной уязвимостью, должен упасть, а не слиться тихо.
+# Работает от графа зависимостей: у публичного репозитория он включён.
+on:
+  pull_request:
+    paths:
+      - 'src/MedAppServer/**'
+      - '.github/workflows/dependency-review.yml'
+
+permissions:
+  contents: read
+  # Чтобы разбор появился комментарием в самом PR, а не только в журнале прогона.
+  pull-requests: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/dependency-review-action@v4
+        with:
+          # Умеренная планка: на «низких» находках очередь остановится вся, и правило
+          # начнут обходить — а обойдённое правило хуже отсутствующего.
+          fail-on-severity: moderate
+          comment-summary-in-pr: on-failure
