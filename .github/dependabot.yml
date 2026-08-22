@@ -1,0 +1,31 @@
+# Обновления приезжают сами, иначе их не приезжает вовсе.
+version: 2
+
+updates:
+  # Зависимости сервера. Каталог — корень: репозиторий и есть сервер.
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    # Одной пачкой на всё мелкое: отдельный PR на каждую патч-версию превращает очередь
+    # в шум, который перестают читать — а вместе с ним перестают читать и важное.
+    groups:
+      мелкие-обновления:
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: "Зависимости:"
+
+  # Сами actions: их не обновляет никто, а они тоже чужой код в нашей сборке.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      действия:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: "Действия CI:"

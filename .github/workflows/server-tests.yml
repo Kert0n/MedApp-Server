@@ -7,6 +7,11 @@ on:
   push:
     branches: [ main ]
 
+# Токену дозволено только читать код: тестам больше ничего не нужно, а умолчание
+# репозитория может оказаться шире.
+permissions:
+  contents: read
+
 # Новый push в ту же ветку отменяет предыдущий прогон.
 concurrency:
   group: server-tests-${{ github.ref }}
