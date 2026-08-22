@@ -1,17 +1,11 @@
-name: MedAppServer tests
+name: Тесты
 
-# Минимум: тесты на каждый PR и на push в main. Линтеров и сканеров здесь пока нет
-# сознательно — сначала пусть будет то, что просто работает.
+# Минимум: тесты на каждый PR и на push в main. Фильтров путей больше нет: репозиторий и есть
+# сервер, менять в нём что-то мимо сервера негде.
 on:
   pull_request:
-    paths:
-      - 'src/MedAppServer/**'
-      - '.github/workflows/server-tests.yml'
   push:
     branches: [ main ]
-    paths:
-      - 'src/MedAppServer/**'
-      - '.github/workflows/server-tests.yml'
 
 # Новый push в ту же ветку отменяет предыдущий прогон.
 concurrency:
@@ -21,10 +15,6 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: src/MedAppServer
-
     steps:
       - uses: actions/checkout@v7
 
@@ -57,10 +47,10 @@ jobs:
         with:
           name: test-results
           path: |
-            src/MedAppServer/build/reports/tests/test
-            src/MedAppServer/build/test-results/test
-            src/MedAppServer/build/reports/tests/queryPlanTest
-            src/MedAppServer/build/test-results/queryPlanTest
-            src/MedAppServer/build/reports/queryPlans
-            src/MedAppServer/build/reports/queryCounts
+            build/reports/tests/test
+            build/test-results/test
+            build/reports/tests/queryPlanTest
+            build/test-results/queryPlanTest
+            build/reports/queryPlans
+            build/reports/queryCounts
           retention-days: 7
