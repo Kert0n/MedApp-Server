@@ -1,0 +1,3 @@
+[submodule "src/scrapper"]
+	path = src/scrapper
+	url = https://github.com/Kert0n/MedApp-scrapper.git
