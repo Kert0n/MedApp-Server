@@ -1,7 +1,10 @@
 package org.kert0n.medappserver.services
 
+import io.swagger.v3.oas.models.OpenAPI
 import io.swagger.v3.oas.models.Operation
+import io.swagger.v3.oas.models.media.Schema
 import io.swagger.v3.oas.models.responses.ApiResponse
+import org.springdoc.core.customizers.GlobalOpenApiCustomizer
 import org.springdoc.core.customizers.GlobalOperationCustomizer
 import org.springframework.stereotype.Component
 import org.springframework.web.method.HandlerMethod
@@ -71,5 +74,72 @@ class OperationContractCustomizer : GlobalOperationCustomizer {
     private companion object {
         const val CONTROLLER_PACKAGE = "org.kert0n.medappserver.controller"
         const val UNAUTHORIZED = "401"
+    }
+}
+
+/**
+ * Операция, принимающая версию, объявляет её коды отказа.
+ *
+ * Из двадцати шести операций эти коды не объявляла **ни одна**, хотя весь механизм предусловий
+ * отвечает именно ими: клиент читал контракт и 428 с 412 оттуда не ждал.
+ *
+ * Проставляется по факту, а не рукой у каждой операции: у кого есть версия — у того есть и коды.
+ * Расписать их по аннотациям значило бы завести девять мест, где можно забыть, — а забывают всегда
+ * там же, где добавляют новый эндпойнт.
+ *
+ * Что считается «принимает версию»: параметр запроса `version` или поле `version` в теле — то есть
+ * ровно то, что разворачивает `statedVersion`. Синхронизация под правило не подпадает намеренно:
+ * её версии зовутся иначе (`drugVersion`), едут телом и отвечают 409, потому что предусловием
+ * запроса они не были (2.6). Это не исключение из правила, а другое правило — и написано оно
+ * здесь, а не подразумевается.
+ *
+ * Тело видно только там, где под рукой `components`: `$ref` разрешается по ним, поэтому проход
+ * идёт по документу целиком, а не по одной операции.
+ */
+@Component
+class PreconditionResponsesCustomizer : GlobalOpenApiCustomizer {
+
+    override fun customise(openApi: OpenAPI) {
+        val schemas: Map<String, Schema<*>> = openApi.components?.schemas.orEmpty()
+        openApi.paths?.values?.forEach { path ->
+            path.readOperations().forEach { operation ->
+                if (statesVersion(operation, schemas)) declarePreconditions(operation)
+            }
+        }
+    }
+
+    private fun statesVersion(operation: Operation, schemas: Map<String, Schema<*>>): Boolean =
+        operation.parameters.orEmpty().any { it.name == VERSION && it.`in` == QUERY } ||
+            VERSION in bodyProperties(operation, schemas)
+
+    /**
+     * Свойства тела — только верхнего уровня.
+     *
+     * Вглубь не идём: у синхронизации версия картины броней лежит во вложенной части, и
+     * заглядывающее вглубь правило записало бы ей 412, которого она не отвечает.
+     */
+    private fun bodyProperties(operation: Operation, schemas: Map<String, Schema<*>>): Set<String> {
+        val declared = operation.requestBody?.content?.values?.firstOrNull()?.schema ?: return emptySet()
+        val resolved = declared.`$ref`?.substringAfterLast('/')?.let { schemas[it] } ?: declared
+        return resolved.properties?.keys.orEmpty()
+    }
+
+    private fun declarePreconditions(operation: Operation) {
+        val responses = operation.responses ?: return
+        responses.putIfAbsent(
+            PRECONDITION_REQUIRED,
+            ApiResponse().description("The command did not state the version it acts on")
+        )
+        responses.putIfAbsent(
+            PRECONDITION_FAILED,
+            ApiResponse().description("The stated version is not the current one")
+        )
+    }
+
+    private companion object {
+        const val VERSION = "version"
+        const val QUERY = "query"
+        const val PRECONDITION_REQUIRED = "428"
+        const val PRECONDITION_FAILED = "412"
     }
 }

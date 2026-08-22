@@ -64,6 +64,10 @@ paths:
           description: Drug or target kit is not accessible
         "401":
           description: Authentication is required
+        "428":
+          description: The command did not state the version it acts on
+        "412":
+          description: The stated version is not the current one
       security:
       - Bearer Authentication: []
   /v1/drugs/{drugId}/sync/{syncId}:
@@ -169,6 +173,10 @@ paths:
           description: Reservation on this package already exists
         "401":
           description: Authentication is required
+        "428":
+          description: The command did not state the version it acts on
+        "412":
+          description: The stated version is not the current one
       security:
       - Bearer Authentication: []
   /v1/med-kits:
@@ -344,6 +352,10 @@ paths:
           description: Package does not exist or is not accessible
         "401":
           description: Authentication is required
+        "428":
+          description: The command did not state the version it acts on
+        "412":
+          description: The stated version is not the current one
       security:
       - Bearer Authentication: []
   /v1/auth/token:
@@ -451,6 +463,10 @@ paths:
           description: No reservation on this package
         "401":
           description: Authentication is required
+        "428":
+          description: The command did not state the version it acts on
+        "412":
+          description: The stated version is not the current one
       security:
       - Bearer Authentication: []
     patch:
@@ -487,6 +503,10 @@ paths:
           description: No reservation on this package
         "401":
           description: Authentication is required
+        "428":
+          description: The command did not state the version it acts on
+        "412":
+          description: The stated version is not the current one
       security:
       - Bearer Authentication: []
   /v1/drugs/{drugId}:
@@ -545,6 +565,10 @@ paths:
           description: Drug does not exist or is not accessible
         "401":
           description: Authentication is required
+        "428":
+          description: The command did not state the version it acts on
+        "412":
+          description: The stated version is not the current one
       security:
       - Bearer Authentication: []
     patch:
@@ -583,6 +607,10 @@ paths:
           description: Drug does not exist or is not accessible
         "401":
           description: Authentication is required
+        "428":
+          description: The command did not state the version it acts on
+        "412":
+          description: The stated version is not the current one
       security:
       - Bearer Authentication: []
   /v1/users/me:
@@ -692,6 +720,10 @@ paths:
           description: Kit does not exist or is not accessible
         "401":
           description: Authentication is required
+        "428":
+          description: The command did not state the version it acts on
+        "412":
+          description: The stated version is not the current one
       security:
       - Bearer Authentication: []
   /v1/form-types:
@@ -813,6 +845,10 @@ paths:
           description: Kit does not exist or is not accessible
         "401":
           description: Authentication is required
+        "428":
+          description: The command did not state the version it acts on
+        "412":
+          description: The stated version is not the current one
       security:
       - Bearer Authentication: []
 components:
