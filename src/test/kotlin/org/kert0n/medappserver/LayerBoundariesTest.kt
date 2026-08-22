@@ -3,10 +3,10 @@ package org.kert0n.medappserver
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.name
-import kotlin.streams.asSequence
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
+import org.kert0n.medappserver.testutil.allSources
 
 /**
  * Уровни не смешиваются.
@@ -22,9 +22,7 @@ import org.junit.jupiter.api.Test
 class LayerBoundariesTest {
 
     private val sources: List<Path> =
-        Files.walk(Path.of("src/main/kotlin/org/kert0n/medappserver")).asSequence()
-            .filter { it.name.endsWith(".kt") }
-            .toList()
+        allSources()
 
     /**
      * Хранилище — граница агрегата, и знать о ней должен ровно один сервис.

@@ -76,6 +76,9 @@ class SecurityConfiguration(
     ): SecurityFilterChain {
         return httpSecurity
             .securityMatcher("/v1/auth/token")
+            // Защита от CSRF выключена законно: учётные данные приезжают заголовком, который
+            // ставит клиент, а не кукой, которую браузер подставил бы сам. Подделывать нечего.
+            // Держится это не на комментарии: `StatelessAuthTest` запрещает куки в проде.
             .csrf { csrf -> csrf.disable() }
             .addFilterBefore(
                 LoginThrottleFilter(securityService, problems),
@@ -96,6 +99,9 @@ class SecurityConfiguration(
     @Order(2)
     fun filterChain(httpSecurity: HttpSecurity): SecurityFilterChain {
         return httpSecurity
+            // По той же причине, что и в цепочке выдачи токена: токен приезжает заголовком
+            // `Authorization`, сессии нет, кук нет — неявной аутентификации, на которую и
+            // рассчитан CSRF, здесь просто не существует.
             .csrf { csrf -> csrf.disable() }
             .authorizeHttpRequests { auth ->
                 auth

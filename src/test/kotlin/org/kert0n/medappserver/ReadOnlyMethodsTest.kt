@@ -1,12 +1,11 @@
 package org.kert0n.medappserver
 
-import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.name
 import kotlin.io.path.readText
-import kotlin.streams.asSequence
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
+import org.kert0n.medappserver.testutil.sourcesIn
 
 /**
  * Читающий метод не пишет.
@@ -21,9 +20,7 @@ import org.junit.jupiter.api.Test
 class ReadOnlyMethodsTest {
 
     private val services: List<Path> =
-        Files.walk(Path.of("src/main/kotlin/org/kert0n/medappserver/services")).asSequence()
-            .filter { it.name.endsWith(".kt") }
-            .toList()
+        sourcesIn("services")
 
     @Test
     fun `метод под readOnly не зовёт запись хранилища`() {
