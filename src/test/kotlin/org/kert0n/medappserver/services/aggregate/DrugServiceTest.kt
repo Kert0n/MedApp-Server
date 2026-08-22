@@ -36,7 +36,7 @@ class DrugServiceTest {
     @Autowired
     private lateinit var dbHelper: DatabaseTestHelper
 
-    // ── findById ──
+    // ── get ──
 
     @Test
     fun `несуществующий препарат неотличим от недоступного`() {
@@ -45,10 +45,10 @@ class DrugServiceTest {
         assertThrows<NotAMember> { drugService.get(Uuid.random(), alice.id) }
     }
 
-    // ── findByIdForUser / findByIdForUserForUpdate ──
+    // ── get: доступ ──
 
     @Test
-    fun `findByIdForUser throws when user has no access`() {
+    fun `get throws when user has no access`() {
         val alice = dbHelper.freshUser("alice")
         val eve = dbHelper.freshUser("eve")
         val kit = medKitService.create(alice.id)
@@ -61,7 +61,7 @@ class DrugServiceTest {
     }
 
     @Test
-    fun `findByIdForUserForUpdate throws when user has no access`() {
+    fun `get for update throws when user has no access`() {
         val alice = dbHelper.freshUser("alice")
         val eve = dbHelper.freshUser("eve")
         val kit = medKitService.create(alice.id)
@@ -73,10 +73,10 @@ class DrugServiceTest {
         }
     }
 
-    // ── findAllByMedKit / findAllByUser ──
+    // ── ofMedKit / allOf ──
 
     @Test
-    fun `findAllByMedKit returns drugs in medkit`() {
+    fun `ofMedKit returns drugs in medkit`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.create(alice.id)
         dbHelper.freshDrug(kit.id, 10.0)
@@ -87,7 +87,7 @@ class DrugServiceTest {
     }
 
     @Test
-    fun `findAllByUser returns drugs user has treatment plans for`() {
+    fun `allOf returns drugs the user has reservations on`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.create(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
@@ -225,10 +225,10 @@ class DrugServiceTest {
         assertNull(dbHelper.drug(drug.id))
     }
 
-    // ── consumeDrug ──
+    // ── consume ──
 
     @Test
-    fun `consumeDrug reduces quantity`() {
+    fun `consume reduces quantity`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.create(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
@@ -239,7 +239,7 @@ class DrugServiceTest {
     }
 
     @Test
-    fun `consumeDrug throws when insufficient quantity`() {
+    fun `consume throws when insufficient quantity`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.create(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 10.0)

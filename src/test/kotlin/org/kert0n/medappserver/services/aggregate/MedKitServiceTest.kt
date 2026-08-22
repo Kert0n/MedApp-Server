@@ -27,7 +27,7 @@ class MedKitServiceTest {
     @Autowired
     private lateinit var dbHelper: DatabaseTestHelper
 
-    // ── createNew ──
+    // ── create ──
 
     @Test
     fun `create creates medkit with user`() {
@@ -39,19 +39,17 @@ class MedKitServiceTest {
         assertTrue(medKit.members.contains(alice.id))
     }
 
-    // ── require ──
+    // ── get ──
 
     @Test
-    fun `require throws NOT_FOUND for non-existent medkit`() {
+    fun `get throws NOT_FOUND for non-existent medkit`() {
         assertThrows<DomainRuleViolated> {
             medKitService.get(Uuid.random(), Uuid.random())
         }
     }
 
-    // ── findByIdForUser ──
-
     @Test
-    fun `require throws when user has no access`() {
+    fun `get throws when user has no access`() {
         val alice = dbHelper.freshUser("alice")
         val eve = dbHelper.freshUser("eve")
         val kit = medKitService.create(alice.id)
@@ -74,8 +72,7 @@ class MedKitServiceTest {
         assertEquals(2, medKitService.allOfUser(alice.id).size)
     }
 
-    // ── findMedKitSummaries ──
-
+    
     @Test
     fun `allOfUser returns the kit with its members`() {
         val alice = dbHelper.freshUser("alice")
@@ -87,7 +84,7 @@ class MedKitServiceTest {
         assertEquals(setOf(alice.id), mine.members)
     }
 
-    // ── generateMedKitShareKey / joinMedKitByKey ──
+    // ── invite / joinByInvitation ──
 
     @Test
     fun `joinByInvitation adds user and invalidates key`() {
@@ -104,7 +101,7 @@ class MedKitServiceTest {
         assertEquals(1, joinerKits.size)
         assertEquals(kit.id, joinerKits.first().id)
 
-        // Key should be invalidated after use
+        // Ключ одноразовый: после вступления он уже не действует.
         assertFailsWith<DomainRuleViolated> {
             medKitService.joinByInvitation(key, joiner.id)
         }
@@ -119,7 +116,7 @@ class MedKitServiceTest {
         }
     }
 
-    // ── addUserToMedKit ──
+    // ── join ──
 
     @Test
     fun `join adds second user`() {
@@ -145,7 +142,7 @@ class MedKitServiceTest {
         }
     }
 
-    // ── removeUserFromMedKit ──
+    // ── leave ──
 
     @Test
     fun `leave keeps medkit when other users remain`() {

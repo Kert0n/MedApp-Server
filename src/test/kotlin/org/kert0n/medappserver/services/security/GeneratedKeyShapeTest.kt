@@ -34,8 +34,8 @@ class GeneratedKeyShapeTest {
 
     @Test
     fun `длина соответствует запрошенной энтропии`() {
-        // 32 байта без выравнивания — 43 символа: ceil(32 * 8 / 6). С выравниванием было 44,
-        // и последний символ всегда был '='.
+        // 32 байта без выравнивания — 43 символа: ceil(32 * 8 / 6). С выравниванием их 44, и
+        // последний всегда '='.
         assertEquals(43, securityService.generateKey(32).length)
         assertEquals(22, securityService.generateKey(16).length)
     }

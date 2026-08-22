@@ -10,8 +10,8 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
 
 /**
- * ARCHITECTURE.md and the README state that client addresses are only ever held in the cache in
- * hashed form. This pins that claim down.
+ * ARCHITECTURE.md и README обещают, что адрес клиента лежит в кэше только в виде хеша. Здесь это
+ * обещание закреплено.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -50,8 +50,8 @@ class SecurityServiceAddressKeyTest {
         securityService.registerIncrease(address)
         val added = successfulRegistrationsCache.asDeferredMap().keys - before
 
-        // Both increments must land on the same derived key: unstable derivation would mean a
-        // fresh key per call and no throttling at all.
+        // Оба инкремента обязаны попасть в один и тот же производный ключ: неустойчивое
+        // выведение давало бы новый ключ на каждый вызов и никакого ограничения.
         assertEquals(1, added.size, "two increments for one address produced keys: $added")
     }
 }

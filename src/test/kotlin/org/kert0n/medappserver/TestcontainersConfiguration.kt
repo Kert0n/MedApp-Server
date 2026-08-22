@@ -10,9 +10,9 @@ import org.testcontainers.utility.DockerImageName
  * Контейнер один на весь набор.
  *
  * `@Configuration`, а не `@TestConfiguration`: второе не подхватывается сканированием и требует
- * `@Import` на каждом классе. Кто про импорт забывал, тот уходил на `jdbc:tc:` из
- * `application.properties` и поднимал **свой** контейнер другой версии — набор шёл на двух
- * разных Postgres сразу, при том что версия пришпилена как раз затем, чтобы этого не было.
+ * `@Import` на каждом классе. Класс без импорта уходит на `jdbc:tc:` из `application.properties`
+ * и поднимает **свой** контейнер другой версии — набор идёт на двух разных Postgres сразу, при
+ * том что версия пришпилена как раз затем, чтобы этого не было.
  */
 @Configuration(proxyBeanMethods = false)
 class TestcontainersConfiguration {

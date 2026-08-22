@@ -49,7 +49,7 @@ class DrugMovementStoriesTest {
     private lateinit var medKits: MedKitApplicationService
 
 
-    /** Story 11: a move keeps the reservations of everyone who still sees the pack. */
+    /** История 11: переезд сохраняет брони всех, кто пачку по-прежнему видит. */
     @Test
     fun `Story 11 - Moving drug between medkits`() {
         val userData = User(id = Uuid.random(), hashedKey = "user_${Uuid.random()}")
@@ -87,7 +87,7 @@ class DrugMovementStoriesTest {
         println("✅ Story 11 passed: Drug moved between medkits with treatment plan intact")
     }
 
-    /** Story 12: a reservation may be raised freely — nothing weighs it against the pack. */
+    /** История 12: бронь поднимается свободно — с остатком пачки её никто не сверяет. */
     @Test
     fun `Story 12 - Updating treatment plan correctly checks available quantity`() {
         val anna = User(id = Uuid.random(), hashedKey = "anna_${Uuid.random()}")
@@ -107,7 +107,7 @@ class DrugMovementStoriesTest {
         )
         dbHelper.insert(drugData)
 
-        // Anna reserves 40, Bob 30 — 70 of 100
+        // Анна заявляет 40, Боб 30 — 70 из 100.
         dbHelper.reserve(anna.id, drugData.id, qty(40.0))
         dbHelper.reserve(bob.id, drugData.id, qty(30.0))
 
@@ -126,7 +126,7 @@ class DrugMovementStoriesTest {
         println("✅ Story 12 passed: reservations are free to exceed the package")
     }
 
-    /** Story 13: a destroyed pack takes its reservations with it. */
+    /** История 13: уничтоженная пачка уносит брони с собой. */
     @Test
     fun `Story 13 - Deleting drug removes its treatment plans`() {
         val userData = User(id = Uuid.random(), hashedKey = "user_${Uuid.random()}")
@@ -157,10 +157,9 @@ class DrugMovementStoriesTest {
         println("✅ Story 13 passed: Deleting drug removed its treatment plans")
     }
 
-    /** Story 14: migration into a narrower kit strips the reservations of those left out. */
+    /** История 14: перенос в более узкую аптечку снимает брони тех, кто в неё не входит. */
     @Test
     fun `Story 14 - Moving shared drug to private medkit removes other users treatment plans`() {
-        // Setup: Anna, Bob, and Charlie share an Old MedKit
         val anna = dbHelper.insert(User(id = Uuid.random(), hashedKey = "anna_${Uuid.random()}"))
         val bob = dbHelper.insert(User(id = Uuid.random(), hashedKey = "bob_${Uuid.random()}"))
         val charlie = dbHelper.insert(User(id = Uuid.random(), hashedKey = "charlie_${Uuid.random()}"))
@@ -169,7 +168,7 @@ class DrugMovementStoriesTest {
         medKitService.joinByInvitation(medKitService.invite(medKitService.get(oldKit.id, anna.id), anna.id), bob.id)
         medKitService.joinByInvitation(medKitService.invite(medKitService.get(oldKit.id, anna.id), anna.id), charlie.id)
 
-        // Setup: Anna and Bob share a New MedKit (Charlie is excluded)
+        // Новая аптечка — на Анну и Боба; Чарли в неё не входит.
         val newKit = medKitService.create(anna.id)
         medKitService.joinByInvitation(medKitService.invite(medKitService.get(newKit.id, anna.id), anna.id), bob.id)
 
@@ -191,7 +190,6 @@ class DrugMovementStoriesTest {
         medKits.delete(oldKit.id, dbHelper.medKitVersion(oldKit.id), anna.id, newKit.id)
 
 
-        // Verify: Anna and Bob keep their reservations, Charlie's is deleted.
         assertNotNull(dbHelper.userReservation(anna.id, drugData.id), "Anna should keep her plan")
         assertNotNull(dbHelper.userReservation(bob.id, drugData.id), "Bob should keep his plan")
         assertNull(
@@ -203,7 +201,7 @@ class DrugMovementStoriesTest {
     }
 
 
-    /** Story 16: moving one pack out of a kit leaves it and the others intact. */
+    /** История 16: переезд одной пачки не трогает ни аптечку, ни остальные пачки. */
     @Test
     fun `Story 16 - Moving single drug preserves it from orphan removal`() {
         val userData = dbHelper.insert(User(id = Uuid.random(), hashedKey = "user_${Uuid.random()}"))
@@ -232,7 +230,6 @@ class DrugMovementStoriesTest {
         )
 
 
-        // Move ONLY one drug
         drugs.moveToMedKit(drugDataToMove.id, targetKit.id, dbHelper.drugVersion(drugDataToMove.id), userData.id)
 
 

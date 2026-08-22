@@ -11,16 +11,17 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
 
 /**
- * The registration limit keys on the client address, so behind a reverse proxy it only means
- * anything when X-Forwarded-For is honoured — otherwise every client shares the proxy's address
- * and one global counter.
+ * Ограничение регистраций ключуется адресом клиента, поэтому за обратным прокси оно что-то
+ * значит только тогда, когда учитывается X-Forwarded-For: иначе у всех клиентов один адрес
+ * прокси и один общий счётчик.
  *
- * Real HTTP on purpose: with forward-headers-strategy=native the rewriting is Tomcat's
- * RemoteIpValve, which MockMvc bypasses, so a MockMvc test would pass over a broken production.
+ * Настоящий HTTP, а не MockMvc: при `forward-headers-strategy=native` подмену делает
+ * `RemoteIpValve` самого Tomcat, мимо которого MockMvc проходит, — тест на MockMvc был бы
+ * зелёным над сломанным продом.
  *
- * The test profile sets BanNumber=1 and `validateRequest` compares with `<=`, so two
- * registrations per address succeed and the third is rejected — accepted off-by-one, see
- * SecurityService.validateRequest.
+ * В тестовом профиле `BanNumber=1`, а `validateRequest` сравнивает через `<=`: две регистрации
+ * с адреса проходят, третья отвергается. Смещение на единицу принято — см.
+ * `SecurityService.validateRequest`.
  */
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
@@ -52,8 +53,8 @@ class ForwardedClientAddressTest {
         assertEquals(200, register(first), "second registration from $first")
         assertEquals(429, register(first), "third registration from $first must exhaust that address' quota")
 
-        // The decisive assertion: a different forwarded address still has its own
-        // quota. If the header were ignored, this would share the exhausted counter.
+        // Решающая проверка: у другого проброшенного адреса своя квота. Игнорируйся
+        // заголовок — этот запрос делил бы уже исчерпанный счётчик.
         assertEquals(200, register(second), "$second must have an independent quota")
     }
 }

@@ -52,11 +52,7 @@ class BasicWorkflowStoriesTest {
     @Autowired
     private lateinit var medKits: MedKitApplicationService
 
-    /**
-     * Story 1: Anna creates her first medkit and adds some drugs
-     *
-     * Validates: User registration, medkit creation, drug management, consumption tracking
-     */
+    /** История 1: у человека появляются аптечка, содержимое и первый приём. */
     @Test
     fun `Story 1 - New user Anna creates and manages her medkit`() {
         val anna = User(
@@ -104,11 +100,7 @@ class BasicWorkflowStoriesTest {
         println("✅ Story 1 passed: Anna successfully created medkit and managed drugs")
     }
 
-    /**
-     * Story 2: Anna shares her medkit with Bob (her roommate)
-     *
-     * Validates: Multi-user medkit sharing, bidirectional relationships, data visibility
-     */
+    /** История 2: аптечка делится с соседом, и содержимое видно обоим. */
     @Test
     fun `Story 2 - Anna shares medkit with roommate Bob`() {
         val anna = User(id = Uuid.random(), hashedKey = "anna_${Uuid.random()}")
@@ -147,11 +139,7 @@ class BasicWorkflowStoriesTest {
         println("✅ Story 2 passed: Anna successfully shared medkit with Bob")
     }
 
-    /**
-     * Story 3: Bob leaves shared medkit - his data is cleaned up
-     *
-     * Validates: User removal, cascade operations, data integrity
-     */
+    /** История 3: вышедший участник уходит вместе со своим, но не с чужим. */
     @Test
     fun `Story 3 - Bob leaves shared medkit, cleanup works correctly`() {
         val anna = User(id = Uuid.random(), hashedKey = "anna_${Uuid.random()}")
@@ -178,7 +166,6 @@ class BasicWorkflowStoriesTest {
         val loadedMedkit = dbHelper.medKit(medkit.id)!!
         assertEquals(2, loadedMedkit.members.size)
 
-        // Bob leaves (drugs stay)
         medKits.leave(medkit.id, dbHelper.medKitVersion(medkit.id), bob.id)
 
         val updatedMedkit = dbHelper.medKit(medkit.id)
@@ -192,11 +179,7 @@ class BasicWorkflowStoriesTest {
         println("✅ Story 3 passed: Bob left medkit, cleanup successful")
     }
 
-    /**
-     * Story 4: Migrating drugs when deleting a medkit
-     *
-     * Validates: Drug migration, medkit deletion, data preservation
-     */
+    /** История 4: аптечка удаляется, содержимое переезжает, а не пропадает. */
     @Test
     fun `Story 4 - User migrates drugs when deleting old medkit`() {
         val userData = User(id = Uuid.random(), hashedKey = "user_${Uuid.random()}")
@@ -246,7 +229,7 @@ class BasicWorkflowStoriesTest {
         println("✅ Story 4 passed: Drugs successfully migrated to new medkit")
     }
 
-    /** Story 5: the pack emptied by an intake is destroyed, not left at zero. */
+    /** История 5: опустевшая от приёма пачка уничтожается, а не остаётся нулём. */
     @Test
     fun `Story 5 - User consumes all available drug quantity`() {
         val userData = User(id = Uuid.random(), hashedKey = "user_${Uuid.random()}")
