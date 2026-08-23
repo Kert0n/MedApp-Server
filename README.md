@@ -27,7 +27,7 @@ REST API для домашней аптечки: что есть в наличи
 | посмотреть, что умеет API | [Эндпоинты](#эндпоинты), полный контракт — [open-api.yaml](open-api.yaml) |
 | понять, как устроено | [ARCHITECTURE.md](ARCHITECTURE.md): контексты, слои, доступ, конкурентность |
 | увидеть, чем это держится | [ARCHITECTURE-RULES.md](src/test/kotlin/org/kert0n/medappserver/ARCHITECTURE-RULES.md) — правила и тест, закрепляющий каждое |
-| прогнать тесты | [Тестирование](#тестирование) — Postgres поднимается сам, ставить ничего не надо |
+| прогнать тесты | [Тестирование](#тестирование) — Postgres поднимает Testcontainers, нужен только Docker |
 
 ## Технологии
 
@@ -289,7 +289,12 @@ registration.timeout.BanNumber=1
 ./gradlew queryPlanTest
 ```
 
-Тесты идут против настоящего Postgres в Testcontainers, а не H2: поведение зависит от СУБД.
+Тесты идут против настоящего Postgres в Testcontainers, а не H2: поведение зависит от СУБД —
+локаль для триграмм, `numeric`, планы запросов.
+
+Ставить Postgres не нужно, но нужен запущенный Docker (или другой совместимый runtime — Podman,
+Testcontainers Cloud): контейнер поднимается сам, один на весь набор, версии той же, что в
+compose.
 
 ## Безопасность
 
