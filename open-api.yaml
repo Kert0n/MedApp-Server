@@ -876,23 +876,33 @@ components:
           format: uuid
           description: Quantity unit identifier
         formTypeId:
-          type: string
+          type:
+          - string
+          - "null"
           format: uuid
           description: Dosage form identifier
         category:
-          type: string
+          type:
+          - string
+          - "null"
           description: Category
           example: painkiller
         manufacturer:
-          type: string
+          type:
+          - string
+          - "null"
           description: Manufacturer
           example: Bayer
         country:
-          type: string
+          type:
+          - string
+          - "null"
           description: Country
           example: Germany
         description:
-          type: string
+          type:
+          - string
+          - "null"
           description: Description
         medKitId:
           type: string
@@ -903,6 +913,18 @@ components:
           format: int64
           description: Version of the package state; state it back when commanding
           example: 3
+      required:
+      - category
+      - country
+      - description
+      - formTypeId
+      - id
+      - manufacturer
+      - medKitId
+      - name
+      - quantity
+      - quantityUnitId
+      - version
     DrugSnapshotDTO:
       type: object
       description: Package with what is claimed on it
@@ -913,6 +935,9 @@ components:
         reservations:
           $ref: "#/components/schemas/ReservationsDTO"
           description: What is claimed on it
+      required:
+      - drug
+      - reservations
     ReservationsDTO:
       type: object
       description: What is claimed on the package
@@ -924,7 +949,9 @@ components:
           - "40.000000"
           pattern: "^\\d{1,13}(\\.\\d{1,6})?$"
         mine:
-          type: string
+          type:
+          - string
+          - "null"
           description: Reserved by the caller; absent when they claimed nothing
           pattern: "^(?!0+(\\.0+)?$)\\d{1,13}(\\.\\d{1,6})?$"
         version:
@@ -932,12 +959,18 @@ components:
           format: int64
           description: Version of the claims on this package; state it back when commanding
           example: 5
+      required:
+      - mine
+      - total
+      - version
     DrugSyncRequest:
       type: object
       description: "Offline changes for one package, applied atomically"
       properties:
         consumed:
-          type: string
+          type:
+          - string
+          - "null"
           description: "Amount consumed while offline; a delta, omitted when nothing\
             \ was taken"
           examples:
@@ -945,13 +978,17 @@ components:
           pattern: "^(?!0+(\\.0+)?$)\\d{1,13}(\\.\\d{1,6})?$"
           example: null
         drugVersion:
-          type: integer
+          type:
+          - integer
+          - "null"
           format: int64
           description: "Version the command acts on; taken from the last read. Absent\
             \ means 428, mismatched means 412"
           example: 3
         reservation:
-          $ref: "#/components/schemas/ReservationSyncRequest"
+          anyOf:
+          - $ref: "#/components/schemas/ReservationSyncRequest"
+          - type: "null"
           description: New state of the caller's claim; omitted when it did not change
     ReservationSyncRequest:
       type: object
@@ -965,7 +1002,9 @@ components:
           pattern: "^(?!0+(\\.0+)?$)\\d{1,13}(\\.\\d{1,6})?$"
           example: null
         version:
-          type: integer
+          type:
+          - integer
+          - "null"
           format: int64
           description: Version of the claims picture; absent when there is no claim
             yet
@@ -988,7 +1027,9 @@ components:
           pattern: "^(?!0+(\\.0+)?$)\\d{1,13}(\\.\\d{1,6})?$"
           example: null
         version:
-          type: integer
+          type:
+          - integer
+          - "null"
           format: int64
           description: "Version the command acts on; taken from the last read. Absent\
             \ means 428, mismatched means 412"
@@ -1010,6 +1051,9 @@ components:
           examples:
           - "20.000000"
           pattern: "^(?!0+(\\.0+)?$)\\d{1,13}(\\.\\d{1,6})?$"
+      required:
+      - amount
+      - drugId
     MedKitCreatedDTO:
       type: object
       description: Created medicine kit
@@ -1018,6 +1062,8 @@ components:
           type: string
           format: uuid
           description: Medicine kit identifier
+      required:
+      - id
     InvitationDTO:
       type: object
       description: Invitation to join a medicine kit
@@ -1026,6 +1072,8 @@ components:
           type: string
           description: Key to join the kit; valid for a limited time and reusable
             within it
+      required:
+      - key
     DrugCreateRequest:
       type: object
       description: Request to add a drug to a medicine kit
@@ -1048,29 +1096,39 @@ components:
           format: uuid
           description: Quantity unit identifier from the shared vocabulary
         formTypeId:
-          type: string
+          type:
+          - string
+          - "null"
           format: uuid
           description: Dosage form identifier from the shared vocabulary
         category:
-          type: string
+          type:
+          - string
+          - "null"
           description: Category
           example: painkiller
           maxLength: 200
           minLength: 0
         manufacturer:
-          type: string
+          type:
+          - string
+          - "null"
           description: Manufacturer
           example: Bayer
           maxLength: 300
           minLength: 0
         country:
-          type: string
+          type:
+          - string
+          - "null"
           description: Country
           example: Germany
           maxLength: 100
           minLength: 0
         description:
-          type: string
+          type:
+          - string
+          - "null"
           description: Description
           maxLength: 4000
           minLength: 0
@@ -1086,6 +1144,7 @@ components:
           type: string
           description: Invitation key
           example: sSQUCT8iOjYsobZ7StyspQ
+          minLength: 1
       required:
       - key
     MedKitDTO:
@@ -1107,6 +1166,10 @@ components:
           items:
             $ref: "#/components/schemas/DrugSnapshotDTO"
           uniqueItems: true
+      required:
+      - drugs
+      - id
+      - userCount
     IntakeRequest:
       type: object
       description: Amount taken out of the package
@@ -1119,7 +1182,9 @@ components:
           pattern: "^(?!0+(\\.0+)?$)\\d{1,13}(\\.\\d{1,6})?$"
           example: null
         version:
-          type: integer
+          type:
+          - integer
+          - "null"
           format: int64
           description: "Version the command acts on; taken from the last read. Absent\
             \ means 428, mismatched means 412"
@@ -1133,6 +1198,8 @@ components:
         accessToken:
           type: string
           description: JWT access token
+      required:
+      - accessToken
     RegisterResponse:
       type: object
       description: Registration response with generated credentials
@@ -1144,6 +1211,9 @@ components:
         key:
           type: string
           description: Generated secret key for authentication
+      required:
+      - key
+      - login
     ReservationPatchRequest:
       type: object
       description: Request to change the reserved amount
@@ -1156,7 +1226,9 @@ components:
           pattern: "^(?!0+(\\.0+)?$)\\d{1,13}(\\.\\d{1,6})?$"
           example: null
         version:
-          type: integer
+          type:
+          - integer
+          - "null"
           format: int64
           description: "Version the command acts on; taken from the last read. Absent\
             \ means 428, mismatched means 412"
@@ -1168,13 +1240,17 @@ components:
       description: Partial update of a drug
       properties:
         name:
-          type: string
+          type:
+          - string
+          - "null"
           description: Drug name
           example: Aspirin
           maxLength: 300
           minLength: 1
         quantity:
-          type: string
+          type:
+          - string
+          - "null"
           description: "Corrected stock: you recounted the package and saw a different\
             \ number. This is a correction, not a refill — a new pack is a new package.\
             \ Reservations are left alone."
@@ -1183,38 +1259,52 @@ components:
           pattern: "^(?!0+(\\.0+)?$)\\d{1,13}(\\.\\d{1,6})?$"
           example: null
         quantityUnitId:
-          type: string
+          type:
+          - string
+          - "null"
           format: uuid
           description: Quantity unit identifier from the shared vocabulary
         formTypeId:
-          type: string
+          type:
+          - string
+          - "null"
           format: uuid
           description: Dosage form identifier from the shared vocabulary
         category:
-          type: string
+          type:
+          - string
+          - "null"
           description: Category
           example: painkiller
           maxLength: 200
           minLength: 0
         manufacturer:
-          type: string
+          type:
+          - string
+          - "null"
           description: Manufacturer
           example: Bayer
           maxLength: 300
           minLength: 0
         country:
-          type: string
+          type:
+          - string
+          - "null"
           description: Country
           example: Germany
           maxLength: 100
           minLength: 0
         description:
-          type: string
+          type:
+          - string
+          - "null"
           description: Description
           maxLength: 4000
           minLength: 0
         version:
-          type: integer
+          type:
+          - integer
+          - "null"
           format: int64
           description: "Version the command acts on; taken from the last read. Absent\
             \ means 428, mismatched means 412"
@@ -1233,6 +1323,9 @@ components:
           items:
             $ref: "#/components/schemas/MedKitDTO"
           uniqueItems: true
+      required:
+      - id
+      - medKits
     VocabularyEntryDTO:
       type: object
       description: Shared vocabulary entry
@@ -1245,6 +1338,9 @@ components:
           type: string
           description: Display name
           example: mg
+      required:
+      - id
+      - name
     MedKitSummaryDTO:
       type: object
       description: Medicine kit counters without loading its contents
@@ -1265,6 +1361,10 @@ components:
             type: string
             format: uuid
           uniqueItems: true
+      required:
+      - drugIds
+      - id
+      - userCount
     DrugTemplateDTO:
       type: object
       description: Catalogue entry used as a template for a new drug
@@ -1278,35 +1378,62 @@ components:
           description: Drug name
           example: Аспирин
         nameLat:
-          type: string
+          type:
+          - string
+          - "null"
           description: International name in Latin script
           example: Aspirin
         activeSubstance:
-          type: string
+          type:
+          - string
+          - "null"
           description: Active substance
           example: Acetylsalicylic acid
         formTypeId:
-          type: string
+          type:
+          - string
+          - "null"
           format: uuid
           description: Dosage form identifier
         category:
-          type: string
+          type:
+          - string
+          - "null"
           description: Category
         quantityUnitId:
-          type: string
+          type:
+          - string
+          - "null"
           format: uuid
           description: Quantity unit identifier
         manufacturer:
-          type: string
+          type:
+          - string
+          - "null"
           description: Manufacturer
           example: Bayer
         country:
-          type: string
+          type:
+          - string
+          - "null"
           description: Country
           example: Германия
         description:
-          type: string
+          type:
+          - string
+          - "null"
           description: Description
+      required:
+      - activeSubstance
+      - category
+      - country
+      - description
+      - formTypeId
+      - id
+      - manufacturer
+      - name
+      - nameLat
+      - quantityUnitId
   securitySchemes:
     Bearer Authentication:
       type: http

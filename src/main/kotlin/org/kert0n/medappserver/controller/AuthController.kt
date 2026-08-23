@@ -8,8 +8,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.servlet.http.HttpServletRequest
-import kotlin.uuid.Uuid
-import kotlinx.serialization.Serializable
+import org.kert0n.medappserver.api.RegisterResponse
+import org.kert0n.medappserver.api.TokenResponse
 import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.OpenApiConfiguration
 import org.kert0n.medappserver.services.application.AuthApplicationService
@@ -20,15 +20,6 @@ import org.springframework.web.bind.annotation.*
 @RequestMapping("/v1/auth")
 @Tag(name = "Authentication", description = "Public endpoints for registration and token issuance")
 class AuthController(private val auth: AuthApplicationService) {
-
-    @Schema(description = "Registration response with generated credentials")
-    @Serializable
-    data class RegisterResponse(
-        @Schema(description = "Generated login identifier")
-        val login: Uuid,
-        @Schema(description = "Generated secret key for authentication")
-        val key: String
-    )
 
     @PostMapping("/register")
     @Operation(
@@ -47,19 +38,6 @@ class AuthController(private val auth: AuthApplicationService) {
         val credentials = auth.register(token, request.remoteAddr)
         return RegisterResponse(credentials.login, credentials.key)
     }
-
-    /**
-     * Только сам токен.
-     *
-     * Срок жизни уже в claim `exp`, дублировать его в обёртке — два источника одного факта.
-     * Схема (`Bearer`) одна и зафиксирована в OpenAPI, от ответа к ответу не меняется.
-     */
-    @Schema(description = "Issued access token")
-    @Serializable
-    data class TokenResponse(
-        @Schema(description = "JWT access token")
-        val accessToken: String
-    )
 
     /**
      * POST, а не GET: выдача расходует лимит попыток и создаёт токен, а GET разрешено повторять

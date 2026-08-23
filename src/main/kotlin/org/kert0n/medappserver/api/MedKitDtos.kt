@@ -50,6 +50,6 @@ data class InvitationDTO(
 @Serializable
 data class MembershipCreateRequest(
     @field:NotBlank
-    @Schema(description = "Invitation key", example = "sSQUCT8iOjYsobZ7StyspQ", required = true)
+    @Schema(description = "Invitation key", example = "sSQUCT8iOjYsobZ7StyspQ")
     val key: String
 )
