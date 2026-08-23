@@ -49,11 +49,11 @@ class AuthControllerTest {
         mockMvc = MockMvcBuilders.webAppContextSetup(context)
             .apply<DefaultMockMvcBuilder>(SecurityMockMvcConfigurers.springSecurity())
             .build()
-        // SecurityService is mocked: without this the throttle sees the default `false` and
-        // rejects every token request with 429. Throttling itself is LoginThrottleTest.
+        // `SecurityService` — мок: без заглушки ограничитель видит умолчание `false` и
+        // отвергает каждый запрос токена с 429. Сам ограничитель проверяет LoginThrottleTest.
         whenever(securityService.isLoginAllowed(any())).thenReturn(true)
-        // Same reason: the secret comparison goes through the service, and an unstubbed mock
-        // answers `false` even for a correct secret.
+        // По той же причине: сравнение секрета идёт через сервис, и мок без заглушки отвечает
+        // `false` даже на верный секрет.
         whenever(securityService.secretsMatch(any(), any())).thenReturn(false)
         whenever(securityService.secretsMatch(eq("test-secret"), any())).thenReturn(true)
     }
@@ -135,7 +135,7 @@ class AuthControllerTest {
         val user = User(id = userId, hashedKey = "{noop}password")
         whenever(authenticatedUserService.loadUserByUsername(userId.toString())).thenReturn(user)
 
-        // Basic здесь уже не принимается: цепочка выдачи токена слушает только новый путь.
+        // Basic здесь не принимается: цепочка выдачи токена слушает только `/v1/auth/token`.
         mockMvc.perform(get("/auth/login").with(httpBasic(userId.toString(), "password")))
             .andExpect(status().isUnauthorized)
         mockMvc.perform(post("/auth/register").header("X-Registration-Token", "test-secret"))

@@ -32,8 +32,8 @@ object ApiRoutes {
         "/drug", "/drug/quantity/x", "/drug/consume/x", "/drug/move/x",
         "/drug/template/search", "/drug/template/x",
         "/using", "/using/drug/x", "/using/drug/x/intake",
-        // Планы лечения стали бронями, расход — приёмом упаковки, а маршрут приёма с
-        // клиентским идентификатором отвечал 501 и ушёл вместе с «приёмом по плану».
+        // Второй ряд — пути прежнего словаря: планов лечения и расхода по плану в API нет,
+        // есть брони и приём упаковки.
         "/v1/treatment-plans", "/v1/treatment-plans/x",
         "/v1/drugs/x/consumptions", "/v1/intakes/x",
         "/med-kit", "/med-kit/x", "/med-kit/join", "/med-kit/x/share", "/med-kit/x/leave"

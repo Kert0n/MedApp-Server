@@ -17,19 +17,19 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
 
 /**
- * Keeps the committed API contract honest.
+ * Держит закоммиченный контракт в согласии с приложением.
  *
- * open-api.yaml exists so the contract can be read without starting Spring or digging through
- * annotations, and it is generated rather than hand-written: a snapshot you cannot trust is
- * worse than none. Any drift fails the build, and every contract change carries the regenerated
- * file into the diff.
+ * `open-api.yaml` существует затем, чтобы контракт можно было прочитать, не поднимая Spring и не
+ * разбирая аннотации, и он порождается, а не пишется руками: снимку, которому нельзя верить,
+ * лучше не быть вовсе. Расхождение роняет сборку, и каждая правка контракта уносит в диф
+ * перегенерированный файл.
  *
- * To regenerate after an intentional change:
+ * Перегенерировать после намеренного изменения:
  *
  *     ./gradlew test -DupdateOpenApi=true
  *
- * Always through MockMvc — that is what makes the `servers` entry deterministic, where a real
- * server would put its randomly assigned port.
+ * Всегда через MockMvc: именно поэтому запись `servers` определена, а не содержит случайный порт,
+ * который выдал бы настоящий сервер.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -49,8 +49,8 @@ class OpenApiSnapshotTest {
 
     @Test
     fun `committed contract matches the generated one`() {
-        // UTF-8 explicitly: springdoc declares no charset here, and contentAsString would fall
-        // back to ISO-8859-1 and mangle every non-ASCII character in the descriptions.
+        // UTF-8 явно: springdoc здесь кодировку не объявляет, а `contentAsString` откатился бы
+        // к ISO-8859-1 и испортил бы каждый неascii-символ в описаниях.
         val generated = mockMvc.perform(get("/v3/api-docs.yaml"))
             .andExpect(status().isOk)
             .andReturn().response.contentAsByteArray
@@ -72,7 +72,7 @@ class OpenApiSnapshotTest {
     }
 
     private companion object {
-        // Tests run with the project directory as working directory.
+        // Тесты запускаются из каталога проекта.
         private val SNAPSHOT: Path = Path.of("open-api.yaml")
     }
 }

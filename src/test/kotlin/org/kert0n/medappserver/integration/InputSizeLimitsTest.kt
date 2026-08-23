@@ -26,12 +26,12 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
 
 /**
- * Bounds on what a single authenticated request can ask for: unbounded `limit` reaches Postgres
- * as `LIMIT -1` or becomes an out-of-memory lever, and an unbounded `description` is a column of
- * Integer.MAX_VALUE.
+ * Границы того, что можно запросить одним аутентифицированным запросом: `limit` без границы
+ * доезжает до Postgres как `LIMIT -1` или становится рычагом на исчерпание памяти, а
+ * `description` без границы — это колонка на `Integer.MAX_VALUE`.
  *
- * CatalogueService is mocked so this stays a test of the validation boundary: the real query
- * calls pg_trgm's similarity(), which H2 does not have.
+ * `CatalogueService` замокан, чтобы тест остался про границу валидации: настоящий запрос зовёт
+ * `similarity()` из pg_trgm, которой в H2 нет.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -80,7 +80,7 @@ class InputSizeLimitsTest {
     fun `limit inside the allowed range is accepted`() {
         search("1").andExpect(status().isOk)
         search("50").andExpect(status().isOk)
-        // Default applies when the parameter is absent.
+        // Умолчание применяется, когда параметра нет.
         mockMvc.perform(
             get(ApiRoutes.DRUG_TEMPLATES)
                 .param("query", "aspirin")
@@ -127,7 +127,7 @@ class InputSizeLimitsTest {
      * Количество крупнее колонки отвергается запросом, а не базой.
      *
      * `numeric(19, 6)` — это тринадцать знаков до точки и шесть после. Без границы такое число
-     * проходило валидацию и падало в Postgres переполнением, то есть пятисоткой на правильно
+     * проходит валидацию и падает в Postgres переполнением, то есть пятисоткой на правильно
      * оформленный запрос.
      */
     @Test

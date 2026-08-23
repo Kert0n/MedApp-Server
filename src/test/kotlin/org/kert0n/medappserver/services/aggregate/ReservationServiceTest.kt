@@ -29,7 +29,7 @@ class ReservationServiceTest {
     private lateinit var dbHelper: DatabaseTestHelper
 
     @Test
-    fun `findAllByUser returns treatment plans for user`() {
+    fun `ofUser returns the caller's reservations`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.create(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
@@ -42,7 +42,7 @@ class ReservationServiceTest {
     }
 
     @Test
-    fun `findAllByDrug returns treatment plans for drug`() {
+    fun `a reservation lands on the drug it was made for`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.create(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
@@ -55,7 +55,7 @@ class ReservationServiceTest {
     }
 
     @Test
-    fun `requirePlan throws NOT_FOUND when no plan exists`() {
+    fun `get throws NOT_FOUND when there is no reservation`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.create(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
@@ -67,7 +67,7 @@ class ReservationServiceTest {
     }
 
     @Test
-    fun `view carries the planned amount`() {
+    fun `view carries the reserved amount`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.create(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)

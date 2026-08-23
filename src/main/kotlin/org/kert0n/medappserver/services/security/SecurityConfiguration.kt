@@ -60,17 +60,18 @@ class SecurityConfiguration(
     }
 
     /**
-     * HTTP Basic is accepted **only** where a token is issued: anywhere else the long-lived
-     * registration key could be replayed per request and the short token lifetime would buy
-     * nothing.
+     * HTTP Basic принимается **только** там, где выдаётся токен.
+     *
+     * Где угодно ещё долгоживущий ключ регистрации повторялся бы в каждом запросе, и короткий
+     * срок жизни токена не давал бы ничего.
      */
     @Bean
     @Order(1)
     fun tokenIssuingFilterChain(
         httpSecurity: HttpSecurity,
-        // Injected as a method parameter, not into the constructor: SecurityService needs
-        // the JwtEncoder/JwtDecoder beans defined here, so a constructor dependency would
-        // be a cycle.
+        // Параметром метода, а не через конструктор: `SecurityService` нужны бины
+        // `JwtEncoder`/`JwtDecoder`, объявленные здесь же, и зависимость в конструкторе дала бы
+        // цикл.
         securityService: SecurityService
     ): SecurityFilterChain {
         return httpSecurity
@@ -105,15 +106,16 @@ class SecurityConfiguration(
             .authorizeHttpRequests { auth ->
                 auth
                     .requestMatchers(
-                        // Registration only. /v1/auth/token is handled by the Basic chain
-                        // above and must not be open here.
+                        // Только регистрация: `/v1/auth/token` обслуживает цепочка Basic выше,
+                        // и открывать его здесь нельзя.
                         "/v1/auth/register",
                         "/swagger",
                         "/swagger-ui/**",
                         "/v3/api-docs/**",
                         "/v3/api-docs.yaml",
-                        // Liveness only. /actuator/** would open /env and heapdump the
-                        // moment anyone widens management.endpoints.web.exposure.include.
+                        // Только проверка живости: `/actuator/**` открыл бы `/env` и heapdump
+                        // в тот момент, когда кто-нибудь расширит
+                        // `management.endpoints.web.exposure.include`.
                         "/actuator/health",
                         "/actuator/health/**",
                     )

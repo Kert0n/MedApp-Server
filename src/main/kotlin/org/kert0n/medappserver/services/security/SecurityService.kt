@@ -25,7 +25,8 @@ class SecurityService(
     @Value($$"${authentication.termInMinutes}") private val authenticationTerm: Long,
     @Value($$"${registration.timeout.BanNumber}") private val registrationNumber: Long,
     @Value($$"${authentication.throttle.maxAttempts:20}") private val maxLoginAttempts: Int,
-    // Both caches are Cache<String, Int>: qualified so resolution does not rely on names.
+    // Оба кеша — `Cache<String, Int>`: квалификаторы поставлены, чтобы разрешение не зависело
+    // от имён параметров.
     @Qualifier("successfulRegistrationsCache") private val successfulRegistrationsCache: Cache<String, Int>,
     @Qualifier("loginAttemptsCache") private val loginAttemptsCache: Cache<String, Int>
 ) {
@@ -43,11 +44,11 @@ class SecurityService(
         Base64.encode(MessageDigest.getInstance("SHA-256").digest(token.toByteArray()))
 
     /**
-     * Compares two shared secrets without leaking how much of a candidate was correct.
+     * Сравнивает два секрета, не выдавая, насколько кандидат угадан.
      *
-     * `==` stops at the first differing character, so timing follows the matching prefix. Both
-     * sides are hashed because [MessageDigest.isEqual] returns early on a length mismatch —
-     * hashing equalises the lengths, hiding the size of the expected secret too.
+     * `==` останавливается на первом различии, и время ответа повторяет длину совпавшего
+     * начала. Обе стороны хешируются потому, что [MessageDigest.isEqual] выходит раньше при
+     * разной длине: хеш уравнивает длины и прячет заодно размер ожидаемого секрета.
      */
     fun secretsMatch(candidate: String, expected: String): Boolean = MessageDigest.isEqual(
         hashToken(candidate).toByteArray(StandardCharsets.UTF_8),
@@ -70,38 +71,38 @@ class SecurityService(
     }
 
     /**
-     * Cache key for a client address, so no address is used as a key verbatim.
+     * Ключ кеша для адреса клиента: сам адрес ключом не становится.
      *
-     * Plain SHA-256 on purpose: entries expire within minutes, the cache dies with the process,
-     * and anyone able to read that heap sees the live connections anyway.
+     * Обычный SHA-256 намеренно: записи живут минуты, кеш умирает вместе с процессом, а тот, кто
+     * может прочитать эту память, видит и живые соединения.
      */
     private fun addressCacheKey(clientAddress: String): String = hashToken(clientAddress)
 
     /**
-     * Tracks successful registrations per client address to throttle automated signups.
+     * Считает удачные регистрации с адреса, чтобы автоматические не шли потоком.
      *
-     * Two imprecisions are deliberate — this deters casual bots and is not a security boundary:
-     * the check precedes the increment, so concurrent requests slip past together, and `<=`
-     * allows one more than [registrationNumber]. Exactness would need an atomic counter with a
-     * release on failure: machinery for no real gain here. Do not "fix" without a reason.
+     * Две неточности намеренны — это заслон от простых ботов, а не граница безопасности:
+     * проверка стоит перед увеличением, поэтому одновременные запросы проходят вместе, а `<=`
+     * пропускает на одну больше [registrationNumber]. Точность потребовала бы атомарного
+     * счётчика с возвратом при отказе — механизм ради ничего. Не «чинить» без причины.
      */
     fun validateRequest(ip: String): Boolean =
         (successfulRegistrationsCache.getOrNull(addressCacheKey(ip)) ?: 0) <= registrationNumber
 
     /**
-     * Whether another token request from this address may proceed to authentication.
+     * Можно ли пропустить к аутентификации ещё один запрос токена с этого адреса.
      *
-     * Strict comparison, unlike [validateRequest]: this guards a real cost — a bcrypt
-     * verification per request — not just bots.
+     * Сравнение строгое, в отличие от [validateRequest]: здесь охраняется настоящая цена —
+     * проверка bcrypt на каждый запрос, — а не только боты.
      */
     fun isLoginAllowed(clientAddress: String): Boolean =
         (loginAttemptsCache.getOrNull(addressCacheKey(clientAddress)) ?: 0) < maxLoginAttempts
 
     /**
-     * Counts a token request — every attempt, not just failures.
+     * Считает запрос токена — каждый, а не только неудачный.
      *
-     * A legitimate client asks roughly once per token lifetime, far below the limit, and
-     * counting all attempts also covers an attacker holding valid credentials.
+     * Законный клиент просит примерно раз за время жизни токена, далеко не упираясь в лимит, а
+     * счёт всех попыток покрывает и того, у кого учётные данные верные.
      */
     fun recordLoginAttempt(clientAddress: String) {
         val key = addressCacheKey(clientAddress)
@@ -112,7 +113,7 @@ class SecurityService(
         val URL_SAFE_KEYS: Base64 = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT)
     }
 
-    /** Counts one more successful registration from this address. */
+    /** Засчитывает ещё одну удачную регистрацию с этого адреса. */
     fun registerIncrease(ip: String) {
         val key = addressCacheKey(ip)
         val current = successfulRegistrationsCache.getOrNull(key)

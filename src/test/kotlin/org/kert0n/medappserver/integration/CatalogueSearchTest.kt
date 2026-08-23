@@ -18,11 +18,10 @@ import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.support.TransactionTemplate
 
 /**
- * Fuzzy search over the catalogue.
+ * Нечёткий поиск по справочнику.
  *
- * Deliberately without class-level `@Transactional`: it would keep the Hibernate session open
- * for the whole test and hide the LazyInitializationException that `open-in-view=false` gives
- * in production, where the session closes after the repository call.
+ * Класс намеренно без `@Transactional`: транзакция на весь тест держала бы одно соединение на
+ * все запросы, а поиск в проде вызывается сам по себе — и мерить надо его, а не оснастку.
  */
 @PostgresIntegrationTest
 class CatalogueSearchTest {
@@ -156,7 +155,7 @@ class CatalogueSearchTest {
     }
 
     @Test
-    fun `fuzzySearch eagerly loads formType - no LazyInitializationException`() {
+    fun `нечёткий поиск отдаёт форму выпуска вместе с записью`() {
         val results = search("аспир", 10)
         assertTrue(results.isNotEmpty())
         val formTypeName = results.first { it.formType != null }.formType?.name

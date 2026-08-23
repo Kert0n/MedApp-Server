@@ -64,8 +64,8 @@ class OptimisticUpdateQueryPlanTest {
                     .toKotlinUuid()
                 val drug = drugs.find(drugId, userId) ?: error("Упаковка $drugId не найдена")
 
-                // Версия предъявляется явно с #100: запись без неё не собирается. Предъявляем
-                // ту, что прочитали, — предикат от этого не слабеет, а замеряем мы его форму.
+                // Запись без предъявленной версии не собирается. Предъявляем ту, что прочитали:
+                // предикат от этого не слабеет, а замеряем мы его форму.
                 val statements = RecordedSql.of { drugs.save(drug, stated = drug.version) }
                 status.setRollbackOnly()
                 statements.single { it.startsWith("UPDATE") }

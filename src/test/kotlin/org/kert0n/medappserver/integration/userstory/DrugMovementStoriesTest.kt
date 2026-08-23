@@ -49,7 +49,7 @@ class DrugMovementStoriesTest {
     private lateinit var medKits: MedKitApplicationService
 
 
-    /** Story 11: a move keeps the reservations of everyone who still sees the pack. */
+    /** История 11: переезд сохраняет брони всех, кто пачку по-прежнему видит. */
     @Test
     fun `Story 11 - Moving drug between medkits`() {
         val userData = User(id = Uuid.random(), hashedKey = "user_${Uuid.random()}")
@@ -66,36 +66,30 @@ class DrugMovementStoriesTest {
         )
         dbHelper.insert(painkiller)
 
-        // Reserve a share
         dbHelper.reserve(userData.id, painkiller.id, qty(20.0))
 
-        // Move drug to travel kit
         drugs.moveToMedKit(painkiller.id, travelKit.id, dbHelper.drugVersion(painkiller.id), userData.id)
 
-        // Drug is in travel kit
         val movedDrug = dbHelper.drug(painkiller.id)
         assertNotNull(movedDrug)
         assertEquals(travelKit.id, movedDrug.medKitId)
 
-        // Home kit is empty
         val homeKitDrugs = drugService.ofMedKit(homeKit.id, userData.id)
         assertTrue(homeKitDrugs.isEmpty())
 
-        // Travel kit has the drug
         val travelKitDrugs = drugService.ofMedKit(travelKit.id, userData.id)
         assertEquals(1, travelKitDrugs.size)
 
-        // The reservation survives
         val plan = dbHelper.userReservation(userData.id, painkiller.id)
-        assertNotNull(plan, "Treatment plan should survive drug move")
+        assertNotNull(plan, "the reservation must survive the move")
         assertQty(20.0, plan)
 
-        println("✅ Story 11 passed: Drug moved between medkits with treatment plan intact")
+        println("✅ История 11: пачка переехала, бронь цела")
     }
 
-    /** Story 12: a reservation may be raised freely — nothing weighs it against the pack. */
+    /** История 12: бронь поднимается свободно — с остатком пачки её никто не сверяет. */
     @Test
-    fun `Story 12 - Updating treatment plan correctly checks available quantity`() {
+    fun `Story 12 - Raising a reservation is not weighed against the package`() {
         val anna = User(id = Uuid.random(), hashedKey = "anna_${Uuid.random()}")
         val bob = User(id = Uuid.random(), hashedKey = "bob_${Uuid.random()}")
         dbHelper.insert(anna)
@@ -113,7 +107,7 @@ class DrugMovementStoriesTest {
         )
         dbHelper.insert(drugData)
 
-        // Anna reserves 40, Bob 30 — 70 of 100
+        // Анна заявляет 40, Боб 30 — 70 из 100.
         dbHelper.reserve(anna.id, drugData.id, qty(40.0))
         dbHelper.reserve(bob.id, drugData.id, qty(30.0))
 
@@ -132,9 +126,9 @@ class DrugMovementStoriesTest {
         println("✅ Story 12 passed: reservations are free to exceed the package")
     }
 
-    /** Story 13: a destroyed pack takes its reservations with it. */
+    /** История 13: уничтоженная пачка уносит брони с собой. */
     @Test
-    fun `Story 13 - Deleting drug removes its treatment plans`() {
+    fun `Story 13 - Destroying a package removes the reservations on it`() {
         val userData = User(id = Uuid.random(), hashedKey = "user_${Uuid.random()}")
         dbHelper.insert(userData)
 
@@ -147,31 +141,25 @@ class DrugMovementStoriesTest {
         )
         dbHelper.insert(drugData)
 
-        // Reserve a share
         dbHelper.reserve(userData.id, drugData.id, qty(25.0))
 
-        // Verify the reservation exists
         val plan = dbHelper.userReservation(userData.id, drugData.id)
         assertNotNull(plan)
 
-        // Delete the drug
         disposal.destroy(drugService.get(drugData.id, userData.id), dbHelper.drugVersion(drugData.id))
 
-        // Drug should be gone
         val deletedDrug = dbHelper.drug(drugData.id)
         assertNull(deletedDrug)
 
-        // The reservation is gone with it
         val deletedPlan = dbHelper.userReservation(userData.id, drugData.id)
         assertNull(deletedPlan)
 
-        println("✅ Story 13 passed: Deleting drug removed its treatment plans")
+        println("✅ История 13: пачка уничтожена, брони на неё ушли")
     }
 
-    /** Story 14: migration into a narrower kit strips the reservations of those left out. */
+    /** История 14: перенос в более узкую аптечку снимает брони тех, кто в неё не входит. */
     @Test
-    fun `Story 14 - Moving shared drug to private medkit removes other users treatment plans`() {
-        // Setup: Anna, Bob, and Charlie share an Old MedKit
+    fun `Story 14 - Migrating into a narrower kit strips the reservations of those left out`() {
         val anna = dbHelper.insert(User(id = Uuid.random(), hashedKey = "anna_${Uuid.random()}"))
         val bob = dbHelper.insert(User(id = Uuid.random(), hashedKey = "bob_${Uuid.random()}"))
         val charlie = dbHelper.insert(User(id = Uuid.random(), hashedKey = "charlie_${Uuid.random()}"))
@@ -180,11 +168,10 @@ class DrugMovementStoriesTest {
         medKitService.joinByInvitation(medKitService.invite(medKitService.get(oldKit.id, anna.id), anna.id), bob.id)
         medKitService.joinByInvitation(medKitService.invite(medKitService.get(oldKit.id, anna.id), anna.id), charlie.id)
 
-        // Setup: Anna and Bob share a New MedKit (Charlie is excluded)
+        // Новая аптечка — на Анну и Боба; Чарли в неё не входит.
         val newKit = medKitService.create(anna.id)
         medKitService.joinByInvitation(medKitService.invite(medKitService.get(newKit.id, anna.id), anna.id), bob.id)
 
-        // Add drug to old kit
         val drugData = dbHelper.insert(
             Drug(
                 id = Uuid.random(), name = "Special Meds", quantity = Quantity(qty(90.0), dbHelper.unit()), medKitId = oldKit.id, formType = null,
@@ -195,17 +182,14 @@ class DrugMovementStoriesTest {
             )
         )
 
-        // Everyone reserves 30 pills
         dbHelper.reserve(anna.id, drugData.id, qty(30.0))
         dbHelper.reserve(bob.id, drugData.id, qty(30.0))
         dbHelper.reserve(charlie.id, drugData.id, qty(30.0))
 
 
-        // Anna deletes the old kit and migrates to the new kit
         medKits.delete(oldKit.id, dbHelper.medKitVersion(oldKit.id), anna.id, newKit.id)
 
 
-        // Verify: Anna and Bob keep their reservations, Charlie's is deleted.
         assertNotNull(dbHelper.userReservation(anna.id, drugData.id), "Anna should keep her plan")
         assertNotNull(dbHelper.userReservation(bob.id, drugData.id), "Bob should keep his plan")
         assertNull(
@@ -213,11 +197,11 @@ class DrugMovementStoriesTest {
             "Charlie's plan MUST be deleted for security"
         )
 
-        println("✅ Story 14 passed: Migration security successfully audited treatment plans")
+        println("✅ История 14: перенос снял брони тех, кто в новую аптечку не входит")
     }
 
 
-    /** Story 16: moving one pack out of a kit leaves it and the others intact. */
+    /** История 16: переезд одной пачки не трогает ни аптечку, ни остальные пачки. */
     @Test
     fun `Story 16 - Moving single drug preserves it from orphan removal`() {
         val userData = dbHelper.insert(User(id = Uuid.random(), hashedKey = "user_${Uuid.random()}"))
@@ -246,11 +230,9 @@ class DrugMovementStoriesTest {
         )
 
 
-        // Move ONLY one drug
         drugs.moveToMedKit(drugDataToMove.id, targetKit.id, dbHelper.drugVersion(drugDataToMove.id), userData.id)
 
 
-        // Verify the move did not destroy it
         val movedDrug = dbHelper.drug(drugDataToMove.id)
         assertNotNull(movedDrug, "Moved drug must not be deleted")
         assertEquals(targetKit.id, movedDrug.medKitId, "Drug should point to new kit")

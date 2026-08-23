@@ -66,7 +66,6 @@ class ResourceApiContractTest {
     @Autowired private lateinit var json: Json
 
     // Подменяются ровно те, кого зовёт контроллер: по одному прикладному сервису на ресурс.
-    // Раньше здесь стояли и сервисы агрегатов — контроллер ходил и туда тоже.
     @MockitoBean private lateinit var drugs: DrugApplicationService
     @MockitoBean private lateinit var reservations: ReservationApplicationService
     @MockitoBean private lateinit var medKits: MedKitApplicationService

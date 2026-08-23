@@ -18,11 +18,11 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.server.ResponseStatusException
 
 /**
- * Single place where failures become responses.
+ * Единственное место, где отказ превращается в ответ.
  *
- * The default body echoes the exception message, and those carry package identifiers and
- * quantities — exactly what this server is built not to hand out. The status code stays
- * informative; the body does not.
+ * Тело по умолчанию пересказывает сообщение исключения, а в них — идентификаторы пачек и
+ * количества, то есть ровно то, чего этот сервер наружу не отдаёт. Код ответа остаётся
+ * содержательным, тело — нет.
  */
 @RestControllerAdvice
 class ApiExceptionHandler {
@@ -59,9 +59,10 @@ class ApiExceptionHandler {
     )
 
     /**
-     * Request body validation. Field names and the constraint that failed are part of the
-     * published contract, so they are safe to return — the rejected values are not, and
-     * are left out.
+     * Проверка тела запроса.
+     *
+     * Имена полей и нарушенное ограничение опубликованы в контракте — их вернуть можно.
+     * Отвергнутые значения не опубликованы, и они остаются внутри.
      */
     @ExceptionHandler(MethodArgumentNotValidException::class)
     fun handleBodyValidation(exception: MethodArgumentNotValidException): ProblemDetail =

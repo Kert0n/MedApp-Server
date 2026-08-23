@@ -26,9 +26,9 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
 
 /**
- * Every token request costs a bcrypt verification, so an unauthenticated caller could
- * burn CPU for free. The limit has to bite before authentication runs, which is why it
- * lives in a filter and not in the controller.
+ * Каждый запрос токена стоит одной проверки bcrypt, поэтому неаутентифицированный вызывающий
+ * жёг бы процессор даром. Ограничение обязано сработать до аутентификации — оттого оно живёт в
+ * фильтре, а не в контроллере.
  */
 @SpringBootTest(properties = ["authentication.throttle.maxAttempts=3"])
 @ActiveProfiles("test")
@@ -54,8 +54,8 @@ class LoginThrottleTest {
         mockMvc = MockMvcBuilders.webAppContextSetup(context)
             .apply<DefaultMockMvcBuilder>(SecurityMockMvcConfigurers.springSecurity())
             .build()
-        // The cache is a context-wide singleton and MockMvc always reports the same address,
-        // so without this the next test starts already throttled.
+        // Кэш — синглтон на весь контекст, а MockMvc всегда сообщает один и тот же адрес:
+        // без сброса следующий тест начинается уже под ограничением.
         loginAttemptsCache.invalidateAll()
     }
 
@@ -70,8 +70,7 @@ class LoginThrottleTest {
                 .andExpect(status().isOk)
         }
 
-        // Quota exhausted: 429 rather than 401, i.e. throttling and not an authentication
-        // failure.
+        // Квота исчерпана: 429, а не 401, — то есть ограничение, а не отказ аутентификации.
         mockMvc.perform(post(ApiRoutes.TOKEN).with(httpBasic(userId.toString(), "password")))
             .andExpect(status().isTooManyRequests)
     }
@@ -82,7 +81,7 @@ class LoginThrottleTest {
         val user = User(id = userId, hashedKey = "{noop}password")
         whenever(authenticatedUserService.loadUserByUsername(userId.toString())).thenReturn(user)
 
-        // No credentials at all: the filter counts before Basic runs, so these burn quota too.
+        // Учётных данных нет вовсе: фильтр считает до Basic, так что и такие запросы тратят квоту.
         repeat(3) {
             mockMvc.perform(post(ApiRoutes.TOKEN)).andExpect(status().isUnauthorized)
         }
@@ -90,7 +89,7 @@ class LoginThrottleTest {
         mockMvc.perform(post(ApiRoutes.TOKEN).with(httpBasic(userId.toString(), "password")))
             .andExpect(status().isTooManyRequests)
 
-        // The decisive assertion: the user lookup — and the bcrypt after it — never ran.
+        // Решающая проверка: поиска пользователя — и bcrypt за ним — не было вовсе.
         verify(authenticatedUserService, never()).loadUserByUsername(userId.toString())
     }
 }

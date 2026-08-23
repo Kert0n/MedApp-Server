@@ -23,9 +23,9 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
 
 /**
- * Pins down which endpoints are reachable without a token, and that HTTP Basic is confined to
- * token issuance — otherwise the long-lived registration key is replayable on any request and
- * the token lifetime is decorative.
+ * Закрепляет, какие эндпойнты доступны без токена и что HTTP Basic принимается только при
+ * выдаче токена: иначе долгоживущий ключ регистрации повторялся бы в любом запросе, а срок
+ * жизни токена был бы декорацией.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -67,8 +67,8 @@ class PublicEndpointScopeTest {
 
     @Test
     fun `other actuator endpoints require authentication`() {
-        // Not exposed over HTTP by default either, so 401 rather than 404: the guard must not
-        // depend on the exposure setting.
+        // По умолчанию он и по HTTP не опубликован, поэтому 401, а не 404: охрана не должна
+        // зависеть от настройки публикации.
         mockMvc.perform(get("/actuator/env")).andExpect(status().isUnauthorized)
         mockMvc.perform(get("/actuator/beans")).andExpect(status().isUnauthorized)
     }
@@ -79,7 +79,7 @@ class PublicEndpointScopeTest {
         val user = User(id = userId, hashedKey = "{noop}password")
         whenever(authenticatedUserService.loadUserByUsername(userId.toString())).thenReturn(user)
 
-        // Valid credentials, but Basic is not an accepted scheme outside token issuance.
+        // Учётные данные верные, но вне выдачи токена Basic не принимается как схема.
         mockMvc.perform(
             get("/user").with(httpBasic(userId.toString(), "password"))
         ).andExpect(status().isUnauthorized)

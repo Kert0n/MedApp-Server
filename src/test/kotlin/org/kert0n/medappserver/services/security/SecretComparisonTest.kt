@@ -8,9 +8,9 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
 
 /**
- * Correctness of the constant-time secret comparison — `!=` would stop at the first differing
- * character. The timing property itself is not something a unit test can assert reliably; it is
- * documented on [SecurityService.secretsMatch].
+ * Правильность сравнения секретов за постоянное время: обычное `!=` остановилось бы на первом
+ * несовпавшем символе. Само свойство постоянного времени модульным тестом надёжно не
+ * утверждается — оно описано на [SecurityService.secretsMatch].
  */
 @SpringBootTest
 @ActiveProfiles("test")

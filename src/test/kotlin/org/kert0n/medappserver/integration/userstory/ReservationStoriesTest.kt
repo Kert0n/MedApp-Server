@@ -24,7 +24,7 @@ import org.springframework.transaction.annotation.Transactional
 
 @PostgresIntegrationTest
 @Transactional
-class TreatmentPlanStoriesTest {
+class ReservationStoriesTest {
 
     @Autowired
 
@@ -53,9 +53,9 @@ class TreatmentPlanStoriesTest {
     private lateinit var medKits: MedKitApplicationService
 
 
-    /** Story 6: reserve a share, then take from the pack. */
+    /** История 6: сначала заявить свою долю, потом взять из пачки. */
     @Test
-    fun `Story 6 - User creates treatment plan and records intakes`() {
+    fun `Story 6 - A person reserves a share and then takes from the package`() {
         val userData = User(id = Uuid.random(), hashedKey = "user_${Uuid.random()}")
         dbHelper.insert(userData)
 
@@ -72,31 +72,26 @@ class TreatmentPlanStoriesTest {
         )
         dbHelper.insert(drugData)
 
-        // Reserve 30 tablets
         val plan = dbHelper.reserve(userData.id, drugData.id, qty(30.0))
         assertNotNull(plan)
 
-        // Verify the reservation was created
-        val createdPlan = dbHelper.userReservation(userData.id, drugData.id)
-        assertNotNull(createdPlan, "Plan should be created")
-        assertQty(30.0, createdPlan, "Planned amount should be 30")
+        val reserved = dbHelper.userReservation(userData.id, drugData.id)
+        assertNotNull(reserved, "бронь должна была появиться")
+        assertQty(30.0, reserved, "заявлено должно быть 30")
 
-        // Record some intakes
         drugService.consume(drugService.get(drugData.id, userData.id), qty(5.0), dbHelper.drugVersion(drugData.id))
         drugService.consume(drugService.get(drugData.id, userData.id), qty(5.0), dbHelper.drugVersion(drugData.id))
 
-        // Verify drug quantity decreased
         val updatedDrug = dbHelper.drug(drugData.id)
         assertNotNull(updatedDrug)
         assertQty(90.0, updatedDrug.quantity, "Drug quantity should be 90 after 10 consumed")
 
-        println("✅ Story 6 passed: Treatment plan and intakes work correctly")
+        println("✅ История 6: бронь заведена, приём списан")
     }
 
-    /** Story 7: several people reserve shares of the same pack, each their own. */
+    /** История 7: на одну пачку претендуют несколько человек, у каждого своя доля. */
     @Test
-    fun `Story 7 - Multiple users create treatment plans on shared drug`() {
-        // Setup: Anna and Bob share a medkit with 100 tablets of Vitamin C
+    fun `Story 7 - Several people reserve shares of the same package`() {
         val anna = User(id = Uuid.random(), hashedKey = "anna_${Uuid.random()}")
         val bob = User(id = Uuid.random(), hashedKey = "bob_${Uuid.random()}")
         dbHelper.insert(anna)
@@ -118,15 +113,12 @@ class TreatmentPlanStoriesTest {
         )
         dbHelper.insert(vitaminC)
 
-        // Anna reserves 40 tablets
         dbHelper.reserve(anna.id, vitaminC.id, qty(40.0))
 
-        // Bob reserves 50 more
         dbHelper.reserve(bob.id, vitaminC.id, qty(50.0))
-        // 90 reserved on the pack in total
-        assertQty(90.0, dbHelper.reservedOnDrug(vitaminC.id), "Total planned should be 90")
+        // Заявлено на пачку 90 всего.
+        assertQty(90.0, dbHelper.reservedOnDrug(vitaminC.id), "заявлено на пачку всего 90")
 
-        // Each has their own reservation
         val annaPlan = dbHelper.userReservation(anna.id, vitaminC.id)
         val bobPlan = dbHelper.userReservation(bob.id, vitaminC.id)
         assertNotNull(annaPlan)
@@ -134,19 +126,14 @@ class TreatmentPlanStoriesTest {
         assertQty(40.0, annaPlan)
         assertQty(50.0, bobPlan)
 
-        println("✅ Story 7 passed: Multiple users created treatment plans on shared drug")
+        println("✅ История 7: на одной пачке уживаются несколько броней")
     }
 
 
 
-    /**
-     * Story 10: Complete family medkit lifecycle
-     *
-     * Validates: Full end-to-end workflow from creation to cleanup
-     */
+    /** История 10: семейная аптечка от создания до уборки. */
     @Test
     fun `Story 10 - Complete family medkit lifecycle`() {
-        // Mom creates a family medkit
         val mom = User(id = Uuid.random(), hashedKey = "mom_${Uuid.random()}")
         val dad = User(id = Uuid.random(), hashedKey = "dad_${Uuid.random()}")
         val child = User(id = Uuid.random(), hashedKey = "child_${Uuid.random()}")
@@ -160,7 +147,6 @@ class TreatmentPlanStoriesTest {
         val childKey = medKitService.invite(medKitService.get(familyKit.id, mom.id), mom.id)
         medKitService.joinByInvitation(childKey, child.id)
 
-        // Add family medications
         val aspirin = Drug(
             id = Uuid.random(), name = "Children's Aspirin",
             quantity = Quantity(qty(200.0), dbHelper.unit()),
@@ -176,32 +162,26 @@ class TreatmentPlanStoriesTest {
         dbHelper.insert(aspirin)
         dbHelper.insert(vitamins)
 
-        // Everyone reserves 30 vitamins
         dbHelper.reserve(mom.id, vitamins.id, qty(30.0))
         dbHelper.reserve(dad.id, vitamins.id, qty(30.0))
         dbHelper.reserve(child.id, vitamins.id, qty(30.0))
-        // 90 reserved — the whole pack
+        // Заявлено 90 — вся пачка.
         assertQty(90.0, dbHelper.reservedOnDrug(vitamins.id))
 
-        // Everyone takes their daily vitamin
         drugService.consume(drugService.get(vitamins.id, mom.id), qty(1.0), dbHelper.drugVersion(vitamins.id))
         drugService.consume(drugService.get(vitamins.id, dad.id), qty(1.0), dbHelper.drugVersion(vitamins.id))
         drugService.consume(drugService.get(vitamins.id, child.id), qty(1.0), dbHelper.drugVersion(vitamins.id))
 
-        // Check vitamins after 1 day
         val updatedVitamins = dbHelper.drug(vitamins.id)
         assertNotNull(updatedVitamins)
         assertQty(87.0, updatedVitamins.quantity, "Should be 90 - 3 = 87")
 
-        // 3 users in the medkit
         val medkit = dbHelper.medKit(familyKit.id)
         assertNotNull(medkit)
         assertEquals(3, medkit.members.size)
 
-        // Child leaves the medkit
         medKits.leave(familyKit.id, dbHelper.medKitVersion(familyKit.id), child.id)
 
-        // Medkit still has mom and dad
         val updatedKit = dbHelper.medKit(familyKit.id)
         assertNotNull(updatedKit)
         assertEquals(2, updatedKit.members.size)

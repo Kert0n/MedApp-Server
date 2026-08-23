@@ -21,17 +21,17 @@ class CacheService(
     @Value($$"${authentication.throttle.windowInSeconds:300}") private val loginThrottleWindow: Long,
     @Value($$"${sync.journal.termInMinutes:1440}") private val syncJournalTerm: Long,
 ) {
-    // Medkit share tokens. maximumSize is a hard cap, not a hint: under enough concurrent
-    // sharing a key can be evicted before medkit.share.termInMinutes elapses, so the validity
-    // window is an upper bound. Acceptable — ask for a new key — but never document it as
-    // absolute.
+    // Ключи приглашения. `maximumSize` — жёсткий предел, а не пожелание: при достаточном числе
+    // одновременных приглашений ключ вытеснится раньше, чем истечёт `medkit.share.termInMinutes`,
+    // поэтому срок жизни — верхняя граница. Это приемлемо (попросить новый ключ), но обещать его
+    // как точный нельзя.
     @Bean
     fun medKitTokenCache(): Cache<String, Invitation> = Caffeine.newBuilder()
         .expireAfterWrite(medKitShareTerm.minutes)
         .maximumSize(10_000)
         .asCache()
 
-    // Successful registrations per client address.
+    // Удачные регистрации с одного адреса клиента.
     @Bean
     fun successfulRegistrationsCache(): Cache<String, Int> = Caffeine.newBuilder()
         .expireAfterWrite(registrationTimeOut.seconds)
@@ -52,8 +52,8 @@ class CacheService(
         .maximumSize(100_000)
         .asCache()
 
-    // Token requests per client address: every one costs a bcrypt verification, so an
-    // unauthenticated caller could otherwise burn CPU for free.
+    // Запросы токена с одного адреса: каждый стоит проверки bcrypt, и без счётчика
+    // неаутентифицированный вызывающий жёг бы процессор даром.
     @Bean
     fun loginAttemptsCache(): Cache<String, Int> = Caffeine.newBuilder()
         .expireAfterWrite(loginThrottleWindow.seconds)

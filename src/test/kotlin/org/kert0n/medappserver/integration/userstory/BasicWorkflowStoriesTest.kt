@@ -52,25 +52,18 @@ class BasicWorkflowStoriesTest {
     @Autowired
     private lateinit var medKits: MedKitApplicationService
 
-    /**
-     * Story 1: Anna creates her first medkit and adds some drugs
-     *
-     * Validates: User registration, medkit creation, drug management, consumption tracking
-     */
+    /** История 1: у человека появляются аптечка, содержимое и первый приём. */
     @Test
     fun `Story 1 - New user Anna creates and manages her medkit`() {
-        // Anna signs up
         val anna = User(
             id = Uuid.random(),
             hashedKey = "anna_hashed_key_${Uuid.random()}"
         )
         dbHelper.insert(anna)
 
-        // Creates medkit
         val homeMedkit = medKitService.create(anna.id)
         assertNotNull(homeMedkit)
 
-        // Adds drugs through the store directly
         val aspirin = Drug(
             id = Uuid.random(),
             name = "Aspirin",
@@ -95,10 +88,8 @@ class BasicWorkflowStoriesTest {
         )
         dbHelper.insert(ibuprofen)
 
-        // Anna takes 2 tablets of Aspirin
         drugService.consume(drugService.get(aspirin.id, anna.id), qty(2.0), dbHelper.drugVersion(aspirin.id))
 
-        // Check inventory
         val updatedAspirin = dbHelper.drug(aspirin.id)
         assertNotNull(updatedAspirin)
         assertQty(98.0, updatedAspirin.quantity, "Should have 98 tablets left")
@@ -109,14 +100,9 @@ class BasicWorkflowStoriesTest {
         println("✅ Story 1 passed: Anna successfully created medkit and managed drugs")
     }
 
-    /**
-     * Story 2: Anna shares her medkit with Bob (her roommate)
-     *
-     * Validates: Multi-user medkit sharing, bidirectional relationships, data visibility
-     */
+    /** История 2: аптечка делится с соседом, и содержимое видно обоим. */
     @Test
     fun `Story 2 - Anna shares medkit with roommate Bob`() {
-        // Anna's medkit
         val anna = User(id = Uuid.random(), hashedKey = "anna_${Uuid.random()}")
         dbHelper.insert(anna)
         val medkit = medKitService.create(anna.id)
@@ -133,15 +119,12 @@ class BasicWorkflowStoriesTest {
         )
         dbHelper.insert(vitamins)
 
-        // Bob signs up
         val bob = User(id = Uuid.random(), hashedKey = "bob_${Uuid.random()}")
         dbHelper.insert(bob)
 
-        // Anna shares with Bob via share key
         val shareKey = medKitService.invite(medKitService.get(medkit.id, anna.id), anna.id)
         medKitService.joinByInvitation(shareKey, bob.id)
 
-        // Both can see it
         val annaMedkits = medKitService.allOfUser(anna.id)
         val bobMedkits = medKitService.allOfUser(bob.id)
 
@@ -149,7 +132,6 @@ class BasicWorkflowStoriesTest {
         assertEquals(1, bobMedkits.size)
         assertEquals(annaMedkits[0], bobMedkits[0], "Should be the same medkit")
 
-        // Verify the medkit has 2 users
         val sharedMedkit = dbHelper.medKit(medkit.id)
         assertNotNull(sharedMedkit)
         assertEquals(2, sharedMedkit.members.size, "Medkit should have 2 users")
@@ -157,14 +139,9 @@ class BasicWorkflowStoriesTest {
         println("✅ Story 2 passed: Anna successfully shared medkit with Bob")
     }
 
-    /**
-     * Story 3: Bob leaves shared medkit - his data is cleaned up
-     *
-     * Validates: User removal, cascade operations, data integrity
-     */
+    /** История 3: вышедший участник уходит вместе со своим, но не с чужим. */
     @Test
     fun `Story 3 - Bob leaves shared medkit, cleanup works correctly`() {
-        // Setup shared medkit
         val anna = User(id = Uuid.random(), hashedKey = "anna_${Uuid.random()}")
         val bob = User(id = Uuid.random(), hashedKey = "bob_${Uuid.random()}")
         dbHelper.insert(anna)
@@ -186,39 +163,29 @@ class BasicWorkflowStoriesTest {
         )
         dbHelper.insert(drugData)
 
-        // Verify both users have access
         val loadedMedkit = dbHelper.medKit(medkit.id)!!
         assertEquals(2, loadedMedkit.members.size)
 
-        // Bob leaves (drugs stay)
         medKits.leave(medkit.id, dbHelper.medKitVersion(medkit.id), bob.id)
 
-        // Medkit still exists with Anna only
         val updatedMedkit = dbHelper.medKit(medkit.id)
         assertNotNull(updatedMedkit)
         assertEquals(1, updatedMedkit.members.size, "Only Anna should be in medkit")
         assertTrue(updatedMedkit.members.contains(anna.id))
 
-        // Drug still exists
         val remainingDrug = dbHelper.drug(drugData.id)
         assertNotNull(remainingDrug, "Drug should still exist")
 
         println("✅ Story 3 passed: Bob left medkit, cleanup successful")
     }
 
-    /**
-     * Story 4: Migrating drugs when deleting a medkit
-     *
-     * Validates: Drug migration, medkit deletion, data preservation
-     */
+    /** История 4: аптечка удаляется, содержимое переезжает, а не пропадает. */
     @Test
     fun `Story 4 - User migrates drugs when deleting old medkit`() {
-        // Create user and first medkit
         val userData = User(id = Uuid.random(), hashedKey = "user_${Uuid.random()}")
         dbHelper.insert(userData)
         val oldMedkit = medKitService.create(userData.id)
 
-        // Add drugs
         val drugData1 = Drug(
             id = Uuid.random(),
             name = "Drug A",
@@ -242,33 +209,27 @@ class BasicWorkflowStoriesTest {
         dbHelper.insert(drugData1)
         dbHelper.insert(drugData2)
 
-        // Create new medkit for migration
         val newMedkit = medKitService.create(userData.id)
 
-        // Verify user has 2 medkits
         assertEquals(2, medKitService.allOfUser(userData.id).size)
 
-        // Delete old medkit and move drugs
         medKits.delete(oldMedkit.id, dbHelper.medKitVersion(oldMedkit.id), userData.id, newMedkit.id)
 
-        // Verify migration
         val drugsInNew = drugService.ofMedKit(newMedkit.id, userData.id)
         assertEquals(2, drugsInNew.size, "All drugs should be in new medkit")
         val drugNames = drugsInNew.map { drug -> drug.name }
         assertTrue(drugNames.contains("Drug A"))
         assertTrue(drugNames.contains("Drug B"))
 
-        // Old medkit should be gone
         val oldMedkitCheck = dbHelper.medKit(oldMedkit.id)
         assertNull(oldMedkitCheck, "Old medkit should be deleted")
 
-        // User should have only 1 medkit now
         assertEquals(1, medKitService.allOfUser(userData.id).size)
 
         println("✅ Story 4 passed: Drugs successfully migrated to new medkit")
     }
 
-    /** Story 5: the pack emptied by an intake is destroyed, not left at zero. */
+    /** История 5: опустевшая от приёма пачка уничтожается, а не остаётся нулём. */
     @Test
     fun `Story 5 - User consumes all available drug quantity`() {
         val userData = User(id = Uuid.random(), hashedKey = "user_${Uuid.random()}")
@@ -287,13 +248,11 @@ class BasicWorkflowStoriesTest {
         )
         dbHelper.insert(drugData)
 
-        // Consume all in steps
         disposal.consume(drugService.get(drugData.id, userData.id), qty(10.0), dbHelper.drugVersion(drugData.id))
         disposal.consume(drugService.get(drugData.id, userData.id), qty(10.0), dbHelper.drugVersion(drugData.id))
         disposal.consume(drugService.get(drugData.id, userData.id), qty(10.0), dbHelper.drugVersion(drugData.id))
 
         val updatedDrug = dbHelper.drug(drugData.id)
-        // Must be deleted
         assertNull(updatedDrug)
 
         println("✅ Story 5 passed: All drug quantity consumed correctly")

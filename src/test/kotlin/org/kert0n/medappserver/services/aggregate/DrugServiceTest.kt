@@ -36,7 +36,7 @@ class DrugServiceTest {
     @Autowired
     private lateinit var dbHelper: DatabaseTestHelper
 
-    // ── findById ──
+    // ── get ──
 
     @Test
     fun `несуществующий препарат неотличим от недоступного`() {
@@ -45,10 +45,10 @@ class DrugServiceTest {
         assertThrows<NotAMember> { drugService.get(Uuid.random(), alice.id) }
     }
 
-    // ── findByIdForUser / findByIdForUserForUpdate ──
+    // ── get: доступ ──
 
     @Test
-    fun `findByIdForUser throws when user has no access`() {
+    fun `get throws when user has no access`() {
         val alice = dbHelper.freshUser("alice")
         val eve = dbHelper.freshUser("eve")
         val kit = medKitService.create(alice.id)
@@ -60,23 +60,10 @@ class DrugServiceTest {
         }
     }
 
-    @Test
-    fun `findByIdForUserForUpdate throws when user has no access`() {
-        val alice = dbHelper.freshUser("alice")
-        val eve = dbHelper.freshUser("eve")
-        val kit = medKitService.create(alice.id)
-        val drug = dbHelper.freshDrug(kit.id, 10.0)
-        dbHelper.flushAndClear()
-
-        assertThrows<DomainRuleViolated> {
-            drugService.get(drug.id, eve.id)
-        }
-    }
-
-    // ── findAllByMedKit / findAllByUser ──
+    // ── ofMedKit / allOf ──
 
     @Test
-    fun `findAllByMedKit returns drugs in medkit`() {
+    fun `ofMedKit returns drugs in medkit`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.create(alice.id)
         dbHelper.freshDrug(kit.id, 10.0)
@@ -87,18 +74,17 @@ class DrugServiceTest {
     }
 
     @Test
-    fun `findAllByUser returns drugs user has treatment plans for`() {
+    fun `allOf returns drugs from every kit the user is in`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
-        val drug = dbHelper.freshDrug(kit.id, 100.0)
+        val eve = dbHelper.freshUser("eve")
+        val home = medKitService.create(alice.id)
+        val travel = medKitService.create(alice.id)
+        val mine = listOf(dbHelper.freshDrug(home.id, 100.0), dbHelper.freshDrug(travel.id, 5.0))
+        dbHelper.freshDrug(medKitService.create(eve.id).id, 7.0)
         dbHelper.flushAndClear()
 
-        assertEquals(0, reservationService.ofUser(alice.id).size)
-
-        dbHelper.reserve(alice.id, drug.id, qty(10.0))
-        dbHelper.flushAndClear()
-
-        assertEquals(1, reservationService.ofUser(alice.id).size)
+        // Своё — по обеим аптечкам сразу; чужая пачка в выдачу не попадает, хотя лежит рядом.
+        assertEquals(mine.map { it.id }.toSet(), drugService.allOf(alice.id).map { it.id }.toSet())
     }
 
     // ── create ──
@@ -225,10 +211,10 @@ class DrugServiceTest {
         assertNull(dbHelper.drug(drug.id))
     }
 
-    // ── consumeDrug ──
+    // ── consume ──
 
     @Test
-    fun `consumeDrug reduces quantity`() {
+    fun `consume reduces quantity`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.create(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
@@ -239,7 +225,7 @@ class DrugServiceTest {
     }
 
     @Test
-    fun `consumeDrug throws when insufficient quantity`() {
+    fun `consume throws when insufficient quantity`() {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.create(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 10.0)

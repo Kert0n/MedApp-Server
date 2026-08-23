@@ -28,8 +28,8 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
 
 /**
- * Error bodies must not describe what failed in terms of the caller's data: the default body
- * echoes the exception message, and those carry package ids and amounts.
+ * Тело ошибки не описывает сбой данными вызывающего: умолчательное тело повторяет сообщение
+ * исключения, а в них едут идентификаторы упаковок и количества.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -71,8 +71,10 @@ class ErrorResponseShapeTest {
             .andExpect(jsonPath("$.detail").value("Requested resource does not exist"))
             .andReturn().response.contentAsString
 
-        // `instance` carries the request URI, so it repeats the id the caller just sent —
-        // standard for RFC 9457. What must not appear is the message or the exception type.
+        // `instance` у нас — URI запроса, и потому повторяет идентификатор, который вызывающий
+        // только что прислал сам. RFC 9457 такого не требует: он просит лишь ссылку на случай, а
+        // чем её заполнить — решение приложения. Не должно появиться сообщение исключения или
+        // имя его типа.
         assertFalse(body.contains("access denied"), "internal message leaked: $body")
         assertFalse(body.contains("Drug not found"), "internal message leaked: $body")
         assertFalse(body.contains("Exception"), "error body leaked an exception class: $body")
@@ -112,7 +114,7 @@ class ErrorResponseShapeTest {
     @Test
     fun `body validation reports fields without echoing values`() {
         val userId = Uuid.random()
-        // amount below the @DecimalMin("0.0") constraint.
+        // количество ниже границы @DecimalMin("0.0").
         val invalid = """{"drugId":"${Uuid.random()}","amount":"-42.5","version":0}"""
 
         val body = mockMvc.perform(
