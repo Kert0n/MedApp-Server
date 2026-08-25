@@ -33,7 +33,7 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("org.springframework.boot:spring-boot-starter-kotlinx-serialization-json")
     implementation("org.springframework.boot:spring-boot-starter-security-oauth2-resource-server")
-    implementation("com.sksamuel.aedile:aedile-core:3.0.2")
+    implementation("com.sksamuel.aedile:aedile-core:3.0.4")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     developmentOnly("org.springframework.boot:spring-boot-devtools")
     developmentOnly("org.springframework.boot:spring-boot-docker-compose")
