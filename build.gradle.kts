@@ -21,7 +21,7 @@ repositories {
 }
 
 dependencies {
-    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.1")
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.0")
     // Стартер под Spring Boot 4 — отдельный артефакт, как вофициальном samples/exposed-spring.
     // Обычный exposed-spring-boot-starter собран под Boot 3 и ищет автоконфигурацию по
     // старым адресам.
