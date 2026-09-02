@@ -98,11 +98,11 @@ class ContractFieldPresenceTest {
      * Объявлена ли у свойства пустота.
      *
      * Двумя формами: у обычного поля «null» стоит вторым типом, у ссылки — отдельной ветвью
-     * `anyOf`, потому что рядом с `$ref` тип написать негде.
+     * `oneOf`, потому что рядом с `$ref` тип написать негде.
      */
     private fun allowsEmpty(property: JsonElement?): Boolean =
         NULL_TYPE in declaredTypes(property) ||
-            property.field("anyOf").items().any { NULL_TYPE in declaredTypes(it) }
+            property.field("oneOf").items().any { NULL_TYPE in declaredTypes(it) }
 
     private fun declaredTypes(schema: JsonElement?): Set<String> =
         schema.field("type").let { declared ->

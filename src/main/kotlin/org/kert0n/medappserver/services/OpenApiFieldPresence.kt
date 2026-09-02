@@ -69,22 +69,14 @@ class OpenApiFieldPresence {
      * Пустое значение в контракте версии 3.1 — второй тип, а не флаг `nullable`.
      *
      * Свойство, уехавшее в `$ref`, своего типа не имеет, и дописать «null» некуда: рядом со
-     * ссылкой это ничего не значит. Такие раскрываются в `anyOf` из самой ссылки и пустоты —
-     * `DrugSyncRequest.reservation` как раз из них.
+     * ссылкой это ничего не значит. Такие с springdoc 3.1.0 раскрываются без нас — ветвью
+     * `oneOf` из самой ссылки и пустоты, — и `DrugSyncRequest.reservation` приезжает
+     * объявленным сам. До 3.1.0 ссылка приходила голой, и ветвь строилась здесь.
      */
     private fun allowEmpty(schema: Schema<*>, field: String) {
         val property = schema.properties?.get(field) ?: return
-        val declared = property.types
-        if (declared != null) {
-            property.types = LinkedHashSet(declared) + NULL_TYPE
-            return
-        }
-        val reference = property.`$ref` ?: return
-        property.`$ref` = null
-        property.anyOf = listOf(
-            Schema<Any>().apply { `$ref` = reference },
-            Schema<Any>().apply { types = setOf(NULL_TYPE) }
-        )
+        val declared = property.types ?: return
+        property.types = LinkedHashSet(declared) + NULL_TYPE
     }
 
     private companion object {

@@ -975,6 +975,7 @@ components:
             \ was taken"
           examples:
           - "5.0"
+          minimum: 0.0
           pattern: "^(?!0+(\\.0+)?$)\\d{1,13}(\\.\\d{1,6})?$"
           example: null
         drugVersion:
@@ -986,10 +987,10 @@ components:
             \ means 428, mismatched means 412"
           example: 3
         reservation:
-          anyOf:
+          description: New state of the caller's claim; omitted when it did not change
+          oneOf:
           - $ref: "#/components/schemas/ReservationSyncRequest"
           - type: "null"
-          description: New state of the caller's claim; omitted when it did not change
     ReservationSyncRequest:
       type: object
       description: The caller's claim after the offline session
@@ -999,6 +1000,7 @@ components:
           description: "Claim after the offline session, absolute"
           examples:
           - "20.0"
+          minimum: 0.0
           pattern: "^(?!0+(\\.0+)?$)\\d{1,13}(\\.\\d{1,6})?$"
           example: null
         version:
@@ -1024,6 +1026,7 @@ components:
             \ left in the package."
           examples:
           - "20.0"
+          minimum: 0.0
           pattern: "^(?!0+(\\.0+)?$)\\d{1,13}(\\.\\d{1,6})?$"
           example: null
         version:
@@ -1089,6 +1092,7 @@ components:
           description: "Initial stock, greater than zero"
           examples:
           - "100.0"
+          minimum: 0.0
           pattern: "^(?!0+(\\.0+)?$)\\d{1,13}(\\.\\d{1,6})?$"
           example: null
         quantityUnitId:
@@ -1179,6 +1183,7 @@ components:
           description: "Amount taken, greater than zero"
           examples:
           - "2.0"
+          minimum: 0.0
           pattern: "^(?!0+(\\.0+)?$)\\d{1,13}(\\.\\d{1,6})?$"
           example: null
         version:
@@ -1223,6 +1228,7 @@ components:
           description: "New reserved amount, greater than zero"
           examples:
           - "15.0"
+          minimum: 0.0
           pattern: "^(?!0+(\\.0+)?$)\\d{1,13}(\\.\\d{1,6})?$"
           example: null
         version:
@@ -1256,6 +1262,7 @@ components:
             \ Reservations are left alone."
           examples:
           - "120.0"
+          minimum: 0.0
           pattern: "^(?!0+(\\.0+)?$)\\d{1,13}(\\.\\d{1,6})?$"
           example: null
         quantityUnitId:
