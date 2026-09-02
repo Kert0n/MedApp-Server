@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/dependency-review-action@v4
+      - uses: actions/dependency-review-action@v5
         with:
           # Умеренная планка: на «низких» находках очередь остановится вся, и правило
           # начнут обходить — а обойдённое правило хуже отсутствующего.
