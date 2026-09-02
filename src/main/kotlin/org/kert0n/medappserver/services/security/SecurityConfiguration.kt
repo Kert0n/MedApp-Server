@@ -50,7 +50,10 @@ class SecurityConfiguration(
         val jwk = RSAKey.Builder(rsaKeys.publicKey)
             .privateKey(rsaKeys.privateKey)
             .build()
-        val jwks: JWKSource<SecurityContext?> = ImmutableJWKSet<SecurityContext?>(JWKSet(jwk))
+        // Параметр типа без `?`: `NimbusJwtEncoder` объявляет свой конструктор от
+        // `JWKSource<SecurityContext>`, и под `-Xjsr305=strict` вариант с `?` не подходит
+        // ни одному из его конструкторов.
+        val jwks: JWKSource<SecurityContext> = ImmutableJWKSet(JWKSet(jwk))
         return NimbusJwtEncoder(jwks)
     }
 
