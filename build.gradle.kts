@@ -16,6 +16,13 @@ java {
     }
 }
 
+// Tomcat впереди BOM Spring Boot: 4.1.1 приносит 11.0.24, а в нём три критических CVE
+// (CVE-2026-65182, -65905, -68525) — обход security-constraint и обходы FORM/DIGEST-аутентификации.
+// Ни один механизм здесь не задействован (Spring Security, а не web.xml; Basic и JWT, а не
+// FORM/DIGEST), но версию всё равно поднимаем: числиться в критических незачем. Свойство BOM
+// перебивается через extra — так же снимется, когда Spring Boot догонит сам.
+extra["tomcat.version"] = "11.0.25"
+
 repositories {
     mavenCentral()
 }
