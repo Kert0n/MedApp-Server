@@ -2,7 +2,7 @@
 name: Ошибка
 about: Что-то ведёт себя не так, как обещано.
 title: ""
-labels: bug
+labels: "type: bug, status: triage"
 ---
 
 <!--
