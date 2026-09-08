@@ -29,6 +29,7 @@ import org.kert0n.medappserver.services.aggregate.MedKitAccessService
 import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.kert0n.medappserver.services.application.DrugApplicationService
 import org.kert0n.medappserver.services.application.MedKitApplicationService
+import org.kert0n.medappserver.services.orchestrator.ReservationChanging
 import org.kert0n.medappserver.services.orchestrator.ReservationPlacement
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.springframework.beans.factory.annotation.Autowired
@@ -58,6 +59,7 @@ class OptimisticRaceTest {
     @Autowired private lateinit var drugApplicationService: DrugApplicationService
     @Autowired private lateinit var medKitApplicationService: MedKitApplicationService
     @Autowired private lateinit var placement: ReservationPlacement
+    @Autowired private lateinit var changing: ReservationChanging
     @Autowired private lateinit var jdbc: JdbcTemplate
     @Autowired private lateinit var transactionManager: PlatformTransactionManager
 
@@ -400,6 +402,47 @@ class OptimisticRaceTest {
 
         assertEquals(target.id, dbHelper.requireDrug(drug.id).medKitId)
         assertNull(dbHelper.userReservation(bob.id, drug.id))
+    }
+
+    /**
+     * Изменение брони против переезда её упаковки.
+     *
+     * Упаковка уезжает в аптечку, которой участник не видит, поэтому его бронь снимается. Правка
+     * не должна ни записать в исчезнувшую строку, ни уйти под прежним `med_kit_id`: команда
+     * перечитывает упаковку под удерживаемым корнем и отвечает конфликтом состояния.
+     */
+    @Test
+    fun `изменение брони против переноса упаковки`() {
+        val alice = dbHelper.freshUser("race-change-move-a")
+        val bob = dbHelper.freshUser("race-change-move-b")
+        val source = dbHelper.freshMedKit(alice.id)
+        dbHelper.join(source.id, alice.id, bob.id)
+        val target = dbHelper.freshMedKit(alice.id)
+        val drug = dbHelper.freshDrug(source.id, quantity = 30.0)
+        dbHelper.reserve(bob.id, drug.id, BigDecimal("5"))
+
+        val outcome = race(
+            { sync ->
+                val claims = dbHelper.storedReservationsVersion(drug.id)
+                sync()
+                changing.changeTo(bob.id, drug.id, BigDecimal("7"), claims)
+            },
+            { sync ->
+                sync()
+                drugApplicationService.moveToMedKit(drug.id, target.id, drug.version, alice.id)
+            }
+        )
+
+        outcome.assertNoDatabaseError()
+        assertTrue(
+            outcome.failures.all { it is DomainRuleViolated },
+            "проигравший обязан получить доменный отказ, а не нарушение ключа: ${outcome.failures}"
+        )
+        assertEquals(
+            0,
+            dbHelper.storedReservationsTotal(drug.id).compareTo(dbHelper.reservedOnDrug(drug.id)),
+            "сохранённая сумма обязана сойтись со строками в любом порядке"
+        )
     }
 
     /** Заведение упаковки против глобального удаления аптечки: отказ, а не нарушение ключа. */

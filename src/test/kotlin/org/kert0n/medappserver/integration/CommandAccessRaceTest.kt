@@ -45,148 +45,81 @@ class CommandAccessRaceTest {
 
     @Test
     fun `команды упаковки ждут отзыв membership`() {
-        assertWaitsForLeave("update") { fixture ->
-            drugs.update(
-                fixture.drugId,
-                DrugPatchRequest(name = "Changed", version = fixture.drugVersion),
-                fixture.memberId
-            )
-        }
-        assertWaitsForLeave("consume") { fixture ->
-            drugs.recordIntake(
-                fixture.drugId,
-                IntakeRequest(BigDecimal.ONE, fixture.drugVersion),
-                fixture.memberId
-            )
-        }
-        assertWaitsForLeave("delete") { fixture ->
-            drugs.delete(fixture.drugId, fixture.drugVersion, fixture.memberId)
-        }
-        assertWaitsForLeave("sync") { fixture ->
-            drugs.synchronise(
-                fixture.drugId,
-                Uuid.random(),
-                DrugSyncRequest(consumed = BigDecimal.ONE, drugVersion = fixture.drugVersion),
-                fixture.memberId
-            )
-        }
+        DRUG_COMMANDS.forEach { assertWaitsForRevocation(it, Revocation.LEAVE) }
     }
 
     @Test
     fun `команды брони ждут отзыв membership`() {
-        assertWaitsForLeave("reserve") { fixture ->
-            reservations.create(
-                fixture.memberId,
-                ReservationCreateRequest(fixture.drugId, BigDecimal("3"), fixture.reservationsVersion)
-            )
-        }
-        assertWaitsForLeave("change-reservation", withReservation = true) { fixture ->
-            reservations.changeTo(
-                fixture.memberId,
-                fixture.drugId,
-                ReservationPatchRequest(BigDecimal("6"), fixture.reservationsVersion)
-            )
-        }
-        assertWaitsForLeave("cancel-reservation", withReservation = true) { fixture ->
-            reservations.cancel(fixture.memberId, fixture.drugId, fixture.reservationsVersion)
-        }
+        RESERVATION_COMMANDS.forEach { assertWaitsForRevocation(it, Revocation.LEAVE) }
+    }
+
+    /**
+     * Глобальное удаление отзывает доступ иначе, чем выход.
+     *
+     * Строка membership уходит каскадом от корня, а не удаляется сама, и сам корень исчезает.
+     * Для команды это обязано выглядеть так же: доменный отказ, а не нарушение внешнего ключа.
+     */
+    @Test
+    fun `команды упаковки ждут удаление аптечки`() {
+        DRUG_COMMANDS.forEach { assertWaitsForRevocation(it, Revocation.DELETE) }
     }
 
     @Test
+    fun `команды брони ждут удаление аптечки`() {
+        RESERVATION_COMMANDS.forEach { assertWaitsForRevocation(it, Revocation.DELETE) }
+    }
+
+    /** Обратный порядок: команда успела начаться, и отзыв доступа обязан её дождаться. */
+    @Test
     fun `отзыв membership ждёт уже начатую команду`() {
-        val owner = dbHelper.freshUser("command-first-owner")
-        val member = dbHelper.freshUser("command-first-member")
-        val kit = dbHelper.freshMedKit(owner.id)
-        dbHelper.join(kit.id, owner.id, member.id)
-        val drug = dbHelper.freshDrug(kit.id, quantity = 20.0)
-
-        val commandFinished = CountDownLatch(1)
-        val allowCommandCommit = CountDownLatch(1)
-        val leaveBackend = ArrayBlockingQueue<Int>(1)
-        val pool = Executors.newFixedThreadPool(2)
-        try {
-            val command = pool.submit<Throwable?> {
-                runCatching {
-                    TransactionTemplate(transactionManager).execute {
-                        drugs.update(drug.id, DrugPatchRequest(name = "Before leave", version = drug.version), member.id)
-                        commandFinished.countDown()
-                        assertTrue(allowCommandCommit.await(10, TimeUnit.SECONDS), "leave не дошёл до корня")
-                    }
-                }.exceptionOrNull()
-            }
-            assertTrue(commandFinished.await(10, TimeUnit.SECONDS), "команда не завершила запись")
-
-            val leave = pool.submit<Throwable?> {
-                runCatching {
-                    TransactionTemplate(transactionManager).execute {
-                        leaveBackend.put(jdbc.queryForObject("SELECT pg_backend_pid()", Int::class.java)!!)
-                        medKits.leave(kit.id, member.id)
-                    }
-                }.exceptionOrNull()
-            }
-            awaitDatabaseLock(leaveBackend.poll(10, TimeUnit.SECONDS) ?: error("leave не начался"), "leave")
-            allowCommandCommit.countDown()
-
-            assertNull(command.get(30, TimeUnit.SECONDS)?.rootCause(), "начатая команда обязана завершиться")
-            assertNull(leave.get(30, TimeUnit.SECONDS)?.rootCause(), "leave обязан дождаться команды")
-        } finally {
-            allowCommandCommit.countDown()
-            pool.shutdownNow()
-        }
-
-        assertTrue(!dbHelper.isMember(kit.id, member.id))
+        (DRUG_COMMANDS + RESERVATION_COMMANDS).forEach { assertRevocationWaitsFor(it) }
     }
 
     @Test
     fun `приглашение ждёт отзыв membership`() {
-        assertWaitsForLeave("invite") { fixture ->
-            medKits.invite(fixture.medKitId, fixture.memberId)
-        }
+        assertWaitsForRevocation(
+            Command("invite", withReservation = false) { fixture ->
+                medKits.invite(fixture.medKitId, fixture.memberId)
+            },
+            Revocation.LEAVE
+        )
     }
 
-    private fun assertWaitsForLeave(
-        name: String,
-        withReservation: Boolean = false,
-        command: (Fixture) -> Any?
-    ) {
-        val owner = dbHelper.freshUser("command-access-$name-owner")
-        val member = dbHelper.freshUser("command-access-$name-member")
-        val kit = dbHelper.freshMedKit(owner.id)
-        dbHelper.join(kit.id, owner.id, member.id)
-        val drug = dbHelper.freshDrug(kit.id, quantity = 20.0)
-        if (withReservation) dbHelper.reserve(member.id, drug.id, BigDecimal("4"))
-        val fixture = Fixture(
-            kit.id,
-            member.id,
-            drug.id,
-            drug.version,
-            dbHelper.storedReservationsVersion(drug.id)
-        )
+    /**
+     * Отзыв доступа коммитится первым; команда обязана его дождаться и получить отказ.
+     *
+     * Отзыв удаляет membership и задерживает commit. Обычный SELECT команды всё ещё видит старую
+     * строку, поэтому проверка одним чтением её бы пропустила. Команда встаёт за корневой
+     * блокировкой — ожидание подтверждается `pg_blocking_pids`, а не задержкой потока.
+     */
+    private fun assertWaitsForRevocation(command: Command, revocation: Revocation) {
+        val name = "${command.name}-${revocation.tag}"
+        val fixture = fixture(name, command.withReservation)
 
-        val membershipDeleted = CountDownLatch(1)
-        val allowLeaveCommit = CountDownLatch(1)
+        val accessRevoked = CountDownLatch(1)
+        val allowRevocationCommit = CountDownLatch(1)
         val commandBackend = ArrayBlockingQueue<Int>(1)
         val pool = Executors.newFixedThreadPool(2)
         try {
-            val leave = pool.submit<Throwable?> {
+            val revoke = pool.submit<Throwable?> {
                 runCatching {
                     TransactionTemplate(transactionManager).execute {
-                        medKits.leave(kit.id, member.id)
-                        membershipDeleted.countDown()
+                        revocation.apply(this@CommandAccessRaceTest, fixture)
+                        accessRevoked.countDown()
                         assertTrue(
-                            allowLeaveCommit.await(10, TimeUnit.SECONDS),
+                            allowRevocationCommit.await(10, TimeUnit.SECONDS),
                             "$name не дошёл до ожидания корня"
                         )
                     }
                 }.exceptionOrNull()
             }
-            assertTrue(membershipDeleted.await(10, TimeUnit.SECONDS), "leave не удалил membership")
+            assertTrue(accessRevoked.await(10, TimeUnit.SECONDS), "${revocation.tag} не отозвал доступ")
 
             val attempted = pool.submit<Throwable?> {
                 runCatching {
                     TransactionTemplate(transactionManager).execute {
                         commandBackend.put(jdbc.queryForObject("SELECT pg_backend_pid()", Int::class.java)!!)
-                        command(fixture)
+                        command.run(this@CommandAccessRaceTest, fixture)
                     }
                 }.exceptionOrNull()
             }
@@ -195,15 +128,79 @@ class CommandAccessRaceTest {
                 commandBackend.poll(10, TimeUnit.SECONDS) ?: error("$name не начал транзакцию"),
                 name
             )
-            allowLeaveCommit.countDown()
+            allowRevocationCommit.countDown()
 
-            assertNull(leave.get(30, TimeUnit.SECONDS)?.rootCause(), "leave обязан завершиться")
+            assertNull(revoke.get(30, TimeUnit.SECONDS)?.rootCause(), "${revocation.tag} обязан завершиться")
             val failure = attempted.get(30, TimeUnit.SECONDS)?.rootCause()
             assertTrue(failure is NotAMember, "$name после отзыва доступа обязан получить NotAMember: $failure")
         } finally {
-            allowLeaveCommit.countDown()
+            allowRevocationCommit.countDown()
             pool.shutdownNow()
         }
+    }
+
+    /**
+     * Обратный порядок: команда уже записала, отзыв доступа обязан её дождаться.
+     *
+     * Здесь проверяется не отказ, а отсутствие обгона: обе транзакции законны, ни одна не должна
+     * упереться в нарушение ключа или deadlock.
+     */
+    private fun assertRevocationWaitsFor(command: Command) {
+        val name = "${command.name}-first"
+        val fixture = fixture(name, command.withReservation)
+
+        val commandWrote = CountDownLatch(1)
+        val allowCommandCommit = CountDownLatch(1)
+        val leaveBackend = ArrayBlockingQueue<Int>(1)
+        val pool = Executors.newFixedThreadPool(2)
+        try {
+            val attempted = pool.submit<Throwable?> {
+                runCatching {
+                    TransactionTemplate(transactionManager).execute {
+                        command.run(this@CommandAccessRaceTest, fixture)
+                        commandWrote.countDown()
+                        assertTrue(allowCommandCommit.await(10, TimeUnit.SECONDS), "$name: выход не дошёл до корня")
+                    }
+                }.exceptionOrNull()
+            }
+            assertTrue(commandWrote.await(10, TimeUnit.SECONDS), "$name не завершил запись")
+
+            val leave = pool.submit<Throwable?> {
+                runCatching {
+                    TransactionTemplate(transactionManager).execute {
+                        leaveBackend.put(jdbc.queryForObject("SELECT pg_backend_pid()", Int::class.java)!!)
+                        medKits.leave(fixture.medKitId, fixture.memberId)
+                    }
+                }.exceptionOrNull()
+            }
+            awaitDatabaseLock(leaveBackend.poll(10, TimeUnit.SECONDS) ?: error("$name: выход не начался"), name)
+            allowCommandCommit.countDown()
+
+            assertNull(attempted.get(30, TimeUnit.SECONDS)?.rootCause(), "$name обязан завершиться")
+            assertNull(leave.get(30, TimeUnit.SECONDS)?.rootCause(), "$name: выход обязан дождаться команды")
+        } finally {
+            allowCommandCommit.countDown()
+            pool.shutdownNow()
+        }
+
+        assertTrue(!dbHelper.isMember(fixture.medKitId, fixture.memberId), "$name: участник обязан выйти")
+    }
+
+    private fun fixture(name: String, withReservation: Boolean): Fixture {
+        val owner = dbHelper.freshUser("command-access-$name-owner")
+        val member = dbHelper.freshUser("command-access-$name-member")
+        val kit = dbHelper.freshMedKit(owner.id)
+        dbHelper.join(kit.id, owner.id, member.id)
+        val drug = dbHelper.freshDrug(kit.id, quantity = 20.0)
+        if (withReservation) dbHelper.reserve(member.id, drug.id, BigDecimal("4"))
+        return Fixture(
+            kit.id,
+            owner.id,
+            member.id,
+            drug.id,
+            drug.version,
+            dbHelper.storedReservationsVersion(drug.id)
+        )
     }
 
     private fun awaitDatabaseLock(backendPid: Int, command: String) {
@@ -222,11 +219,87 @@ class CommandAccessRaceTest {
 
     private data class Fixture(
         val medKitId: Uuid,
+        val ownerId: Uuid,
         val memberId: Uuid,
         val drugId: Uuid,
         val drugVersion: Long,
         val reservationsVersion: Long
     )
+
+    /** Команда участника — как данные, чтобы каждый порядок проверялся всем набором сразу. */
+    private class Command(
+        val name: String,
+        val withReservation: Boolean,
+        val run: CommandAccessRaceTest.(Fixture) -> Any?
+    )
+
+    /**
+     * Чем именно отзывается доступ.
+     *
+     * Выход удаляет строку membership сам; глобальное удаление уносит её каскадом вместе с
+     * корнем. Пути в базе разные, а для команды результат обязан быть одним и тем же.
+     */
+    private enum class Revocation(val tag: String) {
+        LEAVE("leave") {
+            override fun apply(test: CommandAccessRaceTest, fixture: Fixture) =
+                test.medKits.leave(fixture.medKitId, fixture.memberId)
+        },
+        DELETE("delete-medkit") {
+            override fun apply(test: CommandAccessRaceTest, fixture: Fixture) =
+                test.medKits.delete(fixture.medKitId, fixture.ownerId)
+        };
+
+        abstract fun apply(test: CommandAccessRaceTest, fixture: Fixture)
+    }
+
+    private companion object {
+        val DRUG_COMMANDS = listOf(
+            Command("update", withReservation = false) { fixture ->
+                drugs.update(
+                    fixture.drugId,
+                    DrugPatchRequest(name = "Changed", version = fixture.drugVersion),
+                    fixture.memberId
+                )
+            },
+            Command("consume", withReservation = false) { fixture ->
+                drugs.recordIntake(
+                    fixture.drugId,
+                    IntakeRequest(BigDecimal.ONE, fixture.drugVersion),
+                    fixture.memberId
+                )
+            },
+            Command("delete", withReservation = false) { fixture ->
+                drugs.delete(fixture.drugId, fixture.drugVersion, fixture.memberId)
+            },
+            Command("sync", withReservation = false) { fixture ->
+                drugs.synchronise(
+                    fixture.drugId,
+                    Uuid.random(),
+                    DrugSyncRequest(consumed = BigDecimal.ONE, drugVersion = fixture.drugVersion),
+                    fixture.memberId
+                )
+            }
+        )
+
+        val RESERVATION_COMMANDS = listOf(
+            Command("reserve", withReservation = false) { fixture ->
+                reservations.create(
+                    fixture.memberId,
+                    ReservationCreateRequest(fixture.drugId, BigDecimal("3"), fixture.reservationsVersion)
+                )
+            },
+            Command("change-reservation", withReservation = true) { fixture ->
+                reservations.changeTo(
+                    fixture.memberId,
+                    fixture.drugId,
+                    ReservationPatchRequest(BigDecimal("6"), fixture.reservationsVersion)
+                )
+            },
+            Command("cancel-reservation", withReservation = true) { fixture ->
+                reservations.cancel(fixture.memberId, fixture.drugId, fixture.reservationsVersion)
+            }
+        )
+    }
 }
 
 private fun Throwable.rootCause(): Throwable = generateSequence(this) { it.cause }.last()
