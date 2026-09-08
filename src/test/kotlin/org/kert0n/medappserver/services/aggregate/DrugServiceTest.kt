@@ -97,7 +97,7 @@ class DrugServiceTest {
 
         val drug = drugService.create(
             NewDrug(name = "Aspirin", quantity = qty(100.0), quantityUnitId = dbHelper.unit().id),
-            medKitService.get(kit.id, alice.id)
+            kit.id
         )
 
         assertNotNull(drug.id)
@@ -244,7 +244,7 @@ class DrugServiceTest {
         val kit = medKitService.create(alice.id)
         val drug = drugService.create(
             NewDrug(name = "Drug", quantity = qty(100.0), quantityUnitId = dbHelper.unit().id),
-            medKitService.get(kit.id, alice.id)
+            kit.id
         )
         dbHelper.flushAndClear()
         dbHelper.reserve(alice.id, drug.id, qty(25.0))

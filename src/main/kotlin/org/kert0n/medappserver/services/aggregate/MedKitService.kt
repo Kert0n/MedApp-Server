@@ -108,10 +108,4 @@ class MedKitService(
     internal fun deleteRoot(medKitId: Uuid) {
         medKits.delete(medKitId)
     }
-
-    @Deprecated("Use a lifecycle command that owns access", level = DeprecationLevel.ERROR)
-    private fun removedCommandSurface() {
-        // Keeps the reason for the removed overloads close to their former owner: a MedKit
-        // value is a read projection, not evidence that a row lock is held.
-    }
 }

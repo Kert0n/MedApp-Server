@@ -100,8 +100,6 @@ class ReservationService(
         reservations.deleteInMedKitExcept(medKitId, targetMedKitId)
     }
 
-    internal fun dropInMedKitExcept(medKit: MedKit, target: MedKit) = dropInMedKitExcept(medKit.id, target.id)
-
     /** Все брони на упаковку: зовётся, когда упаковка уничтожается. */
     @Transactional(propagation = MANDATORY)
     fun dropOnDrug(drug: Drug) {
@@ -116,16 +114,12 @@ class ReservationService(
         reservations.deleteOfDrugExcept(drug, targetMedKitId)
     }
 
-    internal fun dropOnDrugExcept(drug: Drug, target: MedKit) = dropOnDrugExcept(drug, target.id)
-
     /** Снимает брони выходящего и обновляет картины задетых упаковок. */
     @Transactional(propagation = MANDATORY)
     fun dropOfMember(medKitId: Uuid, userId: Uuid) {
         logger.debug("Dropping reservations of user {} in medkit {}", userId, medKitId)
         reservations.deleteOfMember(medKitId, userId)
     }
-
-    internal fun dropOfMember(medKit: MedKit, userId: Uuid) = dropOfMember(medKit.id, userId)
 
     /** Отмена — это удаление: брони с нулём не бывает. */
     @Transactional(propagation = MANDATORY)

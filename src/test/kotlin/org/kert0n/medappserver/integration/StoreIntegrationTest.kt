@@ -213,7 +213,7 @@ class StoreIntegrationTest {
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
-        medKits.delete(dbHelper.medKit(kit.id)!!)
+        medKits.delete(kit.id)
         dbHelper.flushAndClear()
 
         assertNull(dbHelper.medKit(kit.id))
@@ -252,8 +252,8 @@ class StoreIntegrationTest {
         dbHelper.reserve(bob.id, first.id, qty(20.0))
         dbHelper.flushAndClear()
 
-        reservations.deleteInMedKitExcept(dbHelper.medKit(source.id)!!, dbHelper.medKit(target.id)!!)
-        drugs.moveAllToMedKit(dbHelper.medKit(source.id)!!, dbHelper.medKit(target.id)!!)
+        reservations.deleteInMedKitExcept(source.id, target.id)
+        drugs.moveAllToMedKit(source.id, target.id)
         dbHelper.flushAndClear()
 
         assertEquals(target.id, dbHelper.requireDrug(first.id).medKitId)

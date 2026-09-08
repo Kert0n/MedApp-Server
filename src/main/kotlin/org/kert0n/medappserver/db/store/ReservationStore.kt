@@ -165,9 +165,6 @@ class ReservationStore {
         recountSnapshots(touched)
     }
 
-    internal fun deleteInMedKitExcept(medKit: MedKit, target: MedKit) =
-        deleteInMedKitExcept(medKit.id, target.id)
-
     /** То же для одной переехавшей упаковки. */
     fun deleteOfDrugExcept(drug: Drug, targetMedKitId: Uuid) {
         Reservations.deleteWhere {
@@ -175,8 +172,6 @@ class ReservationStore {
         }
         recountSnapshots(listOf(drug.id))
     }
-
-    internal fun deleteOfDrugExcept(drug: Drug, target: MedKit) = deleteOfDrugExcept(drug, target.id)
 
     /**
      * Брони выходящего участника и картины задетых ими упаковок.
@@ -197,8 +192,6 @@ class ReservationStore {
         }
         recountSnapshots(touched)
     }
-
-    internal fun deleteOfMember(medKit: MedKit, userId: Uuid) = deleteOfMember(medKit.id, userId)
 
     // ── Внутреннее: помощники запросов и перенос строк ───────────────────────────
     //

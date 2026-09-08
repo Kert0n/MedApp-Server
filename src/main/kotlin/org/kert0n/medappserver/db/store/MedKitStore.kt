@@ -59,15 +59,11 @@ class MedKitStore {
         }
     }
 
-    internal fun insertMembership(medKit: MedKit, userId: Uuid) = insertMembership(medKit.id, userId)
-
     fun deleteMembership(medKitId: Uuid, userId: Uuid) {
         MedKitMemberships.deleteWhere {
             (MedKitMemberships.medKitId eq medKitId) and (MedKitMemberships.userId eq userId)
         }
     }
-
-    internal fun deleteMembership(medKit: MedKit, userId: Uuid) = deleteMembership(medKit.id, userId)
 
     fun hasMembers(medKitId: Uuid): Boolean =
         !MedKitMemberships.selectAll()
@@ -75,14 +71,10 @@ class MedKitStore {
             .limit(1)
             .empty()
 
-    internal fun hasMembers(medKit: MedKit): Boolean = hasMembers(medKit.id)
-
     /** Содержимое и membership удаляют каскадные ключи. */
     fun delete(medKitId: Uuid) {
         MedKits.deleteWhere { MedKits.id eq medKitId }
     }
-
-    internal fun delete(medKit: MedKit) = delete(medKit.id)
 
     /**
      * Единственный блокирующий запрос приложения — в двух режимах.

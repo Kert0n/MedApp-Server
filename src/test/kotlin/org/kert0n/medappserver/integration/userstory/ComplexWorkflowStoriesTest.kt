@@ -250,7 +250,7 @@ class ComplexWorkflowStoriesTest {
         val shareKey = medKitService.invite(kitA.id, alice.id)
         medKitService.joinByInvitation(shareKey, bob.id)
 
-        val drug = drugService.create(NewDrug("Shared Meds", qty(10.0), dbHelper.unit().id), medKitService.get(kitA.id, alice.id))
+        val drug = drugService.create(NewDrug("Shared Meds", qty(10.0), dbHelper.unit().id), kitA.id)
         dbHelper.flushAndClear()
 
         val kitB = medKitService.create(bob.id)
@@ -271,7 +271,7 @@ class ComplexWorkflowStoriesTest {
         val kitA = medKitService.create(alice.id)
         medKitService.joinByInvitation(medKitService.invite(kitA.id, alice.id), bob.id)
 
-        val drug = drugService.create(NewDrug("Audit Meds", qty(10.0), dbHelper.unit().id), medKitService.get(kitA.id, alice.id))
+        val drug = drugService.create(NewDrug("Audit Meds", qty(10.0), dbHelper.unit().id), kitA.id)
         dbHelper.flushAndClear()
 
         dbHelper.reserve(alice.id, drug.id, qty(5.0))

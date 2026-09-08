@@ -7,7 +7,6 @@ import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.DrugDetails
 import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.Quantity
-import org.kert0n.medappserver.domain.MedKit
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Propagation.MANDATORY
@@ -78,8 +77,6 @@ class DrugService(
         return drug
     }
 
-    internal fun create(request: NewDrug, medKit: MedKit): Drug = create(request, medKit.id)
-
     @Transactional(propagation = MANDATORY)
     fun update(drug: Drug, request: DrugEdit): Drug {
         logger.debug("Updating drug: {}", drug.id)
@@ -136,8 +133,6 @@ class DrugService(
         drugs.moveAllToMedKit(sourceMedKitId, targetMedKitId)
     }
 
-    internal fun moveAll(source: MedKit, target: MedKit) = moveAll(source.id, target.id)
-
     /** Брони, потерявшие доступ, убирает межагрегатный сценарий: они в чужом агрегате. */
     @Transactional(propagation = MANDATORY)
     fun moveTo(drug: Drug, targetMedKitId: Uuid, stated: Long): Drug {
@@ -146,6 +141,4 @@ class DrugService(
         val moved = drug.moveTo(targetMedKitId)
         return drugs.save(moved, stated)
     }
-
-    internal fun moveTo(drug: Drug, target: MedKit, stated: Long): Drug = moveTo(drug, target.id, stated)
 }

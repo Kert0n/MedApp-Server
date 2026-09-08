@@ -130,7 +130,7 @@ class MedKitApplicationServiceTest {
         medKitService.joinByInvitation(medKitService.invite(kitA.id, alice.id), bob.id)
 
         val drug = drugService.create(
-            NewDrug("Shared Meds", qty(10.0), dbHelper.unit().id), medKitService.get(kitA.id, alice.id)
+            NewDrug("Shared Meds", qty(10.0), dbHelper.unit().id), kitA.id
         )
         val kitB = medKitService.create(bob.id)
         dbHelper.flushAndClear()
@@ -345,11 +345,11 @@ class MedKitApplicationServiceTest {
         val kit = medKitService.create(alice.id)
         drugService.create(
             NewDrug(name = "Drug A", quantity = qty(50.0), quantityUnitId = dbHelper.unit().id),
-            medKitService.get(kit.id, alice.id)
+            kit.id
         )
         drugService.create(
             NewDrug(name = "Drug B", quantity = qty(30.0), quantityUnitId = dbHelper.unit().id),
-            medKitService.get(kit.id, alice.id)
+            kit.id
         )
         dbHelper.flushAndClear()
 

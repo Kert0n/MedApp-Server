@@ -118,9 +118,8 @@ class OptimisticRaceTest {
         val outcome = race(
             { sync ->
                 val read = drugService.get(drug.id, alice.id)
-                val into = medKitService.get(target.id, alice.id)
                 sync()
-                drugService.moveTo(read, into, read.version)
+                drugService.moveTo(read, target.id, read.version)
             },
             { sync ->
                 sync()

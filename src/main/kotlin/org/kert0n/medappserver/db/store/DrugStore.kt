@@ -98,8 +98,6 @@ class DrugStore {
         Drugs.update({ Drugs.medKitId eq sourceMedKitId }) { it[medKitId] = targetMedKitId }
     }
 
-    internal fun moveAllToMedKit(source: MedKit, target: MedKit) = moveAllToMedKit(source.id, target.id)
-
 
     // ── Внутреннее: помощники запросов и перенос строк ───────────────────────────
     //
