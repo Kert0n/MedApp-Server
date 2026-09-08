@@ -16,6 +16,7 @@ import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.api.DrugSyncRequest
 import org.kert0n.medappserver.api.ReservationSyncRequest
+import org.kert0n.medappserver.domain.AlreadyMember
 import org.kert0n.medappserver.domain.DomainRuleViolated
 import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.StaleVersion
@@ -573,10 +574,7 @@ class OptimisticRaceTest {
         )
 
         assertEquals(1, outcome.failures.size, "второе вступление обязано быть отвергнуто: ${outcome.failures}")
-        assertTrue(
-            outcome.failures.single() is DomainRuleViolated,
-            "и отвергнуто доменным отказом: ${outcome.failures.single()}"
-        )
+        assertTrue(outcome.failures.single() is AlreadyMember, "повтор отвергается как AlreadyMember")
     }
 
     @Test

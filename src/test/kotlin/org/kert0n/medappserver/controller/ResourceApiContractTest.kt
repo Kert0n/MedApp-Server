@@ -15,6 +15,7 @@ import org.kert0n.medappserver.api.ReservationPatchRequest
 import org.kert0n.medappserver.api.UserSnapshotDTO
 import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.api.toSnapshot
+import org.kert0n.medappserver.domain.AlreadyMember
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.Quantity
@@ -265,6 +266,19 @@ class ResourceApiContractTest {
 
         mockMvc.perform(delete(ApiRoutes.membership(medKitId)).with(asUser()))
             .andExpect(status().isNoContent)
+    }
+
+    @Test
+    fun `повторное вступление отвечает конфликтом ресурса`() {
+        whenever(medKits.joinByInvitation("invite-key", userId)).thenThrow(AlreadyMember())
+
+        mockMvc.perform(
+            post(ApiRoutes.MEMBERSHIPS).with(asUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.encodeToString(MembershipCreateRequest("invite-key")))
+        )
+            .andExpect(status().isConflict)
+            .andExpect(jsonPath("$.status").value(409))
     }
 
     @Test

@@ -136,6 +136,7 @@ class MedKitMembershipController(
         description = "Accepts an invitation and joins the kit."
     )
     @ApiResponse(responseCode = "201", description = "Joined")
+    @ApiResponse(responseCode = "409", description = "Caller is already a member", content = [Content()])
     @ApiResponse(responseCode = "404", description = "Invitation expired or unknown", content = [Content()])
     fun joinMedKit(
         authentication: Authentication,
