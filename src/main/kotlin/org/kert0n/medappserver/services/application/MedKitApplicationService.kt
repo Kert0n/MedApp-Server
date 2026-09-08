@@ -4,7 +4,6 @@ import kotlin.uuid.Uuid
 import org.kert0n.medappserver.api.InvitationDTO
 import org.kert0n.medappserver.api.MedKitCreatedDTO
 import org.kert0n.medappserver.api.MedKitDTO
-import org.kert0n.medappserver.api.statedVersion
 import org.kert0n.medappserver.api.MedKitSummaryDTO
 import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.api.toSnapshots
@@ -36,7 +35,7 @@ class MedKitApplicationService(
     @Transactional
     fun create(userId: Uuid): MedKitCreatedDTO = MedKitCreatedDTO(medKitService.create(userId).id)
 
-    /** Аптечка вместе с содержимым: сама аптечка знает участников, упаковки — себя. */
+    /** Аптечка вместе с содержимым: сама аптечка знает счётчик, упаковки — себя. */
     @Transactional(readOnly = true)
     fun read(medKitId: Uuid, userId: Uuid): MedKitDTO {
         val medKit = medKitService.get(medKitId, userId)
@@ -73,9 +72,9 @@ class MedKitApplicationService(
      * если он допущен к новому месту. Там ключ правило выразить не может — см. `DrugRelocation`.
      */
     @Transactional
-    fun leave(medKitId: Uuid, version: Long?, userId: Uuid) {
+    fun leave(medKitId: Uuid, userId: Uuid) {
         logger.debug("Removing user {} from medkit {}", userId, medKitId)
-        medKitService.leave(medKitId, userId, statedVersion(version))
+        medKitService.leave(medKitId, userId)
     }
 
     /**
@@ -85,9 +84,12 @@ class MedKitApplicationService(
      * переезде одной пачки, поэтому и живёт оно в одном месте на оба случая.
      */
     @Transactional
-    fun delete(medKitId: Uuid, version: Long?, userId: Uuid, transferToMedKitId: Uuid? = null) {
+    fun delete(medKitId: Uuid, userId: Uuid, transferToMedKitId: Uuid? = null) {
         logger.debug("Deleting medkit {} (transfer to {})", medKitId, transferToMedKitId)
-        transferToMedKitId?.let { relocation.moveAll(medKitId, it, userId) }
-        medKitService.delete(medKitId, userId, statedVersion(version))
+        val ids = setOfNotNull(medKitId, transferToMedKitId)
+        val locked = medKitService.lock(ids, userId).associateBy { it.id }
+        val source = locked.getValue(medKitId)
+        transferToMedKitId?.let { relocation.moveAll(source, locked.getValue(it)) }
+        medKitService.delete(source)
     }
 }

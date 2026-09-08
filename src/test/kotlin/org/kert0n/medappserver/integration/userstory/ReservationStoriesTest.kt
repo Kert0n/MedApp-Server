@@ -178,13 +178,13 @@ class ReservationStoriesTest {
 
         val medkit = dbHelper.medKit(familyKit.id)
         assertNotNull(medkit)
-        assertEquals(3, medkit.members.size)
+        assertEquals(3, medkit.userCount)
 
-        medKits.leave(familyKit.id, dbHelper.medKitVersion(familyKit.id), child.id)
+        medKits.leave(familyKit.id, child.id)
 
         val updatedKit = dbHelper.medKit(familyKit.id)
         assertNotNull(updatedKit)
-        assertEquals(2, updatedKit.members.size)
+        assertEquals(2, updatedKit.userCount)
 
         println("✅ Story 10 passed: Complete family medkit lifecycle")
     }

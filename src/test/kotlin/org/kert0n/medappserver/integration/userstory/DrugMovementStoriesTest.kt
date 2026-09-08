@@ -187,7 +187,7 @@ class DrugMovementStoriesTest {
         dbHelper.reserve(charlie.id, drugData.id, qty(30.0))
 
 
-        medKits.delete(oldKit.id, dbHelper.medKitVersion(oldKit.id), anna.id, newKit.id)
+        medKits.delete(oldKit.id, anna.id, newKit.id)
 
 
         assertNotNull(dbHelper.userReservation(anna.id, drugData.id), "Anna should keep her plan")

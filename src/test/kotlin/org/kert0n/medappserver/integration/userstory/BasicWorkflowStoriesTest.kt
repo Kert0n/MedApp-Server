@@ -134,7 +134,7 @@ class BasicWorkflowStoriesTest {
 
         val sharedMedkit = dbHelper.medKit(medkit.id)
         assertNotNull(sharedMedkit)
-        assertEquals(2, sharedMedkit.members.size, "Medkit should have 2 users")
+        assertEquals(2, sharedMedkit.userCount, "Medkit should have 2 users")
 
         println("✅ Story 2 passed: Anna successfully shared medkit with Bob")
     }
@@ -164,14 +164,14 @@ class BasicWorkflowStoriesTest {
         dbHelper.insert(drugData)
 
         val loadedMedkit = dbHelper.medKit(medkit.id)!!
-        assertEquals(2, loadedMedkit.members.size)
+        assertEquals(2, loadedMedkit.userCount)
 
-        medKits.leave(medkit.id, dbHelper.medKitVersion(medkit.id), bob.id)
+        medKits.leave(medkit.id, bob.id)
 
         val updatedMedkit = dbHelper.medKit(medkit.id)
         assertNotNull(updatedMedkit)
-        assertEquals(1, updatedMedkit.members.size, "Only Anna should be in medkit")
-        assertTrue(updatedMedkit.members.contains(anna.id))
+        assertEquals(1, updatedMedkit.userCount, "Only Anna should be in medkit")
+        assertTrue(dbHelper.isMember(medkit.id, anna.id))
 
         val remainingDrug = dbHelper.drug(drugData.id)
         assertNotNull(remainingDrug, "Drug should still exist")
@@ -213,7 +213,7 @@ class BasicWorkflowStoriesTest {
 
         assertEquals(2, medKitService.allOfUser(userData.id).size)
 
-        medKits.delete(oldMedkit.id, dbHelper.medKitVersion(oldMedkit.id), userData.id, newMedkit.id)
+        medKits.delete(oldMedkit.id, userData.id, newMedkit.id)
 
         val drugsInNew = drugService.ofMedKit(newMedkit.id, userData.id)
         assertEquals(2, drugsInNew.size, "All drugs should be in new medkit")

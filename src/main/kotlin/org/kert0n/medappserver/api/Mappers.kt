@@ -71,7 +71,7 @@ fun ReservationSnapshot.toDto(): ReservationsDTO = ReservationsDTO(
 /** Аптечка с содержимым: число участников она знает сама, упаковки приносит вызывающий. */
 fun MedKit.toDto(drugs: Set<DrugSnapshotDTO>): MedKitDTO = MedKitDTO(
     id = id,
-    userCount = members.size.toLong(),
+    userCount = userCount,
     drugs = drugs
 )
 
@@ -110,6 +110,6 @@ fun FormType.toDto(): VocabularyEntryDTO = VocabularyEntryDTO(id = id, name = na
  */
 fun MedKit.toSummaryDto(drugIds: Set<Uuid>): MedKitSummaryDTO = MedKitSummaryDTO(
     id = id,
-    userCount = members.size.toLong(),
+    userCount = userCount,
     drugIds = drugIds
 )

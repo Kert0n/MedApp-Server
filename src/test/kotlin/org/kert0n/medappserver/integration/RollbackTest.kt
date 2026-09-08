@@ -83,7 +83,7 @@ class RollbackTest {
         val kit = dbHelper.freshMedKit(alice.id)
         val drug = dbHelper.freshDrug(kit.id, 10.0)
 
-        assertFailsWith<NotAMember> { medKits.delete(kit.id, 0, eve.id) }
+        assertFailsWith<NotAMember> { medKits.delete(kit.id, eve.id) }
 
         assertNotNull(dbHelper.medKit(kit.id), "аптечка на месте")
         assertNotNull(dbHelper.drug(drug.id), "препарат на месте")
@@ -102,21 +102,22 @@ class RollbackTest {
     /**
      * Самый длинный путь до отказа: упаковки уже переехали, чужие брони уже сняты.
      *
-     * Версия аптечки предъявлена неверная, но узнаётся это последним оператором команды.
-     * Вернуться обязаны обе части — и переезд, и снятые брони.
+     * Целевая аптечка недоступна, поэтому команда обязана остановиться до переезда и снятия
+     * броней.
      */
     @Test
-    fun `удаление аптечки с переносом откатывает и переезд, и снятые брони`() {
+    fun `удаление аптечки с переносом в недоступную не трогает пачки и брони`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
+        val eve = dbHelper.freshUser("eve")
         val source = dbHelper.freshMedKit(alice.id)
         dbHelper.join(source.id, alice.id, bob.id)
-        val target = dbHelper.freshMedKit(alice.id)
+        val target = dbHelper.freshMedKit(eve.id)
         val drug = dbHelper.freshDrug(source.id, 20.0)
         dbHelper.reserve(bob.id, drug.id, qty(5.0))
 
-        assertFailsWith<StaleVersion> {
-            medKits.delete(source.id, dbHelper.medKitVersion(source.id) + 1, alice.id, target.id)
+        assertFailsWith<NotAMember> {
+            medKits.delete(source.id, alice.id, target.id)
         }
 
         assertNotNull(dbHelper.medKit(source.id), "аптечка на месте")
@@ -166,19 +167,6 @@ class RollbackTest {
 
         assertQty(10.0, dbHelper.drugQuantity(drug.id), "пачка цела и не тронута приёмом")
         assertQty(4.0, dbHelper.userReservation(alice.id, drug.id), "бронь на месте")
-    }
-
-    /** Выход последнего участника уносит аптечку с содержимым — отказ не уносит ничего. */
-    @Test
-    fun `отказ на выходе последнего участника ничего не удаляет`() {
-        val alice = dbHelper.freshUser("alice")
-        val kit = dbHelper.freshMedKit(alice.id)
-        val drug = dbHelper.freshDrug(kit.id, 10.0)
-
-        assertFailsWith<StaleVersion> { medKits.leave(kit.id, dbHelper.medKitVersion(kit.id) + 1, alice.id) }
-
-        assertNotNull(dbHelper.medKit(kit.id), "аптечка на месте")
-        assertNotNull(dbHelper.drug(drug.id), "препарат на месте")
     }
 
     /**

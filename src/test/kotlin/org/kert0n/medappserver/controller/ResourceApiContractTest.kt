@@ -78,7 +78,7 @@ class ResourceApiContractTest {
     private val medKitId: Uuid = Uuid.random()
     private val drugId: Uuid = Uuid.random()
 
-    private val medKit = MedKit(medKitId, setOf(userId))
+    private val medKit = MedKit(medKitId, 1)
     private val unit = QuantityUnit(Uuid.random(), "mg")
     private val drug = Drug(
         id = drugId, medKitId = medKitId, name = "Aspirin",
@@ -254,7 +254,7 @@ class ResourceApiContractTest {
     fun `членство создаётся и удаляется`() {
         whenever(medKits.joinByInvitation("invite-key", userId))
             .thenReturn(MedKitDTO(medKitId, 2, emptySet()))
-        doNothing().whenever(medKits).leave(medKitId, 0, userId)
+        doNothing().whenever(medKits).leave(medKitId, userId)
 
         mockMvc.perform(
             post(ApiRoutes.MEMBERSHIPS).with(asUser())
@@ -270,7 +270,7 @@ class ResourceApiContractTest {
     @Test
     fun `удаление аптечки принимает целевую параметром запроса`() {
         val target = Uuid.random()
-        doNothing().whenever(medKits).delete(medKitId, 0, userId, target)
+        doNothing().whenever(medKits).delete(medKitId, userId, target)
 
         mockMvc.perform(
             delete(ApiRoutes.medKit(medKitId))

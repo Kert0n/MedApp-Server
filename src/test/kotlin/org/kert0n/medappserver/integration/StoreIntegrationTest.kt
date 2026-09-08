@@ -172,7 +172,8 @@ class StoreIntegrationTest {
 
         val loaded = dbHelper.medKit(kit.id)!!
 
-        assertEquals(setOf(alice.id), loaded.members)
+        assertEquals(1, loaded.userCount)
+        assertTrue(dbHelper.isMember(kit.id, alice.id))
     }
 
     @Test
@@ -197,11 +198,11 @@ class StoreIntegrationTest {
         dbHelper.freshDrug(kit.id, 3.0)
         dbHelper.flushAndClear()
 
-        // Аптечка приходит агрегатом: участники в ней самой, а пачки считает вызывающий по
-        // тому набору, который всё равно читал.
+        // Аптечка приходит со счётчиком из базы, а пачки считает вызывающий по тому набору,
+        // который всё равно читал.
         val mine = medKits.findAllOfUser(alice.id).single()
 
-        assertEquals(2, mine.members.size)
+        assertEquals(2, mine.userCount)
         assertEquals(3, drugs.findAllInMedKit(kit.id, alice.id).size)
     }
 
@@ -212,7 +213,7 @@ class StoreIntegrationTest {
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
-        medKits.delete(dbHelper.medKit(kit.id)!!, dbHelper.medKitVersion(kit.id))
+        medKits.delete(dbHelper.medKit(kit.id)!!)
         dbHelper.flushAndClear()
 
         assertNull(dbHelper.medKit(kit.id))

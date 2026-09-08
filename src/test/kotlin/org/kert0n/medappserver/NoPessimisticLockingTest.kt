@@ -8,11 +8,10 @@ import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.testutil.allSources
 
 /**
- * Конкурентность держится на версиях, и ничем другим.
+ * Пессимистическая блокировка разрешена только жизненному циклу membership.
  *
- * `FOR UPDATE` и пессимистичные блокировки решают ту же задачу иначе: они удерживают строку до
- * конца транзакции. Смешивать два подхода хуже, чем выбрать любой: под нагрузкой они дают
- * взаимные блокировки, а по коду становится непонятно, что именно защищает запись.
+ * Упаковки и снимки броней по-прежнему держатся на версиях. Membership меняет отдельные строки,
+ * а блокировка корня нужна лишь для решения, кто вышел последним, и для порядка с join/delete.
  *
  * `JdbcTemplate` в проде запрещён отдельно: запрос перестаёт быть выражением, а типы — своими.
  * Единственное законное обращение к драйверу живёт в тесте, который нарочно ходит мимо
@@ -34,13 +33,18 @@ class NoPessimisticLockingTest {
     }
 
     @Test
-    fun `в проде нет пессимистичных блокировок`() {
+    fun `пессимистическая блокировка не выходит за хранилище аптечки`() {
+        val outsideMembershipLifecycle = production.filterNot { it.name == "MedKitStore.kt" }
         listOf("FOR UPDATE", "forUpdate", "LockMode", "PESSIMISTIC").forEach { forbidden ->
             assertNothingMentions(
                 forbidden,
-                "конкурентность держится на версиях; блокировка вернёт то, от чего уходили"
+                "блокировка разрешена только жизненному циклу membership в MedKitStore",
+                outsideMembershipLifecycle
             )
         }
+
+        val medKitStore = production.single { it.name == "MedKitStore.kt" }
+        assertTrue(medKitStore.readText().contains(".forUpdate()"), "корень membership не блокируется")
     }
 
     /**
@@ -49,8 +53,8 @@ class NoPessimisticLockingTest {
      * Написать «здесь мог бы быть FOR UPDATE» и оставить — ровно тот способ, которым запрет
      * размывается; сообщение называет файл и строку, так что разобраться легко.
      */
-    private fun assertNothingMentions(forbidden: String, why: String) {
-        val offenders = production.flatMap { file ->
+    private fun assertNothingMentions(forbidden: String, why: String, sources: List<Path> = production) {
+        val offenders = sources.flatMap { file ->
             file.readText().lines().withIndex()
                 .filter { (_, line) -> line.contains(forbidden) }
                 .map { (number, _) -> "${file.name}:${number + 1}" }

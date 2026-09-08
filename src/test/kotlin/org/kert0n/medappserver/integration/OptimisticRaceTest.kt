@@ -5,12 +5,13 @@ import java.util.concurrent.CyclicBarrier
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.uuid.Uuid
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.domain.DomainRuleViolated
-import org.kert0n.medappserver.domain.MedKit
+import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.StaleVersion
 import org.kert0n.medappserver.services.aggregate.DrugEdit
 import org.kert0n.medappserver.services.aggregate.DrugService
@@ -75,24 +76,17 @@ class OptimisticRaceTest {
 
         val outcome = race(
             { sync ->
-                val read = medKitService.get(kit.id, alice.id)
                 sync()
-                medKitService.leave(read, alice.id, read.version)
+                medKitService.leave(kit.id, alice.id)
             },
             { sync ->
-                val read = medKitService.get(kit.id, bob.id)
                 sync()
-                medKitService.leave(read, bob.id, read.version)
+                medKitService.leave(kit.id, bob.id)
             }
         )
 
-        outcome.assertOneLost()
-        val members: MedKit? = dbHelper.medKit(kit.id)
-        assertEquals(
-            1,
-            members?.members?.size,
-            "проигравший не должен был уйти следом: аптечка обязана остаться с одним участником"
-        )
+        assertTrue(outcome.failures.isEmpty(), "оба выхода должны завершиться: ${outcome.failures}")
+        assertNull(dbHelper.medKit(kit.id), "последний выход обязан удалить аптечку")
     }
 
     @Test
@@ -112,16 +106,13 @@ class OptimisticRaceTest {
                 drugService.moveTo(read, into, read.version)
             },
             { sync ->
-                val read = medKitService.get(source.id, bob.id)
                 sync()
-                medKitService.leave(read, bob.id, read.version)
+                medKitService.leave(source.id, bob.id)
             }
         )
 
-        // Здесь агрегаты разные, и обе стороны могут выиграть: проверяется, что состояние
-        // осталось связным, а не что кто-то обязан проиграть.
-        assertTrue(outcome.failures.all { it is StaleVersion }, "отказ, если он был, — только по версии")
-        assertEquals(target.id, dbHelper.requireDrug(drug.id).medKitId.takeIf { outcome.failures.isEmpty() } ?: target.id)
+        assertTrue(outcome.failures.isEmpty(), "независимые команды должны завершиться: ${outcome.failures}")
+        assertEquals(target.id, dbHelper.requireDrug(drug.id).medKitId)
     }
 
     @Test
@@ -177,13 +168,12 @@ class OptimisticRaceTest {
                 reservationService.create(read, bob.id, BigDecimal("4"), claims.version)
             },
             { sync ->
-                val read = medKitService.get(kit.id, bob.id)
                 sync()
-                medKitService.leave(read, bob.id, read.version)
+                medKitService.leave(kit.id, bob.id)
             }
         )
 
-        val stillMember = dbHelper.medKit(kit.id)?.members?.contains(bob.id) == true
+        val stillMember = dbHelper.isMember(kit.id, bob.id)
         val hasReservation = dbHelper.userReservation(bob.id, drug.id) != null
         assertTrue(
             stillMember || !hasReservation,
@@ -249,6 +239,81 @@ class OptimisticRaceTest {
             outcome.failures.single() is DomainRuleViolated,
             "и отвергнуто доменным отказом: ${outcome.failures.single()}"
         )
+    }
+
+    @Test
+    fun `разные люди вступают по одному приглашению одновременно`() {
+        val alice = dbHelper.freshUser("race-join-many-a")
+        val bob = dbHelper.freshUser("race-join-many-b")
+        val charlie = dbHelper.freshUser("race-join-many-c")
+        val kit = dbHelper.freshMedKit(alice.id)
+        val key = TransactionTemplate(transactionManager).execute { medKitService.invite(kit.id, alice.id) }
+
+        val outcome = race(
+            { sync -> sync(); medKitService.joinByInvitation(key, bob.id) },
+            { sync -> sync(); medKitService.joinByInvitation(key, charlie.id) }
+        )
+
+        assertTrue(outcome.failures.isEmpty(), "разные membership не конфликтуют: ${outcome.failures}")
+        assertEquals(3, dbHelper.medKit(kit.id)?.userCount)
+        assertTrue(dbHelper.isMember(kit.id, bob.id))
+        assertTrue(dbHelper.isMember(kit.id, charlie.id))
+    }
+
+    @Test
+    fun `последний выход против вступления оставляет только целостный результат`() {
+        val alice = dbHelper.freshUser("race-last-leave-a")
+        val bob = dbHelper.freshUser("race-last-leave-b")
+        val kit = dbHelper.freshMedKit(alice.id)
+        val key = TransactionTemplate(transactionManager).execute { medKitService.invite(kit.id, alice.id) }
+
+        val outcome = race(
+            { sync -> sync(); medKitService.leave(kit.id, alice.id) },
+            { sync -> sync(); medKitService.joinByInvitation(key, bob.id) }
+        )
+
+        val stored = dbHelper.medKit(kit.id)
+        if (stored == null) {
+            assertEquals(1, outcome.failures.size)
+            assertTrue(outcome.failures.single() is NotAMember)
+        } else {
+            assertTrue(outcome.failures.isEmpty(), "вступивший остаётся единственным участником: ${outcome.failures}")
+            assertEquals(1, stored.userCount)
+            assertTrue(dbHelper.isMember(kit.id, bob.id))
+        }
+    }
+
+    @Test
+    fun `глобальное удаление против вступления не оставляет membership без аптечки`() {
+        val alice = dbHelper.freshUser("race-delete-join-a")
+        val bob = dbHelper.freshUser("race-delete-join-b")
+        val kit = dbHelper.freshMedKit(alice.id)
+        val key = TransactionTemplate(transactionManager).execute { medKitService.invite(kit.id, alice.id) }
+
+        val outcome = race(
+            { sync -> sync(); medKitService.delete(kit.id, alice.id) },
+            { sync -> sync(); medKitService.joinByInvitation(key, bob.id) }
+        )
+
+        assertTrue(outcome.failures.all { it is NotAMember }, "допустим только отказ исчезнувшего ресурса")
+        assertNull(dbHelper.medKit(kit.id))
+        assertTrue(!dbHelper.isMember(kit.id, bob.id))
+    }
+
+    @Test
+    fun `глобальное удаление против выхода не оставляет пустой корень`() {
+        val alice = dbHelper.freshUser("race-delete-leave-a")
+        val bob = dbHelper.freshUser("race-delete-leave-b")
+        val kit = dbHelper.freshMedKit(alice.id)
+        dbHelper.join(kit.id, alice.id, bob.id)
+
+        val outcome = race(
+            { sync -> sync(); medKitService.delete(kit.id, alice.id) },
+            { sync -> sync(); medKitService.leave(kit.id, bob.id) }
+        )
+
+        assertTrue(outcome.failures.all { it is NotAMember }, "допустим только отказ исчезнувшего ресурса")
+        assertNull(dbHelper.medKit(kit.id))
     }
 
     // ── Оснастка ──────────────────────────────────────────────────────────────────────

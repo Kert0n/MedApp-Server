@@ -20,7 +20,6 @@ ALTER TABLE users ADD CONSTRAINT ix_users_hashed_key UNIQUE (hashed_key);
 
 CREATE TABLE IF NOT EXISTS med_kits (
     id uuid,
-    "version" BIGINT DEFAULT 0 NOT NULL,
     CONSTRAINT med_kits_pkey PRIMARY KEY (id)
 );
 
