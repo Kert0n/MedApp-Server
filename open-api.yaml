@@ -103,13 +103,8 @@ paths:
         required: true
       responses:
         "200":
-          description: Changes applied
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/DrugSnapshotDTO"
-        "204":
-          description: Package emptied by this request and destroyed
+          description: "Changes applied; when the package ran out, it was destroyed\
+            \ and the response body is empty"
           content:
             '*/*':
               schema:
@@ -339,13 +334,12 @@ paths:
         required: true
       responses:
         "200":
-          description: Package reduced
+          description: "Package reduced; when it ran out, it was destroyed and the\
+            \ response body is empty"
           content:
             '*/*':
               schema:
                 $ref: "#/components/schemas/DrugSnapshotDTO"
-        "204":
-          description: Package ran out and was destroyed
         "400":
           description: Amount exceeds what is left in the package
         "404":
@@ -983,8 +977,8 @@ components:
           - integer
           - "null"
           format: int64
-          description: "Version the command acts on; taken from the last read. Absent\
-            \ means 428, mismatched means 412"
+          description: Version of the package state; required when consumed is present.
+            Missing or stale means 409
           example: 3
         reservation:
           description: New state of the caller's claim; omitted when it did not change
@@ -1008,8 +1002,9 @@ components:
           - integer
           - "null"
           format: int64
-          description: Version of the claims picture; absent when there is no claim
-            yet
+          description: "Version of the claims picture; when absent, the server uses\
+            \ the current picture read while processing the request. A supplied stale\
+            \ version means 409"
       required:
       - amount
     ReservationCreateRequest:

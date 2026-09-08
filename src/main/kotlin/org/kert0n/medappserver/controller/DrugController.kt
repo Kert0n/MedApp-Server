@@ -132,8 +132,10 @@ class DrugController(private val drugs: DrugApplicationService) {
             "be refilled, so a second pack is a second package. Returns no body when the package ran out and was " +
             "destroyed."
     )
-    @ApiResponse(responseCode = "200", description = "Package reduced")
-    @ApiResponse(responseCode = "204", description = "Package ran out and was destroyed", content = [Content()])
+    @ApiResponse(
+        responseCode = "200",
+        description = "Package reduced; when it ran out, it was destroyed and the response body is empty"
+    )
     @ApiResponse(responseCode = "400", description = "Amount exceeds what is left in the package", content = [Content()])
     @ApiResponse(responseCode = "404", description = "Package does not exist or is not accessible", content = [Content()])
     fun recordIntake(
@@ -162,8 +164,10 @@ class DrugController(private val drugs: DrugApplicationService) {
             "Repeating the same request under the same identifier changes nothing; the same " +
             "identifier with different content is a conflict."
     )
-    @ApiResponse(responseCode = "200", description = "Changes applied")
-    @ApiResponse(responseCode = "204", description = "Package emptied by this request and destroyed")
+    @ApiResponse(
+        responseCode = "200",
+        description = "Changes applied; when the package ran out, it was destroyed and the response body is empty"
+    )
     @ApiResponse(responseCode = "404", description = "Package does not exist or is not accessible", content = [Content()])
     @ApiResponse(responseCode = "409", description = "Stated version is not current, or the identifier was used for a different request", content = [Content()])
     fun synchronise(

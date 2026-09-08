@@ -30,7 +30,7 @@ data class DrugSyncRequest(
 
     @Schema(
         description =
-            "Version the command acts on; taken from the last read. Absent means 428, mismatched means 412",
+            "Version of the package state; required when consumed is present. Missing or stale means 409",
         example = "3"
     )
     val drugVersion: Long? = null,
@@ -52,7 +52,10 @@ data class ReservationSyncRequest(
     )
     val amount: BigDecimal,
 
-    /** Отсутствует, когда брони ещё нет: сверяться не с чем, её заводят. */
-    @Schema(description = "Version of the claims picture; absent when there is no claim yet")
+    /** Без версии сервер пишет по картине броней, которую только что прочитал сам. */
+    @Schema(
+        description = "Version of the claims picture; when absent, the server uses the current picture read " +
+            "while processing the request. A supplied stale version means 409"
+    )
     val version: Long? = null
 )
