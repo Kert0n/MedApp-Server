@@ -36,12 +36,12 @@ class NoPessimisticLockingTest {
 
     @Test
     fun `пессимистическая блокировка не выходит за хранилище аптечки`() {
-        val outsideMembershipLifecycle = production.filterNot { it.name == "MedKitStore.kt" }
+        val outsideRootProtocol = production.filterNot { it.name == "MedKitStore.kt" }
         listOf("FOR UPDATE", "forUpdate", "LockMode", "PESSIMISTIC").forEach { forbidden ->
             assertNothingMentions(
                 forbidden,
-                "блокировка разрешена только жизненному циклу membership в MedKitStore",
-                outsideMembershipLifecycle
+                "оба режима блокировки корня разрешены только одному запросу MedKitStore",
+                outsideRootProtocol
             )
         }
 
