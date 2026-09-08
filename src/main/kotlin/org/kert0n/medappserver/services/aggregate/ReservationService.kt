@@ -96,9 +96,9 @@ class ReservationService(
 
     /** Брони всех, кто целевую аптечку не видит, — при удалении с переносом. */
     @Transactional(propagation = MANDATORY)
-    fun dropInMedKitExcept(medKit: MedKit, accessibleUserIds: Set<Uuid>) {
-        logger.debug("Dropping reservations in medkit {} outside {} users", medKit.id, accessibleUserIds.size)
-        reservations.deleteInMedKitExcept(medKit, accessibleUserIds)
+    fun dropInMedKitExcept(medKit: MedKit, target: MedKit) {
+        logger.debug("Dropping reservations in medkit {} outside target medkit {}", medKit.id, target.id)
+        reservations.deleteInMedKitExcept(medKit, target)
     }
 
     /** Все брони на упаковку: зовётся, когда упаковка уничтожается. */
@@ -110,9 +110,9 @@ class ReservationService(
 
     /** То же для одной переехавшей упаковки: остаются брони тех, кто видит новое место. */
     @Transactional(propagation = MANDATORY)
-    fun dropOnDrugExcept(drug: Drug, accessibleUserIds: Set<Uuid>) {
-        logger.debug("Dropping reservations on drug {} outside {} users", drug.id, accessibleUserIds.size)
-        reservations.deleteOfDrugExcept(drug, accessibleUserIds)
+    fun dropOnDrugExcept(drug: Drug, target: MedKit) {
+        logger.debug("Dropping reservations on drug {} outside target medkit {}", drug.id, target.id)
+        reservations.deleteOfDrugExcept(drug, target)
     }
 
     /** Отмена — это удаление: брони с нулём не бывает. */

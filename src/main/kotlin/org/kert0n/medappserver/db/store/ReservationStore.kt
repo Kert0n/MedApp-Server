@@ -13,15 +13,15 @@ import org.jetbrains.exposed.v1.core.plus
 import org.jetbrains.exposed.v1.core.sum
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
-import org.jetbrains.exposed.v1.core.notInList
+import org.jetbrains.exposed.v1.core.notInSubQuery
 import org.jetbrains.exposed.v1.jdbc.Query
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.select
-import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
 import org.kert0n.medappserver.db.tables.Drugs
+import org.kert0n.medappserver.db.tables.MedKitMemberships
 import org.kert0n.medappserver.db.tables.QuantityUnits
 import org.kert0n.medappserver.db.tables.Reservations
 import org.kert0n.medappserver.domain.Drug
@@ -151,23 +151,24 @@ class ReservationStore {
     }
 
     /** Брони тех, кто аптечку не видит, — при удалении аптечки с переносом. */
-    fun deleteInMedKitExcept(medKit: MedKit, accessibleUserIds: Set<Uuid>) {
+    fun deleteInMedKitExcept(medKit: MedKit, target: MedKit) {
+        val targetMembers = membersOf(target)
         val touched = Reservations
             .select(Reservations.drugId)
-            .where { (Reservations.medKitId eq medKit.id) and (Reservations.userId notInList accessibleUserIds) }
+            .where { (Reservations.medKitId eq medKit.id) and (Reservations.userId notInSubQuery targetMembers) }
             .map { it[Reservations.drugId] }
             .distinct()
 
         Reservations.deleteWhere {
-            (Reservations.medKitId eq medKit.id) and (Reservations.userId notInList accessibleUserIds)
+            (Reservations.medKitId eq medKit.id) and (Reservations.userId notInSubQuery targetMembers)
         }
         recountSnapshots(touched)
     }
 
     /** То же для одной переехавшей упаковки. */
-    fun deleteOfDrugExcept(drug: Drug, accessibleUserIds: Set<Uuid>) {
+    fun deleteOfDrugExcept(drug: Drug, target: MedKit) {
         Reservations.deleteWhere {
-            (Reservations.drugId eq drug.id) and (Reservations.userId notInList accessibleUserIds)
+            (Reservations.drugId eq drug.id) and (Reservations.userId notInSubQuery membersOf(target))
         }
         recountSnapshots(listOf(drug.id))
     }
@@ -180,6 +181,11 @@ class ReservationStore {
 
     /** Чужие брони видно там, куда есть доступ: аптечка у брони своя, отдельным полем. */
     private fun visibleTo(userId: Uuid): Op<Boolean> = Reservations.medKitId.inMedKitsOf(userId)
+
+    /** Участники целевой аптечки остаются внутри SQL, их идентификаторы не поднимаются в домен. */
+    private fun membersOf(medKit: MedKit): Query =
+        MedKitMemberships.select(MedKitMemberships.userId)
+            .where { MedKitMemberships.medKitId eq medKit.id }
 
     /** Брони вместе с упаковкой и её единицей, отобранные условием. */
     private fun reservationsWhere(condition: () -> Op<Boolean>): Query =

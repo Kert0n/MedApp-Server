@@ -251,7 +251,7 @@ class StoreIntegrationTest {
         dbHelper.reserve(bob.id, first.id, qty(20.0))
         dbHelper.flushAndClear()
 
-        reservations.deleteInMedKitExcept(dbHelper.medKit(source.id)!!, setOf(alice.id))
+        reservations.deleteInMedKitExcept(dbHelper.medKit(source.id)!!, dbHelper.medKit(target.id)!!)
         drugs.moveAllToMedKit(dbHelper.medKit(source.id)!!, dbHelper.medKit(target.id)!!)
         dbHelper.flushAndClear()
 
