@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.domain.NotAMember
-import org.kert0n.medappserver.services.aggregate.MedKitService
+import org.kert0n.medappserver.services.aggregate.MedKitAccessService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.jdbc.core.JdbcTemplate
@@ -27,7 +27,7 @@ import org.springframework.transaction.support.TransactionTemplate
 class RootLockProtocolTest {
 
     @Autowired private lateinit var dbHelper: DatabaseTestHelper
-    @Autowired private lateinit var medKitService: MedKitService
+    @Autowired private lateinit var access: MedKitAccessService
     @Autowired private lateinit var jdbc: JdbcTemplate
     @Autowired private lateinit var transactionManager: PlatformTransactionManager
 
@@ -43,7 +43,7 @@ class RootLockProtocolTest {
                 pool.submit<Throwable?> {
                     runCatching {
                         TransactionTemplate(transactionManager).execute {
-                            medKitService.guard(setOf(kit.id), owner.id)
+                            access.holdContentAccess(setOf(kit.id), owner.id)
                             bothInside.countDown()
                             // Разойтись отсюда можно, только если корень держат оба сразу.
                             assertTrue(bothInside.await(10, TimeUnit.SECONDS), "вторая сторона не получила корень")
@@ -69,7 +69,7 @@ class RootLockProtocolTest {
             val shared = pool.submit<Throwable?> {
                 runCatching {
                     TransactionTemplate(transactionManager).execute {
-                        medKitService.guard(setOf(kit.id), owner.id)
+                        access.holdContentAccess(setOf(kit.id), owner.id)
                         guardTaken.countDown()
                         assertTrue(releaseGuard.await(10, TimeUnit.SECONDS), "исключительный не дошёл до ожидания")
                     }
@@ -82,7 +82,7 @@ class RootLockProtocolTest {
                 runCatching {
                     TransactionTemplate(transactionManager).execute {
                         backend.put(jdbc.queryForObject("SELECT pg_backend_pid()", Int::class.java)!!)
-                        medKitService.lock(setOf(kit.id), owner.id)
+                        access.holdLifecycleAccess(setOf(kit.id), owner.id)
                     }
                 }.exceptionOrNull()
             }
@@ -104,14 +104,14 @@ class RootLockProtocolTest {
         val outsider = dbHelper.freshUser("guard-foreign-eve")
         val kit = dbHelper.freshMedKit(owner.id)
 
-        assertRefusesAccess { medKitService.guard(setOf(kit.id), outsider.id) }
+        assertRefusesAccess { access.holdContentAccess(setOf(kit.id), outsider.id) }
     }
 
     @Test
     fun `совместимый режим не отличает исчезнувшую аптечку от чужой`() {
         val owner = dbHelper.freshUser("guard-missing")
 
-        assertRefusesAccess { medKitService.guard(setOf(Uuid.random()), owner.id) }
+        assertRefusesAccess { access.holdContentAccess(setOf(Uuid.random()), owner.id) }
     }
 
     /**

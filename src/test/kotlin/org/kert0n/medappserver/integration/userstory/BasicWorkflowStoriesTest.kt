@@ -122,7 +122,7 @@ class BasicWorkflowStoriesTest {
         val bob = User(id = Uuid.random(), hashedKey = "bob_${Uuid.random()}")
         dbHelper.insert(bob)
 
-        val shareKey = medKitService.invite(medKitService.get(medkit.id, anna.id), anna.id)
+        val shareKey = medKitService.invite(medkit.id, anna.id)
         medKitService.joinByInvitation(shareKey, bob.id)
 
         val annaMedkits = medKitService.allOfUser(anna.id)
@@ -148,7 +148,7 @@ class BasicWorkflowStoriesTest {
         dbHelper.insert(bob)
 
         val medkit = medKitService.create(anna.id)
-        val shareKey = medKitService.invite(medKitService.get(medkit.id, anna.id), anna.id)
+        val shareKey = medKitService.invite(medkit.id, anna.id)
         medKitService.joinByInvitation(shareKey, bob.id)
 
         val drugData = Drug(
@@ -248,9 +248,9 @@ class BasicWorkflowStoriesTest {
         )
         dbHelper.insert(drugData)
 
-        disposal.consume(drugService.get(drugData.id, userData.id), qty(10.0), dbHelper.drugVersion(drugData.id))
-        disposal.consume(drugService.get(drugData.id, userData.id), qty(10.0), dbHelper.drugVersion(drugData.id))
-        disposal.consume(drugService.get(drugData.id, userData.id), qty(10.0), dbHelper.drugVersion(drugData.id))
+        disposal.consume(drugData.id, userData.id, qty(10.0), dbHelper.drugVersion(drugData.id))
+        disposal.consume(drugData.id, userData.id, qty(10.0), dbHelper.drugVersion(drugData.id))
+        disposal.consume(drugData.id, userData.id, qty(10.0), dbHelper.drugVersion(drugData.id))
 
         val updatedDrug = dbHelper.drug(drugData.id)
         assertNull(updatedDrug)

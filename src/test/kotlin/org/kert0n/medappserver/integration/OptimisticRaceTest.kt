@@ -23,6 +23,7 @@ import org.kert0n.medappserver.domain.StaleVersion
 import org.kert0n.medappserver.services.aggregate.DrugEdit
 import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.MedKitService
+import org.kert0n.medappserver.services.aggregate.MedKitAccessService
 import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.kert0n.medappserver.services.application.DrugApplicationService
 import org.kert0n.medappserver.services.application.MedKitApplicationService
@@ -48,6 +49,7 @@ class OptimisticRaceTest {
     @Autowired private lateinit var dbHelper: DatabaseTestHelper
     @Autowired private lateinit var drugService: DrugService
     @Autowired private lateinit var medKitService: MedKitService
+    @Autowired private lateinit var medKitAccess: MedKitAccessService
     @Autowired private lateinit var reservationService: ReservationService
     @Autowired private lateinit var drugApplicationService: DrugApplicationService
     @Autowired private lateinit var medKitApplicationService: MedKitApplicationService
@@ -220,13 +222,13 @@ class OptimisticRaceTest {
                 val read = drugService.get(drug.id, alice.id)
                 val claims = reservationService.snapshotOn(read, alice.id)
                 sync()
-                placement.place(read, alice.id, BigDecimal("5"), claims.version)
+                placement.place(read.id, alice.id, BigDecimal("5"), claims.version)
             },
             { sync ->
                 val read = drugService.get(drug.id, bob.id)
                 val claims = reservationService.snapshotOn(read, bob.id)
                 sync()
-                placement.place(read, bob.id, BigDecimal("7"), claims.version)
+                placement.place(read.id, bob.id, BigDecimal("7"), claims.version)
             }
         )
 
@@ -258,7 +260,7 @@ class OptimisticRaceTest {
                 val read = drugService.get(drug.id, bob.id)
                 val claims = reservationService.snapshotOn(read, bob.id)
                 sync()
-                placement.place(read, bob.id, BigDecimal("4"), claims.version)
+                placement.place(read.id, bob.id, BigDecimal("4"), claims.version)
             },
             { sync ->
                 sync()
@@ -375,7 +377,7 @@ class OptimisticRaceTest {
                 runCatching {
                     TransactionTemplate(transactionManager).execute {
                         placementBackend.put(jdbc.queryForObject("SELECT pg_backend_pid()", Int::class.java)!!)
-                        placement.place(read, bob.id, BigDecimal("3"), stated)
+                        placement.place(read.id, bob.id, BigDecimal("3"), stated)
                     }
                 }.exceptionOrNull()
             }
@@ -440,10 +442,10 @@ class OptimisticRaceTest {
             val deletion = pool.submit<Throwable?> {
                 runCatching {
                     TransactionTemplate(transactionManager).execute {
-                        val locked = medKitService.lock(setOf(kit.id), alice.id).single()
+                        medKitAccess.holdLifecycleAccess(setOf(kit.id), alice.id)
                         rootTaken.countDown()
                         assertTrue(allowDelete.await(10, TimeUnit.SECONDS), "sync не дошёл до ожидания корня")
-                        medKitService.delete(locked)
+                        medKitService.deleteRoot(kit.id)
                     }
                 }.exceptionOrNull()
             }
@@ -538,13 +540,13 @@ class OptimisticRaceTest {
                 val read = drugService.get(drug.id, owner.id)
                 val claims = reservationService.snapshotOn(read, owner.id)
                 sync()
-                placement.place(read, owner.id, BigDecimal("5"), claims.version)
+                placement.place(read.id, owner.id, BigDecimal("5"), claims.version)
             },
             { sync ->
                 val read = drugService.get(drug.id, owner.id)
                 val claims = reservationService.snapshotOn(read, owner.id)
                 sync()
-                placement.place(read, owner.id, BigDecimal("6"), claims.version)
+                placement.place(read.id, owner.id, BigDecimal("6"), claims.version)
             }
         )
 
@@ -561,20 +563,24 @@ class OptimisticRaceTest {
         val alice = dbHelper.freshUser("race-join-a")
         val bob = dbHelper.freshUser("race-join-b")
         val kit = dbHelper.freshMedKit(alice.id)
+        val key = TransactionTemplate(transactionManager).execute { medKitService.invite(kit.id, alice.id) }
 
         val outcome = race(
             { sync ->
                 sync()
-                dbHelper.join(kit.id, alice.id, bob.id)
+                medKitService.joinByInvitation(key, bob.id)
             },
             { sync ->
                 sync()
-                dbHelper.join(kit.id, alice.id, bob.id)
+                medKitService.joinByInvitation(key, bob.id)
             }
         )
 
         assertEquals(1, outcome.failures.size, "второе вступление обязано быть отвергнуто: ${outcome.failures}")
-        assertTrue(outcome.failures.single() is AlreadyMember, "повтор отвергается как AlreadyMember")
+        assertTrue(
+            outcome.failures.single() is AlreadyMember,
+            "повтор отвергается как AlreadyMember: ${outcome.failures.single()}"
+        )
     }
 
     @Test
@@ -627,7 +633,7 @@ class OptimisticRaceTest {
         val key = TransactionTemplate(transactionManager).execute { medKitService.invite(kit.id, alice.id) }
 
         val outcome = race(
-            { sync -> sync(); medKitService.delete(kit.id, alice.id) },
+            { sync -> sync(); medKitApplicationService.delete(kit.id, alice.id) },
             { sync -> sync(); medKitService.joinByInvitation(key, bob.id) }
         )
 
@@ -644,7 +650,7 @@ class OptimisticRaceTest {
         dbHelper.join(kit.id, alice.id, bob.id)
 
         val outcome = race(
-            { sync -> sync(); medKitService.delete(kit.id, alice.id) },
+            { sync -> sync(); medKitApplicationService.delete(kit.id, alice.id) },
             { sync -> sync(); medKitApplicationService.leave(kit.id, bob.id) }
         )
 

@@ -94,9 +94,11 @@ class DrugStore {
      * Обе аптечки приходят агрегатами, как и везде в этом разделе: вызывающий их прочитал, и
      * это его доказательство доступа к обеим.
      */
-    fun moveAllToMedKit(source: MedKit, target: MedKit) {
-        Drugs.update({ Drugs.medKitId eq source.id }) { it[medKitId] = target.id }
+    fun moveAllToMedKit(sourceMedKitId: Uuid, targetMedKitId: Uuid) {
+        Drugs.update({ Drugs.medKitId eq sourceMedKitId }) { it[medKitId] = targetMedKitId }
     }
+
+    internal fun moveAllToMedKit(source: MedKit, target: MedKit) = moveAllToMedKit(source.id, target.id)
 
 
     // ── Внутреннее: помощники запросов и перенос строк ───────────────────────────

@@ -28,6 +28,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  */
 @Service
 class DrugSynchronisation(
+    private val access: DrugCommandAccess,
     private val reservationService: ReservationService,
     private val placement: ReservationPlacement,
     private val disposal: DrugDisposal,
@@ -37,7 +38,8 @@ class DrugSynchronisation(
     private val logger = LoggerFactory.getLogger(DrugSynchronisation::class.java)
 
     @Transactional(propagation = MANDATORY)
-    fun apply(syncId: Uuid, drug: Drug, userId: Uuid, request: SyncRequest): Drug? {
+    fun apply(syncId: Uuid, drugId: Uuid, userId: Uuid, request: SyncRequest): Drug? {
+        val drug = access.content(drugId, userId)
         val intake = Intake(syncId, userId, drug, request.consumed, request.reservation?.amount)
         if (alreadyApplied(intake)) return drug
 
@@ -57,7 +59,9 @@ class DrugSynchronisation(
             // Списание есть — значит упаковку пишут, и версию к ней предъявить обязаны.
             // Списания нет — писать нечего, и предъявлять не к чему: часть про бронь несёт
             // свою версию сама.
-            asSyncConflict { disposal.consume(drug, request.consumed, request.drugVersion ?: throw StaleSyncVersion()) }
+            asSyncConflict {
+                disposal.consumeUnderAccess(drug, request.consumed, request.drugVersion ?: throw StaleSyncVersion())
+            }
         } else {
             drug
         }
@@ -99,7 +103,7 @@ class DrugSynchronisation(
             if (snapshot.mine == null) {
                 // Через тот же вход, что и у фасада брони: протокол согласования с составом
                 // участников принадлежит заведению брони, а не одному из его вызывающих.
-                placement.place(drug, userId, wanted.amount, stated)
+                placement.placeUnderAccess(drug, userId, wanted.amount, stated)
             } else {
                 reservationService.changeTo(userId, drug.id, wanted.amount, stated)
             }

@@ -8,6 +8,7 @@ import org.kert0n.medappserver.api.statedVersion
 import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.kert0n.medappserver.services.orchestrator.ReservationPlacement
+import org.kert0n.medappserver.services.orchestrator.ReservationChanging
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -21,7 +22,8 @@ import org.springframework.transaction.annotation.Transactional
 @Service
 class ReservationApplicationService(
     private val reservationService: ReservationService,
-    private val placement: ReservationPlacement
+    private val placement: ReservationPlacement,
+    private val changing: ReservationChanging
 ) {
 
     @Transactional(readOnly = true)
@@ -36,9 +38,9 @@ class ReservationApplicationService(
 
     @Transactional
     fun changeTo(userId: Uuid, drugId: Uuid, request: ReservationPatchRequest): ReservationDTO =
-        reservationService.changeTo(userId, drugId, request.amount, statedVersion(request.version)).toDto()
+        changing.changeTo(userId, drugId, request.amount, statedVersion(request.version)).toDto()
 
     @Transactional
     fun cancel(userId: Uuid, drugId: Uuid, version: Long?) =
-        reservationService.cancel(userId, drugId, statedVersion(version))
+        changing.cancel(userId, drugId, statedVersion(version))
 }

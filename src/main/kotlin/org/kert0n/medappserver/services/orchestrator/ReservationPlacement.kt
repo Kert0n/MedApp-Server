@@ -3,11 +3,8 @@ package org.kert0n.medappserver.services.orchestrator
 import java.math.BigDecimal
 import kotlin.uuid.Uuid
 import org.kert0n.medappserver.domain.Drug
-import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.Reservation
-import org.kert0n.medappserver.domain.StaleVersion
 import org.kert0n.medappserver.services.aggregate.DrugService
-import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Propagation.MANDATORY
@@ -28,8 +25,7 @@ import org.springframework.transaction.annotation.Transactional
  */
 @Service
 class ReservationPlacement(
-    private val drugService: DrugService,
-    private val medKitService: MedKitService,
+    private val access: DrugCommandAccess,
     private val reservationService: ReservationService
 ) {
 
@@ -46,23 +42,9 @@ class ReservationPlacement(
      * это конфликт состояния, и отвечать на него надо как на устаревшую версию.
      */
     @Transactional(propagation = MANDATORY)
-    fun place(drug: Drug, userId: Uuid, amount: BigDecimal, stated: Long): Reservation {
-        medKitService.guard(setOf(drug.medKitId), userId)
-
-        val current = try {
-            drugService.get(drug.id, userId)
-        } catch (_: NotAMember) {
-            // Старый корень уже удерживается и доступ к нему не мог исчезнуть. Значит сама
-            // упаковка успела уехать или удалиться после первого чтения.
-            throw StaleVersion()
-        }
-        if (current.medKitId != drug.medKitId) throw StaleVersion()
-
-        return reservationService.create(current, userId, amount, stated)
-    }
-
-    /** По идентификатору — то же самое плюс чтение пачки, оно же проверка доступа. */
-    @Transactional(propagation = MANDATORY)
     fun place(drugId: Uuid, userId: Uuid, amount: BigDecimal, stated: Long): Reservation =
-        place(drugService.get(drugId, userId), userId, amount, stated)
+        placeUnderAccess(access.content(drugId, userId), userId, amount, stated)
+
+    internal fun placeUnderAccess(drug: Drug, userId: Uuid, amount: BigDecimal, stated: Long): Reservation =
+        reservationService.create(drug, userId, amount, stated)
 }

@@ -3,7 +3,6 @@ package org.kert0n.medappserver.services.aggregate
 import com.sksamuel.aedile.core.Cache
 import kotlin.uuid.Uuid
 import org.kert0n.medappserver.db.store.MedKitStore
-import org.kert0n.medappserver.db.store.RootLock
 import org.kert0n.medappserver.domain.Invitation
 import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.NotAMember
@@ -23,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional
 @Service
 class MedKitService(
     private val medKits: MedKitStore,
+    private val access: MedKitAccessService,
     private val securityService: SecurityService,
     private val medKitTokenCache: Cache<String, Invitation>
 ) {
@@ -57,13 +57,10 @@ class MedKitService(
 
     /** По идентификатору — то же самое плюс своё чтение, в котором и проверяется доступ. */
     @Transactional(propagation = MANDATORY)
-    fun invite(medKitId: Uuid, userId: Uuid): String = invite(get(medKitId, userId), userId)
-
-    @Transactional(propagation = MANDATORY)
-    fun invite(medKit: MedKit, invitedBy: Uuid): String {
-        logger.debug("Sharing medkit {} by user: {}", medKit.id, invitedBy)
-        // Аптечка приходит прочитанной — читал её тот, кто приглашает, и это и есть его право.
-        val invitation = Invitation(medKit, invitedBy)
+    fun invite(medKitId: Uuid, userId: Uuid): String {
+        access.holdContentAccess(setOf(medKitId), userId)
+        logger.debug("Sharing medkit {} by user: {}", medKitId, userId)
+        val invitation = Invitation(get(medKitId, userId), userId)
         val key = securityService.generateKey(16)
         // Кешируется только хеш: сырой ключ приглашения на сервере не хранится.
         medKitTokenCache[securityService.hashToken(key)] = invitation
@@ -85,8 +82,9 @@ class MedKitService(
         val invitation = medKitTokenCache.getOrNull(securityService.hashToken(key))
             ?: throw NotAMember()
 
-        val medKit = lock(setOf(invitation.medKitId), invitation.invitedBy).single()
-        medKits.insertMembership(medKit, userId)
+        access.holdLifecycleAccess(setOf(invitation.medKitId), invitation.invitedBy)
+        val medKit = get(invitation.medKitId, invitation.invitedBy)
+        medKits.insertMembership(medKit.id, userId)
         return medKit.copy(userCount = medKit.userCount + 1)
     }
 
@@ -96,57 +94,24 @@ class MedKitService(
      * Брони выходящего лежат в чужом агрегате: их убирает оркестратор.
      */
     @Transactional(propagation = MANDATORY)
-    fun leave(medKit: MedKit, userId: Uuid): MedKit? {
-        logger.debug("Removing user {} from medkit {}", userId, medKit.id)
-        medKits.deleteMembership(medKit, userId)
-        if (!medKits.hasMembers(medKit)) {
-            medKits.delete(medKit)
-            return null
+    internal fun removeMembership(medKitId: Uuid, userId: Uuid): Boolean {
+        logger.debug("Removing user {} from medkit {}", userId, medKitId)
+        medKits.deleteMembership(medKitId, userId)
+        if (!medKits.hasMembers(medKitId)) {
+            medKits.delete(medKitId)
+            return true
         }
-        return medKit.copy(userCount = medKit.userCount - 1)
+        return false
     }
 
-    /**
-     * Удаляется уже прочитанная аптечка.
-     *
-     * Идентификатора здесь нет намеренно: получить `MedKit` можно только скоупленным чтением,
-     * поэтому команде нечего перепроверять — а перепроверка стоила бы второго запроса.
-     */
     @Transactional(propagation = MANDATORY)
-    fun delete(medKitId: Uuid, userId: Uuid) = delete(lock(setOf(medKitId), userId).single())
-
-    @Transactional(propagation = MANDATORY)
-    fun delete(medKit: MedKit) = medKits.delete(medKit)
-
-    /**
-     * Исключительно блокирует доступные корни в стабильном порядке и возвращает их проекции.
-     *
-     * Вход жизненного цикла и переезда: пока корень держат так, состав участников этой аптечки
-     * не меняется и её содержимое никуда не уезжает. Неполный набор не сообщает, какая именно
-     * аптечка чужая или отсутствует.
-     */
-    @Transactional(propagation = MANDATORY)
-    fun lock(medKitIds: Set<Uuid>, userId: Uuid): List<MedKit> {
-        require(medKitIds, RootLock.EXCLUSIVE, userId)
-        return medKits.findAll(medKitIds, userId)
+    internal fun deleteRoot(medKitId: Uuid) {
+        medKits.delete(medKitId)
     }
 
-    /**
-     * Совместимо удерживает корни на время записи содержимого — и ничего не возвращает.
-     *
-     * Нужно это ровно тем командам, чья строка ссылается внешним ключом на membership или на
-     * сам корень: заведению брони и заведению упаковки. Проиграть выходу или удалению аптечки
-     * они обязаны доменным отказом, а не нарушением ключа, и предъявить им нечего — версии у
-     * состава участников нет.
-     *
-     * Проекция здесь не читается намеренно: считать `userCount` под блокировкой команде, которой
-     * он не нужен, — лишняя работа (см. #134). Доступ доказывает сам блокирующий запрос.
-     */
-    @Transactional(propagation = MANDATORY)
-    fun guard(medKitIds: Set<Uuid>, userId: Uuid) = require(medKitIds, RootLock.SHARED, userId)
-
-    /** Взято меньше, чем просили, — значит какой-то корень чужой или его уже нет. */
-    private fun require(medKitIds: Set<Uuid>, lock: RootLock, userId: Uuid) {
-        if (medKits.lockAccessible(medKitIds, userId, lock) != medKitIds) throw NotAMember()
+    @Deprecated("Use a lifecycle command that owns access", level = DeprecationLevel.ERROR)
+    private fun removedCommandSurface() {
+        // Keeps the reason for the removed overloads close to their former owner: a MedKit
+        // value is a read projection, not evidence that a row lock is held.
     }
 }

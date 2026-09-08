@@ -1,7 +1,7 @@
 package org.kert0n.medappserver.services.orchestrator
 
 import kotlin.uuid.Uuid
-import org.kert0n.medappserver.domain.MedKit
+import org.kert0n.medappserver.services.aggregate.MedKitAccessService
 import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.springframework.stereotype.Service
@@ -18,18 +18,15 @@ import org.springframework.transaction.annotation.Transactional
 @Service
 class MedKitLeaving(
     private val medKitService: MedKitService,
+    private val access: MedKitAccessService,
     private val reservationService: ReservationService
 ) {
 
     /** По идентификатору — вход сценария: блокировка одновременно доказывает доступ. */
     @Transactional(propagation = MANDATORY)
-    fun leave(medKitId: Uuid, userId: Uuid): MedKit? =
-        leave(medKitService.lock(setOf(medKitId), userId).single(), userId)
-
-    /** Основная форма для уже исключительно заблокированной аптечки. */
-    @Transactional(propagation = MANDATORY)
-    fun leave(medKit: MedKit, userId: Uuid): MedKit? {
-        reservationService.dropOfMember(medKit, userId)
-        return medKitService.leave(medKit, userId)
+    fun leave(medKitId: Uuid, userId: Uuid) {
+        access.holdLifecycleAccess(setOf(medKitId), userId)
+        reservationService.dropOfMember(medKitId, userId)
+        medKitService.removeMembership(medKitId, userId)
     }
 }

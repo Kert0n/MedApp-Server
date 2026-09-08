@@ -5,9 +5,9 @@ import kotlin.uuid.Uuid
 import org.kert0n.medappserver.db.store.DrugStore
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.DrugDetails
-import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.Quantity
+import org.kert0n.medappserver.domain.MedKit
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Propagation.MANDATORY
@@ -60,11 +60,11 @@ class DrugService(
     // ── Команды препарата ────────────────────────────────────────────────────────
 
     @Transactional(propagation = MANDATORY)
-    fun create(request: NewDrug, medKit: MedKit): Drug {
-        logger.debug("Creating drug {} in medkit {}", request.name, medKit.id)
+    fun create(request: NewDrug, medKitId: Uuid): Drug {
+        logger.debug("Creating drug {} in medkit {}", request.name, medKitId)
 
         val drug = Drug(
-            medKitId = medKit.id,
+            medKitId = medKitId,
             name = request.name,
             quantity = Quantity(request.quantity, catalogue.requireQuantityUnit(request.quantityUnitId)),
             formType = request.formTypeId?.let { catalogue.requireFormType(it) },
@@ -77,6 +77,8 @@ class DrugService(
         drugs.insert(drug)
         return drug
     }
+
+    internal fun create(request: NewDrug, medKit: MedKit): Drug = create(request, medKit.id)
 
     @Transactional(propagation = MANDATORY)
     fun update(drug: Drug, request: DrugEdit): Drug {
@@ -129,17 +131,21 @@ class DrugService(
      * загрузок. Судьбу броней решает вызывающий: они в чужом агрегате.
      */
     @Transactional(propagation = MANDATORY)
-    fun moveAll(source: MedKit, target: MedKit) {
-        logger.debug("Moving all drugs of medkit {} to {}", source.id, target.id)
-        drugs.moveAllToMedKit(source, target)
+    fun moveAll(sourceMedKitId: Uuid, targetMedKitId: Uuid) {
+        logger.debug("Moving all drugs of medkit {} to {}", sourceMedKitId, targetMedKitId)
+        drugs.moveAllToMedKit(sourceMedKitId, targetMedKitId)
     }
+
+    internal fun moveAll(source: MedKit, target: MedKit) = moveAll(source.id, target.id)
 
     /** Брони, потерявшие доступ, убирает межагрегатный сценарий: они в чужом агрегате. */
     @Transactional(propagation = MANDATORY)
-    fun moveTo(drug: Drug, target: MedKit, stated: Long): Drug {
-        logger.debug("Moving drug {} to medkit {}", drug.id, target.id)
+    fun moveTo(drug: Drug, targetMedKitId: Uuid, stated: Long): Drug {
+        logger.debug("Moving drug {} to medkit {}", drug.id, targetMedKitId)
 
-        val moved = drug.moveTo(target.id)
+        val moved = drug.moveTo(targetMedKitId)
         return drugs.save(moved, stated)
     }
+
+    internal fun moveTo(drug: Drug, target: MedKit, stated: Long): Drug = moveTo(drug, target.id, stated)
 }

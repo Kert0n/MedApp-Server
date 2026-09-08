@@ -7,6 +7,7 @@ import org.junit.jupiter.api.assertThrows
 import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.domain.DomainRuleViolated
+import org.kert0n.medappserver.services.orchestrator.MedKitLeaving
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.transaction.annotation.Transactional
@@ -22,6 +23,8 @@ class MedKitServiceTest {
 
     @Autowired
     private lateinit var medKitService: MedKitService
+    @Autowired
+    private lateinit var leaving: MedKitLeaving
     @Autowired
     private lateinit var userService: UserService
     @Autowired
@@ -93,7 +96,7 @@ class MedKitServiceTest {
         val kit = medKitService.create(owner.id)
         dbHelper.flushAndClear()
 
-        val key = medKitService.invite(medKitService.get(kit.id, owner.id), owner.id)
+        val key = medKitService.invite(kit.id, owner.id)
         medKitService.joinByInvitation(key, joiner.id)
         dbHelper.flushAndClear()
 
@@ -152,7 +155,7 @@ class MedKitServiceTest {
         dbHelper.join(kit.id, alice.id, bob.id)
         dbHelper.flushAndClear()
 
-        medKitService.leave(medKitService.lock(setOf(kit.id), bob.id).single(), bob.id)
+        leaving.leave(kit.id, bob.id)
         dbHelper.flushAndClear()
 
         assertNotNull(medKitService.get(kit.id, alice.id))
@@ -167,7 +170,7 @@ class MedKitServiceTest {
         val kit = medKitService.create(alice.id)
         dbHelper.flushAndClear()
 
-        medKitService.leave(medKitService.lock(setOf(kit.id), alice.id).single(), alice.id)
+        leaving.leave(kit.id, alice.id)
         dbHelper.flushAndClear()
 
         assertNull(dbHelper.medKit(kit.id))

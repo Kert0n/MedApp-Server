@@ -13,9 +13,12 @@ import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.api.DrugPatchRequest
 import org.kert0n.medappserver.api.DrugSyncRequest
 import org.kert0n.medappserver.api.IntakeRequest
+import org.kert0n.medappserver.api.ReservationCreateRequest
+import org.kert0n.medappserver.api.ReservationPatchRequest
 import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.services.application.DrugApplicationService
 import org.kert0n.medappserver.services.application.MedKitApplicationService
+import org.kert0n.medappserver.services.application.ReservationApplicationService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.jdbc.core.JdbcTemplate
@@ -36,6 +39,7 @@ class CommandAccessRaceTest {
     @Autowired private lateinit var dbHelper: DatabaseTestHelper
     @Autowired private lateinit var drugs: DrugApplicationService
     @Autowired private lateinit var medKits: MedKitApplicationService
+    @Autowired private lateinit var reservations: ReservationApplicationService
     @Autowired private lateinit var jdbc: JdbcTemplate
     @Autowired private lateinit var transactionManager: PlatformTransactionManager
 
@@ -55,6 +59,9 @@ class CommandAccessRaceTest {
                 fixture.memberId
             )
         }
+        assertWaitsForLeave("delete") { fixture ->
+            drugs.delete(fixture.drugId, fixture.drugVersion, fixture.memberId)
+        }
         assertWaitsForLeave("sync") { fixture ->
             drugs.synchronise(
                 fixture.drugId,
@@ -66,19 +73,95 @@ class CommandAccessRaceTest {
     }
 
     @Test
+    fun `команды брони ждут отзыв membership`() {
+        assertWaitsForLeave("reserve") { fixture ->
+            reservations.create(
+                fixture.memberId,
+                ReservationCreateRequest(fixture.drugId, BigDecimal("3"), fixture.reservationsVersion)
+            )
+        }
+        assertWaitsForLeave("change-reservation", withReservation = true) { fixture ->
+            reservations.changeTo(
+                fixture.memberId,
+                fixture.drugId,
+                ReservationPatchRequest(BigDecimal("6"), fixture.reservationsVersion)
+            )
+        }
+        assertWaitsForLeave("cancel-reservation", withReservation = true) { fixture ->
+            reservations.cancel(fixture.memberId, fixture.drugId, fixture.reservationsVersion)
+        }
+    }
+
+    @Test
+    fun `отзыв membership ждёт уже начатую команду`() {
+        val owner = dbHelper.freshUser("command-first-owner")
+        val member = dbHelper.freshUser("command-first-member")
+        val kit = dbHelper.freshMedKit(owner.id)
+        dbHelper.join(kit.id, owner.id, member.id)
+        val drug = dbHelper.freshDrug(kit.id, quantity = 20.0)
+
+        val commandFinished = CountDownLatch(1)
+        val allowCommandCommit = CountDownLatch(1)
+        val leaveBackend = ArrayBlockingQueue<Int>(1)
+        val pool = Executors.newFixedThreadPool(2)
+        try {
+            val command = pool.submit<Throwable?> {
+                runCatching {
+                    TransactionTemplate(transactionManager).execute {
+                        drugs.update(drug.id, DrugPatchRequest(name = "Before leave", version = drug.version), member.id)
+                        commandFinished.countDown()
+                        assertTrue(allowCommandCommit.await(10, TimeUnit.SECONDS), "leave не дошёл до корня")
+                    }
+                }.exceptionOrNull()
+            }
+            assertTrue(commandFinished.await(10, TimeUnit.SECONDS), "команда не завершила запись")
+
+            val leave = pool.submit<Throwable?> {
+                runCatching {
+                    TransactionTemplate(transactionManager).execute {
+                        leaveBackend.put(jdbc.queryForObject("SELECT pg_backend_pid()", Int::class.java)!!)
+                        medKits.leave(kit.id, member.id)
+                    }
+                }.exceptionOrNull()
+            }
+            awaitDatabaseLock(leaveBackend.poll(10, TimeUnit.SECONDS) ?: error("leave не начался"), "leave")
+            allowCommandCommit.countDown()
+
+            assertNull(command.get(30, TimeUnit.SECONDS)?.rootCause(), "начатая команда обязана завершиться")
+            assertNull(leave.get(30, TimeUnit.SECONDS)?.rootCause(), "leave обязан дождаться команды")
+        } finally {
+            allowCommandCommit.countDown()
+            pool.shutdownNow()
+        }
+
+        assertTrue(!dbHelper.isMember(kit.id, member.id))
+    }
+
+    @Test
     fun `приглашение ждёт отзыв membership`() {
         assertWaitsForLeave("invite") { fixture ->
             medKits.invite(fixture.medKitId, fixture.memberId)
         }
     }
 
-    private fun assertWaitsForLeave(name: String, command: (Fixture) -> Any?) {
+    private fun assertWaitsForLeave(
+        name: String,
+        withReservation: Boolean = false,
+        command: (Fixture) -> Any?
+    ) {
         val owner = dbHelper.freshUser("command-access-$name-owner")
         val member = dbHelper.freshUser("command-access-$name-member")
         val kit = dbHelper.freshMedKit(owner.id)
         dbHelper.join(kit.id, owner.id, member.id)
         val drug = dbHelper.freshDrug(kit.id, quantity = 20.0)
-        val fixture = Fixture(kit.id, member.id, drug.id, drug.version)
+        if (withReservation) dbHelper.reserve(member.id, drug.id, BigDecimal("4"))
+        val fixture = Fixture(
+            kit.id,
+            member.id,
+            drug.id,
+            drug.version,
+            dbHelper.storedReservationsVersion(drug.id)
+        )
 
         val membershipDeleted = CountDownLatch(1)
         val allowLeaveCommit = CountDownLatch(1)
@@ -141,7 +224,8 @@ class CommandAccessRaceTest {
         val medKitId: Uuid,
         val memberId: Uuid,
         val drugId: Uuid,
-        val drugVersion: Long
+        val drugVersion: Long,
+        val reservationsVersion: Long
     )
 }
 

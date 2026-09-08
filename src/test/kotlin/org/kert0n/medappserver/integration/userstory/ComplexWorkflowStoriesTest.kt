@@ -73,8 +73,8 @@ class ComplexWorkflowStoriesTest {
         val charlie = dbHelper.insert(User(id = Uuid.random(), hashedKey = "charlie_${Uuid.random()}"))
 
         val homeKit = medKitService.create(alice.id)
-        medKitService.joinByInvitation(medKitService.invite(medKitService.get(homeKit.id, alice.id), alice.id), bob.id)
-        medKitService.joinByInvitation(medKitService.invite(medKitService.get(homeKit.id, alice.id), alice.id), charlie.id)
+        medKitService.joinByInvitation(medKitService.invite(homeKit.id, alice.id), bob.id)
+        medKitService.joinByInvitation(medKitService.invite(homeKit.id, alice.id), charlie.id)
 
         val allergyMeds = dbHelper.insert(
             Drug(
@@ -135,7 +135,7 @@ class ComplexWorkflowStoriesTest {
 
         // ── Фаза 5: удаление аптечки с переносом содержимого ──
         val duoKit = medKitService.create(alice.id)
-        medKitService.joinByInvitation(medKitService.invite(medKitService.get(duoKit.id, alice.id), alice.id), bob.id)
+        medKitService.joinByInvitation(medKitService.invite(duoKit.id, alice.id), bob.id)
 
 
         medKits.delete(homeKit.id, alice.id, duoKit.id)
@@ -185,7 +185,7 @@ class ComplexWorkflowStoriesTest {
 
         val sourceKit = medKitService.create(alice.id)
         val targetKit = medKitService.create(alice.id) // Сюда доступ есть только у Алисы
-        medKitService.joinByInvitation(medKitService.invite(medKitService.get(sourceKit.id, alice.id), alice.id), bob.id)
+        medKitService.joinByInvitation(medKitService.invite(sourceKit.id, alice.id), bob.id)
 
         val createDrugDto = DrugCreateRequest(
             name = "LifePill", quantity = qty(100.0), quantityUnitId = dbHelper.unit().id
@@ -209,7 +209,7 @@ class ComplexWorkflowStoriesTest {
         // ── Фаза 2: половина пачки потеряна ──
         // Алиса разлила половину. Брони не двигаются: вместе они теперь превышают содержимое
         // пачки, и это законное состояние — отвечают за него их владельцы.
-        disposal.consume(drugService.get(drug.id, alice.id), qty(50.0), dbHelper.drugVersion(drug.id))
+        disposal.consume(drug.id, alice.id, qty(50.0), dbHelper.drugVersion(drug.id))
         dbHelper.flushAndClear()
 
         assertQty(50.0, dbHelper.drugQuantity(drug.id)!!, "в пачке осталось 50")
@@ -229,7 +229,7 @@ class ComplexWorkflowStoriesTest {
         assertQty(40.0, dbHelper.userReservation(alice.id, drug.id)!!, "бронь Алисы не тронута")
 
         // ── Фаза 4: уничтожение пачки ──
-        disposal.destroy(drugService.get(drug.id, alice.id), dbHelper.drugVersion(drug.id))
+        disposal.destroy(drug.id, alice.id, dbHelper.drugVersion(drug.id))
         dbHelper.flushAndClear()
 
         assertNull(dbHelper.drugQuantity(drug.id), "Drug record completely purged")
@@ -247,7 +247,7 @@ class ComplexWorkflowStoriesTest {
         val bob = createTestUser("bob")
 
         val kitA = medKitService.create(alice.id)
-        val shareKey = medKitService.invite(medKitService.get(kitA.id, alice.id), alice.id)
+        val shareKey = medKitService.invite(kitA.id, alice.id)
         medKitService.joinByInvitation(shareKey, bob.id)
 
         val drug = drugService.create(NewDrug("Shared Meds", qty(10.0), dbHelper.unit().id), medKitService.get(kitA.id, alice.id))
@@ -269,7 +269,7 @@ class ComplexWorkflowStoriesTest {
         val alice = createTestUser("alice")
         val bob = createTestUser("bob")
         val kitA = medKitService.create(alice.id)
-        medKitService.joinByInvitation(medKitService.invite(medKitService.get(kitA.id, alice.id), alice.id), bob.id)
+        medKitService.joinByInvitation(medKitService.invite(kitA.id, alice.id), bob.id)
 
         val drug = drugService.create(NewDrug("Audit Meds", qty(10.0), dbHelper.unit().id), medKitService.get(kitA.id, alice.id))
         dbHelper.flushAndClear()

@@ -98,7 +98,7 @@ class DatabaseTestHelper(
      */
     @Transactional
     fun join(medKitId: Uuid, invitedBy: Uuid, userId: Uuid): MedKit =
-        medKitService.joinByInvitation(medKitService.invite(medKitService.get(medKitId, invitedBy), invitedBy), userId)
+        medKitService.joinByInvitation(medKitService.invite(medKitId, invitedBy), userId)
 
     /** Бронь под подготовку сценария. */
     @Transactional

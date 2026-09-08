@@ -98,7 +98,7 @@ class ReservationStoriesTest {
         dbHelper.insert(bob)
 
         val medkit = medKitService.create(anna.id)
-        val shareKey = medKitService.invite(medKitService.get(medkit.id, anna.id), anna.id)
+        val shareKey = medKitService.invite(medkit.id, anna.id)
         medKitService.joinByInvitation(shareKey, bob.id)
 
         val vitaminC = Drug(
@@ -142,9 +142,9 @@ class ReservationStoriesTest {
         dbHelper.insert(child)
 
         val familyKit = medKitService.create(mom.id)
-        val dadKey = medKitService.invite(medKitService.get(familyKit.id, mom.id), mom.id)
+        val dadKey = medKitService.invite(familyKit.id, mom.id)
         medKitService.joinByInvitation(dadKey, dad.id)
-        val childKey = medKitService.invite(medKitService.get(familyKit.id, mom.id), mom.id)
+        val childKey = medKitService.invite(familyKit.id, mom.id)
         medKitService.joinByInvitation(childKey, child.id)
 
         val aspirin = Drug(

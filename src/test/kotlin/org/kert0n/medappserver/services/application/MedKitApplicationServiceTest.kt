@@ -105,7 +105,7 @@ class MedKitApplicationServiceTest {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
         val sourceKit = medKitService.create(alice.id)
-        medKitService.joinByInvitation(medKitService.invite(medKitService.get(sourceKit.id, alice.id), alice.id), bob.id)
+        medKitService.joinByInvitation(medKitService.invite(sourceKit.id, alice.id), bob.id)
 
         val targetKit = medKitService.create(alice.id) // Только Алиса
         val drug = dbHelper.freshDrug(sourceKit.id, 50.0)
@@ -127,7 +127,7 @@ class MedKitApplicationServiceTest {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
         val kitA = medKitService.create(alice.id)
-        medKitService.joinByInvitation(medKitService.invite(medKitService.get(kitA.id, alice.id), alice.id), bob.id)
+        medKitService.joinByInvitation(medKitService.invite(kitA.id, alice.id), bob.id)
 
         val drug = drugService.create(
             NewDrug("Shared Meds", qty(10.0), dbHelper.unit().id), medKitService.get(kitA.id, alice.id)
@@ -309,7 +309,7 @@ class MedKitApplicationServiceTest {
         val alice = dbHelper.freshUser("alice")
         val charlie = dbHelper.freshUser("charlie")
         val oldKit = medKitService.create(alice.id)
-        medKitService.joinByInvitation(medKitService.invite(medKitService.get(oldKit.id, alice.id), alice.id), charlie.id)
+        medKitService.joinByInvitation(medKitService.invite(oldKit.id, alice.id), charlie.id)
 
         val newKit = medKitService.create(alice.id) // Только Алиса
 
