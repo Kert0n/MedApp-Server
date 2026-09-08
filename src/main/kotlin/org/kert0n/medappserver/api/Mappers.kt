@@ -71,7 +71,7 @@ fun ReservationSnapshot.toDto(): ReservationsDTO = ReservationsDTO(
 /** Аптечка с содержимым: число участников она знает сама, упаковки приносит вызывающий. */
 fun MedKit.toDto(drugs: Set<DrugSnapshotDTO>): MedKitDTO = MedKitDTO(
     id = id,
-    userCount = members.size.toLong(),
+    userCount = userCount,
     drugs = drugs
 )
 
@@ -105,11 +105,11 @@ fun FormType.toDto(): VocabularyEntryDTO = VocabularyEntryDTO(id = id, name = na
 /**
  * Сводка аптечки для списка.
  *
- * Счётчики — по тому, что уже на руках: участники в агрегате, число пачек от вызывающего,
- * который их всё равно читал. Отдельный запрос ради двух чисел незачем.
+ * Счётчики — по тому, что уже на руках: `userCount` прочитан SQL-агрегацией, число пачек — от
+ * вызывающего, который их всё равно читал. Идентификаторы других участников не материализуются.
  */
 fun MedKit.toSummaryDto(drugIds: Set<Uuid>): MedKitSummaryDTO = MedKitSummaryDTO(
     id = id,
-    userCount = members.size.toLong(),
+    userCount = userCount,
     drugIds = drugIds
 )

@@ -93,7 +93,8 @@ class DrugApplicationService(
     fun moveToMedKit(drugId: Uuid, targetMedKitId: Uuid, version: Long?, userId: Uuid): DrugSnapshotDTO {
         val drug = drugService.get(drugId, userId)
         logger.debug("Moving drug {} to medkit {}", drugId, targetMedKitId)
-        val moved = relocation.moveOne(drug, medKitService.get(targetMedKitId, userId), statedVersion(version))
+        val locked = medKitService.lock(setOf(drug.medKitId, targetMedKitId), userId).associateBy { it.id }
+        val moved = relocation.moveOne(drug, locked.getValue(targetMedKitId), statedVersion(version))
         return moved.toSnapshot(reservationService.onDrugs(listOf(moved), userId).getValue(moved.id))
     }
 

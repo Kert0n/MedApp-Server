@@ -36,8 +36,6 @@ class TooManyRegistrations : DomainRuleViolated("Too many registrations from thi
 class InvalidCredentials : DomainRuleViolated("Credentials must not be blank")
 
 /** Аптечки без участников не бывает: последний выходящий забирает её с собой. */
-class MedKitWithoutMembers : DomainRuleViolated("Medicine kit must have at least one member")
-
 /** Количество не бывает отрицательным. */
 class NegativeQuantity : DomainRuleViolated("Quantity must not be negative")
 

@@ -111,12 +111,10 @@ class MedKitController(
         authentication: Authentication,
         @Parameter(description = "Medicine kit identifier") @PathVariable medKitId: Uuid,
         @Parameter(description = "Kit to move the drugs into instead of discarding them")
-        @RequestParam(required = false) targetMedKitId: Uuid?,
-        @Parameter(description = "Version the command acts on; absent means 428")
-        @RequestParam(required = false) version: Long?
+        @RequestParam(required = false) targetMedKitId: Uuid?
     ) {
         logger.debug("DELETE /v1/med-kits/{} by user {}, target {}", medKitId, authentication.userId, targetMedKitId)
-        medKits.delete(medKitId, version, authentication.userId, targetMedKitId)
+        medKits.delete(medKitId, authentication.userId, targetMedKitId)
     }
 }
 
@@ -160,11 +158,9 @@ class MedKitMembershipController(
     @ApiResponse(responseCode = "404", description = "Kit does not exist or is not accessible", content = [Content()])
     fun leaveMedKit(
         authentication: Authentication,
-        @Parameter(description = "Medicine kit identifier") @PathVariable medKitId: Uuid,
-        @Parameter(description = "Version the command acts on; absent means 428")
-        @RequestParam(required = false) version: Long?
+        @Parameter(description = "Medicine kit identifier") @PathVariable medKitId: Uuid
     ) {
         logger.debug("DELETE /v1/med-kit-memberships/{} by user {}", medKitId, authentication.userId)
-        medKits.leave(medKitId, version, authentication.userId)
+        medKits.leave(medKitId, authentication.userId)
     }
 }

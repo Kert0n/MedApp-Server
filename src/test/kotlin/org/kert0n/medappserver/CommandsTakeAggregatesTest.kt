@@ -37,7 +37,7 @@ class CommandsTakeAggregatesTest {
             // Команда — та, что открывает запись: у читающих стоит readOnly = true. Признак
             // взят по аннотации, а не по имени: она и так обязана быть верной.
             val commands = Regex(
-                "@Transactional\\(propagation = MANDATORY\\)\\s*\\n\\s*fun (\\w+)\\(([^)]*)\\)",
+                "@Transactional\\(propagation = MANDATORY\\)\\s*\\n\\s*(?:private\\s+)?fun (\\w+)\\(([^)]*)\\)",
                 RegexOption.MULTILINE
             ).findAll(Files.readString(file)).toList()
 

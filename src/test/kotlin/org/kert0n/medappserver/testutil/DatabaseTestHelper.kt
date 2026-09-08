@@ -3,6 +3,7 @@ package org.kert0n.medappserver.testutil
 import java.math.BigDecimal
 import kotlin.uuid.Uuid
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.core.JoinType
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -164,14 +165,14 @@ class DatabaseTestHelper(
             .toList()
 
         if (rows.isEmpty()) return null
-        // Версия читается вместе с составом: без неё оснастка отдавала ноль, и команды,
-        // предъявляющие версию, отвергались бы с 412 на ровном месте.
-        return MedKit(
-            id = medKitId,
-            members = rows.map { it[MedKitMemberships.userId] }.toSet(),
-            version = rows.first()[MedKits.version]
-        )
+        return MedKit(id = medKitId, userCount = rows.size.toLong())
     }
+
+    @Transactional
+    fun isMember(medKitId: Uuid, userId: Uuid): Boolean =
+        !MedKitMemberships.selectAll()
+            .where { (MedKitMemberships.medKitId eq medKitId) and (MedKitMemberships.userId eq userId) }
+            .empty()
 
     @Transactional
     fun requireDrug(id: Uuid): Drug = drug(id) ?: error("Препарат $id не найден")
@@ -194,18 +195,9 @@ class DatabaseTestHelper(
     fun userReservation(userId: Uuid, drugId: Uuid): BigDecimal? =
         reservations.find(userId, drugId)?.amount?.amount
 
-    /**
-     * Текущие версии — для команд, которые обязаны их предъявить.
-     *
-     * В тестах предъявляемое почти всегда «то, что сейчас в базе»: проверяются правила, а не
-     * само предусловие. Несовпадение проверяется отдельно и намеренно.
-     */
+    /** Текущая версия упаковки — для команд, которые обязаны её предъявить. */
     @Transactional
     fun drugVersion(drugId: Uuid): Long = requireDrug(drugId).version
-
-    @Transactional
-    fun medKitVersion(medKitId: Uuid): Long =
-        medKit(medKitId)?.version ?: error("Аптечка $medKitId не найдена")
 
     /** Версия картины броней: команды над бронью предъявляют её, а не версию своей строки. */
     @Transactional

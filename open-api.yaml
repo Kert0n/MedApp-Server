@@ -700,13 +700,6 @@ paths:
         schema:
           type: string
           format: uuid
-      - name: version
-        in: query
-        description: Version the command acts on; absent means 428
-        required: false
-        schema:
-          type: integer
-          format: int64
       responses:
         "204":
           description: Kit deleted for everyone
@@ -714,10 +707,6 @@ paths:
           description: Kit does not exist or is not accessible
         "401":
           description: Authentication is required
-        "428":
-          description: The command did not state the version it acts on
-        "412":
-          description: The stated version is not the current one
       security:
       - Bearer Authentication: []
   /v1/form-types:
@@ -825,13 +814,6 @@ paths:
         schema:
           type: string
           format: uuid
-      - name: version
-        in: query
-        description: Version the command acts on; absent means 428
-        required: false
-        schema:
-          type: integer
-          format: int64
       responses:
         "204":
           description: Left the kit
@@ -839,10 +821,6 @@ paths:
           description: Kit does not exist or is not accessible
         "401":
           description: Authentication is required
-        "428":
-          description: The command did not state the version it acts on
-        "412":
-          description: The stated version is not the current one
       security:
       - Bearer Authentication: []
 components:

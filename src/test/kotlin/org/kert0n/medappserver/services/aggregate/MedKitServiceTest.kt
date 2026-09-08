@@ -36,7 +36,7 @@ class MedKitServiceTest {
         dbHelper.flushAndClear()
 
         assertNotNull(medKit.id)
-        assertTrue(medKit.members.contains(alice.id))
+        assertTrue(dbHelper.isMember(medKit.id, alice.id))
     }
 
     // ── get ──
@@ -74,14 +74,14 @@ class MedKitServiceTest {
 
     
     @Test
-    fun `allOfUser returns the kit with its members`() {
+    fun `allOfUser returns the kit with its user count`() {
         val alice = dbHelper.freshUser("alice")
         medKitService.create(alice.id)
         dbHelper.flushAndClear()
 
         // Аптечка приходит агрегатом: счётчик участников получается из неё самой.
         val mine = medKitService.allOfUser(alice.id).single()
-        assertEquals(setOf(alice.id), mine.members)
+        assertEquals(1, mine.userCount)
     }
 
     // ── invite / joinByInvitation ──
@@ -152,7 +152,7 @@ class MedKitServiceTest {
         dbHelper.join(kit.id, alice.id, bob.id)
         dbHelper.flushAndClear()
 
-        medKitService.leave(medKitService.get(kit.id, bob.id), bob.id, dbHelper.medKitVersion(kit.id))
+        medKitService.leave(kit.id, bob.id)
         dbHelper.flushAndClear()
 
         assertNotNull(medKitService.get(kit.id, alice.id))
@@ -167,7 +167,7 @@ class MedKitServiceTest {
         val kit = medKitService.create(alice.id)
         dbHelper.flushAndClear()
 
-        medKitService.leave(medKitService.get(kit.id, alice.id), alice.id, dbHelper.medKitVersion(kit.id))
+        medKitService.leave(kit.id, alice.id)
         dbHelper.flushAndClear()
 
         assertNull(dbHelper.medKit(kit.id))

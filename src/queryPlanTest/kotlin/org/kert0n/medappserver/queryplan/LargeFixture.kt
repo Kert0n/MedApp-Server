@@ -55,8 +55,8 @@ class LargeFixture(private val jdbc: JdbcTemplate) {
             SELECT gen_random_uuid(), 'hash-' || g FROM generate_series(1, $USERS) g
             """,
             """
-            INSERT INTO med_kits (id, version)
-            SELECT gen_random_uuid(), 0 FROM generate_series(1, $MED_KITS) g
+            INSERT INTO med_kits (id)
+            SELECT gen_random_uuid() FROM generate_series(1, $MED_KITS) g
             """,
             """
             INSERT INTO quantity_units (id, name)

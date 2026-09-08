@@ -13,9 +13,9 @@ import org.springframework.transaction.annotation.Propagation.MANDATORY
 import org.springframework.transaction.annotation.Transactional
 
 /**
- * Аптечка: жизненный цикл участников.
+ * Аптечка: жизненный цикл отдельных membership.
  *
- * Правила членства — в `domain.MedKit`; здесь транзакция, проверка доступа и ключ приглашения.
+ * Здесь транзакция, проверка доступа и ключ приглашения.
  * Ключ не доменное понятие, а секрет с временем жизни, поэтому живёт рядом с тем, кто его
  * выдаёт.
  */
@@ -31,8 +31,8 @@ class MedKitService(
     @Transactional(propagation = MANDATORY)
     fun create(userId: Uuid): MedKit {
         logger.debug("Creating new medkit for user: {}", userId)
-        val medKit = MedKit(members = setOf(userId))
-        medKits.insert(medKit)
+        val medKit = MedKit()
+        medKits.insert(medKit, userId)
         return medKit
     }
 
@@ -47,7 +47,7 @@ class MedKitService(
         return medKits.find(medKitId, userId) ?: throw NotAMember()
     }
 
-    /** Все аптечки участника — целиком и одним запросом. */
+    /** Все аптечки участника со счётчиками — одним запросом. */
     @Transactional(propagation = MANDATORY, readOnly = true)
     fun allOfUser(userId: Uuid): List<MedKit> {
         logger.debug("Finding all medkits for user: {}", userId)
@@ -76,7 +76,7 @@ class MedKitService(
      * состоит, и обычное скоупленное чтение работает. Нескоупленных чтений в приложении не
      * появляется — см. [Invitation] о том, что из этого следует.
      *
-     * Правило «дважды не вступают» решает сам агрегат: состав у него на руках.
+     * Правило «дважды не вступают» выражено отдельной строкой, а страхует его составной ключ.
      */
     @Transactional(propagation = MANDATORY)
     fun joinByInvitation(key: String, userId: Uuid): MedKit {
@@ -84,10 +84,9 @@ class MedKitService(
         val invitation = medKitTokenCache.getOrNull(securityService.hashToken(key))
             ?: throw NotAMember()
 
-        val joined = get(invitation.medKitId, invitation.invitedBy).join(userId)
-        // Клиент аптечку не читал и версии не предъявлял: сверять нечего. Предикат берёт
-        // версию только что прочитанной — от одновременной записи он защищает всё равно.
-        return medKits.save(joined, stated = joined.version)
+        val medKit = lock(setOf(invitation.medKitId), invitation.invitedBy).single()
+        medKits.insertMembership(medKit, userId)
+        return medKit.copy(userCount = medKit.userCount + 1)
     }
 
     /**
@@ -96,18 +95,17 @@ class MedKitService(
      * Брони выходящего лежат в чужом агрегате: их убирает оркестратор.
      */
     @Transactional(propagation = MANDATORY)
-    fun leave(medKitId: Uuid, userId: Uuid, stated: Long): MedKit? = leave(get(medKitId, userId), userId, stated)
+    fun leave(medKitId: Uuid, userId: Uuid): MedKit? = leave(lock(setOf(medKitId), userId).single(), userId)
 
     @Transactional(propagation = MANDATORY)
-    fun leave(medKit: MedKit, userId: Uuid, stated: Long): MedKit? {
+    private fun leave(medKit: MedKit, userId: Uuid): MedKit? {
         logger.debug("Removing user {} from medkit {}", userId, medKit.id)
-        val left = medKit.leave(userId)
-
-        if (left == null) {
-            medKits.delete(medKit, stated)
+        medKits.deleteMembership(medKit, userId)
+        if (!medKits.hasMembers(medKit)) {
+            medKits.delete(medKit)
             return null
         }
-        return medKits.save(left, stated)
+        return medKit.copy(userCount = medKit.userCount - 1)
     }
 
     /**
@@ -117,8 +115,18 @@ class MedKitService(
      * поэтому команде нечего перепроверять — а перепроверка стоила бы второго запроса.
      */
     @Transactional(propagation = MANDATORY)
-    fun delete(medKitId: Uuid, userId: Uuid, stated: Long) = delete(get(medKitId, userId), stated)
+    fun delete(medKitId: Uuid, userId: Uuid) = delete(lock(setOf(medKitId), userId).single())
 
     @Transactional(propagation = MANDATORY)
-    fun delete(medKit: MedKit, stated: Long) = medKits.delete(medKit, stated)
+    fun delete(medKit: MedKit) = medKits.delete(medKit)
+
+    /**
+     * Блокирует доступные корни в стабильном порядке и возвращает их актуальные проекции.
+     * Неполный набор не сообщает, какая именно аптечка чужая или отсутствует.
+     */
+    @Transactional(propagation = MANDATORY)
+    fun lock(medKitIds: Set<Uuid>, userId: Uuid): List<MedKit> {
+        if (medKits.lockAccessible(medKitIds, userId) != medKitIds) throw NotAMember()
+        return medKits.findAll(medKitIds, userId)
+    }
 }

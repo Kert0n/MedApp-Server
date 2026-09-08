@@ -138,7 +138,7 @@ class ComplexWorkflowStoriesTest {
         medKitService.joinByInvitation(medKitService.invite(medKitService.get(duoKit.id, alice.id), alice.id), bob.id)
 
 
-        medKits.delete(homeKit.id, dbHelper.medKitVersion(homeKit.id), alice.id, duoKit.id)
+        medKits.delete(homeKit.id, alice.id, duoKit.id)
 
 
         assertNull(dbHelper.medKit(homeKit.id), "Home kit must be completely deleted")
@@ -158,15 +158,15 @@ class ComplexWorkflowStoriesTest {
         assertQty(20.0, finalAlicePlan, "бронь Алисы переехала неизменной")
 
         // ── Фаза 6: последний участник выходит ──
-        medKits.leave(duoKit.id, dbHelper.medKitVersion(duoKit.id), bob.id)
+        medKits.leave(duoKit.id, bob.id)
 
 
         val duoKitCheck1 = dbHelper.medKit(duoKit.id)!!
-        assertEquals(1, duoKitCheck1.members.size, "Only Alice remains")
+        assertEquals(1, duoKitCheck1.userCount, "Only Alice remains")
 
         // Выход последнего уносит аптечку. Через `medKitService` напрямую: оркестратор стал бы
         // убирать брони, которых вместе с аптечкой уже нет.
-        medKitService.leave(medKitService.get(duoKitCheck1.id, alice.id), alice.id, duoKitCheck1.version)
+        medKitService.leave(duoKitCheck1.id, alice.id)
 
 
         assertNull(dbHelper.medKit(duoKit.id), "Duo kit must auto-delete when last user leaves")
@@ -294,7 +294,7 @@ class ComplexWorkflowStoriesTest {
         val drug =
             drugs.createInMedKit(kitA.id, DrugCreateRequest("Migrating Meds", qty(10.0), dbHelper.unit().id), alice.id)
 
-        medKits.delete(kitA.id, dbHelper.medKitVersion(kitA.id), alice.id, kitB.id)
+        medKits.delete(kitA.id, alice.id, kitB.id)
         val survivingDrug = dbHelper.drug(drug.drug.id)
 
         assertNotNull(survivingDrug, "Drug should not have been deleted")

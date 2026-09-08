@@ -31,15 +31,15 @@ class DrugRelocation(
     /**
      * Переезд одной пачки: сначала переставить, потом снять брони тех, кто цель не видит.
      *
-     * Состав целевой аптечки берётся тот, что прочитал вызывающий: правило смотрит на её
-     * участников, и решение принимается по ним.
+     * Доступ к целевой аптечке проверен её чтением, а тех, чьи брони можно сохранить,
+     * хранилище определяет по актуальным строкам членства.
      */
     @Transactional(propagation = MANDATORY)
     fun moveOne(drug: Drug, target: MedKit, stated: Long): Drug {
         // Порядок важен, как и в массовом переезде: сначала снять брони тех, кто цель не
         // видит, и только потом двигать пачку. Иначе `ON UPDATE CASCADE` потащит их
         // `med_kit_id` в целевую аптечку, и ключ членства отвергнет весь переезд.
-        reservationService.dropOnDrugExcept(drug, target.members)
+        reservationService.dropOnDrugExcept(drug, target)
         return drugService.moveTo(drug, target, stated)
     }
 
@@ -57,7 +57,7 @@ class DrugRelocation(
     @Transactional(propagation = MANDATORY)
     fun moveAll(source: MedKit, target: MedKit) {
         // Порядок важен: брони выбираются по исходной аптечке, пока упаковки ещё в ней.
-        reservationService.dropInMedKitExcept(source, target.members)
+        reservationService.dropInMedKitExcept(source, target)
         drugService.moveAll(source, target)
     }
 }

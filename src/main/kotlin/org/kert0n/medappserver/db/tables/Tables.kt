@@ -34,9 +34,6 @@ object Users : Table("users") {
 object MedKits : Table("med_kits") {
     val id = uuid("id")
 
-    /** Токен предусловия аптечки. Двигают его вступление и выход: состав лежит в другой таблице. */
-    val version = long("version").default(0)
-
     override val primaryKey = PrimaryKey(id, name = "med_kits_pkey")
 }
 

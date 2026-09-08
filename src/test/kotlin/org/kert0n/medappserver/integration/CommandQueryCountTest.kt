@@ -102,7 +102,7 @@ class CommandQueryCountTest {
         }
 
         return count("удаление с переносом, упаковок — $drugs") {
-            medKits.delete(source, dbHelper.medKitVersion(source), alice, target)
+            medKits.delete(source, alice, target)
         }
     }
 
@@ -112,7 +112,7 @@ class CommandQueryCountTest {
         repeat(drugs) { dbHelper.freshDrug(kit, 10.0) }
 
         return count("удаление без переноса, упаковок — $drugs") {
-            medKits.delete(kit, dbHelper.medKitVersion(kit), owner)
+            medKits.delete(kit, owner)
         }
     }
 
@@ -127,7 +127,7 @@ class CommandQueryCountTest {
         }
 
         return count("выход участника, броней — $claims") {
-            medKits.leave(kit, dbHelper.medKitVersion(kit), bob)
+            medKits.leave(kit, bob)
         }
     }
 
