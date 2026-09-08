@@ -10,7 +10,12 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Propagation.MANDATORY
 import org.springframework.transaction.annotation.Transactional
 
-/** Загружает упаковку так, чтобы возвращённое состояние было готово к команде. */
+/**
+ * Загружает упаковку так, чтобы возвращённое состояние было готово к команде.
+ *
+ * Не команда, а её общая первая половина, поэтому обе операции `internal`: снаружи пакета их
+ * вызвать нельзя, и правило «сценарий не зовёт чужой сценарий» на них не спотыкается.
+ */
 @Service
 class DrugCommandAccess(
     private val drugs: DrugService,
@@ -18,14 +23,14 @@ class DrugCommandAccess(
 ) {
 
     @Transactional(propagation = MANDATORY)
-    fun content(drugId: Uuid, userId: Uuid): Drug {
+    internal fun content(drugId: Uuid, userId: Uuid): Drug {
         val observed = drugs.get(drugId, userId)
         medKits.holdContentAccess(setOf(observed.medKitId), userId)
         return reloadInObservedRoot(observed, userId)
     }
 
     @Transactional(propagation = MANDATORY)
-    fun lifecycle(drugId: Uuid, targetMedKitId: Uuid, userId: Uuid): Drug {
+    internal fun lifecycle(drugId: Uuid, targetMedKitId: Uuid, userId: Uuid): Drug {
         val observed = drugs.get(drugId, userId)
         medKits.holdLifecycleAccess(setOf(observed.medKitId, targetMedKitId), userId)
         return reloadInObservedRoot(observed, userId)

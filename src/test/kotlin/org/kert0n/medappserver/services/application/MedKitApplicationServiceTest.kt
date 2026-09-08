@@ -15,6 +15,8 @@ import org.kert0n.medappserver.domain.DomainRuleViolated
 import org.kert0n.medappserver.domain.StaleVersion
 import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.MedKitService
+import org.kert0n.medappserver.services.orchestrator.MedKitInviting
+import org.kert0n.medappserver.services.orchestrator.MedKitJoining
 import org.kert0n.medappserver.services.aggregate.NewDrug
 import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
@@ -39,6 +41,10 @@ class MedKitApplicationServiceTest {
 
     @Autowired
     private lateinit var medKits: MedKitApplicationService
+    @Autowired
+    private lateinit var inviting: MedKitInviting
+    @Autowired
+    private lateinit var joining: MedKitJoining
     @Autowired
     private lateinit var drugs: DrugApplicationService
     @Autowired
@@ -105,7 +111,7 @@ class MedKitApplicationServiceTest {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
         val sourceKit = medKitService.create(alice.id)
-        medKitService.joinByInvitation(medKitService.invite(sourceKit.id, alice.id), bob.id)
+        joining.joinByInvitation(inviting.invite(sourceKit.id, alice.id), bob.id)
 
         val targetKit = medKitService.create(alice.id) // Только Алиса
         val drug = dbHelper.freshDrug(sourceKit.id, 50.0)
@@ -127,7 +133,7 @@ class MedKitApplicationServiceTest {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
         val kitA = medKitService.create(alice.id)
-        medKitService.joinByInvitation(medKitService.invite(kitA.id, alice.id), bob.id)
+        joining.joinByInvitation(inviting.invite(kitA.id, alice.id), bob.id)
 
         val drug = drugService.create(
             NewDrug("Shared Meds", qty(10.0), dbHelper.unit().id), kitA.id
@@ -309,7 +315,7 @@ class MedKitApplicationServiceTest {
         val alice = dbHelper.freshUser("alice")
         val charlie = dbHelper.freshUser("charlie")
         val oldKit = medKitService.create(alice.id)
-        medKitService.joinByInvitation(medKitService.invite(oldKit.id, alice.id), charlie.id)
+        joining.joinByInvitation(inviting.invite(oldKit.id, alice.id), charlie.id)
 
         val newKit = medKitService.create(alice.id) // Только Алиса
 

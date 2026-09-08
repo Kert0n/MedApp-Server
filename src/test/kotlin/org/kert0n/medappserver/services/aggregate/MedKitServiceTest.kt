@@ -7,6 +7,8 @@ import org.junit.jupiter.api.assertThrows
 import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.domain.DomainRuleViolated
+import org.kert0n.medappserver.services.orchestrator.MedKitJoining
+import org.kert0n.medappserver.services.orchestrator.MedKitInviting
 import org.kert0n.medappserver.services.orchestrator.MedKitLeaving
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.springframework.beans.factory.annotation.Autowired
@@ -23,6 +25,10 @@ class MedKitServiceTest {
 
     @Autowired
     private lateinit var medKitService: MedKitService
+    @Autowired
+    private lateinit var inviting: MedKitInviting
+    @Autowired
+    private lateinit var joining: MedKitJoining
     @Autowired
     private lateinit var leaving: MedKitLeaving
     @Autowired
@@ -96,8 +102,8 @@ class MedKitServiceTest {
         val kit = medKitService.create(owner.id)
         dbHelper.flushAndClear()
 
-        val key = medKitService.invite(kit.id, owner.id)
-        medKitService.joinByInvitation(key, joiner.id)
+        val key = inviting.invite(kit.id, owner.id)
+        joining.joinByInvitation(key, joiner.id)
         dbHelper.flushAndClear()
 
         val joinerKits = medKitService.allOfUser(joiner.id)
@@ -106,7 +112,7 @@ class MedKitServiceTest {
 
         // Ключ одноразовый: после вступления он уже не действует.
         assertFailsWith<DomainRuleViolated> {
-            medKitService.joinByInvitation(key, joiner.id)
+            joining.joinByInvitation(key, joiner.id)
         }
     }
 
@@ -115,7 +121,7 @@ class MedKitServiceTest {
         val user = dbHelper.freshUser("user")
 
         assertFailsWith<DomainRuleViolated> {
-            medKitService.joinByInvitation("missing-key", user.id)
+            joining.joinByInvitation("missing-key", user.id)
         }
     }
 

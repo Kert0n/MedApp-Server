@@ -12,6 +12,8 @@ import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.kert0n.medappserver.services.orchestrator.MedKitDeletion
+import org.kert0n.medappserver.services.orchestrator.MedKitInviting
+import org.kert0n.medappserver.services.orchestrator.MedKitJoining
 import org.kert0n.medappserver.services.orchestrator.MedKitLeaving
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -29,6 +31,8 @@ class MedKitApplicationService(
     private val drugService: DrugService,
     private val reservationService: ReservationService,
     private val deletion: MedKitDeletion,
+    private val inviting: MedKitInviting,
+    private val joining: MedKitJoining,
     private val leaving: MedKitLeaving
 ) {
 
@@ -53,11 +57,11 @@ class MedKitApplicationService(
 
     @Transactional
     fun invite(medKitId: Uuid, userId: Uuid): InvitationDTO =
-        InvitationDTO(medKitService.invite(medKitId, userId))
+        InvitationDTO(inviting.invite(medKitId, userId))
 
     @Transactional
     fun joinByInvitation(key: String, userId: Uuid): MedKitDTO {
-        val joined = medKitService.joinByInvitation(key, userId)
+        val joined = joining.joinByInvitation(key, userId)
         return read(joined, userId)
     }
 

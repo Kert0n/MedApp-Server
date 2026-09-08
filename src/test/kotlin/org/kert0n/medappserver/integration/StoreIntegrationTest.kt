@@ -13,6 +13,8 @@ import org.kert0n.medappserver.db.store.ReservationStore
 import org.kert0n.medappserver.db.store.UserStore
 import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.MedKitService
+import org.kert0n.medappserver.services.orchestrator.MedKitInviting
+import org.kert0n.medappserver.services.orchestrator.MedKitJoining
 import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
@@ -36,6 +38,8 @@ class StoreIntegrationTest {
     @Autowired private lateinit var users: UserStore
     @Autowired private lateinit var drugService: DrugService
     @Autowired private lateinit var medKitService: MedKitService
+    @Autowired private lateinit var inviting: MedKitInviting
+    @Autowired private lateinit var joining: MedKitJoining
     @Autowired private lateinit var dbHelper: DatabaseTestHelper
 
     // ── Препараты ────────────────────────────────────────────────────────────────
@@ -119,7 +123,7 @@ class StoreIntegrationTest {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
         val kit = medKitService.create(alice.id)
-        medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
+        joining.joinByInvitation(inviting.invite(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 50.0)
         dbHelper.reserve(alice.id, drug.id, qty(5.0))
         dbHelper.flushAndClear()
@@ -192,7 +196,7 @@ class StoreIntegrationTest {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
         val kit = medKitService.create(alice.id)
-        medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
+        joining.joinByInvitation(inviting.invite(kit.id, alice.id), bob.id)
         dbHelper.freshDrug(kit.id, 1.0)
         dbHelper.freshDrug(kit.id, 2.0)
         dbHelper.freshDrug(kit.id, 3.0)
@@ -243,7 +247,7 @@ class StoreIntegrationTest {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
         val source = medKitService.create(alice.id)
-        medKitService.joinByInvitation(medKitService.invite(source.id, alice.id), bob.id)
+        joining.joinByInvitation(inviting.invite(source.id, alice.id), bob.id)
         val target = medKitService.create(alice.id)
 
         val first = dbHelper.freshDrug(source.id, 50.0)

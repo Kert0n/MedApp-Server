@@ -14,6 +14,8 @@ import org.kert0n.medappserver.domain.InsufficientStock
 import org.kert0n.medappserver.domain.InvalidQuantity
 import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.ReservationAlreadyExists
+import org.kert0n.medappserver.services.orchestrator.MedKitJoining
+import org.kert0n.medappserver.services.orchestrator.MedKitInviting
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.kert0n.medappserver.testutil.assertQty
 import org.kert0n.medappserver.testutil.qty
@@ -29,6 +31,10 @@ class DrugServiceTest {
 
     @Autowired
     private lateinit var drugService: DrugService
+    @Autowired
+    private lateinit var inviting: MedKitInviting
+    @Autowired
+    private lateinit var joining: MedKitJoining
     @Autowired
     private lateinit var medKitService: MedKitService
     @Autowired
@@ -168,7 +174,7 @@ class DrugServiceTest {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
         val kit = medKitService.create(alice.id)
-        medKitService.joinByInvitation(medKitService.invite(kit.id, alice.id), bob.id)
+        joining.joinByInvitation(inviting.invite(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.reserve(alice.id, drug.id, qty(60.0))
         dbHelper.reserve(bob.id, drug.id, qty(40.0))

@@ -23,6 +23,8 @@ import org.kert0n.medappserver.domain.StaleVersion
 import org.kert0n.medappserver.services.aggregate.DrugEdit
 import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.MedKitService
+import org.kert0n.medappserver.services.orchestrator.MedKitInviting
+import org.kert0n.medappserver.services.orchestrator.MedKitJoining
 import org.kert0n.medappserver.services.aggregate.MedKitAccessService
 import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.kert0n.medappserver.services.application.DrugApplicationService
@@ -49,6 +51,8 @@ class OptimisticRaceTest {
     @Autowired private lateinit var dbHelper: DatabaseTestHelper
     @Autowired private lateinit var drugService: DrugService
     @Autowired private lateinit var medKitService: MedKitService
+    @Autowired private lateinit var inviting: MedKitInviting
+    @Autowired private lateinit var joining: MedKitJoining
     @Autowired private lateinit var medKitAccess: MedKitAccessService
     @Autowired private lateinit var reservationService: ReservationService
     @Autowired private lateinit var drugApplicationService: DrugApplicationService
@@ -562,16 +566,16 @@ class OptimisticRaceTest {
         val alice = dbHelper.freshUser("race-join-a")
         val bob = dbHelper.freshUser("race-join-b")
         val kit = dbHelper.freshMedKit(alice.id)
-        val key = TransactionTemplate(transactionManager).execute { medKitService.invite(kit.id, alice.id) }
+        val key = TransactionTemplate(transactionManager).execute { inviting.invite(kit.id, alice.id) }
 
         val outcome = race(
             { sync ->
                 sync()
-                medKitService.joinByInvitation(key, bob.id)
+                joining.joinByInvitation(key, bob.id)
             },
             { sync ->
                 sync()
-                medKitService.joinByInvitation(key, bob.id)
+                joining.joinByInvitation(key, bob.id)
             }
         )
 
@@ -588,11 +592,11 @@ class OptimisticRaceTest {
         val bob = dbHelper.freshUser("race-join-many-b")
         val charlie = dbHelper.freshUser("race-join-many-c")
         val kit = dbHelper.freshMedKit(alice.id)
-        val key = TransactionTemplate(transactionManager).execute { medKitService.invite(kit.id, alice.id) }
+        val key = TransactionTemplate(transactionManager).execute { inviting.invite(kit.id, alice.id) }
 
         val outcome = race(
-            { sync -> sync(); medKitService.joinByInvitation(key, bob.id) },
-            { sync -> sync(); medKitService.joinByInvitation(key, charlie.id) }
+            { sync -> sync(); joining.joinByInvitation(key, bob.id) },
+            { sync -> sync(); joining.joinByInvitation(key, charlie.id) }
         )
 
         assertTrue(outcome.failures.isEmpty(), "разные membership не конфликтуют: ${outcome.failures}")
@@ -606,11 +610,11 @@ class OptimisticRaceTest {
         val alice = dbHelper.freshUser("race-last-leave-a")
         val bob = dbHelper.freshUser("race-last-leave-b")
         val kit = dbHelper.freshMedKit(alice.id)
-        val key = TransactionTemplate(transactionManager).execute { medKitService.invite(kit.id, alice.id) }
+        val key = TransactionTemplate(transactionManager).execute { inviting.invite(kit.id, alice.id) }
 
         val outcome = race(
             { sync -> sync(); medKitApplicationService.leave(kit.id, alice.id) },
-            { sync -> sync(); medKitService.joinByInvitation(key, bob.id) }
+            { sync -> sync(); joining.joinByInvitation(key, bob.id) }
         )
 
         val stored = dbHelper.medKit(kit.id)
@@ -629,11 +633,11 @@ class OptimisticRaceTest {
         val alice = dbHelper.freshUser("race-delete-join-a")
         val bob = dbHelper.freshUser("race-delete-join-b")
         val kit = dbHelper.freshMedKit(alice.id)
-        val key = TransactionTemplate(transactionManager).execute { medKitService.invite(kit.id, alice.id) }
+        val key = TransactionTemplate(transactionManager).execute { inviting.invite(kit.id, alice.id) }
 
         val outcome = race(
             { sync -> sync(); medKitApplicationService.delete(kit.id, alice.id) },
-            { sync -> sync(); medKitService.joinByInvitation(key, bob.id) }
+            { sync -> sync(); joining.joinByInvitation(key, bob.id) }
         )
 
         assertTrue(outcome.failures.all { it is NotAMember }, "допустим только отказ исчезнувшего ресурса")

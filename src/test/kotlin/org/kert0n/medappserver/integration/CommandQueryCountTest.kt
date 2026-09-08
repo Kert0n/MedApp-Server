@@ -5,6 +5,8 @@ import kotlin.uuid.Uuid
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.services.aggregate.MedKitService
+import org.kert0n.medappserver.services.orchestrator.MedKitInviting
+import org.kert0n.medappserver.services.orchestrator.MedKitJoining
 import org.kert0n.medappserver.services.application.DrugApplicationService
 import org.kert0n.medappserver.services.application.MedKitApplicationService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
@@ -27,6 +29,8 @@ class CommandQueryCountTest {
 
     @Autowired private lateinit var medKits: MedKitApplicationService
     @Autowired private lateinit var medKitService: MedKitService
+    @Autowired private lateinit var inviting: MedKitInviting
+    @Autowired private lateinit var joining: MedKitJoining
     @Autowired private lateinit var drugs: DrugApplicationService
     @Autowired private lateinit var dbHelper: DatabaseTestHelper
     @Autowired private lateinit var transactionManager: PlatformTransactionManager
@@ -195,7 +199,7 @@ class CommandQueryCountTest {
         val newcomer = dbHelper.freshUser("$name-new").id
 
         return count("приглашение и вступление, участников — $members") {
-            medKitService.joinByInvitation(medKitService.invite(kit, alice), newcomer)
+            joining.joinByInvitation(inviting.invite(kit, alice), newcomer)
         }
     }
 

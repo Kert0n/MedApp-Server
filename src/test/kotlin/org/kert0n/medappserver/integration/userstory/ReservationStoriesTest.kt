@@ -13,6 +13,8 @@ import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.MedKitService
+import org.kert0n.medappserver.services.orchestrator.MedKitInviting
+import org.kert0n.medappserver.services.orchestrator.MedKitJoining
 import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.kert0n.medappserver.services.application.DrugApplicationService
 import org.kert0n.medappserver.services.application.MedKitApplicationService
@@ -39,6 +41,10 @@ class ReservationStoriesTest {
 
     @Autowired
     private lateinit var reservationService: ReservationService
+    @Autowired
+    private lateinit var inviting: MedKitInviting
+    @Autowired
+    private lateinit var joining: MedKitJoining
 
     @Autowired
     private lateinit var drugService: DrugService
@@ -98,8 +104,8 @@ class ReservationStoriesTest {
         dbHelper.insert(bob)
 
         val medkit = medKitService.create(anna.id)
-        val shareKey = medKitService.invite(medkit.id, anna.id)
-        medKitService.joinByInvitation(shareKey, bob.id)
+        val shareKey = inviting.invite(medkit.id, anna.id)
+        joining.joinByInvitation(shareKey, bob.id)
 
         val vitaminC = Drug(
             id = Uuid.random(),
@@ -142,10 +148,10 @@ class ReservationStoriesTest {
         dbHelper.insert(child)
 
         val familyKit = medKitService.create(mom.id)
-        val dadKey = medKitService.invite(familyKit.id, mom.id)
-        medKitService.joinByInvitation(dadKey, dad.id)
-        val childKey = medKitService.invite(familyKit.id, mom.id)
-        medKitService.joinByInvitation(childKey, child.id)
+        val dadKey = inviting.invite(familyKit.id, mom.id)
+        joining.joinByInvitation(dadKey, dad.id)
+        val childKey = inviting.invite(familyKit.id, mom.id)
+        joining.joinByInvitation(childKey, child.id)
 
         val aspirin = Drug(
             id = Uuid.random(), name = "Children's Aspirin",
