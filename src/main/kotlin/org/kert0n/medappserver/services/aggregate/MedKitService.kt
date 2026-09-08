@@ -55,12 +55,17 @@ class MedKitService(
         return medKits.findAllOfUser(userId)
     }
 
-    /** По идентификатору — то же самое плюс своё чтение, в котором и проверяется доступ. */
+    /**
+     * Приглашение в аптечку: удержание доступа и есть проверка права пригласить.
+     *
+     * Аптечка после этого не читается. Приглашению нужен только идентификатор, а `get` посчитал
+     * бы `COUNT` участников под блокировкой ради значения, которое тут же выбрасывается (#134).
+     */
     @Transactional(propagation = MANDATORY)
     fun invite(medKitId: Uuid, userId: Uuid): String {
         access.holdContentAccess(setOf(medKitId), userId)
         logger.debug("Sharing medkit {} by user: {}", medKitId, userId)
-        val invitation = Invitation(get(medKitId, userId), userId)
+        val invitation = Invitation(medKitId, userId)
         val key = securityService.generateKey(16)
         // Кешируется только хеш: сырой ключ приглашения на сервере не хранится.
         medKitTokenCache[securityService.hashToken(key)] = invitation
@@ -70,22 +75,24 @@ class MedKitService(
     /**
      * Вступление по приглашению — единственный способ попасть в аптечку.
      *
-     * Вступающего в ней ещё нет, поэтому аптечка читается правами **пригласившего**: он в ней
-     * состоит, и обычное скоупленное чтение работает. Нескоупленных чтений в приложении не
+     * Вступающего в аптечке ещё нет, поэтому доступ удерживается правами **пригласившего**: он в
+     * ней состоит, и блокировка это заново подтверждает. Нескоупленных чтений в приложении не
      * появляется — см. [Invitation] о том, что из этого следует.
+     *
+     * Возвращается идентификатор, а не проекция: `userCount` под блокировкой не считается (#134),
+     * а вызывающему всё равно нужна картина уже с самим вступившим.
      *
      * Правило «дважды не вступают» выражено отдельной строкой, а страхует его составной ключ.
      */
     @Transactional(propagation = MANDATORY)
-    fun joinByInvitation(key: String, userId: Uuid): MedKit {
+    fun joinByInvitation(key: String, userId: Uuid): Uuid {
         logger.debug("Adding user {} to medkit by invitation", userId)
         val invitation = medKitTokenCache.getOrNull(securityService.hashToken(key))
             ?: throw NotAMember()
 
         access.holdLifecycleAccess(setOf(invitation.medKitId), invitation.invitedBy)
-        val medKit = get(invitation.medKitId, invitation.invitedBy)
-        medKits.insertMembership(medKit.id, userId)
-        return medKit.copy(userCount = medKit.userCount + 1)
+        medKits.insertMembership(invitation.medKitId, userId)
+        return invitation.medKitId
     }
 
     /**

@@ -4,6 +4,7 @@ import kotlin.test.assertEquals
 import kotlin.uuid.Uuid
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
+import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.services.application.DrugApplicationService
 import org.kert0n.medappserver.services.application.MedKitApplicationService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
@@ -25,6 +26,7 @@ import org.springframework.transaction.PlatformTransactionManager
 class CommandQueryCountTest {
 
     @Autowired private lateinit var medKits: MedKitApplicationService
+    @Autowired private lateinit var medKitService: MedKitService
     @Autowired private lateinit var drugs: DrugApplicationService
     @Autowired private lateinit var dbHelper: DatabaseTestHelper
     @Autowired private lateinit var transactionManager: PlatformTransactionManager
@@ -71,6 +73,24 @@ class CommandQueryCountTest {
         val forMany = countMove("move-30", strangers = 30)
 
         assertEquals(forOne, forMany, "переезд стоит одинаково: $forOne против $forMany")
+    }
+
+    /**
+     * Приглашение и вступление не считают участников.
+     *
+     * Обе команды держат корень и обе раньше строили под ним проекцию с `COUNT` по всем
+     * membership — приглашению она была не нужна вовсе, вступлению её тут же перечитывал фасад.
+     * Рост с числом участников означал бы, что счётчик вернулся под блокировку (#134).
+     */
+    @Test
+    fun `приглашение и вступление не растут с числом участников`() {
+        val forFew = countInviteAndJoin("share-2", members = 2)
+        val forMany = countInviteAndJoin("share-50", members = 50)
+
+        assertEquals(
+            forFew, forMany,
+            "приглашение и вступление обязаны стоить одинаково: $forFew против $forMany"
+        )
     }
 
     /** Уничтожение пачки: брони на неё уходят одним запросом, сколько бы их ни было. */
@@ -159,6 +179,23 @@ class CommandQueryCountTest {
 
         return count("уничтожение упаковки, броней — $claims") {
             drugs.delete(drug.id, dbHelper.drugVersion(drug.id), alice)
+        }
+    }
+
+    /**
+     * Приглашение и вступление меряются вместе: ключ одного нужен другому.
+     *
+     * Замер один на пару, потому что порознь пришлось бы выдавать ключ вне замера, а это тот же
+     * запрос под тем же корнем.
+     */
+    private fun countInviteAndJoin(name: String, members: Int): Int {
+        val alice = dbHelper.freshUser("$name-a").id
+        val kit = dbHelper.freshMedKit(alice).id
+        repeat(members) { dbHelper.join(kit, alice, dbHelper.freshUser("$name-m$it").id) }
+        val newcomer = dbHelper.freshUser("$name-new").id
+
+        return count("приглашение и вступление, участников — $members") {
+            medKitService.joinByInvitation(medKitService.invite(kit, alice), newcomer)
         }
     }
 

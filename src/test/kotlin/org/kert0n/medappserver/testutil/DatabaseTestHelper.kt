@@ -93,11 +93,11 @@ class DatabaseTestHelper(
     /**
      * Вступление под подготовку сценария — тем же путём, что и приложение.
      *
-     * Вступить иначе нельзя: приглашение и есть право прочитать аптечку, в которой тебя ещё
+     * Вступить иначе нельзя: приглашение и есть право попасть в аптечку, в которой тебя ещё
      * нет. Ключ выписывается от имени участника, который в ней уже состоит.
      */
     @Transactional
-    fun join(medKitId: Uuid, invitedBy: Uuid, userId: Uuid): MedKit =
+    fun join(medKitId: Uuid, invitedBy: Uuid, userId: Uuid): Uuid =
         medKitService.joinByInvitation(medKitService.invite(medKitId, invitedBy), userId)
 
     /** Бронь под подготовку сценария. */

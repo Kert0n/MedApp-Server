@@ -58,7 +58,7 @@ class MedKitApplicationService(
     @Transactional
     fun joinByInvitation(key: String, userId: Uuid): MedKitDTO {
         val joined = medKitService.joinByInvitation(key, userId)
-        return read(joined.id, userId)
+        return read(joined, userId)
     }
 
     /**
