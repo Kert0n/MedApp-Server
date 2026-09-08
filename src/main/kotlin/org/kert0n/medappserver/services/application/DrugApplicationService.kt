@@ -11,7 +11,6 @@ import org.kert0n.medappserver.api.toSnapshot
 import org.kert0n.medappserver.domain.ReservationSnapshot
 import org.kert0n.medappserver.services.aggregate.DrugEdit
 import org.kert0n.medappserver.services.aggregate.DrugService
-import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.services.aggregate.NewDrug
 import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.kert0n.medappserver.services.orchestrator.DrugDisposal
@@ -36,7 +35,6 @@ import org.springframework.transaction.annotation.Transactional
 class DrugApplicationService(
     private val drugService: DrugService,
     private val reservationService: ReservationService,
-    private val medKitService: MedKitService,
     private val relocation: DrugRelocation,
     private val disposal: DrugDisposal,
     private val placement: DrugPlacement,
@@ -93,8 +91,8 @@ class DrugApplicationService(
     fun moveToMedKit(drugId: Uuid, targetMedKitId: Uuid, version: Long?, userId: Uuid): DrugSnapshotDTO {
         val drug = drugService.get(drugId, userId)
         logger.debug("Moving drug {} to medkit {}", drugId, targetMedKitId)
-        val locked = medKitService.lock(setOf(drug.medKitId, targetMedKitId), userId).associateBy { it.id }
-        val moved = relocation.moveOne(drug, locked.getValue(targetMedKitId), statedVersion(version))
+        // Корни берёт сам переезд: протокол принадлежит сценарию, а не входу в него.
+        val moved = relocation.moveOne(drug, targetMedKitId, userId, statedVersion(version))
         return moved.toSnapshot(reservationService.onDrugs(listOf(moved), userId).getValue(moved.id))
     }
 

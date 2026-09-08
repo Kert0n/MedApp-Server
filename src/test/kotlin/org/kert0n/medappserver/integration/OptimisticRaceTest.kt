@@ -1,6 +1,7 @@
 package org.kert0n.medappserver.integration
 
 import java.math.BigDecimal
+import java.sql.SQLException
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.CyclicBarrier
@@ -12,6 +13,9 @@ import kotlin.test.assertTrue
 import kotlin.uuid.Uuid
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
+import org.kert0n.medappserver.api.DrugCreateRequest
+import org.kert0n.medappserver.api.DrugSyncRequest
+import org.kert0n.medappserver.api.ReservationSyncRequest
 import org.kert0n.medappserver.domain.DomainRuleViolated
 import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.StaleVersion
@@ -20,6 +24,8 @@ import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.kert0n.medappserver.services.application.DrugApplicationService
+import org.kert0n.medappserver.services.application.MedKitApplicationService
+import org.kert0n.medappserver.services.orchestrator.ReservationPlacement
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.jdbc.core.JdbcTemplate
@@ -43,6 +49,8 @@ class OptimisticRaceTest {
     @Autowired private lateinit var medKitService: MedKitService
     @Autowired private lateinit var reservationService: ReservationService
     @Autowired private lateinit var drugApplicationService: DrugApplicationService
+    @Autowired private lateinit var medKitApplicationService: MedKitApplicationService
+    @Autowired private lateinit var placement: ReservationPlacement
     @Autowired private lateinit var jdbc: JdbcTemplate
     @Autowired private lateinit var transactionManager: PlatformTransactionManager
 
@@ -211,13 +219,13 @@ class OptimisticRaceTest {
                 val read = drugService.get(drug.id, alice.id)
                 val claims = reservationService.snapshotOn(read, alice.id)
                 sync()
-                reservationService.create(read, alice.id, BigDecimal("5"), claims.version)
+                placement.place(read, alice.id, BigDecimal("5"), claims.version)
             },
             { sync ->
                 val read = drugService.get(drug.id, bob.id)
                 val claims = reservationService.snapshotOn(read, bob.id)
                 sync()
-                reservationService.create(read, bob.id, BigDecimal("7"), claims.version)
+                placement.place(read, bob.id, BigDecimal("7"), claims.version)
             }
         )
 
@@ -232,8 +240,9 @@ class OptimisticRaceTest {
     /**
      * Бронь не может остаться без доступа даже на гонке.
      *
-     * Проверяется не то, кто выиграл, а связность итога: если бронь есть, то и членство есть.
-     * Разойтись им не даёт составной ключ на членство — правило выражено в коде, ключ страхует.
+     * Проверяется и связность итога, и то, чем отвечает проигравший. Раньше он мог получить
+     * нарушение внешнего ключа, то есть пятисотку на штатный конкурентный запрос; теперь
+     * заведение держит корень совместимо, и выход либо ждёт его, либо отвечает ему отказом.
      */
     @Test
     fun `заведение брони против потери доступа`() {
@@ -243,17 +252,23 @@ class OptimisticRaceTest {
         dbHelper.join(kit.id, alice.id, bob.id)
         val drug = dbHelper.freshDrug(kit.id, quantity = 30.0)
 
-        race(
+        val outcome = race(
             { sync ->
                 val read = drugService.get(drug.id, bob.id)
                 val claims = reservationService.snapshotOn(read, bob.id)
                 sync()
-                reservationService.create(read, bob.id, BigDecimal("4"), claims.version)
+                placement.place(read, bob.id, BigDecimal("4"), claims.version)
             },
             { sync ->
                 sync()
-                medKitService.leave(kit.id, bob.id)
+                medKitApplicationService.leave(kit.id, bob.id)
             }
+        )
+
+        outcome.assertNoDatabaseError()
+        assertTrue(
+            outcome.failures.all { it is DomainRuleViolated },
+            "проигравший обязан получить доменный отказ: ${outcome.failures}"
         )
 
         val stillMember = dbHelper.isMember(kit.id, bob.id)
@@ -261,6 +276,191 @@ class OptimisticRaceTest {
         assertTrue(
             stillMember || !hasReservation,
             "бронь без доступа: членства нет, а бронь осталась"
+        )
+    }
+
+    /**
+     * Бронь против переезда той же упаковки.
+     *
+     * Между чтением упаковки и записью брони она может уехать в другую аптечку. Записать бронь
+     * с прежней аптечкой значило бы нарушить составной ключ; заведение перечитывает упаковку
+     * под блокировкой и отвечает конфликтом состояния.
+     */
+    @Test
+    fun `заведение брони против переезда упаковки`() {
+        val alice = dbHelper.freshUser("race-book-move-a")
+        val bob = dbHelper.freshUser("race-book-move-b")
+        val source = dbHelper.freshMedKit(alice.id)
+        dbHelper.join(source.id, alice.id, bob.id)
+        val target = dbHelper.freshMedKit(alice.id)
+        val drug = dbHelper.freshDrug(source.id, quantity = 30.0)
+        val read = TransactionTemplate(transactionManager).execute { drugService.get(drug.id, bob.id) }
+        val stated = TransactionTemplate(transactionManager).execute {
+            reservationService.snapshotOn(read, bob.id).version
+        }
+
+        val moved = CountDownLatch(1)
+        val allowMoveCommit = CountDownLatch(1)
+        val placementBackend = ArrayBlockingQueue<Int>(1)
+        val pool = Executors.newFixedThreadPool(2)
+        try {
+            val relocation = pool.submit<Throwable?> {
+                runCatching {
+                    TransactionTemplate(transactionManager).execute {
+                        drugApplicationService.moveToMedKit(drug.id, target.id, drug.version, alice.id)
+                        moved.countDown()
+                        assertTrue(allowMoveCommit.await(10, TimeUnit.SECONDS), "бронь не дошла до ожидания корня")
+                    }
+                }.exceptionOrNull()
+            }
+            assertTrue(moved.await(10, TimeUnit.SECONDS), "переезд не изменил упаковку")
+
+            val reservation = pool.submit<Throwable?> {
+                runCatching {
+                    TransactionTemplate(transactionManager).execute {
+                        placementBackend.put(jdbc.queryForObject("SELECT pg_backend_pid()", Int::class.java)!!)
+                        placement.place(read, bob.id, BigDecimal("3"), stated)
+                    }
+                }.exceptionOrNull()
+            }
+
+            awaitDatabaseLock(placementBackend.poll(10, TimeUnit.SECONDS) ?: error("бронь не начала транзакцию"))
+            allowMoveCommit.countDown()
+
+            assertNull(relocation.get(30, TimeUnit.SECONDS)?.rootCause(), "переезд обязан завершиться")
+            assertTrue(
+                reservation.get(30, TimeUnit.SECONDS)?.rootCause() is StaleVersion,
+                "прочитанная до переезда упаковка обязана устареть"
+            )
+        } finally {
+            allowMoveCommit.countDown()
+            pool.shutdownNow()
+        }
+
+        assertEquals(target.id, dbHelper.requireDrug(drug.id).medKitId)
+        assertNull(dbHelper.userReservation(bob.id, drug.id))
+    }
+
+    /** Заведение упаковки против глобального удаления аптечки: отказ, а не нарушение ключа. */
+    @Test
+    fun `заведение упаковки против удаления аптечки`() {
+        val alice = dbHelper.freshUser("race-place-delete")
+        val kit = dbHelper.freshMedKit(alice.id)
+
+        val outcome = race(
+            { sync ->
+                sync()
+                drugApplicationService.createInMedKit(kit.id, drugRequest(), alice.id)
+            },
+            { sync ->
+                sync()
+                medKitApplicationService.delete(kit.id, alice.id)
+            }
+        )
+
+        outcome.assertNoDatabaseError()
+        assertTrue(
+            outcome.failures.all { it is NotAMember },
+            "допустим только отказ исчезнувшего ресурса: ${outcome.failures}"
+        )
+        assertNull(dbHelper.medKit(kit.id), "аптечка обязана исчезнуть в любом порядке")
+    }
+
+    /**
+     * Новая бронь внутри sync обязана взять корень до того, как списание заблокирует упаковку.
+     * Иначе delete держит корень и ждёт упаковку, а sync держит упаковку и ждёт корень.
+     */
+    @Test
+    fun `синхронизация с новой бронью не образует deadlock с удалением аптечки`() {
+        val alice = dbHelper.freshUser("race-sync-delete")
+        val kit = dbHelper.freshMedKit(alice.id)
+        val drug = dbHelper.freshDrug(kit.id, quantity = 30.0)
+
+        val rootTaken = CountDownLatch(1)
+        val allowDelete = CountDownLatch(1)
+        val syncBackend = ArrayBlockingQueue<Int>(1)
+        val pool = Executors.newFixedThreadPool(2)
+        try {
+            val deletion = pool.submit<Throwable?> {
+                runCatching {
+                    TransactionTemplate(transactionManager).execute {
+                        val locked = medKitService.lock(setOf(kit.id), alice.id).single()
+                        rootTaken.countDown()
+                        assertTrue(allowDelete.await(10, TimeUnit.SECONDS), "sync не дошёл до ожидания корня")
+                        medKitService.delete(locked)
+                    }
+                }.exceptionOrNull()
+            }
+            assertTrue(rootTaken.await(10, TimeUnit.SECONDS), "удаление не удержало корень")
+
+            val synchronisation = pool.submit<Throwable?> {
+                runCatching {
+                    TransactionTemplate(transactionManager).execute {
+                        syncBackend.put(jdbc.queryForObject("SELECT pg_backend_pid()", Int::class.java)!!)
+                        drugApplicationService.synchronise(
+                            drug.id,
+                            Uuid.random(),
+                            DrugSyncRequest(
+                                consumed = BigDecimal.ONE,
+                                drugVersion = drug.version,
+                                reservation = ReservationSyncRequest(BigDecimal("2"))
+                            ),
+                            alice.id
+                        )
+                    }
+                }.exceptionOrNull()
+            }
+
+            awaitDatabaseLock(syncBackend.poll(10, TimeUnit.SECONDS) ?: error("sync не начал транзакцию"))
+            allowDelete.countDown()
+
+            assertNull(deletion.get(30, TimeUnit.SECONDS)?.rootCause(), "удаление обязано завершиться")
+            val syncFailure = synchronisation.get(30, TimeUnit.SECONDS)?.rootCause()
+            assertTrue(syncFailure is NotAMember, "sync проигрывает доменным отказом: $syncFailure")
+        } finally {
+            allowDelete.countDown()
+            pool.shutdownNow()
+        }
+
+        assertNull(dbHelper.medKit(kit.id))
+        assertNull(dbHelper.drug(drug.id))
+    }
+
+    /**
+     * Переезд против выхода из целевой аптечки — обратный порядок.
+     *
+     * Симметричен проверке ниже: там первым корень берёт выход, здесь — переезд. Выход обязан
+     * дождаться переезда, а уцелевшая бронь Боба — уйти вместе с его членством.
+     */
+    @Test
+    fun `выход из целевой аптечки ждёт одиночный перенос`() {
+        val alice = dbHelper.freshUser("race-move-first-a")
+        val bob = dbHelper.freshUser("race-move-first-b")
+        val source = dbHelper.freshMedKit(alice.id)
+        dbHelper.join(source.id, alice.id, bob.id)
+        val target = dbHelper.freshMedKit(alice.id)
+        dbHelper.join(target.id, alice.id, bob.id)
+        val drug = dbHelper.freshDrug(source.id, quantity = 20.0)
+        dbHelper.reserve(bob.id, drug.id, BigDecimal("5"))
+
+        val outcome = race(
+            { sync ->
+                sync()
+                drugApplicationService.moveToMedKit(drug.id, target.id, drug.version, alice.id)
+            },
+            { sync ->
+                sync()
+                medKitApplicationService.leave(target.id, bob.id)
+            }
+        )
+
+        outcome.assertNoDatabaseError()
+        assertTrue(outcome.failures.isEmpty(), "обе команды законны в любом порядке: ${outcome.failures}")
+        assertEquals(target.id, dbHelper.requireDrug(drug.id).medKitId)
+        assertNull(dbHelper.userReservation(bob.id, drug.id), "бронь не переживает выход из целевой аптечки")
+        assertEquals(
+            0, dbHelper.storedReservationsTotal(drug.id).compareTo(dbHelper.reservedOnDrug(drug.id)),
+            "сохранённая сумма обязана сойтись со строками"
         )
     }
 
@@ -282,13 +482,13 @@ class OptimisticRaceTest {
                 val read = drugService.get(drug.id, owner.id)
                 val claims = reservationService.snapshotOn(read, owner.id)
                 sync()
-                reservationService.create(read, owner.id, BigDecimal("5"), claims.version)
+                placement.place(read, owner.id, BigDecimal("5"), claims.version)
             },
             { sync ->
                 val read = drugService.get(drug.id, owner.id)
                 val claims = reservationService.snapshotOn(read, owner.id)
                 sync()
-                reservationService.create(read, owner.id, BigDecimal("6"), claims.version)
+                placement.place(read, owner.id, BigDecimal("6"), claims.version)
             }
         )
 
@@ -427,6 +627,12 @@ class OptimisticRaceTest {
         }
     }
 
+    private fun drugRequest() = DrugCreateRequest(
+        name = "Race_${Uuid.random()}",
+        quantity = BigDecimal("10"),
+        quantityUnitId = dbHelper.unit().id
+    )
+
     /** Ждёт именно блокировку в PostgreSQL; задержка потока не считается доказательством гонки. */
     private fun awaitDatabaseLock(backendPid: Int) {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
@@ -444,6 +650,17 @@ class OptimisticRaceTest {
 
     private class Outcome(results: List<Throwable?>) {
         val failures = results.filterNotNull().map { it.rootCause() }
+
+        /**
+         * Штатная гонка отвечает доменным отказом, а не поломкой схемы.
+         *
+         * Нарушение внешнего ключа наружу — это пятисотка на осмысленный запрос: клиенту нечего
+         * с ней делать, а причина в том, что команды разошлись, а не в том, что он неправ.
+         */
+        fun assertNoDatabaseError() {
+            val fromDatabase = failures.filterIsInstance<SQLException>()
+            assertTrue(fromDatabase.isEmpty(), "штатная гонка упёрлась в ошибку БД: $fromDatabase")
+        }
 
         fun assertOneLost() {
             assertEquals(1, failures.size, "ровно одна сторона обязана проиграть: $failures")

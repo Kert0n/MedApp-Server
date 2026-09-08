@@ -5,6 +5,7 @@ import java.math.BigDecimal
 import kotlin.uuid.Uuid
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.domain.Intake
+import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.StaleVersion
 import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.slf4j.LoggerFactory
@@ -28,6 +29,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Service
 class DrugSynchronisation(
     private val reservationService: ReservationService,
+    private val placement: ReservationPlacement,
     private val disposal: DrugDisposal,
     private val syncJournalCache: Cache<Uuid, Intake>
 ) {
@@ -39,6 +41,17 @@ class DrugSynchronisation(
         val intake = Intake(syncId, userId, drug, request.consumed, request.reservation?.amount)
         if (alreadyApplied(intake)) return drug
 
+        /*
+         * Если sync заводит новую бронь, `ReservationPlacement` сначала удержит корень
+         * совместимо. Сделать это после записи упаковки нельзя: глобальный delete уже может
+         * держать корень и ждать эту упаковку. Чистый вызов домена заранее отвечает, переживёт
+         * ли пачка списание; для уничтоженной пачки бронь, как и прежде, не применяется.
+         */
+        val survives = request.consumed?.let {
+            drug.consume(Quantity(it, drug.quantity.unit)) != null
+        } ?: true
+        if (survives) applyReservation(drug, userId, request.reservation)
+
         // `null` — списание опустошило пачку, и её больше нет вместе с бронями на неё.
         val left = if (request.consumed != null) {
             // Списание есть — значит упаковку пишут, и версию к ней предъявить обязаны.
@@ -48,7 +61,6 @@ class DrugSynchronisation(
         } else {
             drug
         }
-        applyReservation(left, userId, request.reservation)
 
         rememberAfterCommit(intake)
         return left
@@ -85,7 +97,9 @@ class DrugSynchronisation(
 
         asSyncConflict {
             if (snapshot.mine == null) {
-                reservationService.create(drug, userId, wanted.amount, stated)
+                // Через тот же вход, что и у фасада брони: протокол согласования с составом
+                // участников принадлежит заведению брони, а не одному из его вызывающих.
+                placement.place(drug, userId, wanted.amount, stated)
             } else {
                 reservationService.changeTo(userId, drug.id, wanted.amount, stated)
             }

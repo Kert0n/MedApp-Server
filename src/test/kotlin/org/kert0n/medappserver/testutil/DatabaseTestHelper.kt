@@ -6,6 +6,7 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.core.JoinType
+import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.kert0n.medappserver.db.store.DrugStore
 import org.kert0n.medappserver.db.store.MedKitStore
@@ -194,6 +195,25 @@ class DatabaseTestHelper(
     @Transactional
     fun userReservation(userId: Uuid, drugId: Uuid): BigDecimal? =
         reservations.find(userId, drugId)?.amount?.amount
+
+    /**
+     * Сохранённая сумма броней — та, что лежит в колонке, а не сложенная из строк.
+     *
+     * Существует ровно затем, чтобы сверить одно с другим: `reservedOnDrug` складывает строки,
+     * а API отвечает по ним же, так что расхождение видно только отсюда.
+     */
+    @Transactional
+    fun storedReservationsTotal(drugId: Uuid): BigDecimal =
+        Drugs.select(Drugs.reservationsTotal)
+            .where { Drugs.id eq drugId }
+            .single()[Drugs.reservationsTotal]
+
+    /** Версия картины броней без оглядки на доступ — под проверки состояния. */
+    @Transactional
+    fun storedReservationsVersion(drugId: Uuid): Long =
+        Drugs.select(Drugs.reservationsVersion)
+            .where { Drugs.id eq drugId }
+            .single()[Drugs.reservationsVersion]
 
     /** Текущая версия упаковки — для команд, которые обязаны её предъявить. */
     @Transactional
