@@ -28,6 +28,22 @@ class MedKitAccessService(private val medKits: MedKitStore) {
     fun holdLifecycleAccess(medKitIds: Set<Uuid>, userId: Uuid) =
         hold(medKitIds, userId, RootLock.EXCLUSIVE)
 
+    /**
+     * Два запроса, и второй не избыточен.
+     *
+     * Блокирующий `SELECT` берёт снимок до того, как встанет в очередь за корнем. Параллельный
+     * выход удаляет строку `user_med_kits`, но саму строку `med_kits` не трогает, поэтому после
+     * его коммита EvalPlanQual не срабатывает: перепроверять Postgres будет только тогда, когда
+     * изменилась заблокированная строка. Присоединённое membership так и вернётся из устаревшего
+     * снимка, и команда решит, что доступ есть.
+     *
+     * Второй запрос — новый statement, а значит и новый снимок: он уже видит коммит, которого
+     * ждали корни. Убрать его — вернуть заведению брони нарушение внешнего ключа под гонкой;
+     * поймано это поведенчески в `CommandAccessRaceTest`, а не по форме кода.
+     *
+     * Дальше membership исчезнуть не может: удаляют его только выход и глобальное удаление, а оба
+     * берут корень исключительно и потому ждут нас.
+     */
     private fun hold(medKitIds: Set<Uuid>, userId: Uuid, lock: RootLock) {
         val locked = medKits.lockAccessible(medKitIds, userId, lock)
         if (locked != medKitIds || medKits.accessible(medKitIds, userId) != medKitIds) throw NotAMember()
