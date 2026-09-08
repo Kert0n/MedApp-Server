@@ -299,6 +299,8 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/MedKitDTO"
+        "409":
+          description: Caller is already a member
         "404":
           description: Invitation expired or unknown
         "401":

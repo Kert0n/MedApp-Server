@@ -28,12 +28,21 @@ class DrugPlacement(
     private val medKitService: MedKitService
 ) {
 
-    /** Основная форма: аптечка уже прочитана, значит доступ к ней доказан. */
+    /** Аптечка уже прочитана и её корень уже удерживает вызывающий: писать можно. */
     @Transactional(propagation = MANDATORY)
     fun place(request: NewDrug, medKit: MedKit): Drug = drugService.create(request, medKit)
 
-    /** По идентификатору — то же самое плюс чтение аптечки. */
+    /**
+     * По идентификатору — вход, который сам обеспечивает протокол.
+     *
+     * Корень удерживается совместимо, пока строка пишется: у неё внешний ключ на `med_kits`, и
+     * параллельное удаление аптечки иначе отвергло бы вставку нарушением ключа вместо отказа
+     * «такой аптечки нет». Блокировка и есть проверка доступа, поэтому чтение после неё —
+     * только за проекцией.
+     */
     @Transactional(propagation = MANDATORY)
-    fun place(request: NewDrug, medKitId: Uuid, userId: Uuid): Drug =
-        place(request, medKitService.get(medKitId, userId))
+    fun place(request: NewDrug, medKitId: Uuid, userId: Uuid): Drug {
+        medKitService.guard(setOf(medKitId), userId)
+        return place(request, medKitService.get(medKitId, userId))
+    }
 }

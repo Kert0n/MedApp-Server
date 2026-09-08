@@ -1,5 +1,6 @@
 package org.kert0n.medappserver.controller
 
+import org.kert0n.medappserver.domain.AlreadyMember
 import org.kert0n.medappserver.domain.DomainRuleViolated
 import org.kert0n.medappserver.domain.InvalidRegistrationSecret
 import org.kert0n.medappserver.domain.NoSuchReservation
@@ -35,8 +36,9 @@ class ApiExceptionHandler {
      * Нарушенное правило агрегата. Здесь и только здесь оно превращается в код ответа — сама
      * модель про HTTP не знает, иначе её нельзя было бы проверить без веб-слоя.
      *
-     * Отсутствие брони — 404: ресурса нет. Вторая бронь того же человека на ту же пачку — 409:
-     * ресурс есть, его надо менять. Остальное — 400: запрос сам по себе противоречив.
+     * Отсутствие брони — 404: ресурса нет. Вторая бронь того же человека на ту же пачку и
+     * повторное вступление — 409: ресурс уже существует, его нельзя создать заново. Остальное
+     * — 400: запрос сам по себе противоречив.
      */
     @ExceptionHandler(DomainRuleViolated::class)
     fun handleDomainRule(exception: DomainRuleViolated): ProblemDetail = problem(
@@ -45,7 +47,7 @@ class ApiExceptionHandler {
             // Недоступная аптечка и несуществующая отвечают одинаково: иначе код ответа
             // выдавал бы существование чужой.
             is NotAMember -> HttpStatus.NOT_FOUND
-            is ReservationAlreadyExists -> HttpStatus.CONFLICT
+            is ReservationAlreadyExists, is AlreadyMember -> HttpStatus.CONFLICT
             // Предъявленная версия не совпала с той, что в базе. Различать «прислал
             // устаревшую» и «проиграл гонку» база не даёт — она отвечает одинаково, нулём
             // задетых строк, — да и клиенту разницы нет: и там и там решение принято по

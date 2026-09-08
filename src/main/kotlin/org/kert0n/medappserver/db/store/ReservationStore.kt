@@ -173,6 +173,26 @@ class ReservationStore {
         recountSnapshots(listOf(drug.id))
     }
 
+    /**
+     * Брони выходящего участника и картины задетых ими упаковок.
+     *
+     * Корень аптечки к этому моменту удерживается исключительно, поэтому новая бронь этого
+     * участника уже не вклинится между выборкой и удалением. Идентификаторы упаковок остаются
+     * локальной деталью хранилища; наружу не поднимается ни список броней, ни список участников.
+     */
+    fun deleteOfMember(medKit: MedKit, userId: Uuid) {
+        val touched = Reservations
+            .select(Reservations.drugId)
+            .where { (Reservations.medKitId eq medKit.id) and (Reservations.userId eq userId) }
+            .map { it[Reservations.drugId] }
+
+        lockSnapshots(touched)
+        Reservations.deleteWhere {
+            (Reservations.medKitId eq medKit.id) and (Reservations.userId eq userId)
+        }
+        recountSnapshots(touched)
+    }
+
     // ── Внутреннее: помощники запросов и перенос строк ───────────────────────────
     //
     // Обещания разделов выше — про публичную поверхность. Здесь работают уже внутри доказанного
@@ -213,6 +233,19 @@ class ReservationStore {
             it[reservationsVersion] = stated + 1
         }
         if (moved == 0) throw StaleVersion()
+    }
+
+    /**
+     * Сохраняет единый порядок блокировок с правкой и отменой брони: сначала упаковка, затем
+     * строка брони. Без этого выход мог держать бронь и ждать упаковку, пока встречная правка
+     * держала упаковку и ждала ту же бронь. Само значение не меняется; `UPDATE` нужен именно
+     * как блокировка строк и не выдаётся за изменение версии картины.
+     */
+    private fun lockSnapshots(drugIds: Collection<Uuid>) {
+        if (drugIds.isEmpty()) return
+        Drugs.update({ Drugs.id inList drugIds }) {
+            it[reservationsTotal] = Drugs.reservationsTotal
+        }
     }
 
     /**

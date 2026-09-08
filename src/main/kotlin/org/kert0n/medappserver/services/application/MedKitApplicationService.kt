@@ -12,6 +12,7 @@ import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.kert0n.medappserver.services.orchestrator.DrugRelocation
+import org.kert0n.medappserver.services.orchestrator.MedKitLeaving
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -27,7 +28,8 @@ class MedKitApplicationService(
     private val medKitService: MedKitService,
     private val drugService: DrugService,
     private val reservationService: ReservationService,
-    private val relocation: DrugRelocation
+    private val relocation: DrugRelocation,
+    private val leaving: MedKitLeaving
 ) {
 
     private val logger = LoggerFactory.getLogger(MedKitApplicationService::class.java)
@@ -64,9 +66,9 @@ class MedKitApplicationService(
      *
      * Правило: **человек ушёл от хранилища — его назначения на пачки внутри него сняты.**
      *
-     * Отдельным запросом их снимать нечего: бронь ссылается на членство, и вместе со строкой
-     * членства уходит по каскаду. Это не «уборка, которая может не
-     * отработать», а то же самое правило, выраженное ключом — см. `AccessKeysTest`.
+     * Перед удалением membership оркестратор снимает брони и обновляет сохранённые суммы и
+     * версии их картин. Каскад остаётся страховкой целостности ключей, но не может один
+     * поддержать производную картину в `user_drugs`.
      *
      * Не путать с переездом коробки: там человек никуда не девался, и назначение остаётся,
      * если он допущен к новому месту. Там ключ правило выразить не может — см. `DrugRelocation`.
@@ -74,7 +76,7 @@ class MedKitApplicationService(
     @Transactional
     fun leave(medKitId: Uuid, userId: Uuid) {
         logger.debug("Removing user {} from medkit {}", userId, medKitId)
-        medKitService.leave(medKitId, userId)
+        leaving.leave(medKitId, userId)
     }
 
     /**

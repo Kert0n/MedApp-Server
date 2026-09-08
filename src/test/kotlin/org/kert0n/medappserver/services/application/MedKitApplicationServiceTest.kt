@@ -4,6 +4,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlin.uuid.Uuid
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertDoesNotThrow
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.assertThrows
 import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.db.store.MedKitStore
 import org.kert0n.medappserver.domain.DomainRuleViolated
+import org.kert0n.medappserver.domain.StaleVersion
 import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.services.aggregate.NewDrug
@@ -20,7 +22,10 @@ import org.kert0n.medappserver.testutil.qty
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
+import org.springframework.test.context.transaction.TestTransaction
+import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionTemplate
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -44,6 +49,8 @@ class MedKitApplicationServiceTest {
     private lateinit var reservationService: ReservationService
     @Autowired
     private lateinit var dbHelper: DatabaseTestHelper
+    @Autowired
+    private lateinit var transactionManager: PlatformTransactionManager
 
     // ── createInMedKit ──
 
@@ -168,6 +175,97 @@ class MedKitApplicationServiceTest {
         assertFailsWith<DomainRuleViolated> {
             medKitService.get(kit.id, bob.id)
         }
+    }
+
+    @Test
+    fun `leave recalculates only snapshots touched by departing member`() {
+        val alice = dbHelper.freshUser("leave-snapshot-a")
+        val bob = dbHelper.freshUser("leave-snapshot-b")
+        val kit = medKitService.create(alice.id)
+        dbHelper.join(kit.id, alice.id, bob.id)
+        val touched = dbHelper.freshDrug(kit.id, 100.0)
+        val untouched = dbHelper.freshDrug(kit.id, 100.0)
+        dbHelper.reserve(alice.id, touched.id, qty(7.0))
+        dbHelper.reserve(bob.id, touched.id, qty(5.0))
+        dbHelper.reserve(alice.id, untouched.id, qty(3.0))
+
+        val touchedVersion = dbHelper.storedReservationsVersion(touched.id)
+        val untouchedVersion = dbHelper.storedReservationsVersion(untouched.id)
+
+        medKits.leave(kit.id, bob.id)
+
+        assertNull(dbHelper.userReservation(bob.id, touched.id))
+        assertEquals(0, dbHelper.storedReservationsTotal(touched.id).compareTo(qty(7.0)))
+        assertEquals(touchedVersion + 1, dbHelper.storedReservationsVersion(touched.id))
+        assertEquals(untouchedVersion, dbHelper.storedReservationsVersion(untouched.id))
+        assertEquals(
+            0,
+            dbHelper.storedReservationsTotal(touched.id).compareTo(dbHelper.reservedOnDrug(touched.id)),
+            "сохранённая сумма обязана совпадать со строками после выхода"
+        )
+    }
+
+    @Test
+    fun `reservation snapshot token becomes stale after another member leaves`() {
+        val alice = dbHelper.freshUser("leave-token-a")
+        val bob = dbHelper.freshUser("leave-token-b")
+        val kit = medKitService.create(alice.id)
+        dbHelper.join(kit.id, alice.id, bob.id)
+        val drug = dbHelper.freshDrug(kit.id, 100.0)
+        dbHelper.reserve(alice.id, drug.id, qty(7.0))
+        dbHelper.reserve(bob.id, drug.id, qty(5.0))
+        val stale = dbHelper.storedReservationsVersion(drug.id)
+
+        medKits.leave(kit.id, bob.id)
+
+        assertThrows<StaleVersion> {
+            reservationService.changeTo(alice.id, drug.id, qty(8.0), stale)
+        }
+    }
+
+    @Test
+    fun `last member leaves with reservations and removes whole medkit`() {
+        val alice = dbHelper.freshUser("leave-last")
+        val kit = medKitService.create(alice.id)
+        val drug = dbHelper.freshDrug(kit.id, 100.0)
+        dbHelper.reserve(alice.id, drug.id, qty(5.0))
+
+        medKits.leave(kit.id, alice.id)
+
+        assertNull(dbHelper.medKit(kit.id))
+        assertNull(dbHelper.drug(drug.id))
+        assertNull(dbHelper.userReservation(alice.id, drug.id))
+    }
+
+    @Test
+    fun `late failure rolls back reservations snapshot and membership together`() {
+        val alice = dbHelper.freshUser("leave-rollback-a")
+        val bob = dbHelper.freshUser("leave-rollback-b")
+        val kit = medKitService.create(alice.id)
+        dbHelper.join(kit.id, alice.id, bob.id)
+        val drug = dbHelper.freshDrug(kit.id, 100.0)
+        dbHelper.reserve(bob.id, drug.id, qty(5.0))
+        val total = dbHelper.storedReservationsTotal(drug.id)
+        val version = dbHelper.storedReservationsVersion(drug.id)
+
+        // Подготовка должна стать видна новой транзакции, которую мы намеренно откатим.
+        TestTransaction.flagForCommit()
+        TestTransaction.end()
+
+        assertFailsWith<IllegalStateException> {
+            TransactionTemplate(transactionManager).execute {
+                medKits.leave(kit.id, bob.id)
+                error("поздний отказ после всех изменений")
+            }
+        }
+
+        assertTrue(dbHelper.isMember(kit.id, bob.id))
+        assertNotNull(dbHelper.userReservation(bob.id, drug.id))
+        assertEquals(total, dbHelper.storedReservationsTotal(drug.id))
+        assertEquals(version, dbHelper.storedReservationsVersion(drug.id))
+
+        // Возвращаем тестовую транзакцию, чтобы стандартный listener завершил метод штатно.
+        TestTransaction.start()
     }
 
     // ── delete ──

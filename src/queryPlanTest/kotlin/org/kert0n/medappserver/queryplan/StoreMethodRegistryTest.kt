@@ -79,7 +79,7 @@ class StoreMethodRegistryTest {
             "MedKitStore.insertMembership" to "вставка одной строки по составному первичному ключу",
             "MedKitStore.deleteMembership" to "удаление одной строки по составному первичному ключу",
             "MedKitStore.hasMembers" to "проверка первой строки по префиксу составного первичного ключа",
-            "MedKitStore.lockAccessible" to "блокировка небольшого набора корней по первичным ключам",
+            "MedKitStore.lockAccessible" to "блокировка небольшого набора корней по первичным ключам, оба режима",
             "MedKitStore.delete" to "удаление по первичному ключу",
             "DrugStore.findAllOfUser" to "то же соединение членства, что и содержимое аптечки",
             "DrugStore.insert" to "вставка одной строки",
@@ -98,6 +98,7 @@ class StoreMethodRegistryTest {
             "ReservationStore.save" to "запись по первичному ключу",
             "ReservationStore.delete" to "удаление по первичному ключу",
             "ReservationStore.deleteOfDrug" to "удаление по внешнему ключу упаковки",
+            "ReservationStore.deleteOfMember" to "массовое снятие по участнику и аптечке",
             "ReservationStore.deleteInMedKitExcept" to "массовое снятие, план тот же, что у чтения по аптечке",
             "ReservationStore.deleteOfDrugExcept" to "массовое снятие по одной упаковке"
         )
