@@ -1,6 +1,8 @@
 package org.kert0n.medappserver.integration
 
 import java.math.BigDecimal
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.CyclicBarrier
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -17,8 +19,10 @@ import org.kert0n.medappserver.services.aggregate.DrugEdit
 import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.services.aggregate.ReservationService
+import org.kert0n.medappserver.services.application.DrugApplicationService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.support.TransactionTemplate
 
@@ -38,6 +42,8 @@ class OptimisticRaceTest {
     @Autowired private lateinit var drugService: DrugService
     @Autowired private lateinit var medKitService: MedKitService
     @Autowired private lateinit var reservationService: ReservationService
+    @Autowired private lateinit var drugApplicationService: DrugApplicationService
+    @Autowired private lateinit var jdbc: JdbcTemplate
     @Autowired private lateinit var transactionManager: PlatformTransactionManager
 
     @Test
@@ -113,6 +119,83 @@ class OptimisticRaceTest {
 
         assertTrue(outcome.failures.isEmpty(), "независимые команды должны завершиться: ${outcome.failures}")
         assertEquals(target.id, dbHelper.requireDrug(drug.id).medKitId)
+    }
+
+    /**
+     * Выход из цели обязан сериализоваться со всем переносом, а не только с последним UPDATE.
+     *
+     * Leave удаляет membership, но держит транзакцию открытой. Старая реализация успевает
+     * прочитать ещё видимую строку membership, сохраняет бронь и останавливается только на
+     * каскадном внешнем ключе. Исправленная ждёт корень до чтения membership и после commit
+     * удаляет уже несовместимую бронь.
+     */
+    @Test
+    fun `одиночный перенос ждёт выход из целевой аптечки до проверки броней`() {
+        val alice = dbHelper.freshUser("race-move-target-a")
+        val bob = dbHelper.freshUser("race-move-target-b")
+        val source = dbHelper.freshMedKit(alice.id)
+        dbHelper.join(source.id, alice.id, bob.id)
+        val target = dbHelper.freshMedKit(alice.id)
+        dbHelper.join(target.id, alice.id, bob.id)
+        val drug = dbHelper.freshDrug(source.id, quantity = 20.0)
+        dbHelper.reserve(bob.id, drug.id, BigDecimal("5"))
+
+        val membershipDeleted = CountDownLatch(1)
+        val allowLeaveCommit = CountDownLatch(1)
+        val moveBackend = ArrayBlockingQueue<Int>(1)
+        val pool = Executors.newFixedThreadPool(2)
+        try {
+            val leave = pool.submit<Throwable?> {
+                runCatching {
+                    TransactionTemplate(transactionManager).execute {
+                        medKitService.leave(target.id, bob.id)
+                        membershipDeleted.countDown()
+                        assertTrue(allowLeaveCommit.await(10, TimeUnit.SECONDS), "перенос не дошёл до блокировки")
+                    }
+                }.exceptionOrNull()
+            }
+            assertTrue(membershipDeleted.await(10, TimeUnit.SECONDS), "leave не удалил membership")
+
+            val move = pool.submit<Throwable?> {
+                runCatching {
+                    TransactionTemplate(transactionManager).execute {
+                        moveBackend.put(jdbc.queryForObject("SELECT pg_backend_pid()", Int::class.java)!!)
+                        drugApplicationService.moveToMedKit(drug.id, target.id, drug.version, alice.id)
+                    }
+                }.exceptionOrNull()
+            }
+
+            awaitDatabaseLock(moveBackend.poll(10, TimeUnit.SECONDS) ?: error("перенос не начал транзакцию"))
+            allowLeaveCommit.countDown()
+
+            assertNull(leave.get(30, TimeUnit.SECONDS)?.rootCause(), "выход должен завершиться")
+            assertNull(move.get(30, TimeUnit.SECONDS)?.rootCause(), "перенос должен продолжиться после выхода")
+        } finally {
+            allowLeaveCommit.countDown()
+            pool.shutdownNow()
+        }
+
+        assertEquals(target.id, dbHelper.requireDrug(drug.id).medKitId)
+        assertNull(dbHelper.userReservation(bob.id, drug.id), "бронь вышедшего из цели должна быть снята")
+        assertTrue(!dbHelper.isMember(target.id, bob.id))
+    }
+
+    @Test
+    fun `встречные одиночные переносы блокируют аптечки в одном порядке`() {
+        val alice = dbHelper.freshUser("race-opposite-moves")
+        val firstKit = dbHelper.freshMedKit(alice.id)
+        val secondKit = dbHelper.freshMedKit(alice.id)
+        val firstDrug = dbHelper.freshDrug(firstKit.id, quantity = 10.0)
+        val secondDrug = dbHelper.freshDrug(secondKit.id, quantity = 20.0)
+
+        val outcome = race(
+            { sync -> sync(); drugApplicationService.moveToMedKit(firstDrug.id, secondKit.id, firstDrug.version, alice.id) },
+            { sync -> sync(); drugApplicationService.moveToMedKit(secondDrug.id, firstKit.id, secondDrug.version, alice.id) }
+        )
+
+        assertTrue(outcome.failures.isEmpty(), "встречные переносы не должны образовать deadlock: ${outcome.failures}")
+        assertEquals(secondKit.id, dbHelper.requireDrug(firstDrug.id).medKitId)
+        assertEquals(firstKit.id, dbHelper.requireDrug(secondDrug.id).medKitId)
     }
 
     @Test
@@ -344,6 +427,21 @@ class OptimisticRaceTest {
         }
     }
 
+    /** Ждёт именно блокировку в PostgreSQL; задержка потока не считается доказательством гонки. */
+    private fun awaitDatabaseLock(backendPid: Int) {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
+        while (System.nanoTime() < deadline) {
+            val blocked = jdbc.queryForObject(
+                "SELECT cardinality(pg_blocking_pids(?)) > 0",
+                Boolean::class.java,
+                backendPid
+            ) == true
+            if (blocked) return
+            Thread.onSpinWait()
+        }
+        error("транзакция переноса не дождалась блокировки в PostgreSQL")
+    }
+
     private class Outcome(results: List<Throwable?>) {
         val failures = results.filterNotNull().map { it.rootCause() }
 
@@ -351,7 +449,8 @@ class OptimisticRaceTest {
             assertEquals(1, failures.size, "ровно одна сторона обязана проиграть: $failures")
             assertTrue(failures.single() is StaleVersion, "проигравший отвергается по версии: ${failures.single()}")
         }
-
-        private fun Throwable.rootCause(): Throwable = generateSequence(this) { it.cause }.last()
     }
+
 }
+
+private fun Throwable.rootCause(): Throwable = generateSequence(this) { it.cause }.last()
