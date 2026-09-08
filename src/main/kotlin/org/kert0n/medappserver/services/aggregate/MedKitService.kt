@@ -96,10 +96,7 @@ class MedKitService(
      * Брони выходящего лежат в чужом агрегате: их убирает оркестратор.
      */
     @Transactional(propagation = MANDATORY)
-    fun leave(medKitId: Uuid, userId: Uuid): MedKit? = leave(lock(setOf(medKitId), userId).single(), userId)
-
-    @Transactional(propagation = MANDATORY)
-    private fun leave(medKit: MedKit, userId: Uuid): MedKit? {
+    fun leave(medKit: MedKit, userId: Uuid): MedKit? {
         logger.debug("Removing user {} from medkit {}", userId, medKit.id)
         medKits.deleteMembership(medKit, userId)
         if (!medKits.hasMembers(medKit)) {

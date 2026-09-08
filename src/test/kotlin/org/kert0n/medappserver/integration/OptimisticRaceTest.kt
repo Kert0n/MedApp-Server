@@ -91,11 +91,11 @@ class OptimisticRaceTest {
         val outcome = race(
             { sync ->
                 sync()
-                medKitService.leave(kit.id, alice.id)
+                medKitApplicationService.leave(kit.id, alice.id)
             },
             { sync ->
                 sync()
-                medKitService.leave(kit.id, bob.id)
+                medKitApplicationService.leave(kit.id, bob.id)
             }
         )
 
@@ -121,7 +121,7 @@ class OptimisticRaceTest {
             },
             { sync ->
                 sync()
-                medKitService.leave(source.id, bob.id)
+                medKitApplicationService.leave(source.id, bob.id)
             }
         )
 
@@ -156,7 +156,7 @@ class OptimisticRaceTest {
             val leave = pool.submit<Throwable?> {
                 runCatching {
                     TransactionTemplate(transactionManager).execute {
-                        medKitService.leave(target.id, bob.id)
+                        medKitApplicationService.leave(target.id, bob.id)
                         membershipDeleted.countDown()
                         assertTrue(allowLeaveCommit.await(10, TimeUnit.SECONDS), "перенос не дошёл до блокировки")
                     }
@@ -276,6 +276,61 @@ class OptimisticRaceTest {
         assertTrue(
             stillMember || !hasReservation,
             "бронь без доступа: членства нет, а бронь осталась"
+        )
+        assertEquals(
+            0,
+            dbHelper.storedReservationsTotal(drug.id).compareTo(dbHelper.reservedOnDrug(drug.id)),
+            "гонка не должна рассогласовать сохранённую сумму"
+        )
+    }
+
+    @Test
+    fun `правка брони против выхода сохраняет целую картину`() {
+        val alice = dbHelper.freshUser("race-change-leave-a")
+        val bob = dbHelper.freshUser("race-change-leave-b")
+        val kit = dbHelper.freshMedKit(alice.id)
+        dbHelper.join(kit.id, alice.id, bob.id)
+        val drug = dbHelper.freshDrug(kit.id, quantity = 30.0)
+        dbHelper.reserve(bob.id, drug.id, BigDecimal("4"))
+        val stated = dbHelper.storedReservationsVersion(drug.id)
+
+        val outcome = race(
+            { sync -> sync(); reservationService.changeTo(bob.id, drug.id, BigDecimal("6"), stated) },
+            { sync -> sync(); medKitApplicationService.leave(kit.id, bob.id) }
+        )
+
+        outcome.assertNoDatabaseError()
+        assertTrue(outcome.failures.all { it is DomainRuleViolated }, "допустим только доменный отказ")
+        assertNull(dbHelper.userReservation(bob.id, drug.id))
+        assertEquals(
+            0,
+            dbHelper.storedReservationsTotal(drug.id).compareTo(dbHelper.reservedOnDrug(drug.id)),
+            "правка и выход не должны расходиться"
+        )
+    }
+
+    @Test
+    fun `отмена брони против выхода сохраняет целую картину`() {
+        val alice = dbHelper.freshUser("race-cancel-leave-a")
+        val bob = dbHelper.freshUser("race-cancel-leave-b")
+        val kit = dbHelper.freshMedKit(alice.id)
+        dbHelper.join(kit.id, alice.id, bob.id)
+        val drug = dbHelper.freshDrug(kit.id, quantity = 30.0)
+        dbHelper.reserve(bob.id, drug.id, BigDecimal("4"))
+        val stated = dbHelper.storedReservationsVersion(drug.id)
+
+        val outcome = race(
+            { sync -> sync(); reservationService.cancel(bob.id, drug.id, stated) },
+            { sync -> sync(); medKitApplicationService.leave(kit.id, bob.id) }
+        )
+
+        outcome.assertNoDatabaseError()
+        assertTrue(outcome.failures.all { it is DomainRuleViolated }, "допустим только доменный отказ")
+        assertNull(dbHelper.userReservation(bob.id, drug.id))
+        assertEquals(
+            0,
+            dbHelper.storedReservationsTotal(drug.id).compareTo(dbHelper.reservedOnDrug(drug.id)),
+            "отмена и выход не должны расходиться"
         )
     }
 
@@ -551,7 +606,7 @@ class OptimisticRaceTest {
         val key = TransactionTemplate(transactionManager).execute { medKitService.invite(kit.id, alice.id) }
 
         val outcome = race(
-            { sync -> sync(); medKitService.leave(kit.id, alice.id) },
+            { sync -> sync(); medKitApplicationService.leave(kit.id, alice.id) },
             { sync -> sync(); medKitService.joinByInvitation(key, bob.id) }
         )
 
@@ -592,7 +647,7 @@ class OptimisticRaceTest {
 
         val outcome = race(
             { sync -> sync(); medKitService.delete(kit.id, alice.id) },
-            { sync -> sync(); medKitService.leave(kit.id, bob.id) }
+            { sync -> sync(); medKitApplicationService.leave(kit.id, bob.id) }
         )
 
         assertTrue(outcome.failures.all { it is NotAMember }, "допустим только отказ исчезнувшего ресурса")

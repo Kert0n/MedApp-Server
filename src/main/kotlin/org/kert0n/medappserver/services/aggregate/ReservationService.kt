@@ -114,6 +114,13 @@ class ReservationService(
         reservations.deleteOfDrugExcept(drug, target)
     }
 
+    /** Снимает брони выходящего и обновляет картины задетых упаковок. */
+    @Transactional(propagation = MANDATORY)
+    fun dropOfMember(medKit: MedKit, userId: Uuid) {
+        logger.debug("Dropping reservations of user {} in medkit {}", userId, medKit.id)
+        reservations.deleteOfMember(medKit, userId)
+    }
+
     /** Отмена — это удаление: брони с нулём не бывает. */
     @Transactional(propagation = MANDATORY)
     fun cancel(userId: Uuid, drugId: Uuid, stated: Long) = cancel(get(userId, drugId), stated)

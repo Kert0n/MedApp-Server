@@ -98,6 +98,7 @@ class StoreMethodRegistryTest {
             "ReservationStore.save" to "запись по первичному ключу",
             "ReservationStore.delete" to "удаление по первичному ключу",
             "ReservationStore.deleteOfDrug" to "удаление по внешнему ключу упаковки",
+            "ReservationStore.deleteOfMember" to "массовое снятие по участнику и аптечке",
             "ReservationStore.deleteInMedKitExcept" to "массовое снятие, план тот же, что у чтения по аптечке",
             "ReservationStore.deleteOfDrugExcept" to "массовое снятие по одной упаковке"
         )

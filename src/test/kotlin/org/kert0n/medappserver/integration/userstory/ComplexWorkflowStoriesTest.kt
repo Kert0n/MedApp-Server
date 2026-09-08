@@ -166,7 +166,7 @@ class ComplexWorkflowStoriesTest {
 
         // Выход последнего уносит аптечку. Через `medKitService` напрямую: оркестратор стал бы
         // убирать брони, которых вместе с аптечкой уже нет.
-        medKitService.leave(duoKitCheck1.id, alice.id)
+        medKits.leave(duoKitCheck1.id, alice.id)
 
 
         assertNull(dbHelper.medKit(duoKit.id), "Duo kit must auto-delete when last user leaves")
