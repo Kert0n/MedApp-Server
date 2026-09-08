@@ -3,6 +3,7 @@ package org.kert0n.medappserver.services.aggregate
 import com.sksamuel.aedile.core.Cache
 import kotlin.uuid.Uuid
 import org.kert0n.medappserver.db.store.MedKitStore
+import org.kert0n.medappserver.db.store.RootLock
 import org.kert0n.medappserver.domain.Invitation
 import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.NotAMember
@@ -121,12 +122,34 @@ class MedKitService(
     fun delete(medKit: MedKit) = medKits.delete(medKit)
 
     /**
-     * Блокирует доступные корни в стабильном порядке и возвращает их актуальные проекции.
-     * Неполный набор не сообщает, какая именно аптечка чужая или отсутствует.
+     * Исключительно блокирует доступные корни в стабильном порядке и возвращает их проекции.
+     *
+     * Вход жизненного цикла и переезда: пока корень держат так, состав участников этой аптечки
+     * не меняется и её содержимое никуда не уезжает. Неполный набор не сообщает, какая именно
+     * аптечка чужая или отсутствует.
      */
     @Transactional(propagation = MANDATORY)
     fun lock(medKitIds: Set<Uuid>, userId: Uuid): List<MedKit> {
-        if (medKits.lockAccessible(medKitIds, userId) != medKitIds) throw NotAMember()
+        require(medKitIds, RootLock.EXCLUSIVE, userId)
         return medKits.findAll(medKitIds, userId)
+    }
+
+    /**
+     * Совместимо удерживает корни на время записи содержимого — и ничего не возвращает.
+     *
+     * Нужно это ровно тем командам, чья строка ссылается внешним ключом на membership или на
+     * сам корень: заведению брони и заведению упаковки. Проиграть выходу или удалению аптечки
+     * они обязаны доменным отказом, а не нарушением ключа, и предъявить им нечего — версии у
+     * состава участников нет.
+     *
+     * Проекция здесь не читается намеренно: считать `userCount` под блокировкой команде, которой
+     * он не нужен, — лишняя работа (см. #134). Доступ доказывает сам блокирующий запрос.
+     */
+    @Transactional(propagation = MANDATORY)
+    fun guard(medKitIds: Set<Uuid>, userId: Uuid) = require(medKitIds, RootLock.SHARED, userId)
+
+    /** Взято меньше, чем просили, — значит какой-то корень чужой или его уже нет. */
+    private fun require(medKitIds: Set<Uuid>, lock: RootLock, userId: Uuid) {
+        if (medKits.lockAccessible(medKitIds, userId, lock) != medKitIds) throw NotAMember()
     }
 }

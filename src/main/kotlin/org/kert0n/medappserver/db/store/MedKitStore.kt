@@ -8,6 +8,7 @@ import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.count
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.vendors.ForUpdateOption
 import org.jetbrains.exposed.v1.jdbc.Query
 import org.jetbrains.exposed.v1.jdbc.andWhere
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
@@ -84,13 +85,21 @@ class MedKitStore {
     }
 
     /**
-     * Сериализует только редкие изменения жизненного цикла membership.
+     * Единственный блокирующий запрос приложения — в двух режимах.
+     *
+     * [RootLock.EXCLUSIVE] сериализует изменения состава участников и переезд упаковок между
+     * аптечками. [RootLock.SHARED] совместим сам с собой, поэтому обычные записи друг друга не
+     * задерживают, но ждут жизненного цикла — и он ждёт их.
+     *
+     * Блокируется только `med_kits` (`OF`): присоединённая строка membership участвует как
+     * доказательство доступа, а не как предмет блокировки, — иначе исключительный режим
+     * конфликтовал бы с внешними ключами чужих броней.
      *
      * Все вызывающие блокируют корни в порядке UUID. Поэтому два действия над парой аптечек
      * не берут те же строки в обратном порядке. Предикат membership одновременно доказывает
      * доступ; неполный результат снаружи трактуется так же, как обычная закрытая находка.
      */
-    fun lockAccessible(medKitIds: Set<Uuid>, userId: Uuid): Set<Uuid> {
+    fun lockAccessible(medKitIds: Set<Uuid>, userId: Uuid, lock: RootLock): Set<Uuid> {
         if (medKitIds.isEmpty()) return emptySet()
 
         val mine = MedKitMemberships.alias("mine_to_lock")
@@ -99,7 +108,7 @@ class MedKitStore {
             .select(MedKits.id)
             .where { (MedKits.id inList medKitIds) and (mine[MedKitMemberships.userId] eq userId) }
             .orderBy(MedKits.id to SortOrder.ASC)
-            .forUpdate()
+            .forUpdate(lock.option)
             .map { it[MedKits.id] }
             .toSet()
     }
@@ -121,4 +130,20 @@ class MedKitStore {
             .where { mine[MedKitMemberships.userId] eq userId }
             .groupBy(MedKits.id)
     }
+}
+
+/**
+ * Насколько сильно команда держит корень аптечки.
+ *
+ * Два режима, а не «блокировать или нет»: слабый нужен там, где запись ссылается на строку,
+ * которую жизненный цикл сносит, и защититься версией нечем. Сам с собой он совместим, так
+ * что обычные команды из-за него в очередь не выстраиваются.
+ */
+enum class RootLock(internal val option: ForUpdateOption) {
+
+    /** Меняется состав участников или место упаковок: никто другой корень одновременно не держит. */
+    EXCLUSIVE(ForUpdateOption.PostgreSQL.ForUpdate(null, MedKits)),
+
+    /** Пишется содержимое аптечки: состав участников на время записи не сдвинется. */
+    SHARED(ForUpdateOption.PostgreSQL.ForKeyShare(null, MedKits))
 }

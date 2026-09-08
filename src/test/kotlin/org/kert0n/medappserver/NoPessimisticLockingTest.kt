@@ -8,10 +8,12 @@ import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.testutil.allSources
 
 /**
- * Пессимистическая блокировка разрешена только жизненному циклу membership.
+ * Пессимистическая блокировка разрешена только корню аптечки.
  *
- * Упаковки и снимки броней по-прежнему держатся на версиях. Membership меняет отдельные строки,
- * а блокировка корня нужна лишь для решения, кто вышел последним, и для порядка с join/delete.
+ * Упаковки и снимки броней по-прежнему держатся на версиях. Корень блокируется в двух режимах:
+ * исключительном — под жизненный цикл membership и переезд упаковок, и совместимом — под
+ * записи, чья строка ссылается ключом на состав участников. Обе формы живут в одном методе
+ * `MedKitStore`, и требование ниже проверяет, что оба режима из него не разошлись.
  *
  * `JdbcTemplate` в проде запрещён отдельно: запрос перестаёт быть выражением, а типы — своими.
  * Единственное законное обращение к драйверу живёт в тесте, который нарочно ходит мимо
@@ -43,8 +45,15 @@ class NoPessimisticLockingTest {
             )
         }
 
-        val medKitStore = production.single { it.name == "MedKitStore.kt" }
-        assertTrue(medKitStore.readText().contains(".forUpdate()"), "корень membership не блокируется")
+        val medKitStore = production.single { it.name == "MedKitStore.kt" }.readText()
+        assertTrue(medKitStore.contains(".forUpdate("), "корень аптечки не блокируется")
+        listOf("ForUpdateOption.PostgreSQL.ForUpdate", "ForUpdateOption.PostgreSQL.ForKeyShare").forEach { mode ->
+            assertTrue(medKitStore.contains(mode), "режим $mode уехал из единственного блокирующего запроса")
+        }
+        assertTrue(
+            medKitStore.contains("ForUpdate(null, MedKits)") && medKitStore.contains("ForKeyShare(null, MedKits)"),
+            "блокировать полагается только med_kits: без OF под замок уходит и строка membership"
+        )
     }
 
     /**
