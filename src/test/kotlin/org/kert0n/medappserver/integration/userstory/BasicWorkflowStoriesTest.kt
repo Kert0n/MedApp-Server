@@ -1,266 +1,157 @@
 package org.kert0n.medappserver.integration.userstory
 
+import java.math.BigDecimal
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.uuid.Uuid
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
-import org.kert0n.medappserver.db.store.MedKitStore
-import org.kert0n.medappserver.domain.Drug
-import org.kert0n.medappserver.domain.Quantity
-import org.kert0n.medappserver.domain.User
-import org.kert0n.medappserver.services.aggregate.DrugService
-import org.kert0n.medappserver.services.aggregate.MedKitService
-import org.kert0n.medappserver.services.orchestrator.MedKitInviting
-import org.kert0n.medappserver.services.orchestrator.MedKitJoining
-import org.kert0n.medappserver.services.application.DrugApplicationService
-import org.kert0n.medappserver.services.application.MedKitApplicationService
-import org.kert0n.medappserver.services.orchestrator.DrugDisposal
-import org.kert0n.medappserver.testutil.DatabaseTestHelper
+import org.kert0n.medappserver.api.DrugPatchRequest
+import org.kert0n.medappserver.api.DrugSnapshotDTO
+import org.kert0n.medappserver.api.IntakeRequest
+import org.kert0n.medappserver.api.InvitationDTO
+import org.kert0n.medappserver.api.MedKitCreateRequest
+import org.kert0n.medappserver.api.MedKitCreatedDTO
+import org.kert0n.medappserver.api.MedKitDTO
+import org.kert0n.medappserver.api.MedKitSummaryDTO
+import org.kert0n.medappserver.api.MembershipCreateRequest
 import org.kert0n.medappserver.testutil.assertQty
-import org.kert0n.medappserver.testutil.qty
-import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.transaction.annotation.Transactional
 
 @PostgresIntegrationTest
-@Transactional
-class BasicWorkflowStoriesTest {
-
-    @Autowired
-
-    private lateinit var medKitStore: MedKitStore
-
-
-    @Autowired
-
-    private lateinit var dbHelper: DatabaseTestHelper
-
-
-
-    @Autowired
-    private lateinit var drugService: DrugService
-    @Autowired
-    private lateinit var inviting: MedKitInviting
-    @Autowired
-    private lateinit var joining: MedKitJoining
-
-    @Autowired
-    private lateinit var disposal: DrugDisposal
-
-    @Autowired
-    private lateinit var medKitService: MedKitService
-
-    @Autowired
-    private lateinit var drugs: DrugApplicationService
-
-    @Autowired
-    private lateinit var medKits: MedKitApplicationService
+class BasicWorkflowStoriesTest : HttpUserStoryTest() {
 
     /** История 1: у человека появляются аптечка, содержимое и первый приём. */
     @Test
-    fun `Story 1 - New user Anna creates and manages her medkit`() {
-        val anna = User(
-            id = Uuid.random(),
-            hashedKey = "anna_hashed_key_${Uuid.random()}"
-        )
-        dbHelper.insert(anna)
+    fun `пользователь создаёт аптечку, меняет упаковку и отмечает приём`() {
+        val anna = actor("anna-manages")
+        val kitId = Uuid.random()
 
-        val homeMedkit = medKitService.create(Uuid.random(), anna.id)
-        assertNotNull(homeMedkit)
+        val createdKit = anna.api.createMedKit(MedKitCreateRequest(kitId))
+            .expectBody<MedKitCreatedDTO>(201)
+        assertEquals(kitId, createdKit.id)
 
-        val aspirin = Drug(
-            id = Uuid.random(),
-            name = "Aspirin",
-            quantity = Quantity(qty(100.0), dbHelper.unit()),
-            category = "painkiller",
-            manufacturer = null,
-            country = null,
-            description = null,
-            medKitId = homeMedkit.id
-        )
-        dbHelper.insert(aspirin)
+        val aspirin = anna.api.createDrug(kitId, drugRequest("Aspirin", "100"))
+            .expectBody<DrugSnapshotDTO>(201)
+        val ibuprofen = anna.api.createDrug(kitId, drugRequest("Ibuprofen", "50"))
+            .expectBody<DrugSnapshotDTO>(201)
 
-        val ibuprofen = Drug(
-            id = Uuid.random(),
-            name = "Ibuprofen",
-            quantity = Quantity(qty(50.0), dbHelper.unit()),
-            category = "painkiller",
-            manufacturer = null,
-            country = null,
-            description = null,
-            medKitId = homeMedkit.id
-        )
-        dbHelper.insert(ibuprofen)
+        val renamed = anna.api.patchDrug(
+            aspirin.drug.id,
+            DrugPatchRequest(name = "Aspirin cardio", version = aspirin.drug.version)
+        ).expectBody<DrugSnapshotDTO>(200)
+        assertEquals("Aspirin cardio", renamed.drug.name)
 
-        drugService.consume(drugService.get(aspirin.id, anna.id), qty(2.0), dbHelper.drugVersion(aspirin.id))
+        val afterIntake = anna.api.recordIntake(
+            aspirin.drug.id,
+            IntakeRequest(BigDecimal("2"), renamed.drug.version)
+        ).expectBody<DrugSnapshotDTO>(200)
+        assertQty(98.0, afterIntake.drug.quantity)
 
-        val updatedAspirin = dbHelper.drug(aspirin.id)
-        assertNotNull(updatedAspirin)
-        assertQty(98.0, updatedAspirin.quantity, "Should have 98 tablets left")
-
-        val drugs = drugService.ofMedKit(homeMedkit.id, anna.id)
-        assertEquals(2, drugs.size, "Should have 2 drugs in medkit")
-
-        println("✅ Story 1 passed: Anna successfully created medkit and managed drugs")
+        val kit = anna.api.getMedKit(kitId).expectBody<MedKitDTO>(200)
+        assertEquals(setOf(aspirin.drug.id, ibuprofen.drug.id), kit.drugs.map { it.drug.id }.toSet())
+        assertEquals("Aspirin cardio", kit.drugs.single { it.drug.id == aspirin.drug.id }.drug.name)
     }
 
     /** История 2: аптечка делится с соседом, и содержимое видно обоим. */
     @Test
-    fun `Story 2 - Anna shares medkit with roommate Bob`() {
-        val anna = User(id = Uuid.random(), hashedKey = "anna_${Uuid.random()}")
-        dbHelper.insert(anna)
-        val medkit = medKitService.create(Uuid.random(), anna.id)
+    fun `приглашённый сосед видит общую аптечку`() {
+        val anna = actor("anna-shares")
+        val bob = actor("bob-joins")
+        val kitId = Uuid.random()
+        anna.api.createMedKit(MedKitCreateRequest(kitId)).expectBody<MedKitCreatedDTO>(201)
+        val vitamins = anna.api.createDrug(kitId, drugRequest("Vitamin C", "30"))
+            .expectBody<DrugSnapshotDTO>(201)
 
-        val vitamins = Drug(
-            id = Uuid.random(),
-            name = "Vitamin C",
-            quantity = Quantity(qty(30.0), dbHelper.unit()),
-            category = null,
-            manufacturer = null,
-            country = null,
-            description = null,
-            medKitId = medkit.id
-        )
-        dbHelper.insert(vitamins)
+        val invitation = anna.api.inviteTo(kitId).expectBody<InvitationDTO>(201)
+        val joined = bob.api.join(MembershipCreateRequest(invitation.key)).expectBody<MedKitDTO>(201)
+        assertEquals(kitId, joined.id)
+        assertEquals(2L, joined.userCount)
+        assertEquals(setOf(vitamins.drug.id), joined.drugs.map { it.drug.id }.toSet())
 
-        val bob = User(id = Uuid.random(), hashedKey = "bob_${Uuid.random()}")
-        dbHelper.insert(bob)
-
-        val shareKey = inviting.invite(medkit.id, anna.id)
-        joining.joinByInvitation(shareKey, bob.id)
-
-        val annaMedkits = medKitService.allOfUser(anna.id)
-        val bobMedkits = medKitService.allOfUser(bob.id)
-
-        assertEquals(1, annaMedkits.size)
-        assertEquals(1, bobMedkits.size)
-        assertEquals(annaMedkits[0], bobMedkits[0], "Should be the same medkit")
-
-        val sharedMedkit = dbHelper.medKit(medkit.id)
-        assertNotNull(sharedMedkit)
-        assertEquals(2, sharedMedkit.userCount, "Medkit should have 2 users")
-
-        println("✅ Story 2 passed: Anna successfully shared medkit with Bob")
+        val annaView = anna.api.getMedKit(kitId).expectBody<MedKitDTO>(200)
+        val bobView = bob.api.getMedKit(kitId).expectBody<MedKitDTO>(200)
+        assertEquals(2L, annaView.userCount)
+        assertEquals(2L, bobView.userCount)
+        assertEquals(setOf(vitamins.drug.id), annaView.drugs.map { it.drug.id }.toSet())
+        assertEquals(setOf(vitamins.drug.id), bobView.drugs.map { it.drug.id }.toSet())
     }
 
-    /** История 3: вышедший участник уходит вместе со своим, но не с чужим. */
+    /** История 3: вышедший участник теряет доступ, но чужая аптечка остаётся. */
     @Test
-    fun `Story 3 - Bob leaves shared medkit, cleanup works correctly`() {
-        val anna = User(id = Uuid.random(), hashedKey = "anna_${Uuid.random()}")
-        val bob = User(id = Uuid.random(), hashedKey = "bob_${Uuid.random()}")
-        dbHelper.insert(anna)
-        dbHelper.insert(bob)
+    fun `выход соседа сохраняет аптечку оставшемуся участнику`() {
+        val anna = actor("anna-stays")
+        val bob = actor("bob-leaves")
+        val kitId = Uuid.random()
+        anna.api.createMedKit(MedKitCreateRequest(kitId)).expectBody<MedKitCreatedDTO>(201)
+        val drug = anna.api.createDrug(kitId, drugRequest("Test Drug", "100"))
+            .expectBody<DrugSnapshotDTO>(201)
+        val invitation = anna.api.inviteTo(kitId).expectBody<InvitationDTO>(201)
+        bob.api.join(MembershipCreateRequest(invitation.key)).expectBody<MedKitDTO>(201)
 
-        val medkit = medKitService.create(Uuid.random(), anna.id)
-        val shareKey = inviting.invite(medkit.id, anna.id)
-        joining.joinByInvitation(shareKey, bob.id)
-
-        val drugData = Drug(
-            id = Uuid.random(),
-            name = "Test Drug",
-            quantity = Quantity(qty(100.0), dbHelper.unit()),
-            category = null,
-            manufacturer = null,
-            country = null,
-            description = null,
-            medKitId = medkit.id
+        bob.api.leave(kitId).expectEmpty(204)
+        bob.api.getMedKit(kitId).expectStatus(404)
+        assertTrue(
+            bob.api.listMedKits().expectBody<Set<MedKitSummaryDTO>>(200).none { it.id == kitId }
         )
-        dbHelper.insert(drugData)
 
-        val loadedMedkit = dbHelper.medKit(medkit.id)!!
-        assertEquals(2, loadedMedkit.userCount)
-
-        medKits.leave(medkit.id, bob.id)
-
-        val updatedMedkit = dbHelper.medKit(medkit.id)
-        assertNotNull(updatedMedkit)
-        assertEquals(1, updatedMedkit.userCount, "Only Anna should be in medkit")
-        assertTrue(dbHelper.isMember(medkit.id, anna.id))
-
-        val remainingDrug = dbHelper.drug(drugData.id)
-        assertNotNull(remainingDrug, "Drug should still exist")
-
-        println("✅ Story 3 passed: Bob left medkit, cleanup successful")
+        val remaining = anna.api.getMedKit(kitId).expectBody<MedKitDTO>(200)
+        assertEquals(1L, remaining.userCount)
+        assertEquals(setOf(drug.drug.id), remaining.drugs.map { it.drug.id }.toSet())
     }
 
-    /** История 4: аптечка удаляется, содержимое переезжает, а не пропадает. */
+    /** История 4 и прежняя дублирующая проверка миграции. */
     @Test
-    fun `Story 4 - User migrates drugs when deleting old medkit`() {
-        val userData = User(id = Uuid.random(), hashedKey = "user_${Uuid.random()}")
-        dbHelper.insert(userData)
-        val oldMedkit = medKitService.create(Uuid.random(), userData.id)
+    fun `удаление старой аптечки переносит упаковки в новую`() {
+        val user = actor("migrates-kit")
+        val oldKitId = Uuid.random()
+        val newKitId = Uuid.random()
+        user.api.createMedKit(MedKitCreateRequest(oldKitId)).expectBody<MedKitCreatedDTO>(201)
+        user.api.createMedKit(MedKitCreateRequest(newKitId)).expectBody<MedKitCreatedDTO>(201)
+        val drugA = user.api.createDrug(oldKitId, drugRequest("Drug A", "50"))
+            .expectBody<DrugSnapshotDTO>(201)
+        val drugB = user.api.createDrug(oldKitId, drugRequest("Drug B", "100"))
+            .expectBody<DrugSnapshotDTO>(201)
 
-        val drugData1 = Drug(
-            id = Uuid.random(),
-            name = "Drug A",
-            quantity = Quantity(qty(50.0), dbHelper.unit()),
-            category = null,
-            manufacturer = null,
-            country = null,
-            description = null,
-            medKitId = oldMedkit.id
+        user.api.deleteMedKit(oldKitId, newKitId).expectEmpty(204)
+        user.api.getMedKit(oldKitId).expectStatus(404)
+
+        val target = user.api.getMedKit(newKitId).expectBody<MedKitDTO>(200)
+        assertEquals(setOf(drugA.drug.id, drugB.drug.id), target.drugs.map { it.drug.id }.toSet())
+        assertEquals(setOf("Drug A", "Drug B"), target.drugs.map { it.drug.name }.toSet())
+        assertEquals(
+            setOf(newKitId),
+            user.api.listMedKits().expectBody<Set<MedKitSummaryDTO>>(200).map { it.id }.toSet()
         )
-        val drugData2 = Drug(
-            id = Uuid.random(),
-            name = "Drug B",
-            quantity = Quantity(qty(100.0), dbHelper.unit()),
-            category = null,
-            manufacturer = null,
-            country = null,
-            description = null,
-            medKitId = oldMedkit.id
-        )
-        dbHelper.insert(drugData1)
-        dbHelper.insert(drugData2)
-
-        val newMedkit = medKitService.create(Uuid.random(), userData.id)
-
-        assertEquals(2, medKitService.allOfUser(userData.id).size)
-
-        medKits.delete(oldMedkit.id, userData.id, newMedkit.id)
-
-        val drugsInNew = drugService.ofMedKit(newMedkit.id, userData.id)
-        assertEquals(2, drugsInNew.size, "All drugs should be in new medkit")
-        val drugNames = drugsInNew.map { drug -> drug.name }
-        assertTrue(drugNames.contains("Drug A"))
-        assertTrue(drugNames.contains("Drug B"))
-
-        val oldMedkitCheck = dbHelper.medKit(oldMedkit.id)
-        assertNull(oldMedkitCheck, "Old medkit should be deleted")
-
-        assertEquals(1, medKitService.allOfUser(userData.id).size)
-
-        println("✅ Story 4 passed: Drugs successfully migrated to new medkit")
     }
 
-    /** История 5: опустевшая от приёма пачка уничтожается, а не остаётся нулём. */
+    /** История 5: опустевшая от приёма пачка даёт пустой 200 и исчезает. */
     @Test
-    fun `Story 5 - User consumes all available drug quantity`() {
-        val userData = User(id = Uuid.random(), hashedKey = "user_${Uuid.random()}")
-        dbHelper.insert(userData)
+    fun `последний приём уничтожает упаковку и возвращает пустой 200`() {
+        val user = actor("finishes-pack")
+        val kitId = Uuid.random()
+        user.api.createMedKit(MedKitCreateRequest(kitId)).expectBody<MedKitCreatedDTO>(201)
+        val created = user.api.createDrug(kitId, drugRequest("Limited Drug", "30"))
+            .expectBody<DrugSnapshotDTO>(201)
 
-        val medkit = medKitService.create(Uuid.random(), userData.id)
-        val drugData = Drug(
-            id = Uuid.random(),
-            name = "Limited Drug",
-            quantity = Quantity(qty(30.0), dbHelper.unit()),
-            category = null,
-            manufacturer = null,
-            country = null,
-            description = null,
-            medKitId = medkit.id
-        )
-        dbHelper.insert(drugData)
+        val afterFirst = user.api.recordIntake(
+            created.drug.id,
+            IntakeRequest(BigDecimal("10"), created.drug.version)
+        ).expectBody<DrugSnapshotDTO>(200)
+        assertQty(20.0, afterFirst.drug.quantity)
 
-        disposal.consume(drugData.id, userData.id, qty(10.0), dbHelper.drugVersion(drugData.id))
-        disposal.consume(drugData.id, userData.id, qty(10.0), dbHelper.drugVersion(drugData.id))
-        disposal.consume(drugData.id, userData.id, qty(10.0), dbHelper.drugVersion(drugData.id))
+        val afterSecond = user.api.recordIntake(
+            created.drug.id,
+            IntakeRequest(BigDecimal("10"), afterFirst.drug.version)
+        ).expectBody<DrugSnapshotDTO>(200)
+        assertQty(10.0, afterSecond.drug.quantity)
 
-        val updatedDrug = dbHelper.drug(drugData.id)
-        assertNull(updatedDrug)
+        user.api.recordIntake(
+            created.drug.id,
+            IntakeRequest(BigDecimal("10"), afterSecond.drug.version)
+        ).expectEmpty(200)
 
-        println("✅ Story 5 passed: All drug quantity consumed correctly")
+        user.api.getDrug(created.drug.id).expectStatus(404)
+        val kit = user.api.getMedKit(kitId).expectBody<MedKitDTO>(200)
+        assertTrue(kit.drugs.none { it.drug.id == created.drug.id })
     }
 }

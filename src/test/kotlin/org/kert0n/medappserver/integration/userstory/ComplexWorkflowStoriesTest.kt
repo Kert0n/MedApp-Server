@@ -1,308 +1,176 @@
 package org.kert0n.medappserver.integration.userstory
 
+import java.math.BigDecimal
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.uuid.Uuid
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertDoesNotThrow
 import org.kert0n.medappserver.PostgresIntegrationTest
-import org.kert0n.medappserver.api.DrugCreateRequest
-import org.kert0n.medappserver.db.store.MedKitStore
-import org.kert0n.medappserver.domain.Drug
-import org.kert0n.medappserver.domain.Quantity
-import org.kert0n.medappserver.domain.User
-import org.kert0n.medappserver.services.aggregate.DrugService
-import org.kert0n.medappserver.services.aggregate.MedKitService
-import org.kert0n.medappserver.services.orchestrator.MedKitInviting
-import org.kert0n.medappserver.services.orchestrator.MedKitJoining
-import org.kert0n.medappserver.services.aggregate.NewDrug
-import org.kert0n.medappserver.services.aggregate.ReservationService
-import org.kert0n.medappserver.services.application.DrugApplicationService
-import org.kert0n.medappserver.services.application.MedKitApplicationService
-import org.kert0n.medappserver.services.orchestrator.DrugDisposal
-import org.kert0n.medappserver.testutil.DatabaseTestHelper
+import org.kert0n.medappserver.api.DrugSnapshotDTO
+import org.kert0n.medappserver.api.IntakeRequest
+import org.kert0n.medappserver.api.InvitationDTO
+import org.kert0n.medappserver.api.MedKitCreateRequest
+import org.kert0n.medappserver.api.MedKitCreatedDTO
+import org.kert0n.medappserver.api.MedKitDTO
+import org.kert0n.medappserver.api.MembershipCreateRequest
+import org.kert0n.medappserver.api.ReservationCreateRequest
+import org.kert0n.medappserver.api.ReservationDTO
+import org.kert0n.medappserver.api.ReservationPatchRequest
 import org.kert0n.medappserver.testutil.assertQty
-import org.kert0n.medappserver.testutil.qty
-import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.transaction.annotation.Transactional
 
 @PostgresIntegrationTest
-@Transactional
-class ComplexWorkflowStoriesTest {
+class ComplexWorkflowStoriesTest : HttpUserStoryTest() {
 
-    @Autowired
-
-    private lateinit var medKitStore: MedKitStore
-
-
-    @Autowired
-    private lateinit var dbHelper: DatabaseTestHelper
-    @Autowired
-    private lateinit var inviting: MedKitInviting
-    @Autowired
-    private lateinit var joining: MedKitJoining
-
-    @Autowired
-    private lateinit var reservationService: ReservationService
-
-
-
-    @Autowired
-    private lateinit var drugService: DrugService
-
-    @Autowired
-    private lateinit var disposal: DrugDisposal
-
-    @Autowired
-    private lateinit var medKitService: MedKitService
-
-    @Autowired
-    private lateinit var drugs: DrugApplicationService
-
-    @Autowired
-    private lateinit var medKits: MedKitApplicationService
-
-
-    /**
-     * История 17: общая аптечка от первого приглашения до автоудаления.
-     *
-     * Здесь сходятся правила, которые поодиночке проверены своими тестами: приём не двигает
-     * брони, потерявший доступ теряет и бронь — и на одиночном переезде, и на переносе целой
-     * аптечки, — а опустевшая аптечка уходит сама.
-     */
+    /** История 17: общая аптечка от первого приглашения до выхода последнего участника. */
     @Test
-    fun `Story 17 - The Roommate Saga complex interwoven workflow`() {
-        // ── Фаза 1: аптечка и участники ──
-        val alice = dbHelper.insert(User(id = Uuid.random(), hashedKey = "alice_${Uuid.random()}"))
-        val bob = dbHelper.insert(User(id = Uuid.random(), hashedKey = "bob_${Uuid.random()}"))
-        val charlie = dbHelper.insert(User(id = Uuid.random(), hashedKey = "charlie_${Uuid.random()}"))
-
-        val homeKit = medKitService.create(Uuid.random(), alice.id)
-        joining.joinByInvitation(inviting.invite(homeKit.id, alice.id), bob.id)
-        joining.joinByInvitation(inviting.invite(homeKit.id, alice.id), charlie.id)
-
-        val allergyMeds = dbHelper.insert(
-            Drug(
-                id = Uuid.random(), name = "Allergy Meds", quantity = Quantity(qty(60.0), dbHelper.unit()), medKitId = homeKit.id, formType = null,
-                category = null,
-                manufacturer = null,
-                country = null,
-                description = null
-            )
-        )
-        val painkillers = dbHelper.insert(
-            Drug(
-                id = Uuid.random(), name = "Painkillers", quantity = Quantity(qty(100.0), dbHelper.unit()), medKitId = homeKit.id, formType = null,
-                category = null,
-                manufacturer = null,
-                country = null,
-                description = null
-            )
-        )
-
-
-        // ── Фаза 2: каждый бронирует свою долю ──
-        // От аллергии: в пачке 60, заявлено 20 + 20 + 20 = 60.
-        dbHelper.reserve(alice.id, allergyMeds.id, qty(20.0))
-        dbHelper.reserve(bob.id, allergyMeds.id, qty(20.0))
-        dbHelper.reserve(charlie.id, allergyMeds.id, qty(20.0))
-
-        // Обезболивающее: в пачке 100, заявлено 30 + 30.
-        dbHelper.reserve(bob.id, painkillers.id, qty(30.0))
-        dbHelper.reserve(charlie.id, painkillers.id, qty(30.0))
-
-
-        // ── Фаза 3: приём ──
-        // Боб съедает 30: в пачке остаётся 30, заявлено по-прежнему 60.
-        drugService.consume(drugService.get(allergyMeds.id, bob.id), qty(30.0), dbHelper.drugVersion(allergyMeds.id))
-
-
-        val updatedAllergyMeds = dbHelper.requireDrug(allergyMeds.id)
-        assertQty(30.0, updatedAllergyMeds.quantity, "Stock should be 30")
-
-        // Бронь не двигается: пачка уменьшилась, а сколько из своей брони оставить — дело Алисы.
-        val aliceAllergyReservation = dbHelper.userReservation(alice.id, allergyMeds.id)!!
-        assertQty(20.0, aliceAllergyReservation, "бронь Алисы осталась прежней")
-
-        // ── Фаза 4: переезд одной пачки ──
-        val travelKit = medKitService.create(Uuid.random(), alice.id)
-
-
-        drugs.moveToMedKit(painkillers.id, travelKit.id, dbHelper.drugVersion(painkillers.id), alice.id)
-
-
-        // Боб и Чарли дорожную аптечку не видят — их брони уходят вместе с пачкой.
-        assertNull(dbHelper.userReservation(bob.id, painkillers.id), "Bob's reservation must be deleted")
-        assertNull(dbHelper.userReservation(charlie.id, painkillers.id), "Charlie's reservation must be deleted")
-
-        val movedPainkillers = dbHelper.requireDrug(painkillers.id)
-        assertEquals(travelKit.id, movedPainkillers.medKitId, "Drug successfully moved")
-
-        // ── Фаза 5: удаление аптечки с переносом содержимого ──
-        val duoKit = medKitService.create(Uuid.random(), alice.id)
-        joining.joinByInvitation(inviting.invite(duoKit.id, alice.id), bob.id)
-
-
-        medKits.delete(homeKit.id, alice.id, duoKit.id)
-
-
-        assertNull(dbHelper.medKit(homeKit.id), "Home kit must be completely deleted")
-
-        val migratedAllergyMeds = dbHelper.drug(allergyMeds.id)
-        assertNotNull(migratedAllergyMeds, "Allergy meds must survive the migration")
-        assertEquals(duoKit.id, migratedAllergyMeds.medKitId, "Allergy meds are in Duo Kit")
-
-        // Чарли в новую аптечку не входит — его бронь снята.
-        assertNull(
-            dbHelper.userReservation(charlie.id, allergyMeds.id),
-            "Charlie's last reservation must be deleted"
-        )
-
-        // Брони Алисы и Боба переехали как были
-        val finalAlicePlan = dbHelper.userReservation(alice.id, allergyMeds.id)!!
-        assertQty(20.0, finalAlicePlan, "бронь Алисы переехала неизменной")
-
-        // ── Фаза 6: последний участник выходит ──
-        medKits.leave(duoKit.id, bob.id)
-
-
-        val duoKitCheck1 = dbHelper.medKit(duoKit.id)!!
-        assertEquals(1, duoKitCheck1.userCount, "Only Alice remains")
-
-        // Выход последнего уносит аптечку. Через `medKitService` напрямую: оркестратор стал бы
-        // убирать брони, которых вместе с аптечкой уже нет.
-        medKits.leave(duoKitCheck1.id, alice.id)
-
-
-        assertNull(dbHelper.medKit(duoKit.id), "Duo kit must auto-delete when last user leaves")
-        assertNull(
-            dbHelper.drug(allergyMeds.id),
-            "Cascade should kill the drugs inside the abandoned kit"
-        )
-
-        println("✅ Story 17 passed: The Roommate Saga completed")
-    }
-
-    @Test
-    fun `Story 18 - Full Lifecycle Alterations, Movement, and Deletion`() {
-                val alice = dbHelper.freshUser("alice")
-        val bob = dbHelper.freshUser("bob")
-
-        val sourceKit = medKitService.create(Uuid.random(), alice.id)
-        val targetKit = medKitService.create(Uuid.random(), alice.id) // Сюда доступ есть только у Алисы
-        joining.joinByInvitation(inviting.invite(sourceKit.id, alice.id), bob.id)
-
-        val createDrugDto = DrugCreateRequest(Uuid.random(), name = "LifePill", quantity = qty(100.0), quantityUnitId = dbHelper.unit().id
-            )
-        val drug = drugs.createInMedKit(sourceKit.id, createDrugDto, alice.id).drug
-        dbHelper.flushAndClear()
-
-        // Алиса и Боб заявляют по 40: 80 из 100.
-        dbHelper.reserve(alice.id, drug.id, qty(40.0))
-        dbHelper.reserve(bob.id, drug.id, qty(40.0))
-        dbHelper.flushAndClear()
-
-        // ── Фаза 1: правка брони ──
-        // Боб поднимает свою с 40 до 60. С остатком пачки это не сверяется: решение его.
-        reservationService.changeTo(reservationService.get(bob.id, drug.id), qty(60.0), dbHelper.reservationsVersion(drug.id, bob.id))
-        dbHelper.flushAndClear()
-
-        assertQty(60.0, dbHelper.userReservation(bob.id, drug.id)!!, "Bob's reservation is 60")
-        assertQty(40.0, dbHelper.userReservation(alice.id, drug.id)!!, "Alice's is unchanged at 40")
-
-        // ── Фаза 2: половина пачки потеряна ──
-        // Алиса разлила половину. Брони не двигаются: вместе они теперь превышают содержимое
-        // пачки, и это законное состояние — отвечают за него их владельцы.
-        disposal.consume(drug.id, alice.id, qty(50.0), dbHelper.drugVersion(drug.id))
-        dbHelper.flushAndClear()
-
-        assertQty(50.0, dbHelper.drugQuantity(drug.id)!!, "в пачке осталось 50")
-        assertQty(40.0, dbHelper.userReservation(alice.id, drug.id)!!, "бронь Алисы не тронута")
-        assertQty(60.0, dbHelper.userReservation(bob.id, drug.id)!!, "бронь Боба не тронута")
-        assertQty(100.0, dbHelper.reservedOnDrug(drug.id), "заявлено больше, чем в пачке")
-
-        // ── Фаза 3: переезд пачки туда, где нет Боба ──
-        drugs.moveToMedKit(drug.id, targetKit.id, dbHelper.drugVersion(drug.id), alice.id)
-        dbHelper.flushAndClear()
-
-        val movedDrug = dbHelper.requireDrug(drug.id)
-        assertEquals(targetKit.id, movedDrug.medKitId, "Drug successfully moved to targetKit")
-
-        // Боб потерял доступ — бронь снята вместе с ним.
-        assertNull(dbHelper.userReservation(bob.id, drug.id), "Bob's reservation MUST be stripped")
-        assertQty(40.0, dbHelper.userReservation(alice.id, drug.id)!!, "бронь Алисы не тронута")
-
-        // ── Фаза 4: уничтожение пачки ──
-        disposal.destroy(drug.id, alice.id, dbHelper.drugVersion(drug.id))
-        dbHelper.flushAndClear()
-
-        assertNull(dbHelper.drugQuantity(drug.id), "Drug record completely purged")
-        assertNull(dbHelper.userReservation(alice.id, drug.id), "Alice's reservation purged with the pack")
-
-        println("✅ Story 18 passed: edits, access stripping on move, and total deletion")
-    }
-
-    private fun createTestUser(name: String): User =
-        dbHelper.insert(User(id = Uuid.random(), hashedKey = name))
-
-    @Test
-    fun `Story 19 - Roommate can move drug even without a reservation of their own`() {
-        val alice = createTestUser("alice")
-        val bob = createTestUser("bob")
-
-        val kitA = medKitService.create(Uuid.random(), alice.id)
-        val shareKey = inviting.invite(kitA.id, alice.id)
-        joining.joinByInvitation(shareKey, bob.id)
-
-        val drug = drugService.create(NewDrug(Uuid.random(), "Shared Meds", qty(10.0), dbHelper.unit().id), kitA.id)
-        dbHelper.flushAndClear()
-
-        val kitB = medKitService.create(Uuid.random(), bob.id)
-
-        // Переезжает Боб, и своей брони на пачку у него нет: право даёт членство, а не бронь.
-        assertDoesNotThrow {
-            drugs.moveToMedKit(drug.id, kitB.id, dbHelper.drugVersion(drug.id), bob.id)
+    fun `соседи проходят полный жизненный цикл общей аптечки`() {
+        val alice = actor("saga-alice")
+        val bob = actor("saga-bob")
+        val charlie = actor("saga-charlie")
+        val homeKitId = Uuid.random()
+        alice.api.createMedKit(MedKitCreateRequest(homeKitId)).expectBody<MedKitCreatedDTO>(201)
+        listOf(bob, charlie).forEach { neighbour ->
+            val invitation = alice.api.inviteTo(homeKitId).expectBody<InvitationDTO>(201)
+            neighbour.api.join(MembershipCreateRequest(invitation.key)).expectBody<MedKitDTO>(201)
         }
 
-        val updatedDrug = dbHelper.requireDrug(drug.id)
-        assertEquals(kitB.id, updatedDrug.medKitId)
+        val allergyMeds = alice.api.createDrug(homeKitId, drugRequest("Allergy Meds", "60"))
+            .expectBody<DrugSnapshotDTO>(201)
+        val painkillers = alice.api.createDrug(homeKitId, drugRequest("Painkillers", "100"))
+            .expectBody<DrugSnapshotDTO>(201)
+
+        listOf(alice, bob, charlie).forEach { neighbour ->
+            val visible = neighbour.api.getDrug(allergyMeds.drug.id).expectBody<DrugSnapshotDTO>(200)
+            neighbour.api.createReservation(
+                ReservationCreateRequest(allergyMeds.drug.id, BigDecimal("20"), visible.reservations.version)
+            ).expectBody<ReservationDTO>(201)
+        }
+        listOf(bob, charlie).forEach { neighbour ->
+            val visible = neighbour.api.getDrug(painkillers.drug.id).expectBody<DrugSnapshotDTO>(200)
+            neighbour.api.createReservation(
+                ReservationCreateRequest(painkillers.drug.id, BigDecimal("30"), visible.reservations.version)
+            ).expectBody<ReservationDTO>(201)
+        }
+
+        val allergyBeforeIntake = bob.api.getDrug(allergyMeds.drug.id).expectBody<DrugSnapshotDTO>(200)
+        val allergyAfterIntake = bob.api.recordIntake(
+            allergyMeds.drug.id,
+            IntakeRequest(BigDecimal("30"), allergyBeforeIntake.drug.version)
+        ).expectBody<DrugSnapshotDTO>(200)
+        assertQty(30.0, allergyAfterIntake.drug.quantity)
+        assertQty(60.0, allergyAfterIntake.reservations.total)
+        assertQty(20.0, allergyAfterIntake.reservations.mine)
+
+        val travelKitId = Uuid.random()
+        alice.api.createMedKit(MedKitCreateRequest(travelKitId)).expectBody<MedKitCreatedDTO>(201)
+        val painkillersBeforeMove = alice.api.getDrug(painkillers.drug.id).expectBody<DrugSnapshotDTO>(200)
+        val movedPainkillers = alice.api.moveDrug(
+            painkillers.drug.id,
+            travelKitId,
+            painkillersBeforeMove.drug.version
+        ).expectBody<DrugSnapshotDTO>(200)
+        assertEquals(travelKitId, movedPainkillers.drug.medKitId)
+        assertQty(0.0, movedPainkillers.reservations.total)
+        bob.api.getReservation(painkillers.drug.id).expectStatus(404)
+        charlie.api.getReservation(painkillers.drug.id).expectStatus(404)
+
+        val duoKitId = Uuid.random()
+        alice.api.createMedKit(MedKitCreateRequest(duoKitId)).expectBody<MedKitCreatedDTO>(201)
+        val duoInvitation = alice.api.inviteTo(duoKitId).expectBody<InvitationDTO>(201)
+        bob.api.join(MembershipCreateRequest(duoInvitation.key)).expectBody<MedKitDTO>(201)
+
+        alice.api.deleteMedKit(homeKitId, duoKitId).expectEmpty(204)
+        alice.api.getMedKit(homeKitId).expectStatus(404)
+        val migratedAllergy = alice.api.getDrug(allergyMeds.drug.id).expectBody<DrugSnapshotDTO>(200)
+        assertEquals(duoKitId, migratedAllergy.drug.medKitId)
+        assertQty(40.0, migratedAllergy.reservations.total)
+        assertQty(20.0, migratedAllergy.reservations.mine)
+        assertQty(20.0, bob.api.getReservation(allergyMeds.drug.id).expectBody<ReservationDTO>(200).amount)
+        charlie.api.getReservation(allergyMeds.drug.id).expectStatus(404)
+
+        bob.api.leave(duoKitId).expectEmpty(204)
+        val aliceAlone = alice.api.getMedKit(duoKitId).expectBody<MedKitDTO>(200)
+        assertEquals(1L, aliceAlone.userCount)
+        assertQty(20.0, aliceAlone.drugs.single().reservations.total)
+
+        alice.api.leave(duoKitId).expectEmpty(204)
+        alice.api.getMedKit(duoKitId).expectStatus(404)
+        alice.api.getDrug(allergyMeds.drug.id).expectStatus(404)
     }
 
+    /** История 18: правка, приём, сужение доступа и уничтожение одной упаковки. */
     @Test
-    fun `Verify movement strips the reservations of those who lost access`() {
-        val alice = createTestUser("alice")
-        val bob = createTestUser("bob")
-        val kitA = medKitService.create(Uuid.random(), alice.id)
-        joining.joinByInvitation(inviting.invite(kitA.id, alice.id), bob.id)
+    fun `изменения упаковки и броней остаются согласованными при переносе и удалении`() {
+        val alice = actor("lifecycle-alice")
+        val bob = actor("lifecycle-bob")
+        val sourceKitId = Uuid.random()
+        val targetKitId = Uuid.random()
+        alice.api.createMedKit(MedKitCreateRequest(sourceKitId)).expectBody<MedKitCreatedDTO>(201)
+        alice.api.createMedKit(MedKitCreateRequest(targetKitId)).expectBody<MedKitCreatedDTO>(201)
+        val invitation = alice.api.inviteTo(sourceKitId).expectBody<InvitationDTO>(201)
+        bob.api.join(MembershipCreateRequest(invitation.key)).expectBody<MedKitDTO>(201)
+        val drug = alice.api.createDrug(sourceKitId, drugRequest("LifePill", "100"))
+            .expectBody<DrugSnapshotDTO>(201)
 
-        val drug = drugService.create(NewDrug(Uuid.random(), "Audit Meds", qty(10.0), dbHelper.unit().id), kitA.id)
-        dbHelper.flushAndClear()
+        listOf(alice, bob).forEach { participant ->
+            val visible = participant.api.getDrug(drug.drug.id).expectBody<DrugSnapshotDTO>(200)
+            participant.api.createReservation(
+                ReservationCreateRequest(drug.drug.id, BigDecimal("40"), visible.reservations.version)
+            ).expectBody<ReservationDTO>(201)
+        }
+        val bobBeforeRaise = bob.api.getDrug(drug.drug.id).expectBody<DrugSnapshotDTO>(200)
+        val raised = bob.api.patchReservation(
+            drug.drug.id,
+            ReservationPatchRequest(BigDecimal("60"), bobBeforeRaise.reservations.version)
+        ).expectBody<ReservationDTO>(200)
+        assertQty(60.0, raised.amount)
 
-        dbHelper.reserve(alice.id, drug.id, qty(5.0))
-        dbHelper.reserve(bob.id, drug.id, qty(2.0))
+        val beforeIntake = alice.api.getDrug(drug.drug.id).expectBody<DrugSnapshotDTO>(200)
+        val afterIntake = alice.api.recordIntake(
+            drug.drug.id,
+            IntakeRequest(BigDecimal("50"), beforeIntake.drug.version)
+        ).expectBody<DrugSnapshotDTO>(200)
+        assertQty(50.0, afterIntake.drug.quantity)
+        assertQty(100.0, afterIntake.reservations.total)
+        assertQty(40.0, afterIntake.reservations.mine)
 
-        // Личная аптечка Алисы: Боба в ней нет.
-        val kitB = medKitService.create(Uuid.random(), alice.id)
-        drugs.moveToMedKit(drug.id, kitB.id, dbHelper.drugVersion(drug.id), alice.id)
-        val aliceReservation = dbHelper.userReservation(alice.id, drug.id)
-        val bobReservation = dbHelper.userReservation(bob.id, drug.id)
-        assertNotNull(aliceReservation, "Alice keeps her reservation")
-        assertNull(bobReservation, "Bob's is deleted because he lost access to the pack")
+        val moved = alice.api.moveDrug(drug.drug.id, targetKitId, afterIntake.drug.version)
+            .expectBody<DrugSnapshotDTO>(200)
+        assertEquals(targetKitId, moved.drug.medKitId)
+        assertQty(40.0, moved.reservations.total)
+        assertQty(40.0, moved.reservations.mine)
+        bob.api.getDrug(drug.drug.id).expectStatus(404)
+        bob.api.getReservation(drug.drug.id).expectStatus(404)
+
+        alice.api.deleteDrug(drug.drug.id, moved.drug.version).expectEmpty(204)
+        alice.api.getDrug(drug.drug.id).expectStatus(404)
+        alice.api.getReservation(drug.drug.id).expectStatus(404)
     }
 
+    /** История 19: право переноса даёт membership, а не собственная бронь. */
     @Test
-    fun `Verify drug migration during MedKit deletion`() {
-        val alice = createTestUser("alice")
-        val kitA = medKitService.create(Uuid.random(), alice.id)
-        val kitB = medKitService.create(Uuid.random(), alice.id)
-        val drug =
-            drugs.createInMedKit(kitA.id, DrugCreateRequest(Uuid.random(), "Migrating Meds", qty(10.0), dbHelper.unit().id), alice.id)
+    fun `сосед без собственной брони переносит общую упаковку в свою аптечку`() {
+        val alice = actor("unreserved-alice")
+        val bob = actor("unreserved-bob")
+        val sharedKitId = Uuid.random()
+        val bobKitId = Uuid.random()
+        alice.api.createMedKit(MedKitCreateRequest(sharedKitId)).expectBody<MedKitCreatedDTO>(201)
+        val invitation = alice.api.inviteTo(sharedKitId).expectBody<InvitationDTO>(201)
+        bob.api.join(MembershipCreateRequest(invitation.key)).expectBody<MedKitDTO>(201)
+        bob.api.createMedKit(MedKitCreateRequest(bobKitId)).expectBody<MedKitCreatedDTO>(201)
+        val drug = alice.api.createDrug(sharedKitId, drugRequest("Shared Meds", "10"))
+            .expectBody<DrugSnapshotDTO>(201)
 
-        medKits.delete(kitA.id, alice.id, kitB.id)
-        val survivingDrug = dbHelper.drug(drug.drug.id)
+        val bobView = bob.api.getDrug(drug.drug.id).expectBody<DrugSnapshotDTO>(200)
+        assertNull(bobView.reservations.mine)
+        val moved = bob.api.moveDrug(drug.drug.id, bobKitId, bobView.drug.version)
+            .expectBody<DrugSnapshotDTO>(200)
+        assertEquals(bobKitId, moved.drug.medKitId)
+        assertQty(0.0, moved.reservations.total)
+        assertNull(moved.reservations.mine)
 
-        assertNotNull(survivingDrug, "Drug should not have been deleted")
-        assertEquals(kitB.id, survivingDrug.medKitId, "Drug should be re-parented to Kit B")
+        val bobKit = bob.api.getMedKit(bobKitId).expectBody<MedKitDTO>(200)
+        assertEquals(setOf(drug.drug.id), bobKit.drugs.map { it.drug.id }.toSet())
+        alice.api.getDrug(drug.drug.id).expectStatus(404)
     }
 }

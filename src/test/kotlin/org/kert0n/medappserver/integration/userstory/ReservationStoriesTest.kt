@@ -1,197 +1,134 @@
 package org.kert0n.medappserver.integration.userstory
 
+import java.math.BigDecimal
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertNotNull
-import kotlin.test.assertTrue
 import kotlin.uuid.Uuid
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
-import org.kert0n.medappserver.db.store.MedKitStore
-import org.kert0n.medappserver.domain.Drug
-import org.kert0n.medappserver.domain.Quantity
-import org.kert0n.medappserver.domain.User
-import org.kert0n.medappserver.services.aggregate.DrugService
-import org.kert0n.medappserver.services.aggregate.MedKitService
-import org.kert0n.medappserver.services.orchestrator.MedKitInviting
-import org.kert0n.medappserver.services.orchestrator.MedKitJoining
-import org.kert0n.medappserver.services.aggregate.ReservationService
-import org.kert0n.medappserver.services.application.DrugApplicationService
-import org.kert0n.medappserver.services.application.MedKitApplicationService
-import org.kert0n.medappserver.testutil.DatabaseTestHelper
+import org.kert0n.medappserver.api.DrugSnapshotDTO
+import org.kert0n.medappserver.api.IntakeRequest
+import org.kert0n.medappserver.api.InvitationDTO
+import org.kert0n.medappserver.api.MedKitCreateRequest
+import org.kert0n.medappserver.api.MedKitCreatedDTO
+import org.kert0n.medappserver.api.MedKitDTO
+import org.kert0n.medappserver.api.MembershipCreateRequest
+import org.kert0n.medappserver.api.ReservationCreateRequest
+import org.kert0n.medappserver.api.ReservationDTO
+import org.kert0n.medappserver.api.ReservationPatchRequest
 import org.kert0n.medappserver.testutil.assertQty
-import org.kert0n.medappserver.testutil.qty
-import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.transaction.annotation.Transactional
 
 @PostgresIntegrationTest
-@Transactional
-class ReservationStoriesTest {
+class ReservationStoriesTest : HttpUserStoryTest() {
 
-    @Autowired
-
-    private lateinit var medKitStore: MedKitStore
-
-
-    @Autowired
-
-    private lateinit var dbHelper: DatabaseTestHelper
-
-
-
-    @Autowired
-    private lateinit var reservationService: ReservationService
-    @Autowired
-    private lateinit var inviting: MedKitInviting
-    @Autowired
-    private lateinit var joining: MedKitJoining
-
-    @Autowired
-    private lateinit var drugService: DrugService
-
-    @Autowired
-    private lateinit var medKitService: MedKitService
-
-    @Autowired
-    private lateinit var drugs: DrugApplicationService
-
-    @Autowired
-    private lateinit var medKits: MedKitApplicationService
-
-
-    /** История 6: сначала заявить свою долю, потом взять из пачки. */
+    /** История 6: бронь и приём — независимые публичные действия. */
     @Test
-    fun `Story 6 - A person reserves a share and then takes from the package`() {
-        val userData = User(id = Uuid.random(), hashedKey = "user_${Uuid.random()}")
-        dbHelper.insert(userData)
+    fun `пользователь бронирует долю и принимает лекарство`() {
+        val user = actor("reserves-and-takes")
+        val kitId = Uuid.random()
+        user.api.createMedKit(MedKitCreateRequest(kitId)).expectBody<MedKitCreatedDTO>(201)
+        val created = user.api.createDrug(kitId, drugRequest("Treatment Drug", "100"))
+            .expectBody<DrugSnapshotDTO>(201)
 
-        val medkit = medKitService.create(Uuid.random(), userData.id)
-        val drugData = Drug(
-            id = Uuid.random(),
-            name = "Treatment Drug",
-            quantity = Quantity(qty(100.0), dbHelper.unit()),
-            category = null,
-            manufacturer = null,
-            country = null,
-            description = null,
-            medKitId = medkit.id
-        )
-        dbHelper.insert(drugData)
+        val reservation = user.api.createReservation(
+            ReservationCreateRequest(created.drug.id, BigDecimal("30"), created.reservations.version)
+        ).expectBody<ReservationDTO>(201)
+        assertQty(30.0, reservation.amount)
 
-        val plan = dbHelper.reserve(userData.id, drugData.id, qty(30.0))
-        assertNotNull(plan)
+        val beforeIntake = user.api.getDrug(created.drug.id).expectBody<DrugSnapshotDTO>(200)
+        val afterFirst = user.api.recordIntake(
+            created.drug.id,
+            IntakeRequest(BigDecimal("5"), beforeIntake.drug.version)
+        ).expectBody<DrugSnapshotDTO>(200)
+        val afterSecond = user.api.recordIntake(
+            created.drug.id,
+            IntakeRequest(BigDecimal("5"), afterFirst.drug.version)
+        ).expectBody<DrugSnapshotDTO>(200)
 
-        val reserved = dbHelper.userReservation(userData.id, drugData.id)
-        assertNotNull(reserved, "бронь должна была появиться")
-        assertQty(30.0, reserved, "заявлено должно быть 30")
-
-        drugService.consume(drugService.get(drugData.id, userData.id), qty(5.0), dbHelper.drugVersion(drugData.id))
-        drugService.consume(drugService.get(drugData.id, userData.id), qty(5.0), dbHelper.drugVersion(drugData.id))
-
-        val updatedDrug = dbHelper.drug(drugData.id)
-        assertNotNull(updatedDrug)
-        assertQty(90.0, updatedDrug.quantity, "Drug quantity should be 90 after 10 consumed")
-
-        println("✅ История 6: бронь заведена, приём списан")
+        assertQty(90.0, afterSecond.drug.quantity)
+        assertQty(30.0, afterSecond.reservations.total)
+        assertQty(30.0, afterSecond.reservations.mine)
     }
 
-    /** История 7: на одну пачку претендуют несколько человек, у каждого своя доля. */
+    /** Истории 7 и 12: у участников свои доли, а общая сумма не ограничена остатком. */
     @Test
-    fun `Story 7 - Several people reserve shares of the same package`() {
-        val anna = User(id = Uuid.random(), hashedKey = "anna_${Uuid.random()}")
-        val bob = User(id = Uuid.random(), hashedKey = "bob_${Uuid.random()}")
-        dbHelper.insert(anna)
-        dbHelper.insert(bob)
+    fun `участники видят свои брони и могут заявить больше остатка`() {
+        val anna = actor("anna-reserves")
+        val bob = actor("bob-reserves")
+        val kitId = Uuid.random()
+        anna.api.createMedKit(MedKitCreateRequest(kitId)).expectBody<MedKitCreatedDTO>(201)
+        val created = anna.api.createDrug(kitId, drugRequest("Vitamin C", "100"))
+            .expectBody<DrugSnapshotDTO>(201)
+        val invitation = anna.api.inviteTo(kitId).expectBody<InvitationDTO>(201)
+        bob.api.join(MembershipCreateRequest(invitation.key)).expectBody<MedKitDTO>(201)
 
-        val medkit = medKitService.create(Uuid.random(), anna.id)
-        val shareKey = inviting.invite(medkit.id, anna.id)
-        joining.joinByInvitation(shareKey, bob.id)
+        anna.api.createReservation(
+            ReservationCreateRequest(created.drug.id, BigDecimal("40"), created.reservations.version)
+        ).expectBody<ReservationDTO>(201)
+        val bobView = bob.api.getDrug(created.drug.id).expectBody<DrugSnapshotDTO>(200)
+        bob.api.createReservation(
+            ReservationCreateRequest(created.drug.id, BigDecimal("30"), bobView.reservations.version)
+        ).expectBody<ReservationDTO>(201)
 
-        val vitaminC = Drug(
-            id = Uuid.random(),
-            name = "Vitamin C",
-            quantity = Quantity(qty(100.0), dbHelper.unit()),
-            category = null,
-            manufacturer = null,
-            country = null,
-            description = null,
-            medKitId = medkit.id
+        val beforeRaise = anna.api.getDrug(created.drug.id).expectBody<DrugSnapshotDTO>(200)
+        anna.api.patchReservation(
+            created.drug.id,
+            ReservationPatchRequest(BigDecimal("200"), beforeRaise.reservations.version)
+        ).expectBody<ReservationDTO>(200)
+
+        val annaView = anna.api.getDrug(created.drug.id).expectBody<DrugSnapshotDTO>(200)
+        val finalBobView = bob.api.getDrug(created.drug.id).expectBody<DrugSnapshotDTO>(200)
+        assertQty(230.0, annaView.reservations.total)
+        assertQty(200.0, annaView.reservations.mine)
+        assertQty(230.0, finalBobView.reservations.total)
+        assertQty(30.0, finalBobView.reservations.mine)
+        assertEquals(
+            listOf(created.drug.id),
+            bob.api.listReservations().expectBody<List<ReservationDTO>>(200).map { it.drugId }
         )
-        dbHelper.insert(vitaminC)
-
-        dbHelper.reserve(anna.id, vitaminC.id, qty(40.0))
-
-        dbHelper.reserve(bob.id, vitaminC.id, qty(50.0))
-        // Заявлено на пачку 90 всего.
-        assertQty(90.0, dbHelper.reservedOnDrug(vitaminC.id), "заявлено на пачку всего 90")
-
-        val annaPlan = dbHelper.userReservation(anna.id, vitaminC.id)
-        val bobPlan = dbHelper.userReservation(bob.id, vitaminC.id)
-        assertNotNull(annaPlan)
-        assertNotNull(bobPlan)
-        assertQty(40.0, annaPlan)
-        assertQty(50.0, bobPlan)
-
-        println("✅ История 7: на одной пачке уживаются несколько броней")
     }
 
-
-
-    /** История 10: семейная аптечка от создания до уборки. */
+    /** История 10: семейная аптечка от приглашений до выхода ребёнка. */
     @Test
-    fun `Story 10 - Complete family medkit lifecycle`() {
-        val mom = User(id = Uuid.random(), hashedKey = "mom_${Uuid.random()}")
-        val dad = User(id = Uuid.random(), hashedKey = "dad_${Uuid.random()}")
-        val child = User(id = Uuid.random(), hashedKey = "child_${Uuid.random()}")
-        dbHelper.insert(mom)
-        dbHelper.insert(dad)
-        dbHelper.insert(child)
+    fun `семья совместно бронирует и принимает лекарства`() {
+        val mom = actor("mom")
+        val dad = actor("dad")
+        val child = actor("child")
+        val kitId = Uuid.random()
+        mom.api.createMedKit(MedKitCreateRequest(kitId)).expectBody<MedKitCreatedDTO>(201)
+        mom.api.createDrug(kitId, drugRequest("Children's Aspirin", "200"))
+            .expectBody<DrugSnapshotDTO>(201)
+        val vitamins = mom.api.createDrug(kitId, drugRequest("Multivitamins", "90"))
+            .expectBody<DrugSnapshotDTO>(201)
 
-        val familyKit = medKitService.create(Uuid.random(), mom.id)
-        val dadKey = inviting.invite(familyKit.id, mom.id)
-        joining.joinByInvitation(dadKey, dad.id)
-        val childKey = inviting.invite(familyKit.id, mom.id)
-        joining.joinByInvitation(childKey, child.id)
+        listOf(dad, child).forEach { relative ->
+            val invitation = mom.api.inviteTo(kitId).expectBody<InvitationDTO>(201)
+            relative.api.join(MembershipCreateRequest(invitation.key)).expectBody<MedKitDTO>(201)
+        }
 
-        val aspirin = Drug(
-            id = Uuid.random(), name = "Children's Aspirin",
-            quantity = Quantity(qty(200.0), dbHelper.unit()),
-            category = "painkiller", manufacturer = null, country = null,
-            description = null, medKitId = familyKit.id
-        )
-        val vitamins = Drug(
-            id = Uuid.random(), name = "Multivitamins",
-            quantity = Quantity(qty(90.0), dbHelper.unit()),
-            category = "supplement", manufacturer = null, country = null,
-            description = null, medKitId = familyKit.id
-        )
-        dbHelper.insert(aspirin)
-        dbHelper.insert(vitamins)
+        listOf(mom, dad, child).forEach { relative ->
+            val snapshot = relative.api.getDrug(vitamins.drug.id).expectBody<DrugSnapshotDTO>(200)
+            relative.api.createReservation(
+                ReservationCreateRequest(vitamins.drug.id, BigDecimal("30"), snapshot.reservations.version)
+            ).expectBody<ReservationDTO>(201)
+        }
 
-        dbHelper.reserve(mom.id, vitamins.id, qty(30.0))
-        dbHelper.reserve(dad.id, vitamins.id, qty(30.0))
-        dbHelper.reserve(child.id, vitamins.id, qty(30.0))
-        // Заявлено 90 — вся пачка.
-        assertQty(90.0, dbHelper.reservedOnDrug(vitamins.id))
+        var current = mom.api.getDrug(vitamins.drug.id).expectBody<DrugSnapshotDTO>(200)
+        listOf(mom, dad, child).forEach { relative ->
+            current = relative.api.recordIntake(
+                vitamins.drug.id,
+                IntakeRequest(BigDecimal.ONE, current.drug.version)
+            ).expectBody(200)
+        }
 
-        drugService.consume(drugService.get(vitamins.id, mom.id), qty(1.0), dbHelper.drugVersion(vitamins.id))
-        drugService.consume(drugService.get(vitamins.id, dad.id), qty(1.0), dbHelper.drugVersion(vitamins.id))
-        drugService.consume(drugService.get(vitamins.id, child.id), qty(1.0), dbHelper.drugVersion(vitamins.id))
+        assertQty(87.0, current.drug.quantity)
+        assertQty(90.0, current.reservations.total)
+        child.api.leave(kitId).expectEmpty(204)
+        child.api.getMedKit(kitId).expectStatus(404)
 
-        val updatedVitamins = dbHelper.drug(vitamins.id)
-        assertNotNull(updatedVitamins)
-        assertQty(87.0, updatedVitamins.quantity, "Should be 90 - 3 = 87")
-
-        val medkit = dbHelper.medKit(familyKit.id)
-        assertNotNull(medkit)
-        assertEquals(3, medkit.userCount)
-
-        medKits.leave(familyKit.id, child.id)
-
-        val updatedKit = dbHelper.medKit(familyKit.id)
-        assertNotNull(updatedKit)
-        assertEquals(2, updatedKit.userCount)
-
-        println("✅ Story 10 passed: Complete family medkit lifecycle")
+        val remainingFamily = mom.api.getMedKit(kitId).expectBody<MedKitDTO>(200)
+        assertEquals(2L, remainingFamily.userCount)
+        val remainingVitamins = remainingFamily.drugs.single { it.drug.id == vitamins.drug.id }
+        assertQty(60.0, remainingVitamins.reservations.total)
+        assertQty(30.0, remainingVitamins.reservations.mine)
     }
 }
