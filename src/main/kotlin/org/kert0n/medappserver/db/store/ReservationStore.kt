@@ -25,7 +25,6 @@ import org.kert0n.medappserver.db.tables.MedKitMemberships
 import org.kert0n.medappserver.db.tables.QuantityUnits
 import org.kert0n.medappserver.db.tables.Reservations
 import org.kert0n.medappserver.domain.Drug
-import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.QuantityUnit
 import org.kert0n.medappserver.domain.Reservation
@@ -40,8 +39,9 @@ import org.springframework.stereotype.Component
  * упаковкой: бронь в «штуках вообще» смысла не имеет.
  *
  * Правила обращения — в `Access.kt`, одним списком на весь пакет. Коротко: чтения называют
- * вызывающего и скоупятся запросом, команды принимают агрегат, а разделы ниже подписаны потому,
- * что обещание относится к публичной поверхности, а не к приватным помощникам.
+ * вызывающего и скоупятся запросом; команды пишут по уже принятому решению — доступ удержал и
+ * состояние перечитал сценарий. Разделы ниже подписаны потому, что обещание относится к
+ * публичной поверхности, а не к приватным помощникам.
  */
 @Component
 class ReservationStore {
@@ -111,7 +111,7 @@ class ReservationStore {
         return ReservationSnapshot.of(drug, findAllOfDrugs(listOf(drug.id), userId), userId, version)
     }
 
-    // ── Команды: принимают агрегат — доступ к нему уже доказан ───────────────────
+    // ── Команды: пишут под доступом, который удерживает вызывающий сценарий ─────
 
     /**
      * Пачка приходит доменным объектом, а не поднимается из чужого хранилища.
@@ -151,24 +151,24 @@ class ReservationStore {
     }
 
     /** Брони тех, кто аптечку не видит, — при удалении аптечки с переносом. */
-    fun deleteInMedKitExcept(medKit: MedKit, target: MedKit) {
-        val targetMembers = membersOf(target)
+    fun deleteInMedKitExcept(medKitId: Uuid, targetMedKitId: Uuid) {
+        val targetMembers = membersOf(targetMedKitId)
         val touched = Reservations
             .select(Reservations.drugId)
-            .where { (Reservations.medKitId eq medKit.id) and (Reservations.userId notInSubQuery targetMembers) }
+            .where { (Reservations.medKitId eq medKitId) and (Reservations.userId notInSubQuery targetMembers) }
             .map { it[Reservations.drugId] }
             .distinct()
 
         Reservations.deleteWhere {
-            (Reservations.medKitId eq medKit.id) and (Reservations.userId notInSubQuery targetMembers)
+            (Reservations.medKitId eq medKitId) and (Reservations.userId notInSubQuery targetMembers)
         }
         recountSnapshots(touched)
     }
 
     /** То же для одной переехавшей упаковки. */
-    fun deleteOfDrugExcept(drug: Drug, target: MedKit) {
+    fun deleteOfDrugExcept(drug: Drug, targetMedKitId: Uuid) {
         Reservations.deleteWhere {
-            (Reservations.drugId eq drug.id) and (Reservations.userId notInSubQuery membersOf(target))
+            (Reservations.drugId eq drug.id) and (Reservations.userId notInSubQuery membersOf(targetMedKitId))
         }
         recountSnapshots(listOf(drug.id))
     }
@@ -180,15 +180,15 @@ class ReservationStore {
      * участника уже не вклинится между выборкой и удалением. Идентификаторы упаковок остаются
      * локальной деталью хранилища; наружу не поднимается ни список броней, ни список участников.
      */
-    fun deleteOfMember(medKit: MedKit, userId: Uuid) {
+    fun deleteOfMember(medKitId: Uuid, userId: Uuid) {
         val touched = Reservations
             .select(Reservations.drugId)
-            .where { (Reservations.medKitId eq medKit.id) and (Reservations.userId eq userId) }
+            .where { (Reservations.medKitId eq medKitId) and (Reservations.userId eq userId) }
             .map { it[Reservations.drugId] }
 
         lockSnapshots(touched)
         Reservations.deleteWhere {
-            (Reservations.medKitId eq medKit.id) and (Reservations.userId eq userId)
+            (Reservations.medKitId eq medKitId) and (Reservations.userId eq userId)
         }
         recountSnapshots(touched)
     }
@@ -203,9 +203,9 @@ class ReservationStore {
     private fun visibleTo(userId: Uuid): Op<Boolean> = Reservations.medKitId.inMedKitsOf(userId)
 
     /** Участники целевой аптечки остаются внутри SQL, их идентификаторы не поднимаются в домен. */
-    private fun membersOf(medKit: MedKit): Query =
+    private fun membersOf(medKitId: Uuid): Query =
         MedKitMemberships.select(MedKitMemberships.userId)
-            .where { MedKitMemberships.medKitId eq medKit.id }
+            .where { MedKitMemberships.medKitId eq medKitId }
 
     /** Брони вместе с упаковкой и её единицей, отобранные условием. */
     private fun reservationsWhere(condition: () -> Op<Boolean>): Query =

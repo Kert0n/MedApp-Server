@@ -14,6 +14,7 @@ import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.NewDrug
 import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.kert0n.medappserver.services.orchestrator.DrugDisposal
+import org.kert0n.medappserver.services.orchestrator.DrugEditing
 import org.kert0n.medappserver.services.orchestrator.DrugPlacement
 import org.kert0n.medappserver.services.orchestrator.DrugRelocation
 import org.kert0n.medappserver.services.orchestrator.DrugSynchronisation
@@ -37,6 +38,7 @@ class DrugApplicationService(
     private val reservationService: ReservationService,
     private val relocation: DrugRelocation,
     private val disposal: DrugDisposal,
+    private val editing: DrugEditing,
     private val placement: DrugPlacement,
     private val synchronisation: DrugSynchronisation
 ) {
@@ -70,29 +72,27 @@ class DrugApplicationService(
 
     @Transactional
     fun update(drugId: Uuid, request: DrugPatchRequest, userId: Uuid): DrugSnapshotDTO {
-        val drug = drugService.get(drugId, userId)
-        val updated = drugService.update(drug, request.toCommand())
+        val updated = editing.update(drugId, userId, request.toCommand())
         return updated.toSnapshot(reservationService.onDrugs(listOf(updated), userId).getValue(updated.id))
     }
 
     @Transactional
     fun delete(drugId: Uuid, version: Long?, userId: Uuid) =
-        disposal.destroy(drugService.get(drugId, userId), statedVersion(version))
+        disposal.destroy(drugId, userId, statedVersion(version))
 
     /** `null` — приём опустошил пачку, и она уничтожена: отдавать нечего. */
     @Transactional
     fun recordIntake(drugId: Uuid, request: IntakeRequest, userId: Uuid): DrugSnapshotDTO? {
-        val left = disposal.consume(drugService.get(drugId, userId), request.quantity, statedVersion(request.version))
+        val left = disposal.consume(drugId, userId, request.quantity, statedVersion(request.version))
             ?: return null
         return left.toSnapshot(reservationService.onDrugs(listOf(left), userId).getValue(left.id))
     }
 
     @Transactional
     fun moveToMedKit(drugId: Uuid, targetMedKitId: Uuid, version: Long?, userId: Uuid): DrugSnapshotDTO {
-        val drug = drugService.get(drugId, userId)
         logger.debug("Moving drug {} to medkit {}", drugId, targetMedKitId)
         // Корни берёт сам переезд: протокол принадлежит сценарию, а не входу в него.
-        val moved = relocation.moveOne(drug, targetMedKitId, userId, statedVersion(version))
+        val moved = relocation.moveOne(drugId, targetMedKitId, userId, statedVersion(version))
         return moved.toSnapshot(reservationService.onDrugs(listOf(moved), userId).getValue(moved.id))
     }
 
@@ -111,10 +111,10 @@ class DrugApplicationService(
     @Transactional
     fun synchronise(drugId: Uuid, syncId: Uuid, request: DrugSyncRequest, userId: Uuid): DrugSnapshotDTO? {
         logger.debug("Synchronising drug {} by user {}, sync {}", drugId, userId, syncId)
-        // Упаковка читается здесь, скоуплено: дальше она идёт агрегатом, а не идентификатором,
-        // и доказывает доступ сама.
+        // Упаковку читает сам сценарий — под удержанным корнем и после него: синхронизация
+        // трогает и упаковку, и бронь, поэтому доступ ей нужен до первой из этих записей.
         val left = synchronisation.apply(
-            syncId, drugService.get(drugId, userId), userId,
+            syncId, drugId, userId,
             DrugSynchronisation.SyncRequest(
                 consumed = request.consumed,
                 drugVersion = request.drugVersion,

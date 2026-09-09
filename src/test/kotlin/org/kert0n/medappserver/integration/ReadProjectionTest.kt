@@ -8,6 +8,8 @@ import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.MedKitService
+import org.kert0n.medappserver.services.orchestrator.MedKitInviting
+import org.kert0n.medappserver.services.orchestrator.MedKitJoining
 import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.NoSuchReservation
@@ -29,6 +31,8 @@ class ReadProjectionTest {
     @Autowired private lateinit var drugService: DrugService
     @Autowired private lateinit var reservationService: ReservationService
     @Autowired private lateinit var medKitService: MedKitService
+    @Autowired private lateinit var inviting: MedKitInviting
+    @Autowired private lateinit var joining: MedKitJoining
     @Autowired private lateinit var dbHelper: DatabaseTestHelper
 
     @Test
@@ -36,7 +40,7 @@ class ReadProjectionTest {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.create(alice.id)
         val bob = dbHelper.freshUser("bob")
-        medKitService.joinByInvitation(medKitService.invite(medKitService.get(kit.id, alice.id), alice.id), bob.id)
+        joining.joinByInvitation(inviting.invite(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
 
         dbHelper.reserve(alice.id, drug.id, qty(30.0))
@@ -101,7 +105,7 @@ class ReadProjectionTest {
         val alice = dbHelper.freshUser("alice")
         val kit = medKitService.create(alice.id)
         val bob = dbHelper.freshUser("bob")
-        medKitService.joinByInvitation(medKitService.invite(medKitService.get(kit.id, alice.id), alice.id), bob.id)
+        joining.joinByInvitation(inviting.invite(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.reserve(alice.id, drug.id, qty(30.0))
         dbHelper.flushAndClear()

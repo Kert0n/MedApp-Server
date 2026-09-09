@@ -23,9 +23,13 @@ import org.kert0n.medappserver.domain.StaleVersion
 import org.kert0n.medappserver.services.aggregate.DrugEdit
 import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.MedKitService
+import org.kert0n.medappserver.services.orchestrator.MedKitInviting
+import org.kert0n.medappserver.services.orchestrator.MedKitJoining
+import org.kert0n.medappserver.services.aggregate.MedKitAccessService
 import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.kert0n.medappserver.services.application.DrugApplicationService
 import org.kert0n.medappserver.services.application.MedKitApplicationService
+import org.kert0n.medappserver.services.orchestrator.ReservationChanging
 import org.kert0n.medappserver.services.orchestrator.ReservationPlacement
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.springframework.beans.factory.annotation.Autowired
@@ -48,10 +52,14 @@ class OptimisticRaceTest {
     @Autowired private lateinit var dbHelper: DatabaseTestHelper
     @Autowired private lateinit var drugService: DrugService
     @Autowired private lateinit var medKitService: MedKitService
+    @Autowired private lateinit var inviting: MedKitInviting
+    @Autowired private lateinit var joining: MedKitJoining
+    @Autowired private lateinit var medKitAccess: MedKitAccessService
     @Autowired private lateinit var reservationService: ReservationService
     @Autowired private lateinit var drugApplicationService: DrugApplicationService
     @Autowired private lateinit var medKitApplicationService: MedKitApplicationService
     @Autowired private lateinit var placement: ReservationPlacement
+    @Autowired private lateinit var changing: ReservationChanging
     @Autowired private lateinit var jdbc: JdbcTemplate
     @Autowired private lateinit var transactionManager: PlatformTransactionManager
 
@@ -116,9 +124,8 @@ class OptimisticRaceTest {
         val outcome = race(
             { sync ->
                 val read = drugService.get(drug.id, alice.id)
-                val into = medKitService.get(target.id, alice.id)
                 sync()
-                drugService.moveTo(read, into, read.version)
+                drugService.moveTo(read, target.id, read.version)
             },
             { sync ->
                 sync()
@@ -220,13 +227,13 @@ class OptimisticRaceTest {
                 val read = drugService.get(drug.id, alice.id)
                 val claims = reservationService.snapshotOn(read, alice.id)
                 sync()
-                placement.place(read, alice.id, BigDecimal("5"), claims.version)
+                placement.place(read.id, alice.id, BigDecimal("5"), claims.version)
             },
             { sync ->
                 val read = drugService.get(drug.id, bob.id)
                 val claims = reservationService.snapshotOn(read, bob.id)
                 sync()
-                placement.place(read, bob.id, BigDecimal("7"), claims.version)
+                placement.place(read.id, bob.id, BigDecimal("7"), claims.version)
             }
         )
 
@@ -258,7 +265,7 @@ class OptimisticRaceTest {
                 val read = drugService.get(drug.id, bob.id)
                 val claims = reservationService.snapshotOn(read, bob.id)
                 sync()
-                placement.place(read, bob.id, BigDecimal("4"), claims.version)
+                placement.place(read.id, bob.id, BigDecimal("4"), claims.version)
             },
             { sync ->
                 sync()
@@ -375,7 +382,7 @@ class OptimisticRaceTest {
                 runCatching {
                     TransactionTemplate(transactionManager).execute {
                         placementBackend.put(jdbc.queryForObject("SELECT pg_backend_pid()", Int::class.java)!!)
-                        placement.place(read, bob.id, BigDecimal("3"), stated)
+                        placement.place(read.id, bob.id, BigDecimal("3"), stated)
                     }
                 }.exceptionOrNull()
             }
@@ -395,6 +402,47 @@ class OptimisticRaceTest {
 
         assertEquals(target.id, dbHelper.requireDrug(drug.id).medKitId)
         assertNull(dbHelper.userReservation(bob.id, drug.id))
+    }
+
+    /**
+     * Изменение брони против переезда её упаковки.
+     *
+     * Упаковка уезжает в аптечку, которой участник не видит, поэтому его бронь снимается. Правка
+     * не должна ни записать в исчезнувшую строку, ни уйти под прежним `med_kit_id`: команда
+     * перечитывает упаковку под удерживаемым корнем и отвечает конфликтом состояния.
+     */
+    @Test
+    fun `изменение брони против переноса упаковки`() {
+        val alice = dbHelper.freshUser("race-change-move-a")
+        val bob = dbHelper.freshUser("race-change-move-b")
+        val source = dbHelper.freshMedKit(alice.id)
+        dbHelper.join(source.id, alice.id, bob.id)
+        val target = dbHelper.freshMedKit(alice.id)
+        val drug = dbHelper.freshDrug(source.id, quantity = 30.0)
+        dbHelper.reserve(bob.id, drug.id, BigDecimal("5"))
+
+        val outcome = race(
+            { sync ->
+                val claims = dbHelper.storedReservationsVersion(drug.id)
+                sync()
+                changing.changeTo(bob.id, drug.id, BigDecimal("7"), claims)
+            },
+            { sync ->
+                sync()
+                drugApplicationService.moveToMedKit(drug.id, target.id, drug.version, alice.id)
+            }
+        )
+
+        outcome.assertNoDatabaseError()
+        assertTrue(
+            outcome.failures.all { it is DomainRuleViolated },
+            "проигравший обязан получить доменный отказ, а не нарушение ключа: ${outcome.failures}"
+        )
+        assertEquals(
+            0,
+            dbHelper.storedReservationsTotal(drug.id).compareTo(dbHelper.reservedOnDrug(drug.id)),
+            "сохранённая сумма обязана сойтись со строками в любом порядке"
+        )
     }
 
     /** Заведение упаковки против глобального удаления аптечки: отказ, а не нарушение ключа. */
@@ -440,10 +488,10 @@ class OptimisticRaceTest {
             val deletion = pool.submit<Throwable?> {
                 runCatching {
                     TransactionTemplate(transactionManager).execute {
-                        val locked = medKitService.lock(setOf(kit.id), alice.id).single()
+                        medKitAccess.holdLifecycleAccess(setOf(kit.id), alice.id)
                         rootTaken.countDown()
                         assertTrue(allowDelete.await(10, TimeUnit.SECONDS), "sync не дошёл до ожидания корня")
-                        medKitService.delete(locked)
+                        medKitService.deleteRoot(kit.id)
                     }
                 }.exceptionOrNull()
             }
@@ -538,13 +586,13 @@ class OptimisticRaceTest {
                 val read = drugService.get(drug.id, owner.id)
                 val claims = reservationService.snapshotOn(read, owner.id)
                 sync()
-                placement.place(read, owner.id, BigDecimal("5"), claims.version)
+                placement.place(read.id, owner.id, BigDecimal("5"), claims.version)
             },
             { sync ->
                 val read = drugService.get(drug.id, owner.id)
                 val claims = reservationService.snapshotOn(read, owner.id)
                 sync()
-                placement.place(read, owner.id, BigDecimal("6"), claims.version)
+                placement.place(read.id, owner.id, BigDecimal("6"), claims.version)
             }
         )
 
@@ -561,20 +609,24 @@ class OptimisticRaceTest {
         val alice = dbHelper.freshUser("race-join-a")
         val bob = dbHelper.freshUser("race-join-b")
         val kit = dbHelper.freshMedKit(alice.id)
+        val key = TransactionTemplate(transactionManager).execute { inviting.invite(kit.id, alice.id) }
 
         val outcome = race(
             { sync ->
                 sync()
-                dbHelper.join(kit.id, alice.id, bob.id)
+                joining.joinByInvitation(key, bob.id)
             },
             { sync ->
                 sync()
-                dbHelper.join(kit.id, alice.id, bob.id)
+                joining.joinByInvitation(key, bob.id)
             }
         )
 
         assertEquals(1, outcome.failures.size, "второе вступление обязано быть отвергнуто: ${outcome.failures}")
-        assertTrue(outcome.failures.single() is AlreadyMember, "повтор отвергается как AlreadyMember")
+        assertTrue(
+            outcome.failures.single() is AlreadyMember,
+            "повтор отвергается как AlreadyMember: ${outcome.failures.single()}"
+        )
     }
 
     @Test
@@ -583,11 +635,11 @@ class OptimisticRaceTest {
         val bob = dbHelper.freshUser("race-join-many-b")
         val charlie = dbHelper.freshUser("race-join-many-c")
         val kit = dbHelper.freshMedKit(alice.id)
-        val key = TransactionTemplate(transactionManager).execute { medKitService.invite(kit.id, alice.id) }
+        val key = TransactionTemplate(transactionManager).execute { inviting.invite(kit.id, alice.id) }
 
         val outcome = race(
-            { sync -> sync(); medKitService.joinByInvitation(key, bob.id) },
-            { sync -> sync(); medKitService.joinByInvitation(key, charlie.id) }
+            { sync -> sync(); joining.joinByInvitation(key, bob.id) },
+            { sync -> sync(); joining.joinByInvitation(key, charlie.id) }
         )
 
         assertTrue(outcome.failures.isEmpty(), "разные membership не конфликтуют: ${outcome.failures}")
@@ -601,11 +653,11 @@ class OptimisticRaceTest {
         val alice = dbHelper.freshUser("race-last-leave-a")
         val bob = dbHelper.freshUser("race-last-leave-b")
         val kit = dbHelper.freshMedKit(alice.id)
-        val key = TransactionTemplate(transactionManager).execute { medKitService.invite(kit.id, alice.id) }
+        val key = TransactionTemplate(transactionManager).execute { inviting.invite(kit.id, alice.id) }
 
         val outcome = race(
             { sync -> sync(); medKitApplicationService.leave(kit.id, alice.id) },
-            { sync -> sync(); medKitService.joinByInvitation(key, bob.id) }
+            { sync -> sync(); joining.joinByInvitation(key, bob.id) }
         )
 
         val stored = dbHelper.medKit(kit.id)
@@ -624,11 +676,11 @@ class OptimisticRaceTest {
         val alice = dbHelper.freshUser("race-delete-join-a")
         val bob = dbHelper.freshUser("race-delete-join-b")
         val kit = dbHelper.freshMedKit(alice.id)
-        val key = TransactionTemplate(transactionManager).execute { medKitService.invite(kit.id, alice.id) }
+        val key = TransactionTemplate(transactionManager).execute { inviting.invite(kit.id, alice.id) }
 
         val outcome = race(
-            { sync -> sync(); medKitService.delete(kit.id, alice.id) },
-            { sync -> sync(); medKitService.joinByInvitation(key, bob.id) }
+            { sync -> sync(); medKitApplicationService.delete(kit.id, alice.id) },
+            { sync -> sync(); joining.joinByInvitation(key, bob.id) }
         )
 
         assertTrue(outcome.failures.all { it is NotAMember }, "допустим только отказ исчезнувшего ресурса")
@@ -644,7 +696,7 @@ class OptimisticRaceTest {
         dbHelper.join(kit.id, alice.id, bob.id)
 
         val outcome = race(
-            { sync -> sync(); medKitService.delete(kit.id, alice.id) },
+            { sync -> sync(); medKitApplicationService.delete(kit.id, alice.id) },
             { sync -> sync(); medKitApplicationService.leave(kit.id, bob.id) }
         )
 

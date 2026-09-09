@@ -43,45 +43,37 @@ class MedKitStore {
             .orderBy(MedKits.id)
             .map { MedKit(it[MedKits.id], it[memberCount]) }
 
-    /** То же чтение для уже известного небольшого набора, после блокировки его корней. */
-    fun findAll(medKitIds: Set<Uuid>, userId: Uuid): List<MedKit> =
-        if (medKitIds.isEmpty()) emptyList()
-        else withCaller(userId)
-            .andWhere { MedKits.id inList medKitIds }
-            .orderBy(MedKits.id)
-            .map { MedKit(it[MedKits.id], it[memberCount]) }
-
     // ── Команды: меняют одну строку, а не снимок всего множества ─────────────────
 
     fun insert(medKit: MedKit, firstMember: Uuid) {
         MedKits.insert { it[id] = medKit.id }
-        insertMembership(medKit, firstMember)
+        insertMembership(medKit.id, firstMember)
     }
 
-    fun insertMembership(medKit: MedKit, userId: Uuid) {
+    fun insertMembership(medKitId: Uuid, userId: Uuid) {
         translatingConstraints {
             MedKitMemberships.insert {
-                it[medKitId] = medKit.id
+                it[MedKitMemberships.medKitId] = medKitId
                 it[MedKitMemberships.userId] = userId
             }
         }
     }
 
-    fun deleteMembership(medKit: MedKit, userId: Uuid) {
+    fun deleteMembership(medKitId: Uuid, userId: Uuid) {
         MedKitMemberships.deleteWhere {
-            (MedKitMemberships.medKitId eq medKit.id) and (MedKitMemberships.userId eq userId)
+            (MedKitMemberships.medKitId eq medKitId) and (MedKitMemberships.userId eq userId)
         }
     }
 
-    fun hasMembers(medKit: MedKit): Boolean =
+    fun hasMembers(medKitId: Uuid): Boolean =
         !MedKitMemberships.selectAll()
-            .where { MedKitMemberships.medKitId eq medKit.id }
+            .where { MedKitMemberships.medKitId eq medKitId }
             .limit(1)
             .empty()
 
     /** Содержимое и membership удаляют каскадные ключи. */
-    fun delete(medKit: MedKit) {
-        MedKits.deleteWhere { MedKits.id eq medKit.id }
+    fun delete(medKitId: Uuid) {
+        MedKits.deleteWhere { MedKits.id eq medKitId }
     }
 
     /**
@@ -99,7 +91,7 @@ class MedKitStore {
      * не берут те же строки в обратном порядке. Предикат membership одновременно доказывает
      * доступ; неполный результат снаружи трактуется так же, как обычная закрытая находка.
      */
-    fun lockAccessible(medKitIds: Set<Uuid>, userId: Uuid, lock: RootLock): Set<Uuid> {
+    internal fun lockAccessible(medKitIds: Set<Uuid>, userId: Uuid, lock: RootLock): Set<Uuid> {
         if (medKitIds.isEmpty()) return emptySet()
 
         val mine = MedKitMemberships.alias("mine_to_lock")
@@ -112,6 +104,23 @@ class MedKitStore {
             .map { it[MedKits.id] }
             .toSet()
     }
+
+    /**
+     * Повторная проверка membership после получения корневых блокировок.
+     *
+     * Locking SELECT начинает statement до ожидания и способен увидеть присоединённую строку
+     * membership из старого снимка. Новый statement уже видит commit, которого ждали корни.
+     */
+    internal fun accessible(medKitIds: Set<Uuid>, userId: Uuid): Set<Uuid> =
+        if (medKitIds.isEmpty()) emptySet()
+        else MedKitMemberships
+            .select(MedKitMemberships.medKitId)
+            .where {
+                (MedKitMemberships.medKitId inList medKitIds) and
+                    (MedKitMemberships.userId eq userId)
+            }
+            .map { it[MedKitMemberships.medKitId] }
+            .toSet()
 
     // ── Внутреннее ──────────────────────────────────────────────────────────────
 
@@ -139,7 +148,7 @@ class MedKitStore {
  * которую жизненный цикл сносит, и защититься версией нечем. Сам с собой он совместим, так
  * что обычные команды из-за него в очередь не выстраиваются.
  */
-enum class RootLock(internal val option: ForUpdateOption) {
+internal enum class RootLock(internal val option: ForUpdateOption) {
 
     /** Меняется состав участников или место упаковок: никто другой корень одновременно не держит. */
     EXCLUSIVE(ForUpdateOption.PostgreSQL.ForUpdate(null, MedKits)),

@@ -13,6 +13,8 @@ import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.MedKitService
+import org.kert0n.medappserver.services.orchestrator.MedKitInviting
+import org.kert0n.medappserver.services.orchestrator.MedKitJoining
 import org.kert0n.medappserver.services.application.DrugApplicationService
 import org.kert0n.medappserver.services.application.MedKitApplicationService
 import org.kert0n.medappserver.services.orchestrator.DrugDisposal
@@ -39,6 +41,10 @@ class BasicWorkflowStoriesTest {
 
     @Autowired
     private lateinit var drugService: DrugService
+    @Autowired
+    private lateinit var inviting: MedKitInviting
+    @Autowired
+    private lateinit var joining: MedKitJoining
 
     @Autowired
     private lateinit var disposal: DrugDisposal
@@ -122,8 +128,8 @@ class BasicWorkflowStoriesTest {
         val bob = User(id = Uuid.random(), hashedKey = "bob_${Uuid.random()}")
         dbHelper.insert(bob)
 
-        val shareKey = medKitService.invite(medKitService.get(medkit.id, anna.id), anna.id)
-        medKitService.joinByInvitation(shareKey, bob.id)
+        val shareKey = inviting.invite(medkit.id, anna.id)
+        joining.joinByInvitation(shareKey, bob.id)
 
         val annaMedkits = medKitService.allOfUser(anna.id)
         val bobMedkits = medKitService.allOfUser(bob.id)
@@ -148,8 +154,8 @@ class BasicWorkflowStoriesTest {
         dbHelper.insert(bob)
 
         val medkit = medKitService.create(anna.id)
-        val shareKey = medKitService.invite(medKitService.get(medkit.id, anna.id), anna.id)
-        medKitService.joinByInvitation(shareKey, bob.id)
+        val shareKey = inviting.invite(medkit.id, anna.id)
+        joining.joinByInvitation(shareKey, bob.id)
 
         val drugData = Drug(
             id = Uuid.random(),
@@ -248,9 +254,9 @@ class BasicWorkflowStoriesTest {
         )
         dbHelper.insert(drugData)
 
-        disposal.consume(drugService.get(drugData.id, userData.id), qty(10.0), dbHelper.drugVersion(drugData.id))
-        disposal.consume(drugService.get(drugData.id, userData.id), qty(10.0), dbHelper.drugVersion(drugData.id))
-        disposal.consume(drugService.get(drugData.id, userData.id), qty(10.0), dbHelper.drugVersion(drugData.id))
+        disposal.consume(drugData.id, userData.id, qty(10.0), dbHelper.drugVersion(drugData.id))
+        disposal.consume(drugData.id, userData.id, qty(10.0), dbHelper.drugVersion(drugData.id))
+        disposal.consume(drugData.id, userData.id, qty(10.0), dbHelper.drugVersion(drugData.id))
 
         val updatedDrug = dbHelper.drug(drugData.id)
         assertNull(updatedDrug)

@@ -10,6 +10,8 @@ import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.MedKitService
+import org.kert0n.medappserver.services.orchestrator.MedKitInviting
+import org.kert0n.medappserver.services.orchestrator.MedKitJoining
 import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.kert0n.medappserver.services.application.DrugApplicationService
 import org.kert0n.medappserver.services.application.MedKitApplicationService
@@ -32,6 +34,10 @@ class DrugMovementStoriesTest {
 
     @Autowired
     private lateinit var reservationService: ReservationService
+    @Autowired
+    private lateinit var inviting: MedKitInviting
+    @Autowired
+    private lateinit var joining: MedKitJoining
 
     @Autowired
     private lateinit var drugService: DrugService
@@ -96,8 +102,8 @@ class DrugMovementStoriesTest {
         dbHelper.insert(bob)
 
         val medkit = medKitService.create(anna.id)
-        val shareKey = medKitService.invite(medKitService.get(medkit.id, anna.id), anna.id)
-        medKitService.joinByInvitation(shareKey, bob.id)
+        val shareKey = inviting.invite(medkit.id, anna.id)
+        joining.joinByInvitation(shareKey, bob.id)
 
         val drugData = Drug(
             id = Uuid.random(), name = "Medicine X",
@@ -146,7 +152,7 @@ class DrugMovementStoriesTest {
         val plan = dbHelper.userReservation(userData.id, drugData.id)
         assertNotNull(plan)
 
-        disposal.destroy(drugService.get(drugData.id, userData.id), dbHelper.drugVersion(drugData.id))
+        disposal.destroy(drugData.id, userData.id, dbHelper.drugVersion(drugData.id))
 
         val deletedDrug = dbHelper.drug(drugData.id)
         assertNull(deletedDrug)
@@ -165,12 +171,12 @@ class DrugMovementStoriesTest {
         val charlie = dbHelper.insert(User(id = Uuid.random(), hashedKey = "charlie_${Uuid.random()}"))
 
         val oldKit = medKitService.create(anna.id)
-        medKitService.joinByInvitation(medKitService.invite(medKitService.get(oldKit.id, anna.id), anna.id), bob.id)
-        medKitService.joinByInvitation(medKitService.invite(medKitService.get(oldKit.id, anna.id), anna.id), charlie.id)
+        joining.joinByInvitation(inviting.invite(oldKit.id, anna.id), bob.id)
+        joining.joinByInvitation(inviting.invite(oldKit.id, anna.id), charlie.id)
 
         // Новая аптечка — на Анну и Боба; Чарли в неё не входит.
         val newKit = medKitService.create(anna.id)
-        medKitService.joinByInvitation(medKitService.invite(medKitService.get(newKit.id, anna.id), anna.id), bob.id)
+        joining.joinByInvitation(inviting.invite(newKit.id, anna.id), bob.id)
 
         val drugData = dbHelper.insert(
             Drug(

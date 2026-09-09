@@ -2,9 +2,9 @@ package org.kert0n.medappserver.services.orchestrator
 
 import kotlin.uuid.Uuid
 import org.kert0n.medappserver.domain.Drug
-import org.kert0n.medappserver.domain.MedKit
+import org.kert0n.medappserver.domain.StaleVersion
 import org.kert0n.medappserver.services.aggregate.DrugService
-import org.kert0n.medappserver.services.aggregate.MedKitService
+import org.kert0n.medappserver.services.aggregate.MedKitAccessService
 import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Propagation.MANDATORY
@@ -24,7 +24,7 @@ import org.springframework.transaction.annotation.Transactional
 @Service
 class DrugRelocation(
     private val drugService: DrugService,
-    private val medKitService: MedKitService,
+    private val access: DrugCommandAccess,
     private val reservationService: ReservationService
 ) {
 
@@ -37,24 +37,14 @@ class DrugRelocation(
      * подробность одного из его вызывающих.
      */
     @Transactional(propagation = MANDATORY)
-    fun moveOne(drug: Drug, targetMedKitId: Uuid, userId: Uuid, stated: Long): Drug {
-        val locked = medKitService.lock(setOf(drug.medKitId, targetMedKitId), userId).associateBy { it.id }
-        return moveOne(drug, locked.getValue(targetMedKitId), stated)
-    }
+    fun moveOne(drugId: Uuid, targetMedKitId: Uuid, userId: Uuid, stated: Long): Drug {
+        val drug = access.lifecycle(drugId, targetMedKitId, userId)
 
-    /**
-     * Переезд одной пачки: сначала снять брони тех, кто цель не видит, потом переставить.
-     *
-     * Доступ к целевой аптечке проверен её чтением, а тех, чьи брони можно сохранить,
-     * хранилище определяет по актуальным строкам членства.
-     */
-    @Transactional(propagation = MANDATORY)
-    fun moveOne(drug: Drug, target: MedKit, stated: Long): Drug {
         // Порядок важен, как и в массовом переезде: сначала снять брони тех, кто цель не
         // видит, и только потом двигать пачку. Иначе `ON UPDATE CASCADE` потащит их
         // `med_kit_id` в целевую аптечку, и ключ членства отвергнет весь переезд.
-        reservationService.dropOnDrugExcept(drug, target)
-        return drugService.moveTo(drug, target, stated)
+        reservationService.dropOnDrugExcept(drug, targetMedKitId)
+        return drugService.moveTo(drug, targetMedKitId, stated)
     }
 
     /**
@@ -68,9 +58,9 @@ class DrugRelocation(
      * того, кто удаляет исходную, — ему они нужны и для самого удаления.
      */
     @Transactional(propagation = MANDATORY)
-    fun moveAll(source: MedKit, target: MedKit) {
+    internal fun moveAllUnderAccess(sourceMedKitId: Uuid, targetMedKitId: Uuid) {
         // Порядок важен: брони выбираются по исходной аптечке, пока упаковки ещё в ней.
-        reservationService.dropInMedKitExcept(source, target)
-        drugService.moveAll(source, target)
+        reservationService.dropInMedKitExcept(sourceMedKitId, targetMedKitId)
+        drugService.moveAll(sourceMedKitId, targetMedKitId)
     }
 }

@@ -4,7 +4,6 @@ import java.math.BigDecimal
 import kotlin.uuid.Uuid
 import org.kert0n.medappserver.db.store.ReservationStore
 import org.kert0n.medappserver.domain.Drug
-import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.NoSuchReservation
 import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.Quantity
@@ -95,9 +94,9 @@ class ReservationService(
 
     /** Брони всех, кто целевую аптечку не видит, — при удалении с переносом. */
     @Transactional(propagation = MANDATORY)
-    fun dropInMedKitExcept(medKit: MedKit, target: MedKit) {
-        logger.debug("Dropping reservations in medkit {} outside target medkit {}", medKit.id, target.id)
-        reservations.deleteInMedKitExcept(medKit, target)
+    fun dropInMedKitExcept(medKitId: Uuid, targetMedKitId: Uuid) {
+        logger.debug("Dropping reservations in medkit {} outside target medkit {}", medKitId, targetMedKitId)
+        reservations.deleteInMedKitExcept(medKitId, targetMedKitId)
     }
 
     /** Все брони на упаковку: зовётся, когда упаковка уничтожается. */
@@ -109,16 +108,16 @@ class ReservationService(
 
     /** То же для одной переехавшей упаковки: остаются брони тех, кто видит новое место. */
     @Transactional(propagation = MANDATORY)
-    fun dropOnDrugExcept(drug: Drug, target: MedKit) {
-        logger.debug("Dropping reservations on drug {} outside target medkit {}", drug.id, target.id)
-        reservations.deleteOfDrugExcept(drug, target)
+    fun dropOnDrugExcept(drug: Drug, targetMedKitId: Uuid) {
+        logger.debug("Dropping reservations on drug {} outside target medkit {}", drug.id, targetMedKitId)
+        reservations.deleteOfDrugExcept(drug, targetMedKitId)
     }
 
     /** Снимает брони выходящего и обновляет картины задетых упаковок. */
     @Transactional(propagation = MANDATORY)
-    fun dropOfMember(medKit: MedKit, userId: Uuid) {
-        logger.debug("Dropping reservations of user {} in medkit {}", userId, medKit.id)
-        reservations.deleteOfMember(medKit, userId)
+    fun dropOfMember(medKitId: Uuid, userId: Uuid) {
+        logger.debug("Dropping reservations of user {} in medkit {}", userId, medKitId)
+        reservations.deleteOfMember(medKitId, userId)
     }
 
     /** Отмена — это удаление: брони с нулём не бывает. */

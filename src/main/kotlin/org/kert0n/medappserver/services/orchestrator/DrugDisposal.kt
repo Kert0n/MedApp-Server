@@ -1,6 +1,7 @@
 package org.kert0n.medappserver.services.orchestrator
 
 import java.math.BigDecimal
+import kotlin.uuid.Uuid
 import org.kert0n.medappserver.domain.Drug
 import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.ReservationService
@@ -22,13 +23,18 @@ import org.springframework.transaction.annotation.Transactional
  */
 @Service
 class DrugDisposal(
+    private val access: DrugCommandAccess,
     private val drugService: DrugService,
     private val reservationService: ReservationService
 ) {
 
     /** Пачку выбросили — назначений на неё больше нет. */
     @Transactional(propagation = MANDATORY)
-    fun destroy(drug: Drug, stated: Long) {
+    fun destroy(drugId: Uuid, userId: Uuid, stated: Long) {
+        destroyUnderAccess(access.content(drugId, userId), stated)
+    }
+
+    internal fun destroyUnderAccess(drug: Drug, stated: Long) {
         reservationService.dropOnDrug(drug)
         drugService.delete(drug, stated)
     }
@@ -41,11 +47,14 @@ class DrugDisposal(
      * для соседнего агрегата.
      */
     @Transactional(propagation = MANDATORY)
-    fun consume(drug: Drug, quantity: BigDecimal, stated: Long): Drug? {
+    fun consume(drugId: Uuid, userId: Uuid, quantity: BigDecimal, stated: Long): Drug? =
+        consumeUnderAccess(access.content(drugId, userId), quantity, stated)
+
+    internal fun consumeUnderAccess(drug: Drug, quantity: BigDecimal, stated: Long): Drug? {
         val left = drugService.consume(drug, quantity, stated)
         // Пачка кончилась — списание её не переписывало, а значит и версию не двигало:
         // уничтожение предъявляет ту же самую.
-        if (left == null) destroy(drug, stated)
+        if (left == null) destroyUnderAccess(drug, stated)
         return left
     }
 }

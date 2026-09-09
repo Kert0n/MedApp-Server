@@ -25,6 +25,8 @@ import org.kert0n.medappserver.domain.Reservation
 import org.kert0n.medappserver.domain.User
 import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.MedKitService
+import org.kert0n.medappserver.services.orchestrator.MedKitInviting
+import org.kert0n.medappserver.services.orchestrator.MedKitJoining
 import org.kert0n.medappserver.services.aggregate.ReservationService
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
@@ -43,6 +45,8 @@ class DatabaseTestHelper(
     private val reservations: ReservationStore,
     private val medKits: MedKitStore,
     private val medKitService: MedKitService,
+    private val inviting: MedKitInviting,
+    private val joining: MedKitJoining,
     private val drugService: DrugService,
     private val reservationService: ReservationService
 ) {
@@ -93,12 +97,12 @@ class DatabaseTestHelper(
     /**
      * Вступление под подготовку сценария — тем же путём, что и приложение.
      *
-     * Вступить иначе нельзя: приглашение и есть право прочитать аптечку, в которой тебя ещё
+     * Вступить иначе нельзя: приглашение и есть право попасть в аптечку, в которой тебя ещё
      * нет. Ключ выписывается от имени участника, который в ней уже состоит.
      */
     @Transactional
-    fun join(medKitId: Uuid, invitedBy: Uuid, userId: Uuid): MedKit =
-        medKitService.joinByInvitation(medKitService.invite(medKitService.get(medKitId, invitedBy), invitedBy), userId)
+    fun join(medKitId: Uuid, invitedBy: Uuid, userId: Uuid): Uuid =
+        joining.joinByInvitation(inviting.invite(medKitId, invitedBy), userId)
 
     /** Бронь под подготовку сценария. */
     @Transactional

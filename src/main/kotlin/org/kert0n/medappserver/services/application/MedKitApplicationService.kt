@@ -11,7 +11,9 @@ import org.kert0n.medappserver.api.toSummaryDto
 import org.kert0n.medappserver.services.aggregate.DrugService
 import org.kert0n.medappserver.services.aggregate.MedKitService
 import org.kert0n.medappserver.services.aggregate.ReservationService
-import org.kert0n.medappserver.services.orchestrator.DrugRelocation
+import org.kert0n.medappserver.services.orchestrator.MedKitDeletion
+import org.kert0n.medappserver.services.orchestrator.MedKitInviting
+import org.kert0n.medappserver.services.orchestrator.MedKitJoining
 import org.kert0n.medappserver.services.orchestrator.MedKitLeaving
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -28,7 +30,9 @@ class MedKitApplicationService(
     private val medKitService: MedKitService,
     private val drugService: DrugService,
     private val reservationService: ReservationService,
-    private val relocation: DrugRelocation,
+    private val deletion: MedKitDeletion,
+    private val inviting: MedKitInviting,
+    private val joining: MedKitJoining,
     private val leaving: MedKitLeaving
 ) {
 
@@ -53,12 +57,12 @@ class MedKitApplicationService(
 
     @Transactional
     fun invite(medKitId: Uuid, userId: Uuid): InvitationDTO =
-        InvitationDTO(medKitService.invite(medKitId, userId))
+        InvitationDTO(inviting.invite(medKitId, userId))
 
     @Transactional
     fun joinByInvitation(key: String, userId: Uuid): MedKitDTO {
-        val joined = medKitService.joinByInvitation(key, userId)
-        return read(joined.id, userId)
+        val joined = joining.joinByInvitation(key, userId)
+        return read(joined, userId)
     }
 
     /**
@@ -88,10 +92,6 @@ class MedKitApplicationService(
     @Transactional
     fun delete(medKitId: Uuid, userId: Uuid, transferToMedKitId: Uuid? = null) {
         logger.debug("Deleting medkit {} (transfer to {})", medKitId, transferToMedKitId)
-        val ids = setOfNotNull(medKitId, transferToMedKitId)
-        val locked = medKitService.lock(ids, userId).associateBy { it.id }
-        val source = locked.getValue(medKitId)
-        transferToMedKitId?.let { relocation.moveAll(source, locked.getValue(it)) }
-        medKitService.delete(source)
+        deletion.delete(medKitId, userId, transferToMedKitId)
     }
 }

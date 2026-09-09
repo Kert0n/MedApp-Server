@@ -2,9 +2,8 @@ package org.kert0n.medappserver.services.orchestrator
 
 import kotlin.uuid.Uuid
 import org.kert0n.medappserver.domain.Drug
-import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.services.aggregate.DrugService
-import org.kert0n.medappserver.services.aggregate.MedKitService
+import org.kert0n.medappserver.services.aggregate.MedKitAccessService
 import org.kert0n.medappserver.services.aggregate.NewDrug
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Propagation.MANDATORY
@@ -25,12 +24,8 @@ import org.springframework.transaction.annotation.Transactional
 @Service
 class DrugPlacement(
     private val drugService: DrugService,
-    private val medKitService: MedKitService
+    private val access: MedKitAccessService
 ) {
-
-    /** Аптечка уже прочитана и её корень уже удерживает вызывающий: писать можно. */
-    @Transactional(propagation = MANDATORY)
-    fun place(request: NewDrug, medKit: MedKit): Drug = drugService.create(request, medKit)
 
     /**
      * По идентификатору — вход, который сам обеспечивает протокол.
@@ -42,7 +37,7 @@ class DrugPlacement(
      */
     @Transactional(propagation = MANDATORY)
     fun place(request: NewDrug, medKitId: Uuid, userId: Uuid): Drug {
-        medKitService.guard(setOf(medKitId), userId)
-        return place(request, medKitService.get(medKitId, userId))
+        access.holdContentAccess(setOf(medKitId), userId)
+        return drugService.create(request, medKitId)
     }
 }
