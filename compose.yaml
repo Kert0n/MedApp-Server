@@ -3,12 +3,13 @@
 # Пароль Postgres лежит в файле secrets/postgres_password, которого нет в git. Создать
 # один раз:
 #
-#   mkdir -p secrets && openssl rand -base64 32 > secrets/postgres_password
+#   mkdir -p secrets
+#   openssl rand -hex 32 | tr -d '\n' > secrets/postgres_password
+#   openssl rand -hex 32 | tr -d '\n' > secrets/registration.secret
 #
-# Приложение получает тот же секрет через configtree: Spring читает /run/secrets как
-# дерево свойств, где имя файла и есть имя свойства — поэтому второй секрет смонтирован
-# под именем spring.datasource.password и указывает на тот же файл. Значение не
-# дублируется, обёртка над entrypoint не нужна.
+# Приложение получает те же секреты через configtree: Spring читает /run/secrets как дерево
+# свойств, где имя файла и есть имя свойства. Они совпадают с двумя значениями из локального
+# application-prod.properties, который уже упакован в образ.
 #
 # Локальная разработка: приложение с профилем dev само поднимает compose.dev.yaml.
 # Прод-подобная проверка без продовых секретов: compose.mock-prod.yaml.
@@ -54,8 +55,8 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
-      # mock-prod несёт всю продовую конфигурацию, prod доописывает поверх только скрытые
-      # значения. Порядок важен: последний профиль перебивает предыдущий.
+      # mock-prod содержит все политики, prod активируется последним и перекрывает только
+      # registration.secret и spring.datasource.password.
       - 'SPRING_PROFILES_ACTIVE=mock-prod,prod'
       - 'SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/medapp-server-db'
       - 'SPRING_DATASOURCE_USERNAME=medapp'

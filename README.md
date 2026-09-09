@@ -54,7 +54,8 @@ REST API для домашней аптечки: что есть в наличи
 - о человеке хранятся только идентификатор и хеш ключа — ни имени, ни почты, ни телефона;
 - журнал приёмов в базу не попадает: он слишком персонален для таблицы;
 - недоступное неотличимо от несуществующего: иначе по коду ответа перебором узнаётся чужое;
-- логи идут только в консоль и не содержат идентификаторов и количеств.
+- production не пишет application- и access-логи; диагностическое логирование остаётся только
+  в локальном `dev`.
 
 ## Модель данных
 
@@ -205,10 +206,8 @@ src/main/resources/certs/gen.sh
 
 ### Прод-подобная проверка
 
-`application-mock-prod.properties` — это и есть продовая конфигурация: всё, что не секрет, лежит
-там и в git. Профиль `prod` ничего не повторяет, он активируется вторым
-(`SPRING_PROFILES_ACTIVE=mock-prod,prod`) и доописывает только скрытые значения. Поэтому стенд
-проверяет ровно то, что поедет в прод.
+`application-mock-prod.properties` — production-like конфигурация с заведомо ненастоящими
+секретами. Она позволяет локально проверить ограничения API на настоящем PostgreSQL и без Caddy.
 
 ```bash
 docker compose -f compose.mock-prod.yaml up -d --build
@@ -218,21 +217,25 @@ docker compose -f compose.mock-prod.yaml up -d --build
 
 ### Прод
 
-Секреты — реальный `registration.secret` и пароль БД — берутся из `application-prod.properties`
-(файл вне git) либо из docker secrets, которые перебивают даже его. Пароль Postgres нужен
-контейнеру БД, поэтому только файлом:
+Production запускается с цепочкой `mock-prod,prod`: первый профиль содержит все политики, а
+`application-prod.properties` активируется последним и перекрывает только реальный
+`registration.secret` и пароль БД. Файл находится вне git и входит в локально собранный образ.
+Те же два секрета передаются контейнерам через Docker secrets; пароль Postgres в любом случае
+нужен контейнеру БД отдельным файлом:
 
 ```bash
 mkdir -p secrets
-openssl rand -base64 32 > secrets/postgres_password
-printf '%s' "ваш-секрет-регистрации" > secrets/registration.secret
+openssl rand -hex 32 | tr -d '\n' > secrets/postgres_password
+openssl rand -hex 32 | tr -d '\n' > secrets/registration.secret
+chmod 600 secrets/postgres_password secrets/registration.secret
 
 docker compose -f compose.yaml up -d --build
-docker compose -f compose.yaml logs -f med-app-server
 ```
 
 Приложение читает `/run/secrets` через `configtree`: имя файла становится именем свойства, поэтому
-значение не дублируется и обёртка над entrypoint не нужна.
+секреты из файлов совпадают со значениями, упакованными в профиль, и обёртка над entrypoint не
+нужна. RSA-пара генерируется локально через `src/main/resources/certs/gen.sh --force` и также
+входит в образ; это сохраняет у владельца ключи для проверки уже выданных JWT.
 
 Наружу смотрит только Caddy: приложение и Postgres портов не публикуют — на этом же держится
 доверие к `X-Forwarded-For`.
@@ -261,12 +264,11 @@ docker compose -f compose.yaml logs -f med-app-server
 | Профиль | Файл | Роль |
 |---|---|---|
 | `dev` | `application-dev.properties` | локальная работа, ослабленные сроки и лимиты |
-| `mock-prod` | `application-mock-prod.properties` | **вся продовая конфигурация**, лежит в git |
-| `prod` | `application-prod.properties` | только скрытые значения, вне git |
+| `mock-prod` | `application-mock-prod.properties` | все production-политики и локальные секреты-заглушки |
+| `prod` | `application-prod.properties` | только два реальных секрета, вне git |
 
-Прод запускается как `mock-prod,prod`: второй профиль доописывает первый. Поэтому настройки
-поведения правятся в `mock-prod` и автоматически действуют в проде, а стенд проверяет ровно то,
-что поедет в прод.
+Прод запускается как `mock-prod,prod`: второй профиль имеет приоритет и заменяет обе заглушки.
+`RegistrationSecret` дополнительно запрещает старт production с mock-значением.
 
 Основные параметры:
 

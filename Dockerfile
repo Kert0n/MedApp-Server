@@ -22,10 +22,9 @@ RUN ./gradlew dependencies --no-daemon
 # Copy source code
 COPY src ./src
 
-# Make sure a signing key pair exists before packaging. The script is idempotent: keys
-# copied in with the sources are left alone, and only a missing pair is generated. So the
-# image needs no key handed to it and no key committed to git, and there is nothing to
-# configure either way.
+# Make sure a signing key pair exists before packaging. The script is idempotent: a pair
+# generated locally for production and copied in with the sources is kept intact; a clean
+# development checkout gets a new pair automatically.
 RUN sh src/main/resources/certs/gen.sh
 
 # Build application
