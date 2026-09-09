@@ -65,6 +65,11 @@ class DrugController(private val drugs: DrugApplicationService) {
     @ApiResponse(responseCode = "201", description = "Drug created")
     @ApiResponse(responseCode = "400", description = "Invalid request", content = [Content()])
     @ApiResponse(responseCode = "404", description = "Medicine kit is not accessible", content = [Content()])
+    @ApiResponse(
+        responseCode = "409",
+        description = "A drug with this identifier already exists",
+        content = [Content()]
+    )
     fun createDrug(
         authentication: Authentication,
         @Parameter(description = "Medicine kit identifier") @PathVariable medKitId: Uuid,

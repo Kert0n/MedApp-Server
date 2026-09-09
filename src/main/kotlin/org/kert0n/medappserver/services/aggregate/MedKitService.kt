@@ -21,10 +21,17 @@ class MedKitService(private val medKits: MedKitStore) {
 
     private val logger = LoggerFactory.getLogger(MedKitService::class.java)
 
+    /**
+     * Идентификатор приходит сверху, а не рождается здесь.
+     *
+     * Тот же приём, что у `UserService.registerNewUser`: решение об идентичности принял слой выше,
+     * сервису остаётся запись. Повтор с тем же идентификатором упрётся в первичный ключ и станет
+     * доменным отказом, а не второй аптечкой.
+     */
     @Transactional(propagation = MANDATORY)
-    fun create(userId: Uuid): MedKit {
-        logger.debug("Creating new medkit for user: {}", userId)
-        val medKit = MedKit()
+    fun create(medKitId: Uuid, userId: Uuid): MedKit {
+        logger.debug("Creating new medkit {} for user: {}", medKitId, userId)
+        val medKit = MedKit(medKitId)
         medKits.insert(medKit, userId)
         return medKit
     }

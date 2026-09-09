@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
 import kotlin.uuid.Uuid
 import org.kert0n.medappserver.api.InvitationDTO
+import org.kert0n.medappserver.api.MedKitCreateRequest
 import org.kert0n.medappserver.api.MedKitCreatedDTO
 import org.kert0n.medappserver.api.MedKitDTO
 import org.kert0n.medappserver.api.MedKitSummaryDTO
@@ -40,9 +41,19 @@ class MedKitController(
         description = "Creates a kit owned by nobody in particular."
     )
     @ApiResponse(responseCode = "201", description = "Kit created")
-    fun createMedKit(authentication: Authentication): MedKitCreatedDTO {
+    @ApiResponse(responseCode = "400", description = "Invalid request", content = [Content()])
+    @ApiResponse(
+        responseCode = "409",
+        description = "A kit with this identifier already exists",
+        content = [Content()]
+    )
+    fun createMedKit(
+        authentication: Authentication,
+        @SwaggerRequestBody(description = "Medicine kit to create")
+        @Valid @RequestBody request: MedKitCreateRequest
+    ): MedKitCreatedDTO {
         logger.debug("POST /v1/med-kits by user {}", authentication.userId)
-        return medKits.create(authentication.userId)
+        return medKits.create(request, authentication.userId)
     }
 
     @GetMapping

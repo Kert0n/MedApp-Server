@@ -65,7 +65,7 @@ class ReservationStoriesTest {
         val userData = User(id = Uuid.random(), hashedKey = "user_${Uuid.random()}")
         dbHelper.insert(userData)
 
-        val medkit = medKitService.create(userData.id)
+        val medkit = medKitService.create(Uuid.random(), userData.id)
         val drugData = Drug(
             id = Uuid.random(),
             name = "Treatment Drug",
@@ -103,7 +103,7 @@ class ReservationStoriesTest {
         dbHelper.insert(anna)
         dbHelper.insert(bob)
 
-        val medkit = medKitService.create(anna.id)
+        val medkit = medKitService.create(Uuid.random(), anna.id)
         val shareKey = inviting.invite(medkit.id, anna.id)
         joining.joinByInvitation(shareKey, bob.id)
 
@@ -147,7 +147,7 @@ class ReservationStoriesTest {
         dbHelper.insert(dad)
         dbHelper.insert(child)
 
-        val familyKit = medKitService.create(mom.id)
+        val familyKit = medKitService.create(Uuid.random(), mom.id)
         val dadKey = inviting.invite(familyKit.id, mom.id)
         joining.joinByInvitation(dadKey, dad.id)
         val childKey = inviting.invite(familyKit.id, mom.id)

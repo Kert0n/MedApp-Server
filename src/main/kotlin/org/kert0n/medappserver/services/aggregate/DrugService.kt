@@ -63,6 +63,7 @@ class DrugService(
         logger.debug("Creating drug {} in medkit {}", request.name, medKitId)
 
         val drug = Drug(
+            id = request.id,
             medKitId = medKitId,
             name = request.name,
             quantity = Quantity(request.quantity, catalogue.requireQuantityUnit(request.quantityUnitId)),

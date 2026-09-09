@@ -158,7 +158,7 @@ class DecimalWireFormatTest {
                 .with(asUser(userId))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
-                    """{"name":"Aspirin","quantity":$quantity,""" +
+                    """{"id":"${Uuid.random()}","name":"Aspirin","quantity":$quantity,""" +
                         """"quantityUnitId":"${dbHelper.unit().id}"}"""
                 )
         )

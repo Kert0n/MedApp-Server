@@ -2,6 +2,8 @@ package org.kert0n.medappserver.controller
 
 import org.kert0n.medappserver.domain.AlreadyMember
 import org.kert0n.medappserver.domain.DomainRuleViolated
+import org.kert0n.medappserver.domain.DrugAlreadyExists
+import org.kert0n.medappserver.domain.MedKitAlreadyExists
 import org.kert0n.medappserver.domain.InvalidRegistrationSecret
 import org.kert0n.medappserver.domain.NoSuchReservation
 import org.kert0n.medappserver.domain.NotAMember
@@ -47,7 +49,10 @@ class ApiExceptionHandler {
             // Недоступная аптечка и несуществующая отвечают одинаково: иначе код ответа
             // выдавал бы существование чужой.
             is NotAMember -> HttpStatus.NOT_FOUND
-            is ReservationAlreadyExists, is AlreadyMember -> HttpStatus.CONFLICT
+            // Повтор создания с тем же придуманным клиентом идентификатором — в ту же корзину,
+            // что дубль брони и повторное вступление: конфликт, предусловием запроса не бывший.
+            is ReservationAlreadyExists, is AlreadyMember,
+            is MedKitAlreadyExists, is DrugAlreadyExists -> HttpStatus.CONFLICT
             // Предъявленная версия не совпала с той, что в базе. Различать «прислал
             // устаревшую» и «проиграл гонку» база не даёт — она отвечает одинаково, нулём
             // задетых строк, — да и клиенту разницы нет: и там и там решение принято по

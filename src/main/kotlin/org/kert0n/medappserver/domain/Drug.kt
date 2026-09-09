@@ -11,9 +11,11 @@ import kotlin.uuid.Uuid
  * О бронях упаковка не знает: сколько из своей брони оставить, решает её владелец.
  *
  * Состояние неизменяемо — команда возвращает следующее, а не меняет текущее.
+ *
+ * Идентификатор обязателен и умолчания не имеет: его придумывает клиент — см. [MedKit].
  */
 data class Drug(
-    val id: Uuid = Uuid.random(),
+    val id: Uuid,
     val medKitId: Uuid,
     val name: String,
     val quantity: Quantity,

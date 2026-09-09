@@ -61,8 +61,8 @@ class DrugMovementStoriesTest {
         val userData = User(id = Uuid.random(), hashedKey = "user_${Uuid.random()}")
         dbHelper.insert(userData)
 
-        val homeKit = medKitService.create(userData.id)
-        val travelKit = medKitService.create(userData.id)
+        val homeKit = medKitService.create(Uuid.random(), userData.id)
+        val travelKit = medKitService.create(Uuid.random(), userData.id)
 
         val painkiller = Drug(
             id = Uuid.random(), name = "Ibuprofen",
@@ -101,7 +101,7 @@ class DrugMovementStoriesTest {
         dbHelper.insert(anna)
         dbHelper.insert(bob)
 
-        val medkit = medKitService.create(anna.id)
+        val medkit = medKitService.create(Uuid.random(), anna.id)
         val shareKey = inviting.invite(medkit.id, anna.id)
         joining.joinByInvitation(shareKey, bob.id)
 
@@ -138,7 +138,7 @@ class DrugMovementStoriesTest {
         val userData = User(id = Uuid.random(), hashedKey = "user_${Uuid.random()}")
         dbHelper.insert(userData)
 
-        val medkit = medKitService.create(userData.id)
+        val medkit = medKitService.create(Uuid.random(), userData.id)
         val drugData = Drug(
             id = Uuid.random(), name = "Expired Drug",
             quantity = Quantity(qty(50.0), dbHelper.unit()), formType = null,
@@ -170,12 +170,12 @@ class DrugMovementStoriesTest {
         val bob = dbHelper.insert(User(id = Uuid.random(), hashedKey = "bob_${Uuid.random()}"))
         val charlie = dbHelper.insert(User(id = Uuid.random(), hashedKey = "charlie_${Uuid.random()}"))
 
-        val oldKit = medKitService.create(anna.id)
+        val oldKit = medKitService.create(Uuid.random(), anna.id)
         joining.joinByInvitation(inviting.invite(oldKit.id, anna.id), bob.id)
         joining.joinByInvitation(inviting.invite(oldKit.id, anna.id), charlie.id)
 
         // Новая аптечка — на Анну и Боба; Чарли в неё не входит.
-        val newKit = medKitService.create(anna.id)
+        val newKit = medKitService.create(Uuid.random(), anna.id)
         joining.joinByInvitation(inviting.invite(newKit.id, anna.id), bob.id)
 
         val drugData = dbHelper.insert(
@@ -212,8 +212,8 @@ class DrugMovementStoriesTest {
     fun `Story 16 - Moving single drug preserves it from orphan removal`() {
         val userData = dbHelper.insert(User(id = Uuid.random(), hashedKey = "user_${Uuid.random()}"))
 
-        val sourceKit = medKitService.create(userData.id)
-        val targetKit = medKitService.create(userData.id)
+        val sourceKit = medKitService.create(Uuid.random(), userData.id)
+        val targetKit = medKitService.create(Uuid.random(), userData.id)
 
         val drugDataToMove = dbHelper.insert(
             Drug(

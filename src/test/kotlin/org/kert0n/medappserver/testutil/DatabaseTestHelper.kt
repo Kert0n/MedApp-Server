@@ -71,6 +71,7 @@ class DatabaseTestHelper(
     @Transactional
     fun freshDrug(medKitId: Uuid, quantity: Double): Drug {
         val drug = Drug(
+            id = Uuid.random(),
             medKitId = medKitId,
             name = "Drug_${Uuid.random()}",
             quantity = Quantity(qty(quantity), unit()),
@@ -92,7 +93,7 @@ class DatabaseTestHelper(
      * через фасад: тем же входом, что и приложение.
      */
     @Transactional
-    fun freshMedKit(ownerId: Uuid): MedKit = medKitService.create(ownerId)
+    fun freshMedKit(ownerId: Uuid): MedKit = medKitService.create(Uuid.random(), ownerId)
 
     /**
      * Вступление под подготовку сценария — тем же путём, что и приложение.
@@ -153,6 +154,16 @@ class DatabaseTestHelper(
             MedKitMemberships.selectAll().where { MedKitMemberships.medKitId eq it[Drugs.medKitId] }
                 .first()[MedKitMemberships.userId]
         }) }
+
+    /** Сколько строк корня лежит под этим идентификатором: повтор не должен заводить вторую. */
+    @Transactional
+    fun medKitCount(medKitId: Uuid): Int =
+        MedKits.selectAll().where { MedKits.id eq medKitId }.count().toInt()
+
+    /** Идентификаторы упаковок аптечки, без оглядки на доступ. */
+    @Transactional
+    fun drugIdsIn(medKitId: Uuid): List<Uuid> =
+        Drugs.select(Drugs.id).where { Drugs.medKitId eq medKitId }.map { it[Drugs.id] }
 
     /**
      * Аптечка без оглядки на доступ — под проверки состояния.

@@ -202,6 +202,13 @@ paths:
       summary: Create a medicine kit
       description: Creates a kit owned by nobody in particular.
       operationId: createMedKit
+      requestBody:
+        description: Medicine kit to create
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MedKitCreateRequest"
+        required: true
       responses:
         "201":
           description: Kit created
@@ -209,6 +216,10 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/MedKitCreatedDTO"
+        "400":
+          description: Invalid request
+        "409":
+          description: A kit with this identifier already exists
         "401":
           description: Authentication is required
       security:
@@ -274,6 +285,8 @@ paths:
           description: Invalid request
         "404":
           description: Medicine kit is not accessible
+        "409":
+          description: A drug with this identifier already exists
         "401":
           description: Authentication is required
       security:
@@ -1032,6 +1045,19 @@ components:
       required:
       - amount
       - drugId
+    MedKitCreateRequest:
+      type: object
+      description: Request to create a medicine kit
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: "Client-invented identifier of the medicine kit. Repeating\
+            \ a request with the same identifier conflicts instead of creating a second\
+            \ kit, so a lost response can be retried"
+          example: 3f1c8a92-7b64-4d21-8e05-9a3d6c2f1b47
+      required:
+      - id
     MedKitCreatedDTO:
       type: object
       description: Created medicine kit
@@ -1056,6 +1082,13 @@ components:
       type: object
       description: Request to add a drug to a medicine kit
       properties:
+        id:
+          type: string
+          format: uuid
+          description: "Client-invented identifier of the drug. Repeating a request\
+            \ with the same identifier conflicts instead of creating a second drug,\
+            \ so a lost response can be retried"
+          example: 8d54b1e1-3a9a-4f0e-9d6b-2c1f5a7e4b30
         name:
           type: string
           description: Drug name
@@ -1112,6 +1145,7 @@ components:
           maxLength: 4000
           minLength: 0
       required:
+      - id
       - name
       - quantity
       - quantityUnitId

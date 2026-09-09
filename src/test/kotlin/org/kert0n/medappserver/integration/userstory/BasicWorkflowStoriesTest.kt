@@ -67,7 +67,7 @@ class BasicWorkflowStoriesTest {
         )
         dbHelper.insert(anna)
 
-        val homeMedkit = medKitService.create(anna.id)
+        val homeMedkit = medKitService.create(Uuid.random(), anna.id)
         assertNotNull(homeMedkit)
 
         val aspirin = Drug(
@@ -111,7 +111,7 @@ class BasicWorkflowStoriesTest {
     fun `Story 2 - Anna shares medkit with roommate Bob`() {
         val anna = User(id = Uuid.random(), hashedKey = "anna_${Uuid.random()}")
         dbHelper.insert(anna)
-        val medkit = medKitService.create(anna.id)
+        val medkit = medKitService.create(Uuid.random(), anna.id)
 
         val vitamins = Drug(
             id = Uuid.random(),
@@ -153,7 +153,7 @@ class BasicWorkflowStoriesTest {
         dbHelper.insert(anna)
         dbHelper.insert(bob)
 
-        val medkit = medKitService.create(anna.id)
+        val medkit = medKitService.create(Uuid.random(), anna.id)
         val shareKey = inviting.invite(medkit.id, anna.id)
         joining.joinByInvitation(shareKey, bob.id)
 
@@ -190,7 +190,7 @@ class BasicWorkflowStoriesTest {
     fun `Story 4 - User migrates drugs when deleting old medkit`() {
         val userData = User(id = Uuid.random(), hashedKey = "user_${Uuid.random()}")
         dbHelper.insert(userData)
-        val oldMedkit = medKitService.create(userData.id)
+        val oldMedkit = medKitService.create(Uuid.random(), userData.id)
 
         val drugData1 = Drug(
             id = Uuid.random(),
@@ -215,7 +215,7 @@ class BasicWorkflowStoriesTest {
         dbHelper.insert(drugData1)
         dbHelper.insert(drugData2)
 
-        val newMedkit = medKitService.create(userData.id)
+        val newMedkit = medKitService.create(Uuid.random(), userData.id)
 
         assertEquals(2, medKitService.allOfUser(userData.id).size)
 
@@ -241,7 +241,7 @@ class BasicWorkflowStoriesTest {
         val userData = User(id = Uuid.random(), hashedKey = "user_${Uuid.random()}")
         dbHelper.insert(userData)
 
-        val medkit = medKitService.create(userData.id)
+        val medkit = medKitService.create(Uuid.random(), userData.id)
         val drugData = Drug(
             id = Uuid.random(),
             name = "Limited Drug",

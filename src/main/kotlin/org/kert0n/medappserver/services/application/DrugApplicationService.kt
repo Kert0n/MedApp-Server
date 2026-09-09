@@ -127,6 +127,7 @@ class DrugApplicationService(
     }
 
     private fun DrugCreateRequest.toCommand() = NewDrug(
+        id = id,
         name = name,
         quantity = quantity,
         quantityUnitId = quantityUnitId,

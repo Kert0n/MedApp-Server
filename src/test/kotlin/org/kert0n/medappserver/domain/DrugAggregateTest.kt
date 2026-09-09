@@ -23,7 +23,8 @@ class DrugAggregateTest {
 
     private fun q(value: Double, unit: QuantityUnit = pills) = Quantity(qty(value), unit)
 
-    private fun drug(quantity: Double): Drug = Drug(medKitId = kit, name = "Aspirin", quantity = q(quantity))
+    private fun drug(quantity: Double): Drug =
+        Drug(id = Uuid.random(), medKitId = kit, name = "Aspirin", quantity = q(quantity))
 
     // ── Создание ─────────────────────────────────────────────────────────────────
 

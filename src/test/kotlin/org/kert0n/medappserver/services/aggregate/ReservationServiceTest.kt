@@ -2,6 +2,7 @@ package org.kert0n.medappserver.services.aggregate
 
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.uuid.Uuid
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.api.toDto
 import org.kert0n.medappserver.domain.DomainRuleViolated
@@ -31,7 +32,7 @@ class ReservationServiceTest {
     @Test
     fun `ofUser returns the caller's reservations`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
@@ -44,7 +45,7 @@ class ReservationServiceTest {
     @Test
     fun `a reservation lands on the drug it was made for`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
@@ -57,7 +58,7 @@ class ReservationServiceTest {
     @Test
     fun `get throws NOT_FOUND when there is no reservation`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
@@ -69,7 +70,7 @@ class ReservationServiceTest {
     @Test
     fun `view carries the reserved amount`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 

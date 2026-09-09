@@ -3,6 +3,8 @@ package org.kert0n.medappserver.db.store
 import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.kert0n.medappserver.domain.AlreadyMember
 import org.kert0n.medappserver.domain.DomainRuleViolated
+import org.kert0n.medappserver.domain.DrugAlreadyExists
+import org.kert0n.medappserver.domain.MedKitAlreadyExists
 import org.kert0n.medappserver.domain.ReservationAlreadyExists
 
 /**
@@ -18,7 +20,9 @@ import org.kert0n.medappserver.domain.ReservationAlreadyExists
  */
 private val REFUSALS: Map<String, () -> DomainRuleViolated> = mapOf(
     "reservations_pkey" to ::ReservationAlreadyExists,
-    "user_med_kits_pkey" to ::AlreadyMember
+    "user_med_kits_pkey" to ::AlreadyMember,
+    "med_kits_pkey" to ::MedKitAlreadyExists,
+    "user_drugs_pkey" to ::DrugAlreadyExists
 )
 
 /**
@@ -35,14 +39,21 @@ fun <T> translatingConstraints(write: () -> T): T =
     }
 
 /**
- * Имя ключа ищется в тексте ошибки, а не в поле драйвера.
+ * Имя ключа читается из текста ошибки целиком, а не ищется в нём подстрокой.
  *
  * Отдельным полем его отдаёт `PSQLException`, но драйвер подключён `runtimeOnly` — на
  * компиляции его типов нет, и тащить их туда ради одного поля значило бы завести зависимость
- * слоя хранения от конкретного драйвера. Ищем по известным именам: совпадение по имени ключа
- * надёжнее разбора формата сообщения, который у разных версий свой.
+ * слоя хранения от конкретного драйвера. Поэтому разбирается текст.
+ *
+ * Разбирается именно так, а не поиском известного имени в сообщении: имена ключей вкладываются
+ * друг в друга. `med_kits_pkey` — подстрока `user_med_kits_pkey`, и поиск подстрокой перевёл бы
+ * повторное вступление в аптечку в «аптечка уже существует», причём результат зависел бы от
+ * порядка объявления в [REFUSALS]. Postgres всегда закавычивает имя, и кавычки дают точную
+ * границу.
  */
 private fun ExposedSQLException.constraintName(): String? {
     val text = generateSequence(this as Throwable) { it.cause }.mapNotNull { it.message }.joinToString(" ")
-    return REFUSALS.keys.firstOrNull { text.contains(it) }
+    return CONSTRAINT_NAME.find(text)?.groupValues?.get(1)
 }
+
+private val CONSTRAINT_NAME = Regex("""constraint "([^"]+)"""")
