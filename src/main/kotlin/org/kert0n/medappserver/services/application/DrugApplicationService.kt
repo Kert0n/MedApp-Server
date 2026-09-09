@@ -111,8 +111,8 @@ class DrugApplicationService(
     @Transactional
     fun synchronise(drugId: Uuid, syncId: Uuid, request: DrugSyncRequest, userId: Uuid): DrugSnapshotDTO? {
         logger.debug("Synchronising drug {} by user {}, sync {}", drugId, userId, syncId)
-        // Упаковка читается здесь, скоуплено: дальше она идёт агрегатом, а не идентификатором,
-        // и доказывает доступ сама.
+        // Упаковку читает сам сценарий — под удержанным корнем и после него: синхронизация
+        // трогает и упаковку, и бронь, поэтому доступ ей нужен до первой из этих записей.
         val left = synchronisation.apply(
             syncId, drugId, userId,
             DrugSynchronisation.SyncRequest(

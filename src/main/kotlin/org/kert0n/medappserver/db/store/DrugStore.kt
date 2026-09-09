@@ -16,7 +16,6 @@ import org.kert0n.medappserver.db.tables.Drugs
 import org.kert0n.medappserver.db.tables.FormTypes
 import org.kert0n.medappserver.db.tables.QuantityUnits
 import org.kert0n.medappserver.domain.Drug
-import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.StaleVersion
 import org.kert0n.medappserver.domain.FormType
 import org.kert0n.medappserver.domain.Quantity
@@ -29,8 +28,9 @@ import org.springframework.stereotype.Component
  * Наружу — только доменные типы. Броней здесь нет: упаковка ими не владеет.
  *
  * Правила обращения — в `Access.kt`, одним списком на весь пакет. Коротко: чтения называют
- * вызывающего и скоупятся запросом, команды принимают агрегат, а разделы ниже подписаны потому,
- * что обещание относится к публичной поверхности, а не к приватным помощникам.
+ * вызывающего и скоупятся запросом; команды пишут по уже принятому решению — доступ удержал и
+ * состояние перечитал сценарий. Разделы ниже подписаны потому, что обещание относится к
+ * публичной поверхности, а не к приватным помощникам.
  *
  * Каждое чтение соединяется со словарями, потому что доменное количество несёт имя единицы.
  * Соединение написано один раз, там же, где скоуп, и видно в самом запросе — а не спрятано в
@@ -52,7 +52,7 @@ class DrugStore {
     fun findAllOfUser(userId: Uuid): List<Drug> =
         drugsAccessibleTo(userId).orderBy(Drugs.name).map { it.toDomain() }
 
-    // ── Команды: принимают агрегат — доступ к нему уже доказан ───────────────────
+    // ── Команды: пишут под доступом, который удерживает вызывающий сценарий ─────
 
     fun insert(drug: Drug) {
         Drugs.insert { it.write(drug) }
@@ -91,8 +91,8 @@ class DrugStore {
     /**
      * Всё содержимое аптечки — в другую, одним запросом. Брони убирает вызывающий.
      *
-     * Обе аптечки приходят агрегатами, как и везде в этом разделе: вызывающий их прочитал, и
-     * это его доказательство доступа к обеим.
+     * Оба корня к этому моменту удерживает сценарий удаления: идентификаторы здесь — уже
+     * принятое им решение, а не то, что надо перепроверить.
      */
     fun moveAllToMedKit(sourceMedKitId: Uuid, targetMedKitId: Uuid) {
         Drugs.update({ Drugs.medKitId eq sourceMedKitId }) { it[medKitId] = targetMedKitId }

@@ -8,7 +8,12 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Propagation.MANDATORY
 import org.springframework.transaction.annotation.Transactional
 
-/** Изменение существующей брони под удерживаемым доступом к её упаковке. */
+/**
+ * Изменение существующей брони под удерживаемым доступом к её упаковке.
+ *
+ * `content` здесь зовётся ради удержания и перечитывания упаковки, а его результат не нужен:
+ * бронь ищется по паре «участник и упаковка», и эту форму `ReservationService` уже умеет.
+ */
 @Service
 class ReservationChanging(
     private val access: DrugCommandAccess,
@@ -18,12 +23,12 @@ class ReservationChanging(
     @Transactional(propagation = MANDATORY)
     fun changeTo(userId: Uuid, drugId: Uuid, amount: BigDecimal, stated: Long): Reservation {
         access.content(drugId, userId)
-        return reservations.changeTo(reservations.get(userId, drugId), amount, stated)
+        return reservations.changeTo(userId, drugId, amount, stated)
     }
 
     @Transactional(propagation = MANDATORY)
     fun cancel(userId: Uuid, drugId: Uuid, stated: Long) {
         access.content(drugId, userId)
-        reservations.cancel(reservations.get(userId, drugId), stated)
+        reservations.cancel(userId, drugId, stated)
     }
 }

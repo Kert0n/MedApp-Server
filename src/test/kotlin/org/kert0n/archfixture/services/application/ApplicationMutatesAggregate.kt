@@ -1,4 +1,4 @@
-package org.kert0n.medappserver.architecturefixture.services.application
+package org.kert0n.archfixture.services.application
 
 import org.kert0n.medappserver.services.aggregate.DrugService
 

@@ -4,7 +4,6 @@ import java.math.BigDecimal
 import kotlin.uuid.Uuid
 import org.kert0n.medappserver.db.store.ReservationStore
 import org.kert0n.medappserver.domain.Drug
-import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.NoSuchReservation
 import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.Quantity

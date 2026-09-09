@@ -25,7 +25,6 @@ import org.kert0n.medappserver.db.tables.MedKitMemberships
 import org.kert0n.medappserver.db.tables.QuantityUnits
 import org.kert0n.medappserver.db.tables.Reservations
 import org.kert0n.medappserver.domain.Drug
-import org.kert0n.medappserver.domain.MedKit
 import org.kert0n.medappserver.domain.Quantity
 import org.kert0n.medappserver.domain.QuantityUnit
 import org.kert0n.medappserver.domain.Reservation
@@ -40,8 +39,9 @@ import org.springframework.stereotype.Component
  * упаковкой: бронь в «штуках вообще» смысла не имеет.
  *
  * Правила обращения — в `Access.kt`, одним списком на весь пакет. Коротко: чтения называют
- * вызывающего и скоупятся запросом, команды принимают агрегат, а разделы ниже подписаны потому,
- * что обещание относится к публичной поверхности, а не к приватным помощникам.
+ * вызывающего и скоупятся запросом; команды пишут по уже принятому решению — доступ удержал и
+ * состояние перечитал сценарий. Разделы ниже подписаны потому, что обещание относится к
+ * публичной поверхности, а не к приватным помощникам.
  */
 @Component
 class ReservationStore {
@@ -111,7 +111,7 @@ class ReservationStore {
         return ReservationSnapshot.of(drug, findAllOfDrugs(listOf(drug.id), userId), userId, version)
     }
 
-    // ── Команды: принимают агрегат — доступ к нему уже доказан ───────────────────
+    // ── Команды: пишут под доступом, который удерживает вызывающий сценарий ─────
 
     /**
      * Пачка приходит доменным объектом, а не поднимается из чужого хранилища.

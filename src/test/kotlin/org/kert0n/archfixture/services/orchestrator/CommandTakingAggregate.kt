@@ -1,4 +1,4 @@
-package org.kert0n.medappserver.architecturefixture.services.orchestrator
+package org.kert0n.archfixture.services.orchestrator
 
 import org.kert0n.medappserver.domain.Drug
 

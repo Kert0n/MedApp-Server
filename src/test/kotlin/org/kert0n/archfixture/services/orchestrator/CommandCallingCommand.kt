@@ -1,4 +1,4 @@
-package org.kert0n.medappserver.architecturefixture.services.orchestrator
+package org.kert0n.archfixture.services.orchestrator
 
 import kotlin.uuid.Uuid
 import org.kert0n.medappserver.services.orchestrator.MedKitLeaving

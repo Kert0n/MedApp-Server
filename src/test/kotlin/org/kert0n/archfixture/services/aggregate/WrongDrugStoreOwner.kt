@@ -1,4 +1,4 @@
-package org.kert0n.medappserver.architecturefixture.services.aggregate
+package org.kert0n.archfixture.services.aggregate
 
 import org.kert0n.medappserver.db.store.DrugStore
 

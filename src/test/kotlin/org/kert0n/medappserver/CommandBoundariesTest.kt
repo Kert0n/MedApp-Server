@@ -15,11 +15,11 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
 import org.springframework.stereotype.Service
-import org.kert0n.medappserver.architecturefixture.services.aggregate.WrongDrugStoreOwner
-import org.kert0n.medappserver.architecturefixture.services.application.ApplicationMutatesAggregate
-import org.kert0n.medappserver.architecturefixture.services.application.ApplicationUsesRootAccess
-import org.kert0n.medappserver.architecturefixture.services.orchestrator.CommandCallingCommand
-import org.kert0n.medappserver.architecturefixture.services.orchestrator.CommandTakingAggregate
+import org.kert0n.archfixture.services.aggregate.WrongDrugStoreOwner
+import org.kert0n.archfixture.services.application.ApplicationMutatesAggregate
+import org.kert0n.archfixture.services.application.ApplicationUsesRootAccess
+import org.kert0n.archfixture.services.orchestrator.CommandCallingCommand
+import org.kert0n.archfixture.services.orchestrator.CommandTakingAggregate
 
 /**
  * Командная граница проверяется по типам и вызовам, а не по тексту исходников.
@@ -32,6 +32,11 @@ import org.kert0n.medappserver.architecturefixture.services.orchestrator.Command
  * Про видимость: `internal` в JVM публичен и отличается только манглингом имени
  * (`moveAllUnderAccess$org_kert0n_MedAppServer`). Там, где важна именно Kotlin-видимость,
  * проверка идёт через `kotlin-reflect`, а не через ArchUnit.
+ *
+ * Фикстуры лежат в `org.kert0n.archfixture`, вне корня компонентного сканирования. Иначе
+ * помеченная `@Service` фикстура поднималась бы настоящим бином в каждом `@SpringBootTest`, и
+ * первая же неудовлетворимая зависимость роняла бы контекст всему интеграционному набору.
+ * Шаблоны пакетов вида `..services.orchestrator..` совпадают с ними по-прежнему.
  */
 class CommandBoundariesTest {
 
