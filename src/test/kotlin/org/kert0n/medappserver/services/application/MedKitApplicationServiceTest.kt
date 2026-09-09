@@ -63,12 +63,12 @@ class MedKitApplicationServiceTest {
     @Test
     fun `createInMedKit creates drug in user medkit`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         dbHelper.flushAndClear()
 
         val drug = drugs.createInMedKit(
             kit.id,
-            DrugCreateRequest(name = "Aspirin", quantity = qty(100.0), quantityUnitId = dbHelper.unit().id),
+            DrugCreateRequest(Uuid.random(), name = "Aspirin", quantity = qty(100.0), quantityUnitId = dbHelper.unit().id),
             alice.id
         )
 
@@ -80,13 +80,13 @@ class MedKitApplicationServiceTest {
     fun `createDrugInMedKit fails for unauthorized user`() {
         val alice = dbHelper.freshUser("alice")
         val eve = dbHelper.freshUser("eve")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         dbHelper.flushAndClear()
 
         assertFailsWith<DomainRuleViolated> {
             drugs.createInMedKit(
                 kit.id,
-                DrugCreateRequest(name = "Drug", quantity = qty(10.0), quantityUnitId = dbHelper.unit().id),
+                DrugCreateRequest(Uuid.random(), name = "Drug", quantity = qty(10.0), quantityUnitId = dbHelper.unit().id),
                 eve.id
             )
         }
@@ -97,8 +97,8 @@ class MedKitApplicationServiceTest {
     @Test
     fun `moveToMedKit moves drug to target medkit`() {
         val alice = dbHelper.freshUser("alice")
-        val kit1 = medKitService.create(alice.id)
-        val kit2 = medKitService.create(alice.id)
+        val kit1 = medKitService.create(Uuid.random(), alice.id)
+        val kit2 = medKitService.create(Uuid.random(), alice.id)
         val drug = dbHelper.freshDrug(kit1.id, 50.0)
         dbHelper.flushAndClear()
 
@@ -110,10 +110,10 @@ class MedKitApplicationServiceTest {
     fun `moveDrug strips access from unauthorized users`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val sourceKit = medKitService.create(alice.id)
+        val sourceKit = medKitService.create(Uuid.random(), alice.id)
         joining.joinByInvitation(inviting.invite(sourceKit.id, alice.id), bob.id)
 
-        val targetKit = medKitService.create(alice.id) // Только Алиса
+        val targetKit = medKitService.create(Uuid.random(), alice.id) // Только Алиса
         val drug = dbHelper.freshDrug(sourceKit.id, 50.0)
         dbHelper.flushAndClear()
 
@@ -132,13 +132,13 @@ class MedKitApplicationServiceTest {
     fun `moveToMedKit works without a reservation of one's own`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kitA = medKitService.create(alice.id)
+        val kitA = medKitService.create(Uuid.random(), alice.id)
         joining.joinByInvitation(inviting.invite(kitA.id, alice.id), bob.id)
 
         val drug = drugService.create(
-            NewDrug("Shared Meds", qty(10.0), dbHelper.unit().id), kitA.id
+            NewDrug(Uuid.random(), "Shared Meds", qty(10.0), dbHelper.unit().id), kitA.id
         )
-        val kitB = medKitService.create(bob.id)
+        val kitB = medKitService.create(Uuid.random(), bob.id)
         dbHelper.flushAndClear()
 
         assertDoesNotThrow {
@@ -151,7 +151,7 @@ class MedKitApplicationServiceTest {
     @Test
     fun `moveDrug throws when target medkit not found`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
@@ -166,7 +166,7 @@ class MedKitApplicationServiceTest {
     fun `leave removes user and their reservations`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         dbHelper.join(kit.id, alice.id, bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
@@ -187,7 +187,7 @@ class MedKitApplicationServiceTest {
     fun `leave recalculates only snapshots touched by departing member`() {
         val alice = dbHelper.freshUser("leave-snapshot-a")
         val bob = dbHelper.freshUser("leave-snapshot-b")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         dbHelper.join(kit.id, alice.id, bob.id)
         val touched = dbHelper.freshDrug(kit.id, 100.0)
         val untouched = dbHelper.freshDrug(kit.id, 100.0)
@@ -215,7 +215,7 @@ class MedKitApplicationServiceTest {
     fun `reservation snapshot token becomes stale after another member leaves`() {
         val alice = dbHelper.freshUser("leave-token-a")
         val bob = dbHelper.freshUser("leave-token-b")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         dbHelper.join(kit.id, alice.id, bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.reserve(alice.id, drug.id, qty(7.0))
@@ -232,7 +232,7 @@ class MedKitApplicationServiceTest {
     @Test
     fun `last member leaves with reservations and removes whole medkit`() {
         val alice = dbHelper.freshUser("leave-last")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.reserve(alice.id, drug.id, qty(5.0))
 
@@ -247,7 +247,7 @@ class MedKitApplicationServiceTest {
     fun `late failure rolls back reservations snapshot and membership together`() {
         val alice = dbHelper.freshUser("leave-rollback-a")
         val bob = dbHelper.freshUser("leave-rollback-b")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         dbHelper.join(kit.id, alice.id, bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.reserve(bob.id, drug.id, qty(5.0))
@@ -279,7 +279,7 @@ class MedKitApplicationServiceTest {
     @Test
     fun `delete without transfer removes medkit`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
@@ -294,10 +294,10 @@ class MedKitApplicationServiceTest {
     @Test
     fun `delete with transfer migrates drugs to target medkit`() {
         val alice = dbHelper.freshUser("alice")
-        val kitA = medKitService.create(alice.id)
-        val kitB = medKitService.create(alice.id)
+        val kitA = medKitService.create(Uuid.random(), alice.id)
+        val kitB = medKitService.create(Uuid.random(), alice.id)
         val drug = drugs.createInMedKit(
-            kitA.id, DrugCreateRequest("Migrating Drug", qty(10.0), dbHelper.unit().id), alice.id
+            kitA.id, DrugCreateRequest(Uuid.random(), "Migrating Drug", qty(10.0), dbHelper.unit().id), alice.id
         )
         dbHelper.flushAndClear()
 
@@ -314,10 +314,10 @@ class MedKitApplicationServiceTest {
     fun `delete with transfer strips reservations of those left out`() {
         val alice = dbHelper.freshUser("alice")
         val charlie = dbHelper.freshUser("charlie")
-        val oldKit = medKitService.create(alice.id)
+        val oldKit = medKitService.create(Uuid.random(), alice.id)
         joining.joinByInvitation(inviting.invite(oldKit.id, alice.id), charlie.id)
 
-        val newKit = medKitService.create(alice.id) // Только Алиса
+        val newKit = medKitService.create(Uuid.random(), alice.id) // Только Алиса
 
         val drug = dbHelper.freshDrug(oldKit.id, 90.0)
         dbHelper.flushAndClear()
@@ -348,13 +348,13 @@ class MedKitApplicationServiceTest {
     @Test
     fun `read returns the kit with its drugs`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         drugService.create(
-            NewDrug(name = "Drug A", quantity = qty(50.0), quantityUnitId = dbHelper.unit().id),
+            NewDrug(Uuid.random(), name = "Drug A", quantity = qty(50.0), quantityUnitId = dbHelper.unit().id),
             kit.id
         )
         drugService.create(
-            NewDrug(name = "Drug B", quantity = qty(30.0), quantityUnitId = dbHelper.unit().id),
+            NewDrug(Uuid.random(), name = "Drug B", quantity = qty(30.0), quantityUnitId = dbHelper.unit().id),
             kit.id
         )
         dbHelper.flushAndClear()

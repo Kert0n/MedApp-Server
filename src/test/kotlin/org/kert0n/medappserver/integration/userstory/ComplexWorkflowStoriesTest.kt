@@ -78,7 +78,7 @@ class ComplexWorkflowStoriesTest {
         val bob = dbHelper.insert(User(id = Uuid.random(), hashedKey = "bob_${Uuid.random()}"))
         val charlie = dbHelper.insert(User(id = Uuid.random(), hashedKey = "charlie_${Uuid.random()}"))
 
-        val homeKit = medKitService.create(alice.id)
+        val homeKit = medKitService.create(Uuid.random(), alice.id)
         joining.joinByInvitation(inviting.invite(homeKit.id, alice.id), bob.id)
         joining.joinByInvitation(inviting.invite(homeKit.id, alice.id), charlie.id)
 
@@ -126,7 +126,7 @@ class ComplexWorkflowStoriesTest {
         assertQty(20.0, aliceAllergyReservation, "бронь Алисы осталась прежней")
 
         // ── Фаза 4: переезд одной пачки ──
-        val travelKit = medKitService.create(alice.id)
+        val travelKit = medKitService.create(Uuid.random(), alice.id)
 
 
         drugs.moveToMedKit(painkillers.id, travelKit.id, dbHelper.drugVersion(painkillers.id), alice.id)
@@ -140,7 +140,7 @@ class ComplexWorkflowStoriesTest {
         assertEquals(travelKit.id, movedPainkillers.medKitId, "Drug successfully moved")
 
         // ── Фаза 5: удаление аптечки с переносом содержимого ──
-        val duoKit = medKitService.create(alice.id)
+        val duoKit = medKitService.create(Uuid.random(), alice.id)
         joining.joinByInvitation(inviting.invite(duoKit.id, alice.id), bob.id)
 
 
@@ -189,12 +189,11 @@ class ComplexWorkflowStoriesTest {
                 val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
 
-        val sourceKit = medKitService.create(alice.id)
-        val targetKit = medKitService.create(alice.id) // Сюда доступ есть только у Алисы
+        val sourceKit = medKitService.create(Uuid.random(), alice.id)
+        val targetKit = medKitService.create(Uuid.random(), alice.id) // Сюда доступ есть только у Алисы
         joining.joinByInvitation(inviting.invite(sourceKit.id, alice.id), bob.id)
 
-        val createDrugDto = DrugCreateRequest(
-            name = "LifePill", quantity = qty(100.0), quantityUnitId = dbHelper.unit().id
+        val createDrugDto = DrugCreateRequest(Uuid.random(), name = "LifePill", quantity = qty(100.0), quantityUnitId = dbHelper.unit().id
             )
         val drug = drugs.createInMedKit(sourceKit.id, createDrugDto, alice.id).drug
         dbHelper.flushAndClear()
@@ -252,14 +251,14 @@ class ComplexWorkflowStoriesTest {
         val alice = createTestUser("alice")
         val bob = createTestUser("bob")
 
-        val kitA = medKitService.create(alice.id)
+        val kitA = medKitService.create(Uuid.random(), alice.id)
         val shareKey = inviting.invite(kitA.id, alice.id)
         joining.joinByInvitation(shareKey, bob.id)
 
-        val drug = drugService.create(NewDrug("Shared Meds", qty(10.0), dbHelper.unit().id), kitA.id)
+        val drug = drugService.create(NewDrug(Uuid.random(), "Shared Meds", qty(10.0), dbHelper.unit().id), kitA.id)
         dbHelper.flushAndClear()
 
-        val kitB = medKitService.create(bob.id)
+        val kitB = medKitService.create(Uuid.random(), bob.id)
 
         // Переезжает Боб, и своей брони на пачку у него нет: право даёт членство, а не бронь.
         assertDoesNotThrow {
@@ -274,17 +273,17 @@ class ComplexWorkflowStoriesTest {
     fun `Verify movement strips the reservations of those who lost access`() {
         val alice = createTestUser("alice")
         val bob = createTestUser("bob")
-        val kitA = medKitService.create(alice.id)
+        val kitA = medKitService.create(Uuid.random(), alice.id)
         joining.joinByInvitation(inviting.invite(kitA.id, alice.id), bob.id)
 
-        val drug = drugService.create(NewDrug("Audit Meds", qty(10.0), dbHelper.unit().id), kitA.id)
+        val drug = drugService.create(NewDrug(Uuid.random(), "Audit Meds", qty(10.0), dbHelper.unit().id), kitA.id)
         dbHelper.flushAndClear()
 
         dbHelper.reserve(alice.id, drug.id, qty(5.0))
         dbHelper.reserve(bob.id, drug.id, qty(2.0))
 
         // Личная аптечка Алисы: Боба в ней нет.
-        val kitB = medKitService.create(alice.id)
+        val kitB = medKitService.create(Uuid.random(), alice.id)
         drugs.moveToMedKit(drug.id, kitB.id, dbHelper.drugVersion(drug.id), alice.id)
         val aliceReservation = dbHelper.userReservation(alice.id, drug.id)
         val bobReservation = dbHelper.userReservation(bob.id, drug.id)
@@ -295,10 +294,10 @@ class ComplexWorkflowStoriesTest {
     @Test
     fun `Verify drug migration during MedKit deletion`() {
         val alice = createTestUser("alice")
-        val kitA = medKitService.create(alice.id)
-        val kitB = medKitService.create(alice.id)
+        val kitA = medKitService.create(Uuid.random(), alice.id)
+        val kitB = medKitService.create(Uuid.random(), alice.id)
         val drug =
-            drugs.createInMedKit(kitA.id, DrugCreateRequest("Migrating Meds", qty(10.0), dbHelper.unit().id), alice.id)
+            drugs.createInMedKit(kitA.id, DrugCreateRequest(Uuid.random(), "Migrating Meds", qty(10.0), dbHelper.unit().id), alice.id)
 
         medKits.delete(kitA.id, alice.id, kitB.id)
         val survivingDrug = dbHelper.drug(drug.drug.id)

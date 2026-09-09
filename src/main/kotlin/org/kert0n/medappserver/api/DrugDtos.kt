@@ -82,10 +82,21 @@ data class DrugDTO(
     val version: Long
 )
 
-/** Аптечка задаётся путём, поэтому её идентификатора в теле нет. */
+/**
+ * Аптечка задаётся путём, поэтому её идентификатора в теле нет. Идентификатор самой упаковки —
+ * наоборот, в теле: его придумывает клиент.
+ */
 @Schema(description = "Request to add a drug to a medicine kit")
 @Serializable
 data class DrugCreateRequest(
+    @field:NotNull
+    @Schema(
+        description = "Client-invented identifier of the drug. Repeating a request with the same " +
+            "identifier conflicts instead of creating a second drug, so a lost response can be retried",
+        example = "8d54b1e1-3a9a-4f0e-9d6b-2c1f5a7e4b30"
+    )
+    val id: Uuid,
+
     @field:NotNull
     @field:Size(min = 1, max = 300)
     @Schema(description = "Drug name", example = "Aspirin")

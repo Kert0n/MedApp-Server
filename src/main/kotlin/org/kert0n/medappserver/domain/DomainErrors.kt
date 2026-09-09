@@ -20,6 +20,21 @@ class ReservationAlreadyExists : DomainRuleViolated("Reservation already exists 
 /** Брони нет. */
 class NoSuchReservation : DomainRuleViolated("There is no such reservation")
 
+/**
+ * Идентификатор создаваемого ресурса уже занят.
+ *
+ * Идентификаторы придумывает клиент, поэтому повтор запроса приходит с тем же — и упирается в
+ * первичный ключ. Это и есть защита от второй копии, когда ответ на первый запрос потерялся.
+ *
+ * Про существование чужого ресурса ответ действительно сообщает, и это принято осознанно:
+ * UUIDv4 не перебирается, а тот, кто прислал не им придуманный идентификатор, знает его откуда-то
+ * ещё. Сказано при этом только «идентификатор занят» — чей ресурс и что в нём, узнать нельзя.
+ */
+class MedKitAlreadyExists : DomainRuleViolated("Medicine kit with this identifier already exists")
+
+/** То же для упаковки — см. [MedKitAlreadyExists]. */
+class DrugAlreadyExists : DomainRuleViolated("Drug with this identifier already exists")
+
 /** Пользователь не участник этой аптечки — или самой аптечки нет. */
 class NotAMember : DomainRuleViolated("Medicine kit is not accessible")
 

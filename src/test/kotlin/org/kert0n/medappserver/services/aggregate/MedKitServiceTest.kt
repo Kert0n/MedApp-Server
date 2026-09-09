@@ -41,7 +41,7 @@ class MedKitServiceTest {
     @Test
     fun `create creates medkit with user`() {
         val alice = dbHelper.freshUser("alice")
-        val medKit = medKitService.create(alice.id)
+        val medKit = medKitService.create(Uuid.random(), alice.id)
         dbHelper.flushAndClear()
 
         assertNotNull(medKit.id)
@@ -61,7 +61,7 @@ class MedKitServiceTest {
     fun `get throws when user has no access`() {
         val alice = dbHelper.freshUser("alice")
         val eve = dbHelper.freshUser("eve")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         dbHelper.flushAndClear()
 
         assertFailsWith<DomainRuleViolated> {
@@ -74,8 +74,8 @@ class MedKitServiceTest {
     @Test
     fun `allOfUser returns medkits of user`() {
         val alice = dbHelper.freshUser("alice")
-        medKitService.create(alice.id)
-        medKitService.create(alice.id)
+        medKitService.create(Uuid.random(), alice.id)
+        medKitService.create(Uuid.random(), alice.id)
         dbHelper.flushAndClear()
 
         assertEquals(2, medKitService.allOfUser(alice.id).size)
@@ -85,7 +85,7 @@ class MedKitServiceTest {
     @Test
     fun `allOfUser returns the kit with its user count`() {
         val alice = dbHelper.freshUser("alice")
-        medKitService.create(alice.id)
+        medKitService.create(Uuid.random(), alice.id)
         dbHelper.flushAndClear()
 
         // Аптечка приходит агрегатом: счётчик участников получается из неё самой.
@@ -99,7 +99,7 @@ class MedKitServiceTest {
     fun `joinByInvitation adds user and invalidates key`() {
         val owner = dbHelper.freshUser("owner")
         val joiner = dbHelper.freshUser("joiner")
-        val kit = medKitService.create(owner.id)
+        val kit = medKitService.create(Uuid.random(), owner.id)
         dbHelper.flushAndClear()
 
         val key = inviting.invite(kit.id, owner.id)
@@ -131,7 +131,7 @@ class MedKitServiceTest {
     fun `join adds second user`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         dbHelper.flushAndClear()
 
         dbHelper.join(kit.id, alice.id, bob.id)
@@ -143,7 +143,7 @@ class MedKitServiceTest {
     @Test
     fun `join throws when user is already a member`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         dbHelper.flushAndClear()
 
         assertFailsWith<DomainRuleViolated> {
@@ -157,7 +157,7 @@ class MedKitServiceTest {
     fun `leave keeps medkit when other users remain`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         dbHelper.join(kit.id, alice.id, bob.id)
         dbHelper.flushAndClear()
 
@@ -173,7 +173,7 @@ class MedKitServiceTest {
     @Test
     fun `leave deletes medkit when last user leaves`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         dbHelper.flushAndClear()
 
         leaving.leave(kit.id, alice.id)

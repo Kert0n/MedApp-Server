@@ -4,6 +4,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.uuid.Uuid
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.services.aggregate.DrugService
@@ -38,7 +39,7 @@ class ReadProjectionTest {
     @Test
     fun `сумма планов складывается по всем участникам`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         val bob = dbHelper.freshUser("bob")
         joining.joinByInvitation(inviting.invite(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
@@ -57,7 +58,7 @@ class ReadProjectionTest {
     @Test
     fun `упаковка без броней отдаёт нулевую сумму, а не отсутствие строки`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         val drug = dbHelper.freshDrug(kit.id, 7.0)
         dbHelper.flushAndClear()
 
@@ -71,7 +72,7 @@ class ReadProjectionTest {
     fun `чужой препарат не читается`() {
         val alice = dbHelper.freshUser("alice")
         val eve = dbHelper.freshUser("eve")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
@@ -81,10 +82,10 @@ class ReadProjectionTest {
     @Test
     fun `снимок собирает препараты всех аптечек пользователя одним запросом`() {
         val alice = dbHelper.freshUser("alice")
-        val first = medKitService.create(alice.id)
-        val second = medKitService.create(alice.id)
+        val first = medKitService.create(Uuid.random(), alice.id)
+        val second = medKitService.create(Uuid.random(), alice.id)
         val outsider = dbHelper.freshUser("outsider")
-        val foreign = medKitService.create(outsider.id)
+        val foreign = medKitService.create(Uuid.random(), outsider.id)
 
         dbHelper.freshDrug(first.id, 1.0)
         dbHelper.freshDrug(first.id, 2.0)
@@ -103,7 +104,7 @@ class ReadProjectionTest {
     @Test
     fun `план читается только своим владельцем`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         val bob = dbHelper.freshUser("bob")
         joining.joinByInvitation(inviting.invite(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)

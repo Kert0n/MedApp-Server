@@ -2,6 +2,7 @@ package org.kert0n.medappserver.api
 
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.NotNull
 import kotlin.uuid.Uuid
 import kotlinx.serialization.Serializable
 
@@ -29,6 +30,24 @@ data class MedKitSummaryDTO(
      */
     @Schema(description = "Identifiers of the drugs in the kit")
     val drugIds: Set<Uuid>
+)
+
+/**
+ * Идентификатор аптечки придумывает клиент.
+ *
+ * Тело у создания появилось именно ради него: зная идентификатор заранее, клиент может обратиться
+ * к аптечке, даже если ответ на создание до него не доехал, и безопасно повторить запрос.
+ */
+@Schema(description = "Request to create a medicine kit")
+@Serializable
+data class MedKitCreateRequest(
+    @field:NotNull
+    @Schema(
+        description = "Client-invented identifier of the medicine kit. Repeating a request with the " +
+            "same identifier conflicts instead of creating a second kit, so a lost response can be retried",
+        example = "3f1c8a92-7b64-4d21-8e05-9a3d6c2f1b47"
+    )
+    val id: Uuid
 )
 
 @Schema(description = "Created medicine kit")

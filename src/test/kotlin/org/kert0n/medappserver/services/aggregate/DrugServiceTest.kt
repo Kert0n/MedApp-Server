@@ -57,7 +57,7 @@ class DrugServiceTest {
     fun `get throws when user has no access`() {
         val alice = dbHelper.freshUser("alice")
         val eve = dbHelper.freshUser("eve")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
@@ -71,7 +71,7 @@ class DrugServiceTest {
     @Test
     fun `ofMedKit returns drugs in medkit`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.freshDrug(kit.id, 20.0)
         dbHelper.flushAndClear()
@@ -83,10 +83,10 @@ class DrugServiceTest {
     fun `allOf returns drugs from every kit the user is in`() {
         val alice = dbHelper.freshUser("alice")
         val eve = dbHelper.freshUser("eve")
-        val home = medKitService.create(alice.id)
-        val travel = medKitService.create(alice.id)
+        val home = medKitService.create(Uuid.random(), alice.id)
+        val travel = medKitService.create(Uuid.random(), alice.id)
         val mine = listOf(dbHelper.freshDrug(home.id, 100.0), dbHelper.freshDrug(travel.id, 5.0))
-        dbHelper.freshDrug(medKitService.create(eve.id).id, 7.0)
+        dbHelper.freshDrug(medKitService.create(Uuid.random(), eve.id).id, 7.0)
         dbHelper.flushAndClear()
 
         // Своё — по обеим аптечкам сразу; чужая пачка в выдачу не попадает, хотя лежит рядом.
@@ -98,11 +98,11 @@ class DrugServiceTest {
     @Test
     fun `create saves and returns drug`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         dbHelper.flushAndClear()
 
         val drug = drugService.create(
-            NewDrug(name = "Aspirin", quantity = qty(100.0), quantityUnitId = dbHelper.unit().id),
+            NewDrug(Uuid.random(), name = "Aspirin", quantity = qty(100.0), quantityUnitId = dbHelper.unit().id),
             kit.id
         )
 
@@ -117,7 +117,7 @@ class DrugServiceTest {
     @Test
     fun `update with all nulls leaves drug unchanged`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
@@ -131,7 +131,7 @@ class DrugServiceTest {
     @Test
     fun `update with all fields populates every property`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         val drug = dbHelper.freshDrug(kit.id, 50.0)
         dbHelper.flushAndClear()
 
@@ -155,7 +155,7 @@ class DrugServiceTest {
     @Test
     fun `update increasing quantity bypasses reduction`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
@@ -173,7 +173,7 @@ class DrugServiceTest {
     fun `update decreasing quantity leaves reservations alone`() {
         val alice = dbHelper.freshUser("alice")
         val bob = dbHelper.freshUser("bob")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         joining.joinByInvitation(inviting.invite(kit.id, alice.id), bob.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.reserve(alice.id, drug.id, qty(60.0))
@@ -193,7 +193,7 @@ class DrugServiceTest {
     @Test
     fun `update refuses a non-positive quantity`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
@@ -207,7 +207,7 @@ class DrugServiceTest {
     @Test
     fun `delete removes drug`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         val drug = dbHelper.freshDrug(kit.id, 50.0)
         dbHelper.flushAndClear()
 
@@ -222,7 +222,7 @@ class DrugServiceTest {
     @Test
     fun `consume reduces quantity`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         val drug = dbHelper.freshDrug(kit.id, 100.0)
         dbHelper.flushAndClear()
 
@@ -233,7 +233,7 @@ class DrugServiceTest {
     @Test
     fun `consume throws when insufficient quantity`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.flushAndClear()
 
@@ -247,9 +247,9 @@ class DrugServiceTest {
     @Test
     fun `представление упаковки несёт заявленное бронями`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         val drug = drugService.create(
-            NewDrug(name = "Drug", quantity = qty(100.0), quantityUnitId = dbHelper.unit().id),
+            NewDrug(Uuid.random(), name = "Drug", quantity = qty(100.0), quantityUnitId = dbHelper.unit().id),
             kit.id
         )
         dbHelper.flushAndClear()

@@ -45,8 +45,9 @@ class MedKitStore {
 
     // ── Команды: меняют одну строку, а не снимок всего множества ─────────────────
 
+    /** Идентификатор придуман клиентом, поэтому повтор ловится первичным ключом. */
     fun insert(medKit: MedKit, firstMember: Uuid) {
-        MedKits.insert { it[id] = medKit.id }
+        translatingConstraints { MedKits.insert { it[id] = medKit.id } }
         insertMembership(medKit.id, firstMember)
     }
 

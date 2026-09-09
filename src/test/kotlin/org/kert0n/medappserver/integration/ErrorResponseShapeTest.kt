@@ -88,7 +88,8 @@ class ErrorResponseShapeTest {
         val medKit = dbHelper.freshMedKit(user.id)
         val drug = dbHelper.insert(
             Drug(
-                medKitId = medKit.id, name = "Aspirin", quantity = Quantity(qty(5.0), dbHelper.unit()),
+                id = Uuid.random(), medKitId = medKit.id,
+                name = "Aspirin", quantity = Quantity(qty(5.0), dbHelper.unit()),
             )
         )
 

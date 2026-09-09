@@ -4,6 +4,7 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.uuid.Uuid
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.PostgresIntegrationTest
 import org.kert0n.medappserver.services.aggregate.DrugService
@@ -38,7 +39,7 @@ class FractionalQuantityTest {
     @Test
     fun `приём третями расходует остаток без потерь`() {
         val alice = dbHelper.freshUser("alice")
-        val kit = medKitService.create(alice.id)
+        val kit = medKitService.create(Uuid.random(), alice.id)
         val drug = dbHelper.freshDrug(kit.id, 1.0)
         dbHelper.reserve(alice.id, drug.id, qty(1.0))
         dbHelper.flushAndClear()

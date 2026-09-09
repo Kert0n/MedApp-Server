@@ -54,8 +54,9 @@ class DrugStore {
 
     // ── Команды: пишут под доступом, который удерживает вызывающий сценарий ─────
 
+    /** Идентификатор придуман клиентом, поэтому повтор ловится первичным ключом. */
     fun insert(drug: Drug) {
-        Drugs.insert { it.write(drug) }
+        translatingConstraints { Drugs.insert { it.write(drug) } }
     }
 
     /**

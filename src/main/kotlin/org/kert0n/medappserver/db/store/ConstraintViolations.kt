@@ -3,6 +3,8 @@ package org.kert0n.medappserver.db.store
 import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.kert0n.medappserver.domain.AlreadyMember
 import org.kert0n.medappserver.domain.DomainRuleViolated
+import org.kert0n.medappserver.domain.DrugAlreadyExists
+import org.kert0n.medappserver.domain.MedKitAlreadyExists
 import org.kert0n.medappserver.domain.ReservationAlreadyExists
 
 /**
@@ -18,7 +20,9 @@ import org.kert0n.medappserver.domain.ReservationAlreadyExists
  */
 private val REFUSALS: Map<String, () -> DomainRuleViolated> = mapOf(
     "reservations_pkey" to ::ReservationAlreadyExists,
-    "user_med_kits_pkey" to ::AlreadyMember
+    "user_med_kits_pkey" to ::AlreadyMember,
+    "med_kits_pkey" to ::MedKitAlreadyExists,
+    "user_drugs_pkey" to ::DrugAlreadyExists
 )
 
 /**

@@ -46,6 +46,7 @@ class DrugCreateRequestBuilder(private val quantityUnitId: Uuid) {
     fun withQuantity(quantity: Double) = apply { this.quantity = quantity }
 
     fun build(): DrugCreateRequest = DrugCreateRequest(
+        id = Uuid.random(),
         name = name,
         quantity = qty(quantity),
         quantityUnitId = quantityUnitId,

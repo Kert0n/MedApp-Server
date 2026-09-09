@@ -732,8 +732,7 @@ class OptimisticRaceTest {
         }
     }
 
-    private fun drugRequest() = DrugCreateRequest(
-        name = "Race_${Uuid.random()}",
+    private fun drugRequest() = DrugCreateRequest(Uuid.random(), name = "Race_${Uuid.random()}",
         quantity = BigDecimal("10"),
         quantityUnitId = dbHelper.unit().id
     )

@@ -6,6 +6,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.api.DrugCreateRequest
 import org.kert0n.medappserver.api.InvitationDTO
+import org.kert0n.medappserver.api.MedKitCreateRequest
 import org.kert0n.medappserver.api.MedKitCreatedDTO
 import org.kert0n.medappserver.api.MedKitDTO
 import org.kert0n.medappserver.api.MedKitSummaryDTO
@@ -117,7 +118,7 @@ class ResourceApiContractTest {
     @Test
     fun `препарат создаётся в аптечке из пути`() {
         whenever(drugs.createInMedKit(eq(medKitId), any(), eq(userId))).thenReturn(snapshot)
-        val body = DrugCreateRequest(name = "Aspirin", quantity = qty(100.0), quantityUnitId = unit.id)
+        val body = DrugCreateRequest(Uuid.random(), name = "Aspirin", quantity = qty(100.0), quantityUnitId = unit.id)
 
         mockMvc.perform(
             post(ApiRoutes.drugsOf(medKitId)).with(asUser())
@@ -130,7 +131,7 @@ class ResourceApiContractTest {
 
     @Test
     fun `нулевое количество при создании отвергается`() {
-        val body = DrugCreateRequest(name = "Aspirin", quantity = qty(0.0), quantityUnitId = unit.id)
+        val body = DrugCreateRequest(Uuid.random(), name = "Aspirin", quantity = qty(0.0), quantityUnitId = unit.id)
 
         mockMvc.perform(
             post(ApiRoutes.drugsOf(medKitId)).with(asUser())
@@ -227,11 +228,15 @@ class ResourceApiContractTest {
 
     @Test
     fun `аптечка создаётся и перечисляется`() {
-        whenever(medKits.create(userId)).thenReturn(MedKitCreatedDTO(medKitId))
+        whenever(medKits.create(MedKitCreateRequest(medKitId), userId)).thenReturn(MedKitCreatedDTO(medKitId))
         whenever(medKits.summaries(userId))
             .thenReturn(setOf(MedKitSummaryDTO(medKitId, 2, setOf(drugId))))
 
-        mockMvc.perform(post(ApiRoutes.MED_KITS).with(asUser()))
+        mockMvc.perform(
+            post(ApiRoutes.MED_KITS).with(asUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.encodeToString(MedKitCreateRequest(medKitId)))
+        )
             .andExpect(status().isCreated)
             .andExpect(jsonPath("$.id").value(medKitId.toString()))
 

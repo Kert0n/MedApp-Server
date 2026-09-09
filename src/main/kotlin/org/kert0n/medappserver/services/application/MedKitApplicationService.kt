@@ -2,6 +2,7 @@ package org.kert0n.medappserver.services.application
 
 import kotlin.uuid.Uuid
 import org.kert0n.medappserver.api.InvitationDTO
+import org.kert0n.medappserver.api.MedKitCreateRequest
 import org.kert0n.medappserver.api.MedKitCreatedDTO
 import org.kert0n.medappserver.api.MedKitDTO
 import org.kert0n.medappserver.api.MedKitSummaryDTO
@@ -39,7 +40,8 @@ class MedKitApplicationService(
     private val logger = LoggerFactory.getLogger(MedKitApplicationService::class.java)
 
     @Transactional
-    fun create(userId: Uuid): MedKitCreatedDTO = MedKitCreatedDTO(medKitService.create(userId).id)
+    fun create(request: MedKitCreateRequest, userId: Uuid): MedKitCreatedDTO =
+        MedKitCreatedDTO(medKitService.create(request.id, userId).id)
 
     /** Аптечка вместе с содержимым: сама аптечка знает счётчик, упаковки — себя. */
     @Transactional(readOnly = true)
