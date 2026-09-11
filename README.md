@@ -235,15 +235,71 @@ Production запускается с цепочкой `mock-prod,prod`: перв
 mkdir -p secrets
 openssl rand -hex 32 | tr -d '\n' > secrets/postgres_password
 openssl rand -hex 32 | tr -d '\n' > secrets/registration.secret
-chmod 600 secrets/postgres_password secrets/registration.secret
-
-docker compose -f compose.yaml up -d --build
 ```
+
+Значения в `secrets/` и в `application-prod.properties` должны совпадать: файлы секретов
+перебивают профиль, но расхождение означало бы два разных пароля к одной базе.
 
 Приложение читает `/run/secrets` через `configtree`: имя файла становится именем свойства, поэтому
 секреты из файлов совпадают со значениями, упакованными в профиль, и обёртка над entrypoint не
 нужна. RSA-пара генерируется локально через `src/main/resources/certs/gen.sh --force` и также
 входит в образ; это сохраняет у владельца ключи для проверки уже выданных JWT.
+
+#### Развёртывание на сервер
+
+Образ собирается локально: в него входят `application-prod.properties` и RSA-пара из `certs/`,
+которых нет в git. Исходники серверу не нужны — только то, что читает compose. `medapp` ниже —
+хост из `~/.ssh/config`.
+
+```bash
+# 1. Образ — под платформу сервера, а не своей машины: с Apple Silicon без --platform
+#    соберётся arm64, и на x86_64-сервере он не запустится.
+docker buildx build --platform linux/amd64 -t medapp-med-app-server:latest --load .
+docker save medapp-med-app-server:latest | gzip -1 | ssh medapp 'gunzip | docker load'
+
+# 2. Файлы стека. Каталог называется medapp: из его имени compose берёт имя проекта, а
+#    значит, и имя образа medapp-med-app-server, под которым образ загружен выше.
+ssh medapp 'mkdir -p /opt/medapp'
+rsync -rltpR compose.yaml Caddyfile db/schema.sql db/load-catalogue.sh \
+  init-scripts/cleaned-init.sql secrets/postgres_password secrets/registration.secret \
+  medapp:/opt/medapp/
+ssh medapp 'cd /opt/medapp && chown -R root:root . && chmod 700 secrets && chmod 644 secrets/*'
+
+# 3. Запуск без сборки: образ уже на месте, исходников на сервере нет.
+ssh medapp 'cd /opt/medapp && docker compose -f compose.yaml up -d --no-build --wait'
+```
+
+Права на секреты — `644` на файлах внутри каталога `700`, а не `600`. Compose без swarm
+монтирует файл секрета как есть, с правами хоста, а читают его не от root: приложение —
+пользователем `spring`, Postgres — после перехода на пользователя `postgres`. Файл `600`,
+принадлежащий root, им недоступен; от посторонних на хосте секреты закрывает каталог.
+
+Справочник грузится только в новый том. Чтобы перезалить его или обновить схему, том базы
+удаляется перед запуском: `docker compose -f compose.yaml down && docker volume rm
+medapp_postgres_data`. Тома Caddy не трогать: в `caddy_data` лежат TLS-сертификаты, и частый
+перевыпуск упирается в лимиты Let's Encrypt.
+
+#### Проверка после развёртывания
+
+```bash
+# На сервере: справочник загружен при инициализации — в логе «load-catalogue: готово»,
+# в таблице десятки тысяч строк, а не ноль.
+docker logs medapp-postgres-1 2>&1 | grep load-catalogue
+docker exec medapp-postgres-1 psql -U medapp -d medapp-server-db -tAc 'select count(*) from parsed_drugs'
+
+# Снаружи, из /opt/medapp: продовый секрет принимается, токен выдаётся, поиск непуст.
+B=https://medapp.ru.net
+curl -s $B/actuator/health                                   # "status":"UP"
+LOGIN=$(cat /proc/sys/kernel/random/uuid); PASS=$(openssl rand -hex 24)
+curl -s -o /dev/null -w '%{http_code}\n' -X POST $B/v1/auth/register \
+  -H "X-Registration-Token: $(cat secrets/registration.secret)" \
+  -H 'Content-Type: application/json' -d "{\"login\":\"$LOGIN\",\"password\":\"$PASS\"}"   # 201
+TOKEN=$(curl -s -X POST $B/v1/auth/token -u "$LOGIN:$PASS" | sed -E 's/.*"accessToken":"([^"]+)".*/\1/')
+curl -s -G $B/v1/drug-templates --data-urlencode 'query=аспирин' -H "Authorization: Bearer $TOKEN"
+```
+
+Проверочная учётка остаётся в базе — удаления пользователя в API нет. Она пуста и ничего не
+несёт.
 
 Наружу смотрит только Caddy: приложение и Postgres портов не публикуют — на этом же держится
 доверие к `X-Forwarded-For`.
