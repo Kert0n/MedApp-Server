@@ -78,7 +78,8 @@ paths:
       description: "Applies the consumed amount and the new claim in one transaction.\
         \ Repeating the same request under the same identifier changes nothing; the\
         \ same identifier with different content is a conflict. Identifiers are remembered\
-        \ in server memory for 24 hours: after a server restart a repeat is judged\
+        \ in server memory for at most 24 hours: under heavy load older ones are evicted\
+        \ sooner, and a server restart forgets them all. After that a repeat is judged\
         \ as a new request (412 if the version has moved on). Once the package has\
         \ run out and was destroyed, a repeat answers 404."
       operationId: synchronise
@@ -136,9 +137,10 @@ paths:
         \ pack is a second package. Repeating the same request under the same identifier\
         \ changes nothing, even after the package version has moved on; the same identifier\
         \ with different content is a conflict. Identifiers are remembered in server\
-        \ memory for 24 hours: after a server restart a repeat is judged as a new\
-        \ request (412 if the version has moved on). Once the package has run out\
-        \ and was destroyed, a repeat answers 404. Returns no body when the package\
+        \ memory for at most 24 hours: under heavy load older ones are evicted sooner,\
+        \ and a server restart forgets them all. After that a repeat is judged as\
+        \ a new request (412 if the version has moved on). Once the package has run\
+        \ out and was destroyed, a repeat answers 404. Returns no body when the package\
         \ ran out and was destroyed."
       operationId: recordIntake
       parameters:

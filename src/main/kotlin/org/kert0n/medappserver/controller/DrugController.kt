@@ -218,9 +218,10 @@ class DrugController(private val drugs: DrugApplicationService) {
          * Граница журнала повторов, общая для приёма и синхронизации, — в контракте, а не только в
          * `CacheService`: клиент решает по ней, можно ли повторять вслепую.
          */
-        const val REPEAT_LIMITS = "Identifiers are remembered in server memory for 24 hours: after a server " +
-            "restart a repeat is judged as a new request (412 if the version has moved on). Once the package " +
-            "has run out and was destroyed, a repeat answers 404."
+        const val REPEAT_LIMITS = "Identifiers are remembered in server memory for at most 24 hours: under " +
+            "heavy load older ones are evicted sooner, and a server restart forgets them all. After that a repeat " +
+            "is judged as a new request (412 if the version has moved on). Once the package has run out and was " +
+            "destroyed, a repeat answers 404."
     }
 }
 
