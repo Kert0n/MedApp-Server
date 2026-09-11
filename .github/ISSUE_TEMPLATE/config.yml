@@ -11,8 +11,8 @@ blank_issues_enabled: true
 # в этих ссылках молчаливая — проверять переходом, а не кодом ответа.
 contact_links:
   - name: Вопрос — в «Вопросы»
-    url: https://github.com/Kert0n/MedApp-Server/discussions/categories/%D0%B2%D0%BE%D0%BF%D1%80%D0%BE%D1%81%D1%8B
+    url: https://github.com/Kert0n/MedAppServer/discussions/categories/%D0%B2%D0%BE%D0%BF%D1%80%D0%BE%D1%81%D1%8B
     about: Вопрос без правки кода — не issue. Там на него отвечают, и ответ виден следующему, кто спросит о том же.
   - name: Замысел до разбора — в «Идеи»
-    url: https://github.com/Kert0n/MedApp-Server/discussions/categories/%D0%B8%D0%B4%D0%B5%D0%B8
+    url: https://github.com/Kert0n/MedAppServer/discussions/categories/%D0%B8%D0%B4%D0%B5%D0%B8
     about: Обсудить замысел, пока он не созрел в предложение-issue. Созревшее оформляется шаблоном «Разбор или предложение».
