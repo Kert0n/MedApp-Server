@@ -136,8 +136,8 @@ class DrugController(private val drugs: DrugApplicationService) {
             "and an emergency one: what was taken reduces the package, and the reservation is the owner's to " +
             "adjust. Taking more than the package holds is refused: a package cannot be refilled, so a second pack " +
             "is a second package. Repeating the same request under the same identifier changes nothing, even after " +
-            "the package version has moved on; the same identifier with different content is a conflict. Returns no " +
-            "body when the package ran out and was destroyed."
+            "the package version has moved on; the same identifier with different content is a conflict. " +
+            REPEAT_LIMITS + " Returns no body when the package ran out and was destroyed."
     )
     @ApiResponse(
         responseCode = "200",
@@ -171,7 +171,7 @@ class DrugController(private val drugs: DrugApplicationService) {
         summary = "Apply offline changes to a package",
         description = "Applies the consumed amount and the new claim in one transaction. " +
             "Repeating the same request under the same identifier changes nothing; the same " +
-            "identifier with different content is a conflict."
+            "identifier with different content is a conflict. " + REPEAT_LIMITS
     )
     @ApiResponse(
         responseCode = "200",
@@ -211,6 +211,16 @@ class DrugController(private val drugs: DrugApplicationService) {
     ): DrugSnapshotDTO {
         logger.debug("PUT /v1/med-kits/{}/drugs/{} by user {}", targetMedKitId, drugId, authentication.userId)
         return drugs.moveToMedKit(drugId, targetMedKitId, version, authentication.userId)
+    }
+
+    private companion object {
+        /**
+         * Граница журнала повторов, общая для приёма и синхронизации, — в контракте, а не только в
+         * `CacheService`: клиент решает по ней, можно ли повторять вслепую.
+         */
+        const val REPEAT_LIMITS = "Identifiers are remembered in server memory for 24 hours: after a server " +
+            "restart a repeat is judged as a new request (412 if the version has moved on). Once the package " +
+            "has run out and was destroyed, a repeat answers 404."
     }
 }
 
