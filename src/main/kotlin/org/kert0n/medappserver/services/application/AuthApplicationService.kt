@@ -13,7 +13,7 @@ import org.springframework.transaction.annotation.Transactional
 /**
  * Регистрация и выдача токена.
  *
- * Порядок проверок — сравнение секрета, лимит, генерация ключа — живёт здесь, а не в контроллере:
+ * Порядок проверок — сравнение секрета, лимит, запись — живёт здесь, а не в контроллере:
  * HTTP-слою полагается перевод запроса и ответа, а не решение о том, что проверяется первым.
  */
 @Service
@@ -24,29 +24,27 @@ class AuthApplicationService(
 ) {
 
     /**
-     * Заводит пользователя и возвращает сгенерированные учётные данные.
+     * Заводит пользователя с учётными данными, которые придумал клиент.
      *
      * Секрет проверяется первым: иначе по коду ответа стало бы видно состояние лимита, а его
      * незачем показывать тому, кто секрета не знает.
+     *
+     * Занятый логин отвергает первичный ключ, а не чтение перед записью: одновременный повтор
+     * прошёл бы мимо чтения. Такой повтор квоту адреса не тратит — засчитывается только
+     * состоявшаяся запись.
      */
     @Transactional
-    fun register(secret: String, clientAddress: String): Credentials {
+    fun register(secret: String, clientAddress: String, login: Uuid, password: String) {
         // Сравнение постоянного времени: `!=` останавливается на первом различии, и время
         // ответа выдало бы длину совпавшего начала.
         if (!securityService.secretsMatch(secret, registrationSecret.value)) throw InvalidRegistrationSecret()
         // Лимит по адресу: сдерживает автоматическую регистрацию, ничего не храня о человеке.
         if (!securityService.validateRequest(clientAddress)) throw TooManyRegistrations()
 
-        val login = Uuid.random()
-        val key = securityService.generateKey(32)
-        userService.registerNewUser(login, key, clientAddress)
-        return Credentials(login, key)
+        userService.registerNewUser(login, password, clientAddress)
     }
 
     /** Токен по уже аутентифицированному пользователю: проверку пароля сделал Basic-фильтр. */
     @Transactional(readOnly = true)
     fun issueToken(user: User): String = securityService.generateToken(user)
-
-    /** Сгенерированные учётные данные. Доменного понятия за ними нет — это ответ на регистрацию. */
-    data class Credentials(val login: Uuid, val key: String)
 }

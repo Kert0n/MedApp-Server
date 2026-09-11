@@ -4,12 +4,15 @@ import kotlin.uuid.Uuid
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.kert0n.medappserver.domain.User
+import org.kert0n.medappserver.domain.UserAlreadyExists
 import org.kert0n.medappserver.services.aggregate.UserService
 import org.kert0n.medappserver.services.security.AuthenticatedUserService
 import org.kert0n.medappserver.services.security.SecurityService
 import org.kert0n.medappserver.testutil.ApiRoutes
 import org.mockito.kotlin.any
 import org.mockito.kotlin.eq
+import org.mockito.kotlin.never
+import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -60,37 +63,52 @@ class AuthControllerTest {
 
     @Test
     fun `POST register - returns 403 with wrong secret`() {
-        mockMvc.perform(
-            post(ApiRoutes.REGISTER)
-                .header("X-Registration-Token", "wrong-secret")
-        )
+        register(secret = "wrong-secret")
             .andExpect(status().isForbidden)
     }
 
     @Test
-    fun `POST register - returns login and key with correct secret`() {
-        val userId = Uuid.random()
-        val user = User(id = userId, hashedKey = "hashed")
+    fun `POST register - stores the credentials chosen by the client`() {
+        val login = Uuid.random()
         whenever(securityService.validateRequest(any())).thenReturn(true)
-        whenever(securityService.generateKey(32)).thenReturn("generated-key")
-        whenever(userService.registerNewUser(any(), eq("generated-key"), any())).thenReturn(user)
+        whenever(userService.registerNewUser(any(), any(), any())).thenReturn(User(id = login, hashedKey = "hashed"))
 
-        mockMvc.perform(
-            post(ApiRoutes.REGISTER)
-                .header("X-Registration-Token", "test-secret")
-        )
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.key").value("generated-key"))
+        register(login = login)
+            .andExpect(status().isCreated)
+            // Возвращать нечего: логин и пароль клиент знает сам, иначе он не прислал бы их.
+            .andExpect(content().string(""))
+
+        verify(userService).registerNewUser(eq(login), eq(PASSWORD), any())
+    }
+
+    @Test
+    fun `POST register - returns 409 when the login is taken`() {
+        whenever(securityService.validateRequest(any())).thenReturn(true)
+        whenever(userService.registerNewUser(any(), any(), any())).thenThrow(UserAlreadyExists())
+
+        register()
+            .andExpect(status().isConflict)
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+    }
+
+    @Test
+    fun `POST register - rejects a short or non-ASCII password`() {
+        whenever(securityService.validateRequest(any())).thenReturn(true)
+
+        register(password = "k".repeat(31)).andExpect(status().isBadRequest)
+        register(password = "k".repeat(73)).andExpect(status().isBadRequest)
+        // Кириллица: символов в пределах, байтов у bcrypt было бы вдвое больше.
+        register(password = "ключ".repeat(10)).andExpect(status().isBadRequest)
+        register(password = "k".repeat(20) + " " + "k".repeat(20)).andExpect(status().isBadRequest)
+
+        verify(userService, never()).registerNewUser(any(), any(), any())
     }
 
     @Test
     fun `POST register - returns 429 when rate limited`() {
         whenever(securityService.validateRequest(any())).thenReturn(false)
 
-        mockMvc.perform(
-            post(ApiRoutes.REGISTER)
-                .header("X-Registration-Token", "test-secret")
-        )
+        register()
             .andExpect(status().isTooManyRequests)
             .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
             .andExpect(jsonPath("$.detail").value("Too many requests"))
@@ -140,5 +158,20 @@ class AuthControllerTest {
             .andExpect(status().isUnauthorized)
         mockMvc.perform(post("/auth/register").header("X-Registration-Token", "test-secret"))
             .andExpect(status().isUnauthorized)
+    }
+
+    private fun register(
+        secret: String = "test-secret",
+        login: Uuid = Uuid.random(),
+        password: String = PASSWORD
+    ) = mockMvc.perform(
+        post(ApiRoutes.REGISTER)
+            .header("X-Registration-Token", secret)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""{"login":"$login","password":"$password"}""")
+    )
+
+    private companion object {
+        const val PASSWORD = "0123456789abcdefghijklmnopqrstuvwxyz-_ABCD"
     }
 }

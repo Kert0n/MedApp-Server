@@ -6,6 +6,7 @@ import org.kert0n.medappserver.domain.DomainRuleViolated
 import org.kert0n.medappserver.domain.DrugAlreadyExists
 import org.kert0n.medappserver.domain.MedKitAlreadyExists
 import org.kert0n.medappserver.domain.ReservationAlreadyExists
+import org.kert0n.medappserver.domain.UserAlreadyExists
 
 /**
  * Нарушение именованного ключа переводится в доменный отказ.
@@ -22,7 +23,8 @@ private val REFUSALS: Map<String, () -> DomainRuleViolated> = mapOf(
     "reservations_pkey" to ::ReservationAlreadyExists,
     "user_med_kits_pkey" to ::AlreadyMember,
     "med_kits_pkey" to ::MedKitAlreadyExists,
-    "user_drugs_pkey" to ::DrugAlreadyExists
+    "user_drugs_pkey" to ::DrugAlreadyExists,
+    "users_pkey" to ::UserAlreadyExists
 )
 
 /**

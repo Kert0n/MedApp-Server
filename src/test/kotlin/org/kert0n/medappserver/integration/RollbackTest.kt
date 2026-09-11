@@ -12,7 +12,6 @@ import org.kert0n.medappserver.api.ReservationSyncRequest
 import org.kert0n.medappserver.domain.InsufficientStock
 import org.kert0n.medappserver.domain.NotAMember
 import org.kert0n.medappserver.domain.StaleVersion
-import org.kert0n.medappserver.services.orchestrator.StaleSyncVersion
 import org.kert0n.medappserver.services.application.DrugApplicationService
 import org.kert0n.medappserver.services.application.MedKitApplicationService
 import org.kert0n.medappserver.testutil.DatabaseTestHelper
@@ -50,7 +49,9 @@ class RollbackTest {
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.reserve(alice.id, drug.id, qty(4.0))
 
-        assertFailsWith<InsufficientStock> { drugs.recordIntake(drug.id, IntakeRequest(qty(11.0), version = 0), alice.id) }
+        assertFailsWith<InsufficientStock> {
+            drugs.recordIntake(drug.id, Uuid.random(), IntakeRequest(qty(11.0), version = 0), alice.id)
+        }
 
         assertQty(10.0, dbHelper.drugQuantity(drug.id))
         assertQty(4.0, dbHelper.userReservation(alice.id, drug.id))
@@ -94,7 +95,9 @@ class RollbackTest {
         val alice = dbHelper.freshUser("alice")
         dbHelper.freshMedKit(alice.id)
 
-        assertFailsWith<NotAMember> { drugs.recordIntake(Uuid.random(), IntakeRequest(qty(1.0), version = 0), alice.id) }
+        assertFailsWith<NotAMember> {
+            drugs.recordIntake(Uuid.random(), Uuid.random(), IntakeRequest(qty(1.0), version = 0), alice.id)
+        }
     }
 
     // ── Отказ в конце команды ────────────────────────────────────────────────────
@@ -162,7 +165,9 @@ class RollbackTest {
         dbHelper.reserve(alice.id, drug.id, qty(4.0))
 
         assertFailsWith<StaleVersion> {
-            drugs.recordIntake(drug.id, IntakeRequest(qty(10.0), version = dbHelper.drugVersion(drug.id) + 1), alice.id)
+            drugs.recordIntake(
+                drug.id, Uuid.random(), IntakeRequest(qty(10.0), version = dbHelper.drugVersion(drug.id) + 1), alice.id
+            )
         }
 
         assertQty(10.0, dbHelper.drugQuantity(drug.id), "пачка цела и не тронута приёмом")
@@ -182,7 +187,7 @@ class RollbackTest {
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         dbHelper.reserve(alice.id, drug.id, qty(4.0))
 
-        assertFailsWith<StaleSyncVersion> {
+        assertFailsWith<StaleVersion> {
             drugs.synchronise(
                 drug.id, Uuid.random(),
                 DrugSyncRequest(
@@ -215,7 +220,7 @@ class RollbackTest {
         val drug = dbHelper.freshDrug(kit.id, 10.0)
         val syncId = Uuid.random()
 
-        assertFailsWith<StaleSyncVersion> {
+        assertFailsWith<StaleVersion> {
             drugs.synchronise(
                 drug.id, syncId,
                 DrugSyncRequest(consumed = qty(3.0), drugVersion = dbHelper.drugVersion(drug.id) + 1),
@@ -228,6 +233,25 @@ class RollbackTest {
             DrugSyncRequest(consumed = qty(3.0), drugVersion = dbHelper.drugVersion(drug.id)),
             alice.id
         )
+
+        assertQty(7.0, dbHelper.drugQuantity(drug.id), "повтор выполнил команду, а не подтвердил её")
+    }
+
+    /** То же для приёма: журнал у них общий и откат не переживает ни у того, ни у другого. */
+    @Test
+    fun `откатившийся приём не считается применённым`() {
+        val alice = dbHelper.freshUser("alice")
+        val kit = dbHelper.freshMedKit(alice.id)
+        val drug = dbHelper.freshDrug(kit.id, 10.0)
+        val intakeId = Uuid.random()
+
+        assertFailsWith<StaleVersion> {
+            drugs.recordIntake(
+                drug.id, intakeId, IntakeRequest(qty(3.0), version = dbHelper.drugVersion(drug.id) + 1), alice.id
+            )
+        }
+
+        drugs.recordIntake(drug.id, intakeId, IntakeRequest(qty(3.0), version = dbHelper.drugVersion(drug.id)), alice.id)
 
         assertQty(7.0, dbHelper.drugQuantity(drug.id), "повтор выполнил команду, а не подтвердил её")
     }

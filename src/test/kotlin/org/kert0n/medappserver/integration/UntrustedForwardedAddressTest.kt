@@ -5,6 +5,7 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import kotlin.test.assertEquals
+import kotlin.uuid.Uuid
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.test.context.SpringBootTest
@@ -43,15 +44,16 @@ class UntrustedForwardedAddressTest {
         val request = HttpRequest.newBuilder(URI.create("http://localhost:$port/v1/auth/register"))
             .header("X-Registration-Token", "test-secret")
             .header("X-Forwarded-For", forwardedFor)
-            .POST(HttpRequest.BodyPublishers.noBody())
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString("""{"login":"${Uuid.random()}","password":"${"k".repeat(43)}"}"""))
             .build()
         return client.send(request, HttpResponse.BodyHandlers.discarding()).statusCode()
     }
 
     @Test
     fun `подменённый адрес от недоверенного узла не даёт новую квоту`() {
-        assertEquals(200, register("203.0.113.10"))
-        assertEquals(200, register("198.51.100.20"))
+        assertEquals(201, register("203.0.113.10"))
+        assertEquals(201, register("198.51.100.20"))
 
         // Решающая проверка: адрес в заголовке снова другой. Если бы ему верили, квота была
         // бы своя и запрос прошёл бы — то есть лимит обходился бы сменой заголовка.

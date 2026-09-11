@@ -12,6 +12,7 @@ import org.kert0n.medappserver.api.DrugSyncRequest
 import org.kert0n.medappserver.api.IntakeRequest
 import org.kert0n.medappserver.api.MedKitCreateRequest
 import org.kert0n.medappserver.api.MembershipCreateRequest
+import org.kert0n.medappserver.api.RegisterRequest
 import org.kert0n.medappserver.api.ReservationCreateRequest
 import org.kert0n.medappserver.api.ReservationPatchRequest
 import org.springframework.http.MediaType
@@ -34,7 +35,7 @@ object ApiRoutes {
     const val MEMBERSHIPS = "/v1/med-kit-memberships"
 
     fun drug(drugId: Any) = "/v1/drugs/$drugId"
-    fun intakes(drugId: Any) = "/v1/drugs/$drugId/intakes"
+    fun intake(drugId: Any, intakeId: Any) = "/v1/drugs/$drugId/intakes/$intakeId"
     fun sync(drugId: Any, syncId: Any) = "/v1/drugs/$drugId/sync/$syncId"
     fun drugsOf(medKitId: Any) = "/v1/med-kits/$medKitId/drugs"
     fun drugIn(medKitId: Any, drugId: Any) = "/v1/med-kits/$medKitId/drugs/$drugId"
@@ -54,6 +55,8 @@ object ApiRoutes {
         // есть брони и приём упаковки.
         "/v1/treatment-plans", "/v1/treatment-plans/x",
         "/v1/drugs/x/consumptions", "/v1/intakes/x",
+        // Приём без идентификатора: повторить потерянный ответ было нечем, теперь он PUT по id.
+        "/v1/drugs/x/intakes",
         "/med-kit", "/med-kit/x", "/med-kit/join", "/med-kit/x/share", "/med-kit/x/leave"
     )
 }
@@ -61,8 +64,10 @@ object ApiRoutes {
 /** Обёртка над MockMvc для публичных операций API. */
 class ApiTestClient(private val mockMvc: MockMvc, private val json: Json = Json) {
 
-    fun register(secret: String): ResultActions = mockMvc.perform(
+    fun register(secret: String, login: Uuid, password: String): ResultActions = mockMvc.perform(
         post(ApiRoutes.REGISTER).header(REGISTRATION_TOKEN_HEADER, secret)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(json.encodeToString(RegisterRequest(login, password)))
     )
 
     /** Запрос токена с уже готовым заголовком Authorization — в том числе намеренно кривым. */
@@ -125,8 +130,9 @@ class AuthenticatedApiTestClient internal constructor(
     fun deleteDrug(drugId: Uuid, version: Long): TestHttpResponse =
         perform(delete(ApiRoutes.drug(drugId)).queryParam("version", version.toString()))
 
-    fun recordIntake(drugId: Uuid, request: IntakeRequest): TestHttpResponse =
-        perform(post(ApiRoutes.intakes(drugId)), request)
+    /** Идентификатор приёма свежий, если история не проверяет именно повтор. */
+    fun recordIntake(drugId: Uuid, request: IntakeRequest, intakeId: Uuid = Uuid.random()): TestHttpResponse =
+        perform(put(ApiRoutes.intake(drugId, intakeId)), request)
 
     fun synchronise(drugId: Uuid, syncId: Uuid, request: DrugSyncRequest): TestHttpResponse =
         perform(put(ApiRoutes.sync(drugId, syncId)), request)

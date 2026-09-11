@@ -122,20 +122,22 @@ class DrugController(private val drugs: DrugApplicationService) {
     }
 
     /**
-     * Приём — запись о съеденном, поэтому POST в подчинённый ресурс, а не PUT в упаковку.
+     * Приём — запись о съеденном в подчинённом ресурсе упаковки.
      *
-     * Единственный способ уменьшить пачку; бронь её владелец правит отдельно. Ответа нет, когда
-     * приём опустошил пачку и та уничтожена.
+     * PUT с придуманным клиентом идентификатором, как у синхронизации: повтор того же запроса —
+     * то же состояние, а не второе списание. Бронь её владелец правит отдельно. Ответа нет,
+     * когда приём опустошил пачку и та уничтожена.
      */
-    @PostMapping("/drugs/{drugId}/intakes")
+    @PutMapping("/drugs/{drugId}/intakes/{intakeId}")
     @Operation(
         security = [SecurityRequirement(name = OpenApiConfiguration.BEARER_SCHEME)],
         summary = "Record an intake",
-        description = "Takes the given amount out of the package — the only way its contents decrease. There is no " +
-            "distinction between a planned intake and an emergency one: what was taken reduces the package, and the " +
-            "reservation is the owner's to adjust. Taking more than the package holds is refused: a package cannot " +
-            "be refilled, so a second pack is a second package. Returns no body when the package ran out and was " +
-            "destroyed."
+        description = "Takes the given amount out of the package. There is no distinction between a planned intake " +
+            "and an emergency one: what was taken reduces the package, and the reservation is the owner's to " +
+            "adjust. Taking more than the package holds is refused: a package cannot be refilled, so a second pack " +
+            "is a second package. Repeating the same request under the same identifier changes nothing, even after " +
+            "the package version has moved on; the same identifier with different content is a conflict. Returns no " +
+            "body when the package ran out and was destroyed."
     )
     @ApiResponse(
         responseCode = "200",
@@ -143,15 +145,17 @@ class DrugController(private val drugs: DrugApplicationService) {
     )
     @ApiResponse(responseCode = "400", description = "Amount exceeds what is left in the package", content = [Content()])
     @ApiResponse(responseCode = "404", description = "Package does not exist or is not accessible", content = [Content()])
+    @ApiResponse(responseCode = "409", description = "The identifier was already used for a different request", content = [Content()])
     fun recordIntake(
         authentication: Authentication,
         @Parameter(description = "Package identifier") @PathVariable drugId: Uuid,
+        @Parameter(description = "Client-invented identifier of this intake") @PathVariable intakeId: Uuid,
         @SwaggerRequestBody(description = "Amount taken")
         @Valid @RequestBody request: IntakeRequest
     ): DrugSnapshotDTO? {
-        logger.debug("POST /v1/drugs/{}/intakes by user {}", drugId, authentication.userId)
+        logger.debug("PUT /v1/drugs/{}/intakes/{} by user {}", drugId, intakeId, authentication.userId)
         // null означает, что пачка кончилась и уничтожена этим списанием.
-        return drugs.recordIntake(drugId, request, authentication.userId)
+        return drugs.recordIntake(drugId, intakeId, request, authentication.userId)
     }
 
     /**
@@ -174,7 +178,7 @@ class DrugController(private val drugs: DrugApplicationService) {
         description = "Changes applied; when the package ran out, it was destroyed and the response body is empty"
     )
     @ApiResponse(responseCode = "404", description = "Package does not exist or is not accessible", content = [Content()])
-    @ApiResponse(responseCode = "409", description = "Stated version is not current, or the identifier was used for a different request", content = [Content()])
+    @ApiResponse(responseCode = "409", description = "The identifier was already used for a different request", content = [Content()])
     fun synchronise(
         authentication: Authentication,
         @Parameter(description = "Package identifier") @PathVariable drugId: Uuid,

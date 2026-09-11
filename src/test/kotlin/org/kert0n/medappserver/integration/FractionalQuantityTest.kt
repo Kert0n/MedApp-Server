@@ -54,7 +54,7 @@ class FractionalQuantityTest {
 
         // Третий приём забирает ровно остаток — препарат кончился.
         val last = dbHelper.drugQuantity(drug.id)!!
-        val afterLast = disposal.consume(drug.id, alice.id, last, dbHelper.drugVersion(drug.id))
+        val afterLast = disposal.consume(Uuid.random(), drug.id, alice.id, last, dbHelper.drugVersion(drug.id))
         dbHelper.flushAndClear()
 
         assertNull(afterLast, "план исчезает вместе с кончившимся препаратом")

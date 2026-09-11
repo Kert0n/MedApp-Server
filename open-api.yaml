@@ -112,10 +112,71 @@ paths:
         "404":
           description: Package does not exist or is not accessible
         "409":
-          description: "Stated version is not current, or the identifier was used\
-            \ for a different request"
+          description: The identifier was already used for a different request
         "401":
           description: Authentication is required
+        "428":
+          description: The command did not state the version it acts on
+        "412":
+          description: The stated version is not the current one
+      security:
+      - Bearer Authentication: []
+  /v1/drugs/{drugId}/intakes/{intakeId}:
+    put:
+      tags:
+      - Drugs
+      summary: Record an intake
+      description: "Takes the given amount out of the package. There is no distinction\
+        \ between a planned intake and an emergency one: what was taken reduces the\
+        \ package, and the reservation is the owner's to adjust. Taking more than\
+        \ the package holds is refused: a package cannot be refilled, so a second\
+        \ pack is a second package. Repeating the same request under the same identifier\
+        \ changes nothing, even after the package version has moved on; the same identifier\
+        \ with different content is a conflict. Returns no body when the package ran\
+        \ out and was destroyed."
+      operationId: recordIntake
+      parameters:
+      - name: drugId
+        in: path
+        description: Package identifier
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: intakeId
+        in: path
+        description: Client-invented identifier of this intake
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        description: Amount taken
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IntakeRequest"
+        required: true
+      responses:
+        "200":
+          description: "Package reduced; when it ran out, it was destroyed and the\
+            \ response body is empty"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DrugSnapshotDTO"
+        "400":
+          description: Amount exceeds what is left in the package
+        "404":
+          description: Package does not exist or is not accessible
+        "409":
+          description: The identifier was already used for a different request
+        "401":
+          description: Authentication is required
+        "428":
+          description: The command did not state the version it acts on
+        "412":
+          description: The stated version is not the current one
       security:
       - Bearer Authentication: []
   /v1/reservations:
@@ -320,53 +381,6 @@ paths:
           description: Authentication is required
       security:
       - Bearer Authentication: []
-  /v1/drugs/{drugId}/intakes:
-    post:
-      tags:
-      - Drugs
-      summary: Record an intake
-      description: "Takes the given amount out of the package — the only way its contents\
-        \ decrease. There is no distinction between a planned intake and an emergency\
-        \ one: what was taken reduces the package, and the reservation is the owner's\
-        \ to adjust. Taking more than the package holds is refused: a package cannot\
-        \ be refilled, so a second pack is a second package. Returns no body when\
-        \ the package ran out and was destroyed."
-      operationId: recordIntake
-      parameters:
-      - name: drugId
-        in: path
-        description: Package identifier
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        description: Amount taken
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/IntakeRequest"
-        required: true
-      responses:
-        "200":
-          description: "Package reduced; when it ran out, it was destroyed and the\
-            \ response body is empty"
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/DrugSnapshotDTO"
-        "400":
-          description: Amount exceeds what is left in the package
-        "404":
-          description: Package does not exist or is not accessible
-        "401":
-          description: Authentication is required
-        "428":
-          description: The command did not state the version it acts on
-        "412":
-          description: The stated version is not the current one
-      security:
-      - Bearer Authentication: []
   /v1/auth/token:
     post:
       tags:
@@ -394,7 +408,10 @@ paths:
       tags:
       - Authentication
       summary: Register a new user
-      description: Creates a new user and returns generated credentials.
+      description: "Creates a user with the login and password chosen by the client.\
+        \ The credentials are known before the request is sent, so a lost response\
+        \ is safe to repeat: the repeat answers 409, and a token issued with the same\
+        \ credentials confirms the account is the caller's own."
       operationId: register
       parameters:
       - name: X-Registration-Token
@@ -404,15 +421,22 @@ paths:
         schema:
           type: string
         example: dev-secret
+      requestBody:
+        description: Credentials chosen by the client
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+        required: true
       responses:
-        "200":
+        "201":
           description: User registered
-          content:
-            '*/*':
-              schema:
-                $ref: "#/components/schemas/RegisterResponse"
+        "400":
+          description: Invalid login or password
         "403":
           description: Invalid registration secret
+        "409":
+          description: The login is already taken
         "429":
           description: Too many registration attempts
   /v1/reservations/{drugId}:
@@ -970,8 +994,8 @@ components:
           - integer
           - "null"
           format: int64
-          description: Version of the package state; required when consumed is present.
-            Missing or stale means 409
+          description: "Version of the package state; required when consumed is present.\
+            \ Missing means 428, stale means 412"
           example: 3
         reservation:
           description: New state of the caller's claim; omitted when it did not change
@@ -997,9 +1021,31 @@ components:
           format: int64
           description: "Version of the claims picture; when absent, the server uses\
             \ the current picture read while processing the request. A supplied stale\
-            \ version means 409"
+            \ version means 412"
       required:
       - amount
+    IntakeRequest:
+      type: object
+      description: Amount taken out of the package
+      properties:
+        quantity:
+          type: string
+          description: "Amount taken, greater than zero"
+          examples:
+          - "2.0"
+          minimum: 0.0
+          pattern: "^(?!0+(\\.0+)?$)\\d{1,13}(\\.\\d{1,6})?$"
+          example: null
+        version:
+          type:
+          - integer
+          - "null"
+          format: int64
+          description: "Version the command acts on; taken from the last read. Absent\
+            \ means 428, mismatched means 412"
+          example: 3
+      required:
+      - quantity
     ReservationCreateRequest:
       type: object
       description: Request to reserve part of a package
@@ -1183,28 +1229,6 @@ components:
       - drugs
       - id
       - userCount
-    IntakeRequest:
-      type: object
-      description: Amount taken out of the package
-      properties:
-        quantity:
-          type: string
-          description: "Amount taken, greater than zero"
-          examples:
-          - "2.0"
-          minimum: 0.0
-          pattern: "^(?!0+(\\.0+)?$)\\d{1,13}(\\.\\d{1,6})?$"
-          example: null
-        version:
-          type:
-          - integer
-          - "null"
-          format: int64
-          description: "Version the command acts on; taken from the last read. Absent\
-            \ means 428, mismatched means 412"
-          example: 3
-      required:
-      - quantity
     TokenResponse:
       type: object
       description: Issued access token
@@ -1214,20 +1238,23 @@ components:
           description: JWT access token
       required:
       - accessToken
-    RegisterResponse:
+    RegisterRequest:
       type: object
-      description: Registration response with generated credentials
+      description: Credentials chosen by the client
       properties:
         login:
           type: string
           format: uuid
-          description: Generated login identifier
-        key:
+          description: Client-invented login identifier
+        password:
           type: string
-          description: Generated secret key for authentication
+          description: "Secret key: 32 to 72 printable ASCII characters, no spaces"
+          maxLength: 72
+          minLength: 32
+          pattern: "^[\\x21-\\x7E]+$"
       required:
-      - key
       - login
+      - password
     ReservationPatchRequest:
       type: object
       description: Request to change the reserved amount

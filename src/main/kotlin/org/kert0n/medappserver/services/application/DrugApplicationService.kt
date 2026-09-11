@@ -80,10 +80,14 @@ class DrugApplicationService(
     fun delete(drugId: Uuid, version: Long?, userId: Uuid) =
         disposal.destroy(drugId, userId, statedVersion(version))
 
-    /** `null` — приём опустошил пачку, и она уничтожена: отдавать нечего. */
+    /**
+     * `null` — приём опустошил пачку, и она уничтожена: отдавать нечего.
+     *
+     * Повтор под тем же идентификатором второй раз не списывает и отвечает текущим снимком.
+     */
     @Transactional
-    fun recordIntake(drugId: Uuid, request: IntakeRequest, userId: Uuid): DrugSnapshotDTO? {
-        val left = disposal.consume(drugId, userId, request.quantity, statedVersion(request.version))
+    fun recordIntake(drugId: Uuid, intakeId: Uuid, request: IntakeRequest, userId: Uuid): DrugSnapshotDTO? {
+        val left = disposal.consume(intakeId, drugId, userId, request.quantity, statedVersion(request.version))
             ?: return null
         return left.toSnapshot(reservationService.onDrugs(listOf(left), userId).getValue(left.id))
     }
@@ -116,8 +120,10 @@ class DrugApplicationService(
         val left = synchronisation.apply(
             syncId, drugId, userId,
             DrugSynchronisation.SyncRequest(
-                consumed = request.consumed,
-                drugVersion = request.drugVersion,
+                // Списание пишет упаковку: без версии к ней команда не собирается — 428.
+                consumed = request.consumed?.let {
+                    DrugSynchronisation.Consumption(it, statedVersion(request.drugVersion))
+                },
                 reservation = request.reservation?.let {
                     DrugSynchronisation.ReservationPart(it.amount, it.version)
                 }
