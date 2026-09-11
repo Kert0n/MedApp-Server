@@ -5,6 +5,7 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import kotlin.test.assertEquals
+import kotlin.uuid.Uuid
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.test.context.SpringBootTest
@@ -39,7 +40,8 @@ class ForwardedClientAddressTest {
         val request = HttpRequest.newBuilder(URI.create("http://localhost:$port/v1/auth/register"))
             .header("X-Registration-Token", "test-secret")
             .header("X-Forwarded-For", forwardedFor)
-            .POST(HttpRequest.BodyPublishers.noBody())
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString("""{"login":"${Uuid.random()}","password":"${"k".repeat(43)}"}"""))
             .build()
         return client.send(request, HttpResponse.BodyHandlers.discarding()).statusCode()
     }
@@ -49,12 +51,12 @@ class ForwardedClientAddressTest {
         val first = "203.0.113.10"
         val second = "198.51.100.7"
 
-        assertEquals(200, register(first), "first registration from $first")
-        assertEquals(200, register(first), "second registration from $first")
+        assertEquals(201, register(first), "first registration from $first")
+        assertEquals(201, register(first), "second registration from $first")
         assertEquals(429, register(first), "third registration from $first must exhaust that address' quota")
 
         // Решающая проверка: у другого проброшенного адреса своя квота. Если бы заголовок
         // игнорировался, этот запрос делил бы уже исчерпанный счётчик.
-        assertEquals(200, register(second), "$second must have an independent quota")
+        assertEquals(201, register(second), "$second must have an independent quota")
     }
 }

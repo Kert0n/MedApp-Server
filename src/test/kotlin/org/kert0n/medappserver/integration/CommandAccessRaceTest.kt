@@ -264,6 +264,7 @@ class CommandAccessRaceTest {
             Command("consume", withReservation = false) { fixture ->
                 drugs.recordIntake(
                     fixture.drugId,
+                    Uuid.random(),
                     IntakeRequest(BigDecimal.ONE, fixture.drugVersion),
                     fixture.memberId
                 )

@@ -122,20 +122,22 @@ class DrugController(private val drugs: DrugApplicationService) {
     }
 
     /**
-     * Приём — запись о съеденном, поэтому POST в подчинённый ресурс, а не PUT в упаковку.
+     * Приём — запись о съеденном в подчинённом ресурсе упаковки.
      *
-     * Единственный способ уменьшить пачку; бронь её владелец правит отдельно. Ответа нет, когда
-     * приём опустошил пачку и та уничтожена.
+     * PUT с придуманным клиентом идентификатором, как у синхронизации: повтор того же запроса —
+     * то же состояние, а не второе списание. Бронь её владелец правит отдельно. Ответа нет,
+     * когда приём опустошил пачку и та уничтожена.
      */
-    @PostMapping("/drugs/{drugId}/intakes")
+    @PutMapping("/drugs/{drugId}/intakes/{intakeId}")
     @Operation(
         security = [SecurityRequirement(name = OpenApiConfiguration.BEARER_SCHEME)],
         summary = "Record an intake",
-        description = "Takes the given amount out of the package — the only way its contents decrease. There is no " +
-            "distinction between a planned intake and an emergency one: what was taken reduces the package, and the " +
-            "reservation is the owner's to adjust. Taking more than the package holds is refused: a package cannot " +
-            "be refilled, so a second pack is a second package. Returns no body when the package ran out and was " +
-            "destroyed."
+        description = "Takes the given amount out of the package. There is no distinction between a planned intake " +
+            "and an emergency one: what was taken reduces the package, and the reservation is the owner's to " +
+            "adjust. Taking more than the package holds is refused: a package cannot be refilled, so a second pack " +
+            "is a second package. Repeating the same request under the same identifier changes nothing, even after " +
+            "the package version has moved on; the same identifier with different content is a conflict. " +
+            REPEAT_LIMITS + " Returns no body when the package ran out and was destroyed."
     )
     @ApiResponse(
         responseCode = "200",
@@ -143,15 +145,17 @@ class DrugController(private val drugs: DrugApplicationService) {
     )
     @ApiResponse(responseCode = "400", description = "Amount exceeds what is left in the package", content = [Content()])
     @ApiResponse(responseCode = "404", description = "Package does not exist or is not accessible", content = [Content()])
+    @ApiResponse(responseCode = "409", description = "The identifier was already used for a different request", content = [Content()])
     fun recordIntake(
         authentication: Authentication,
         @Parameter(description = "Package identifier") @PathVariable drugId: Uuid,
+        @Parameter(description = "Client-invented identifier of this intake") @PathVariable intakeId: Uuid,
         @SwaggerRequestBody(description = "Amount taken")
         @Valid @RequestBody request: IntakeRequest
     ): DrugSnapshotDTO? {
-        logger.debug("POST /v1/drugs/{}/intakes by user {}", drugId, authentication.userId)
+        logger.debug("PUT /v1/drugs/{}/intakes/{} by user {}", drugId, intakeId, authentication.userId)
         // null означает, что пачка кончилась и уничтожена этим списанием.
-        return drugs.recordIntake(drugId, request, authentication.userId)
+        return drugs.recordIntake(drugId, intakeId, request, authentication.userId)
     }
 
     /**
@@ -167,14 +171,14 @@ class DrugController(private val drugs: DrugApplicationService) {
         summary = "Apply offline changes to a package",
         description = "Applies the consumed amount and the new claim in one transaction. " +
             "Repeating the same request under the same identifier changes nothing; the same " +
-            "identifier with different content is a conflict."
+            "identifier with different content is a conflict. " + REPEAT_LIMITS
     )
     @ApiResponse(
         responseCode = "200",
         description = "Changes applied; when the package ran out, it was destroyed and the response body is empty"
     )
     @ApiResponse(responseCode = "404", description = "Package does not exist or is not accessible", content = [Content()])
-    @ApiResponse(responseCode = "409", description = "Stated version is not current, or the identifier was used for a different request", content = [Content()])
+    @ApiResponse(responseCode = "409", description = "The identifier was already used for a different request", content = [Content()])
     fun synchronise(
         authentication: Authentication,
         @Parameter(description = "Package identifier") @PathVariable drugId: Uuid,
@@ -207,6 +211,17 @@ class DrugController(private val drugs: DrugApplicationService) {
     ): DrugSnapshotDTO {
         logger.debug("PUT /v1/med-kits/{}/drugs/{} by user {}", targetMedKitId, drugId, authentication.userId)
         return drugs.moveToMedKit(drugId, targetMedKitId, version, authentication.userId)
+    }
+
+    private companion object {
+        /**
+         * Граница журнала повторов, общая для приёма и синхронизации, — в контракте, а не только в
+         * `CacheService`: клиент решает по ней, можно ли повторять вслепую.
+         */
+        const val REPEAT_LIMITS = "Identifiers are remembered in server memory for at most 24 hours: under " +
+            "heavy load older ones are evicted sooner, and a server restart forgets them all. After that a repeat " +
+            "is judged as a new request (412 if the version has moved on). Once the package has run out and was " +
+            "destroyed, a repeat answers 404."
     }
 }
 

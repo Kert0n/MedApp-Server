@@ -86,11 +86,10 @@ class OperationContractCustomizer : GlobalOperationCustomizer {
  * Расписать их по аннотациям значило бы завести девять мест, где можно забыть, — а забывают всегда
  * там же, где добавляют новый эндпойнт.
  *
- * Что считается «принимает версию»: параметр запроса `version` или поле `version` в теле — то есть
- * ровно то, что разворачивает `statedVersion`. Синхронизация под правило не подпадает намеренно:
- * её версии зовутся иначе (`drugVersion`), едут телом и отвечают 409, потому что предусловием
- * запроса они не были (2.6). Это не исключение из правила, а другое правило — и написано оно
- * здесь, а не подразумевается.
+ * Что считается «принимает версию»: параметр запроса `version` или поле тела `version` либо
+ * `drugVersion` — то есть ровно то, что разворачивает `statedVersion`. Второе имя у синхронизации:
+ * в том же теле едет и версия картины броней, и версию упаковки пришлось назвать явно. Отвечает
+ * она теми же 428 и 412 — место версии смысла отказа не меняет.
  *
  * Тело видно только там, где под рукой `components`: `$ref` разрешается по ним, поэтому проход
  * идёт по документу целиком, а не по одной операции.
@@ -109,13 +108,14 @@ class PreconditionResponsesCustomizer : GlobalOpenApiCustomizer {
 
     private fun statesVersion(operation: Operation, schemas: Map<String, Schema<*>>): Boolean =
         operation.parameters.orEmpty().any { it.name == VERSION && it.`in` == QUERY } ||
-            VERSION in bodyProperties(operation, schemas)
+            bodyProperties(operation, schemas).any { it in BODY_VERSIONS }
 
     /**
      * Свойства тела — только верхнего уровня.
      *
-     * Вглубь не идём: у синхронизации версия картины броней лежит во вложенной части, и
-     * заглядывающее вглубь правило записало бы ей 412, которого она не отвечает.
+     * Версия, которую команда обязана предъявить, лежит там. Вложенная версия картины броней у
+     * синхронизации необязательна и к кодам операции ничего не добавляет: 412 та уже объявила
+     * по версии упаковки.
      */
     private fun bodyProperties(operation: Operation, schemas: Map<String, Schema<*>>): Set<String> {
         val declared = operation.requestBody?.content?.values?.firstOrNull()?.schema ?: return emptySet()
@@ -137,6 +137,7 @@ class PreconditionResponsesCustomizer : GlobalOpenApiCustomizer {
 
     private companion object {
         const val VERSION = "version"
+        val BODY_VERSIONS = setOf(VERSION, "drugVersion")
         const val QUERY = "query"
         const val PRECONDITION_REQUIRED = "428"
         const val PRECONDITION_FAILED = "412"

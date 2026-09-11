@@ -69,20 +69,20 @@ class PreconditionContractTest {
     }
 
     /**
-     * Синхронизация версии принимает, но отвечает 409 — и правило это знает.
+     * Синхронизация везёт версию под другим именем, но отвечает теми же кодами.
      *
-     * Её версии едут телом и предусловием запроса не были, поэтому 412 ей не полагается. Проверка
-     * стоит рядом, чтобы «синхронизация выпала из правила» и «синхронизацию забыли» не выглядели
-     * одинаково.
+     * Проверка стоит рядом, чтобы «синхронизация выпала из правила» не прошло молча: имя поля у
+     * неё `drugVersion`, и определение ниже знает его явно. 409 у неё остаётся свой — занятый
+     * идентификатор.
      */
     @Test
-    fun `синхронизация отвечает конфликтом, а не предусловием`() {
+    fun `синхронизация отвечает предусловием, а конфликт оставляет идентификатору`() {
         val sync = contract().field("paths")
             .field("/v1/drugs/{drugId}/sync/{syncId}").field("put").field("responses")
 
-        assertTrue(sync.has("409"), "версия из тела синхронизации отвечает 409")
-        assertTrue(!sync.has("412"), "предусловием запроса версия синхронизации не была")
-        assertTrue(!sync.has("428"), "того же и про 428: версии в теле необязательны")
+        assertTrue(sync.has("412"), "устаревшая версия из тела — то же невыполненное предусловие")
+        assertTrue(sync.has("428"), "списание без версии упаковки не собирается")
+        assertTrue(sync.has("409"), "тот же идентификатор с другим телом — конфликт")
     }
 
     private fun contract(): JsonElement =
@@ -98,12 +98,15 @@ class PreconditionContractTest {
         }
     }
 
-    /** То же определение, что и в контракте: параметр `version` или поле `version` в теле. */
+    /**
+     * То же определение, что и в контракте: параметр `version` или поле тела `version` либо
+     * `drugVersion`.
+     */
     private fun statesVersion(operation: JsonElement, schemas: JsonElement?): Boolean {
         val inQuery = operation.field("parameters").items().any {
             it.field("name").text() == "version" && it.field("in").text() == "query"
         }
-        return inQuery || "version" in bodyProperties(operation, schemas)
+        return inQuery || bodyProperties(operation, schemas).any { it == "version" || it == "drugVersion" }
     }
 
     private fun bodyProperties(operation: JsonElement, schemas: JsonElement?): Set<String> {

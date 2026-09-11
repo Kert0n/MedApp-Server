@@ -17,10 +17,13 @@ class UserStore {
             .singleOrNull()
             ?.let { User(it[Users.id], it[Users.hashedKey]) }
 
+    /** Логин придумывает клиент, поэтому повтор регистрации упирается в первичный ключ. */
     fun insert(user: User) {
-        Users.insert {
-            it[id] = user.id
-            it[hashedKey] = user.hashedKey
+        translatingConstraints {
+            Users.insert {
+                it[id] = user.id
+                it[hashedKey] = user.hashedKey
+            }
         }
     }
 }

@@ -1,6 +1,7 @@
 package org.kert0n.medappserver.integration
 
 import java.math.BigDecimal
+import java.util.UUID
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -22,6 +23,7 @@ import org.kert0n.medappserver.testutil.DatabaseTestHelper
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.MediaType
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers
 import org.springframework.test.web.servlet.MockMvc
@@ -152,6 +154,31 @@ class ClientSuppliedIdTest {
             .andExpect(status().isNotFound)
     }
 
+    // ── Учётная запись ───────────────────────────────────────────────────────────
+
+    /**
+     * Потерянный ответ регистрации больше не оставляет лишней учётки.
+     *
+     * Логин и пароль клиент знает до отправки. Повтор упирается в первичный ключ, а токен по тем
+     * же данным подтверждает, что учётка своя, — заводить вторую незачем.
+     */
+    @Test
+    fun `повтор регистрации отвечает конфликтом, а учётка остаётся своей`() {
+        val login = Uuid.random()
+        val password = "k".repeat(43)
+
+        register(login, password).andExpect(status().isCreated)
+        register(login, password).andExpect(status().isConflict)
+
+        mockMvc.perform(post(ApiRoutes.TOKEN).with(httpBasic(login.toString(), password)))
+            .andExpect(status().isOk)
+        assertEquals(
+            1,
+            jdbc.queryForObject("SELECT count(*) FROM users WHERE id = ?", Int::class.java, UUID.fromString(login.toString())),
+            "повтор завёл вторую учётку"
+        )
+    }
+
     // ── Гонка ────────────────────────────────────────────────────────────────────
 
     /**
@@ -264,6 +291,15 @@ class ClientSuppliedIdTest {
                 """{"id":"$drugId","name":"Aspirin","quantity":"10.0",""" +
                     """"quantityUnitId":"${dbHelper.unit().id}"}"""
             )
+    )
+
+    /** Свой адрес: квота регистраций общая на контекст, и чужие тесты её не должны расходовать. */
+    private fun register(login: Uuid, password: String) = mockMvc.perform(
+        post(ApiRoutes.REGISTER)
+            .with { request -> request.apply { remoteAddr = "192.0.2.143" } }
+            .header("X-Registration-Token", "test-secret")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""{"login":"$login","password":"$password"}""")
     )
 
     private fun asUser(userId: Uuid) = jwt().jwt { it.subject(userId.toString()) }

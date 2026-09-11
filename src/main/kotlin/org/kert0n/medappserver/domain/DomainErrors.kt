@@ -35,6 +35,9 @@ class MedKitAlreadyExists : DomainRuleViolated("Medicine kit with this identifie
 /** То же для упаковки — см. [MedKitAlreadyExists]. */
 class DrugAlreadyExists : DomainRuleViolated("Drug with this identifier already exists")
 
+/** То же для учётной записи: логин придумывает клиент — см. [MedKitAlreadyExists]. */
+class UserAlreadyExists : DomainRuleViolated("User with this login already exists")
+
 /** Пользователь не участник этой аптечки — или самой аптечки нет. */
 class NotAMember : DomainRuleViolated("Medicine kit is not accessible")
 

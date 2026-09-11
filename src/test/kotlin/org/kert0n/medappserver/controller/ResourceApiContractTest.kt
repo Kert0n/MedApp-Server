@@ -143,10 +143,11 @@ class ResourceApiContractTest {
 
     @Test
     fun `приём создаётся подчинённым ресурсом упаковки`() {
-        whenever(drugs.recordIntake(eq(drugId), any(), eq(userId))).thenReturn(snapshot)
+        val intakeId = Uuid.random()
+        whenever(drugs.recordIntake(eq(drugId), eq(intakeId), any(), eq(userId))).thenReturn(snapshot)
 
         mockMvc.perform(
-            post(ApiRoutes.intakes(drugId)).with(asUser())
+            put(ApiRoutes.intake(drugId, intakeId)).with(asUser())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"quantity":"2.0","version":0}""")
         )

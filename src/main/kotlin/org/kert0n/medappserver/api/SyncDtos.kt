@@ -15,7 +15,9 @@ import kotlinx.serialization.UseSerializers
  * применяются в одной транзакции.
  *
  * Версии едут в теле, а не параметрами: запрос меняет два состояния сразу, и разложить их по
- * одному месту нельзя. Отсюда и код ответа: несовпадение версии из тела — 409, а не 412.
+ * одному месту нельзя. Коды ответа при этом те же, что у любой команды: не прислана — 428,
+ * устарела — 412. Место версии не меняет смысла отказа: решение принято по картине, которой
+ * больше нет. 409 остаётся одному случаю — тот же идентификатор с другим телом.
  */
 @Schema(description = "Offline changes for one package, applied atomically")
 @Serializable
@@ -30,7 +32,7 @@ data class DrugSyncRequest(
 
     @Schema(
         description =
-            "Version of the package state; required when consumed is present. Missing or stale means 409",
+            "Version of the package state; required when consumed is present. Missing means 428, stale means 412",
         example = "3"
     )
     val drugVersion: Long? = null,
@@ -55,7 +57,7 @@ data class ReservationSyncRequest(
     /** Без версии сервер пишет по картине броней, которую только что прочитал сам. */
     @Schema(
         description = "Version of the claims picture; when absent, the server uses the current picture read " +
-            "while processing the request. A supplied stale version means 409"
+            "while processing the request. A supplied stale version means 412"
     )
     val version: Long? = null
 )
