@@ -3,8 +3,11 @@ package org.kert0n.medappserver.db.store
 import kotlin.uuid.Uuid
 import org.jetbrains.exposed.v1.core.Case
 import org.jetbrains.exposed.v1.core.Coalesce
+import org.jetbrains.exposed.v1.core.CustomFunction
 import org.jetbrains.exposed.v1.core.Expression
 import org.jetbrains.exposed.v1.core.ExpressionWithColumnType
+import org.jetbrains.exposed.v1.core.FloatColumnType
+import org.jetbrains.exposed.v1.core.IntegerColumnType
 import org.jetbrains.exposed.v1.core.JoinType
 import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.ResultRow
@@ -67,11 +70,15 @@ class CatalogueStore {
     //
     //   1. Отбор.    Кандидат — запись, в которой нашлось хоть одно слово. Условие `OR`, а
     //                не `AND`: одно испорченное слово не должно стоить всей находки.
-    //   2. Порядок.  Пять ступеней, от самого весомого к самому слабому:
+    //   2. Порядок.  Семь ступеней, от самого весомого к самому слабому:
     //                  • набрано точно — название запросу равно;
     //                  • найдено полнотекстом — слова совпали как слова, а не по буквам;
     //                  • сколько слов совпало — каждое найденное поднимает запись;
     //                  • сумма квадратов похожести — тонкая настройка внутри равного счёта;
+    //                  • лучшее совпадение с названием — по составу и производителю находят
+    //                    сотнями, и при равных очках вперёд идёт тот, у кого совпало название;
+    //                  • длина названия — короткое точнее: «Парацетамол» перед
+    //                    «Кодеин + Парацетамол»;
     //                  • название — чтобы порядок был устойчив, а не случаен.
     //   3. Отсечка.  `LIMIT` и превращение строк в доменные карточки.
     //
@@ -90,6 +97,8 @@ class CatalogueStore {
                 (searchDocument matchesText query) to SortOrder.DESC,
                 matchedWords(words) to SortOrder.DESC,
                 wordScore(words) to SortOrder.DESC,
+                bestNameMatch(words) to SortOrder.DESC,
+                nameLength to SortOrder.ASC,
                 DrugTemplates.name to SortOrder.ASC
             )
             .limit(limit)
@@ -97,15 +106,15 @@ class CatalogueStore {
     }
 
     /**
-     * Порог, с которого `<%` считает слово найденным.
+     * Порог, с которого `<<%` считает слово найденным.
      *
      * Настройкой, а не выражением: у оператора он берётся только оттуда — такова плата за то,
      * что оператор индексируемый. `SET LOCAL` действует до конца транзакции и в соседние не
-     * течёт. Умолчание `0.6` рассчитано на точный поиск и для опечаток слишком строгое.
+     * течёт. Умолчание `0.5` рассчитано на точный поиск и для опечаток слишком строгое.
      */
     private fun applyWordMatchThreshold() {
         TransactionManager.current()
-            .exec("SET LOCAL pg_trgm.word_similarity_threshold = $WORD_MATCH_THRESHOLD")
+            .exec("SET LOCAL pg_trgm.strict_word_similarity_threshold = $WORD_MATCH_THRESHOLD")
     }
 
     /** Шаг 1: запись годится в кандидаты, если в ней нашлось хоть одно слово запроса. */
@@ -151,9 +160,31 @@ class CatalogueStore {
         return score
     }
 
+    /**
+     * Ступень 5: лучшее, чем слово запроса отозвалось в самом названии.
+     *
+     * Лучшее, а не сумма: суммой длинное название с двумя словами запроса обошло бы запись, где
+     * одно слово в названии, а другое у производителя, — то самое, что уже отвергнуто в
+     * [exactName]. Ступень нужна там, где очки по записи равны: «парацетамол» стоит действующим
+     * веществом у сотен карточек, и без неё первым оказывается алфавитно ближайший «Апап», а не
+     * «Парацетамол».
+     */
+    private fun bestNameMatch(words: List<String>): ExpressionWithColumnType<Float> =
+        CustomFunction(
+            "greatest", FloatColumnType(),
+            *words.map { nameSimilarityOf(it) }.toTypedArray()
+        )
+
+    /** Ступень 6: при равных очках короткое название точнее длинного перечисления. */
+    private val nameLength: ExpressionWithColumnType<Int>
+        get() = CustomFunction("length", IntegerColumnType(), DrugTemplates.name)
+
     /** Похожесть без `null`: у не совпавшего слова она ноль, а не «неизвестно». */
     private fun similarityOf(word: String): ExpressionWithColumnType<Float> =
         Coalesce(wordSimilarity(word, searchText), floatLiteral(0f))
+
+    private fun nameSimilarityOf(word: String): ExpressionWithColumnType<Float> =
+        Coalesce(wordSimilarity(word, DrugTemplates.name), floatLiteral(0f))
 
     // ── Строки в доменные типы ────────────────────────────────────────────────────────
 
